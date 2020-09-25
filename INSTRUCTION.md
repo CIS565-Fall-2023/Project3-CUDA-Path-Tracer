@@ -124,7 +124,7 @@ This is part of the base project requirements.
 * Use final rays to apply post-processing shaders. Please post your ideas on Piazza before starting.
 
 #### Performance Improvements
-* Work-efficient stream compaction using shared memory across multiple blocks. (See [*GPU Gems 3*, Chapter 39](http://http.developer.nvidia.com/GPUGems3/gpugems3_ch39.html).)
+* Work-efficient stream compaction using shared memory across multiple blocks. (See [*GPU Gems 3*, Chapter 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda).)
   * Note that you will NOT receieve extra credit for this if you implemented shared memory stream compaction as extra credit for Project 2.
 * Hierarchical spatial data structures - for better ray/scene intersection testing
   * Octree recommended - this feature is more about traversal on the GPU than perfect tree structure
@@ -187,7 +187,7 @@ thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, path.rem
 
 In path tracing, like diffuse materials, specular materials are simulated using a probability distribution instead computing the strength of a ray bounce based on angles.
 
-Equations 7, 8, and 9 of [*GPU Gems 3*, Chapter 20](http://http.developer.nvidia.com/GPUGems3/gpugems3_ch20.html) give the formulas for generating a random specular ray. (Note that there is a typographical error: χ in the text = ξ in the formulas.)
+Equations 7, 8, and 9 of [*GPU Gems 3*, Chapter 20](https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling) give the formulas for generating a random specular ray. (Note that there is a typographical error: χ in the text = ξ in the formulas.)
 
 Also see the notes in `scatterRay` for probability splits between diffuse/specular/other material types.
 
