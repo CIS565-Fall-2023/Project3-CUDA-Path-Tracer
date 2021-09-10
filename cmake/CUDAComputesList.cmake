@@ -60,6 +60,8 @@ IF(    CUDA_COMPUTE_20
     OR CUDA_COMPUTE_70
     OR CUDA_COMPUTE_72
     OR CUDA_COMPUTE_75
+    OR CUDA_COMPUTE_80
+    OR CUDA_COMPUTE_86
     )
     SET(FALLBACK OFF)
 ELSE()
@@ -70,8 +72,8 @@ LIST(LENGTH COMPUTES_DETECTED_LIST COMPUTES_LEN)
 IF(${COMPUTES_LEN} EQUAL 0 AND ${FALLBACK})
     MESSAGE(STATUS "You can use -DCOMPUTES_DETECTED_LIST=\"AB;XY\" (semicolon separated list of CUDA Compute versions to enable the specified computes")
     MESSAGE(STATUS "Individual compute versions flags are also available under CMake Advance options")
-    LIST(APPEND COMPUTES_DETECTED_LIST "30" "50" "60" "70")
-    MESSAGE(STATUS "No computes detected. Fall back to 30, 50, 60 70")
+    LIST(APPEND COMPUTES_DETECTED_LIST "30" "50" "60" "70" "80")
+    MESSAGE(STATUS "No computes detected. Fall back to 30, 50, 60, 70, 80")
 ENDIF()
 
 LIST(LENGTH COMPUTES_DETECTED_LIST COMPUTES_LEN)
@@ -90,7 +92,7 @@ MACRO(SET_COMPUTE VERSION)
 ENDMACRO(SET_COMPUTE)
 
 # Iterate over compute versions. Create variables and enable computes if needed
-FOREACH(VER 20 30 32 35 37 50 52 53 60 61 62 70 72 75)
+FOREACH(VER 20 30 32 35 37 50 52 53 60 61 62 70 72 75 80 86)
     OPTION(CUDA_COMPUTE_${VER} "CUDA Compute Capability ${VER}" OFF)
     MARK_AS_ADVANCED(CUDA_COMPUTE_${VER})
     IF(${CUDA_COMPUTE_${VER}})
