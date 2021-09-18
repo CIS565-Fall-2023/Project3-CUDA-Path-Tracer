@@ -1,9 +1,12 @@
-Proj 3 CUDA Path Tracer - Instructions
-========================
+# Proj 3 CUDA Path Tracer - Instructions
 
-This is due **Wednesday October 7th** at 11:59pm. A mid-project submission of the core requirements is due **Tuesday Sept 30th** at 11:59pm.
+This is due **Monday October 4th** at 11:59pm.
 
-[Link to "Pathtracing Primer" Slides](https://1drv.ms/p/s!AiLXbdZHgbemhedscBCjlYs-dpL59A)
+This project involves a significant bit of running time to generate high-quality images, so be sure to take that into account. You will receive an additional 2 days (due Wednesday, October 6th) for "README and Scene" only updates. However, the standard project requirements for READMEs still apply for the October 4th deadline. You may use these two extra days to improve your images, charts, performance analysis, etc.
+
+If you plan to use late days on this project (which we recommend), they will apply to the October 4th deadline. Once you have used your extra days and submitted the project, you will recieve the additional 2 days for "README and Scene" updates only.
+
+[Link to "Pathtracing Primer" Slides](https://1drv.ms/p/s!AiLXbdZHgbemhe02FCjXap5whSuYBQ?e=QxnlpM)
 
 **Summary:**
 
@@ -12,6 +15,7 @@ In this project, you'll implement a CUDA-based path tracer capable of rendering 
 The core renderer is left for you to implement. Finally, note that, while this base code is meant to serve as a strong starting point for a CUDA path tracer, you are not required to use it if you don't want to. You may also change any part of the base code as you please. **This is YOUR project.**
 
 **Recommendations:**
+
 * Every image you save should automatically get a different filename. Don't delete all of them! For the benefit of your README, keep a bunch of them around so you can pick a few to document your progress at the end. Outtakes are highly appreciated!
 * Remember to save your debug images - these will make for a great README.
 * Also remember to save and share your bloopers. Every image has a story to tell and we want to hear about it.
@@ -40,8 +44,6 @@ If you are using Visual Studio, you can set this in the `Debugging > Command Arg
 
 ## Requirements
 
-**Ask in piazza for clarifications.**
-
 In this project, you are given code for:
 
 * Loading and reading the scene description format.
@@ -52,13 +54,14 @@ In this project, you are given code for:
   * Naive ray-scene intersection.
   * A "fake" shading kernel that colors rays based on the material and intersection properties but does NOT compute a new ray based on the BSDF.
 
-### Part 1 - Core Features
+**Ask in piazza for clarifications.**
 
-**You need to complete these features for your mid-project submission on due by Sept, 30**.
+### Part 1 - Core Features
 
 Follow all the same guidelines for README and Pull Request for your mid-project submission, except that you should create a branch called `mid-project-submission` and open a pull request with that branch. This way you can continue to work on your projects in the master branch.
 
 You will need to implement the following features:
+
 * A shading kernel with BSDF evaluation for:
   * Ideal Diffuse surfaces (using provided cosine-weighted scatter function, see below.) [PBRT 8.3].
   * Perfectly specular-reflective (mirrored) surfaces (e.g. using `glm::reflect`).
@@ -70,80 +73,72 @@ implement a means of making rays/pathSegments/intersections contiguous in memory
   * Sort the rays/path segments so that rays/paths interacting with the same material are contiguous in memory before shading. How does this impact performance? Why?
 * A toggleable option to cache the first bounce intersections for re-use across all subsequent iterations. Provide performance benefit analysis across different max ray depths.
 
-### Part 2 - Advance Features (Required)
+### Part 2 - Make Your Pathtracer Unique!
 
-1. 2 of these 3 smaller features:
-  * Refraction (e.g. glass/water) [PBRT 8.2] with Frensel effects using [Schlick's approximation](https://en.wikipedia.org/wiki/Schlick's_approximation) or more accurate methods [PBRT 8.5]. You can use `glm::refract` for Snell's law.
-    * Recommended but not required: non-perfect specular surfaces. (See below.)
-  * Physically-based depth-of-field (by jittering rays within an aperture). [PBRT 6.2.3]
-  * Stochastic Sampled Antialiasing. See Paul Bourke's [notes](http://paulbourke.net/miscellaneous/aliasing/). Keep in mind how this influences the first-bounce cache in part 1.
+The following features are a non-exhaustive list of features you can choose from based on your own interests and motivation. Each feature has an associated score (represented in emoji numbers, eg. :five:).
 
-  > Note you may choose to implement the third feature as well for extra credit as noted in Part 3.
+**You are required to implement additional features of your choosing from the list below totalling up to minimum 10 score points.**
 
-2. Arbitrary mesh loading and rendering (e.g. glTF 2.0 (preferred) or `obj` files) with
-toggleable bounding volume intersection culling
-  * You can find models online or export them from your favorite 3D modeling application.
-  With approval, you may use a third-party loading code to bring the data
-  into C++.
-    * [tinygltf](https://github.com/syoyo/tinygltf/) is highly recommended for glTF.
-    * [tinyObj](https://github.com/syoyo/tinyobjloader) is highly recommended for OBJ.
-    * [obj2gltf](https://github.com/CesiumGS/obj2gltf) can be used to convert
-      OBJ to glTF files. You can find similar projects for FBX and other
-      formats.
-  * You can use the triangle intersection function `glm::intersectRayTriangle`.
-  * Bounding volume intersection culling: reduce the number of rays that have to
-  be checked against the entire mesh by first checking rays against a volume
-  that completely bounds the mesh. For full credit, provide performance analysis
-  with and without this optimization.
+An example set of optional features is:
 
-  > Note: This goes great with the Hierarcical Spatial Data Structures extra credit.
+* Mesh Loading - :four: points
+* Refraction - :two: points
+* Anti-aliasing - :two: points
+* Final rays post processing - :three: points
 
-3. [Better hemisphere sampling methods](https://cseweb.ucsd.edu/classes/sp17/cse168-a/CSE168_07_Random.pdf)
+This list is not comprehensive. If you have a particular idea you would like to implement (e.g. acceleration structures, etc.), please post on Piazza.
 
-### Part 3 - Make Your Pathtracer Unique!
-
-You are required to choose and implement at least:
-* Any 2 Visual Improvements, or
-* 1 of Heirarchical Spatial Data Structure or Open Image AI Denoiser.
-
-This is part of the base project requirements.
-
-**Extra credit**: implement more features on top of the above required ones, with point value up to +20/100 at the grader's discretion (based on difficulty and coolness).
+**Extra credit**: implement more features on top of the above required ones, with point value up to +20/100 at the grader's discretion (based on difficulty and coolness), generally .
 
 #### Visual Improvements
-* Implement the 3rd feature from Part 2.1.
-* Procedural Shapes & Textures.
+
+* :two: Refraction (e.g. glass/water) [PBRT 8.2] with Frensel effects using [Schlick's approximation](https://en.wikipedia.org/wiki/Schlick's_approximation) or more accurate methods [PBRT 8.5]. You can use `glm::refract` for Snell's law.
+  * Recommended but not required: non-perfect specular surfaces. (See below.)
+* :two: Physically-based depth-of-field (by jittering rays within an aperture). [PBRT 6.2.3]
+* :two: Stochastic Sampled Antialiasing. See Paul Bourke's [notes](http://paulbourke.net/miscellaneous/aliasing/). Keep in mind how this influences the first-bounce cache in part 1.
+* :four: Procedural Shapes & Textures.
   * You must generate a minimum of two different complex shapes procedurally. (Not primitives)
   * You must be able to shade object with a minimum of two different textures
-* Texture mapping [PBRT 10.4] and Bump mapping [PBRT 9.3].
+* :five: (:six: if combined with Arbitrary Mesh Loading) Texture mapping [PBRT 10.4] and Bump mapping [PBRT 9.3].
   * Implement file-loaded textures AND a basic procedural texture
   * Provide a performance comparison between the two
-* Direct lighting (by taking a final ray directly to a random point on an emissive object acting as a light source). Or more advanced [PBRT 15.1.1].
-* Subsurface scattering [PBRT 5.6.2, 11.6].
-* Some method of defining object motion, and motion blur by averaging samples at different times in the animation.
-* Use final rays to apply post-processing shaders. Please post your ideas on Piazza before starting.
+* :two: Direct lighting (by taking a final ray directly to a random point on an emissive object acting as a light source). Or more advanced [PBRT 15.1.1].
+* :four: Subsurface scattering [PBRT 5.6.2, 11.6].
+* :three: [Better hemisphere sampling methods](https://cseweb.ucsd.edu/classes/sp17/cse168-a/CSE168_07_Random.pdf)
+* :three: Some method of defining object motion, and motion blur by averaging samples at different times in the animation.
+* :three: Use final rays to apply post-processing shaders. Please post your ideas on Piazza before starting.
+
+#### Mesh Improvements
+
+* :four: Arbitrary mesh loading and rendering (e.g. glTF 2.0 (preferred) or `obj` files) with toggleable bounding volume intersection culling
+  * You can find models online or export them from your favorite 3D modeling application.  With approval, you may use a third-party loading code to bring the data into C++.
+    * [tinygltf](https://github.com/syoyo/tinygltf/) is highly recommended for glTF.
+    * [tinyObj](https://github.com/syoyo/tinyobjloader) is highly recommended for OBJ.
+    * [obj2gltf](https://github.com/CesiumGS/obj2gltf) can be used to convert OBJ to glTF files. You can find similar projects for FBX and other formats.
+  * You can use the triangle intersection function `glm::intersectRayTriangle`.
+  * Bounding volume intersection culling: reduce the number of rays that have to be checked against the entire mesh by first checking rays against a volume that completely bounds the mesh. For full credit, provide performance analysis with and without this optimization.
+  > Note: This goes great with the Hierarcical Spatial Data Structures.
 
 #### Performance Improvements
-* Work-efficient stream compaction using shared memory across multiple blocks. (See [*GPU Gems 3*, Chapter 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda).)
+
+* :two: Work-efficient stream compaction using shared memory across multiple blocks. (See [*GPU Gems 3*, Chapter 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda).)
   * Note that you will NOT receieve extra credit for this if you implemented shared memory stream compaction as extra credit for Project 2.
-* Hierarchical spatial data structures - for better ray/scene intersection testing
+* :six: Hierarchical spatial data structures - for better ray/scene intersection testing
   * Octree recommended - this feature is more about traversal on the GPU than perfect tree structure
   * CPU-side data structure construction is sufficient - GPU-side construction was a [final project.](https://github.com/jeremynewlin/Accel)
   * Make sure this is toggleable for performance comparisons
   * If implemented in conjunction with Arbitrary mesh loading (required for this year), this qualifies as the toggleable bounding volume intersection culling.
   * See below for more resources
-* [Wavefront pathtracing](https://research.nvidia.com/publication/megakernels-considered-harmful-wavefront-path-tracing-gpus):
+* :six: [Wavefront pathtracing](https://research.nvidia.com/publication/megakernels-considered-harmful-wavefront-path-tracing-gpus):
 Group rays by material without a sorting pass. A sane implementation will require considerable refactoring, since every supported material suddenly needs its own kernel.
-* [*Open Image AI Denoiser* ](https://github.com/OpenImageDenoise/oidn) Open Image Denoiser is an image denoiser which works by applying a filter on Monte-Carlo-based pathtracer output. The denoiser runs on the CPU and takes in path tracer output from 1spp to beyond. In order to get full credit for this, you must pass in at least one extra buffer along with the [raw "beauty" buffer](https://github.com/OpenImageDenoise/oidn#open-image-denoise-overview). **Ex:** Beauty + Normals.
+* :five: [*Open Image AI Denoiser*](https://github.com/OpenImageDenoise/oidn) Open Image Denoiser is an image denoiser which works by applying a filter on Monte-Carlo-based pathtracer output. The denoiser runs on the CPU and takes in path tracer output from 1spp to beyond. In order to get full credit for this, you must pass in at least one extra buffer along with the [raw "beauty" buffer](https://github.com/OpenImageDenoise/oidn#open-image-denoise-overview). **Ex:** Beauty + Normals.
   * Part of this extra credit is figuring out where the filter should be called, and how you should manage the data for the filter step.
   * It is important to note that integrating this is not as simple as it may seem at first glance. Library integration, buffer creation, device compatibility, and more are all real problems which will appear, and it may be hard to debug them. Please only try this if you have finished the Part 2 early and would like extra points. While this is difficult, the result would be a significantly faster resolution of the path traced image.
-* Re-startable Path tracing: Save some application state (iteration number, samples so far, acceleration structure) so you can start and stop rendering instead of leaving your computer running for hours at end (which will happen in this project)
-
-**This 'extra features' list is not comprehensive. If you have a particular idea you would like to implement (e.g. acceleration structures, etc.), please post on Piazza.**
+* :five: Re-startable Path tracing: Save some application state (iteration number, samples so far, acceleration structure) so you can start and stop rendering instead of leaving your computer running for hours at end (which will happen in this project)
 
 For each extra feature, you must provide the following analysis:
 
-* Overview write-up of the feature
+* Overview write-up of the feature along with before/after images.
 * Performance impact of the feature
 * If you did something to accelerate the feature, what did you do and why?
 * Compare your GPU version of the feature to a HYPOTHETICAL CPU version (you don't have to implement it!)? Does it benefit or suffer from being implemented on the GPU?
@@ -152,6 +147,7 @@ For each extra feature, you must provide the following analysis:
 ## Base Code Tour
 
 You'll be working in the following files. Look for important parts of the code:
+
 * Search for `CHECKITOUT`.
 * You'll have to implement parts labeled with `TODO`. (But don't let these constrain you - you have free rein!)
 
@@ -170,7 +166,7 @@ You'll be working in the following files. Look for important parts of the code:
 
 ### Generating random numbers
 
-```
+```cpp
 thrust::default_random_engine rng(hash(index));
 thrust::uniform_real_distribution<float> u01(0, 1);
 float result = u01(rng);
@@ -179,7 +175,7 @@ float result = u01(rng);
 There is a convenience function for generating a random engine using a
 combination of index, iteration, and depth as the seed:
 
-```
+```cpp
 thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, path.remainingBounces);
 ```
 
@@ -213,15 +209,9 @@ By default, your GPU driver will probably kill a CUDA kernel if it runs for more
 
 > The easiest way to disable TDR for Cuda programming, assuming you have the NVIDIA Nsight tools installed, is to open the Nsight Monitor, click on "Nsight Monitor options", and under "General" set "WDDM TDR enabled" to false. This will change the registry setting for you. Close and reboot. Any change to the TDR registry setting won't take effect until you reboot. [Stack Overflow](http://stackoverflow.com/questions/497685/cuda-apps-time-out-fail-after-several-seconds-how-to-work-around-this)
 
-### Notes on GLM
-
-This project uses GLM for linear algebra.
-
-On NVIDIA cards pre-Fermi (pre-DX12), you may have issues with mat4-vec4 multiplication. If you have one of these cards, be careful! If you have issues, you might need to grab `cudamat4` and `multiplyMV` from the [Fall 2014 project](https://github.com/CIS565-Fall-2014/Project3-Pathtracer).
-
-Let us know if you need to do this.
-
 ### Scene File Format
+
+> Note: The Scene File Format and sample scene files are provided as a starting point. You are encouraged to create your own unique scene files, or even modify the scene file format in its entirety. Be sure to document any changes in your readme.
 
 This project uses a custom scene description format. Scene files are flat text files that describe all geometry, materials, lights, cameras, and render settings inside of the scene. Items in the format are delimited by new lines, and comments can be added using C-style `// comments`.
 
@@ -265,43 +255,33 @@ Two examples are provided in the `scenes/` directory: a single emissive sphere, 
 * If it is approved, all students are welcome to use it. Generally, we approve use of third-party code that is not a core part of the project. For example, for the path tracer, we would approve using a third-party library for loading models, but would not approve copying and pasting a CUDA function for doing refraction.
 * Third-party code **MUST** be credited in README.md.
 * Using third-party code without its approval, including using another student's code, is an academic integrity violation, and will, at minimum, result in you receiving an F for the semester.
+* You may use third-party 3D models and scenes in your projects. Be sure to provide the right attribution as requested by the creators.
 
 ## README
 
 Please see: [**TIPS FOR WRITING AN AWESOME README**](https://github.com/pjcozzi/Articles/blob/master/CIS565/GitHubRepo/README.md)
 
 * Sell your project.
-* Assume the reader has a little knowledge of path tracing - don't go into
-  detail explaining what it is. Focus on your project.
-* Don't talk about it like it's an assignment - don't say what is and isn't
-  "extra" or "extra credit." Talk about what you accomplished.
+* Assume the reader has a little knowledge of path tracing - don't go into detail explaining what it is. Focus on your project.
+* Don't talk about it like it's an assignment - don't say what is and isn't "extra" or "extra credit." Talk about what you accomplished.
 * Use this to document what you've done.
-* *DO NOT* leave the README to the last minute! It is a crucial part of the
-  project, and we will not be able to grade you without a good README.
+* *DO NOT* leave the README to the last minute!
+  * It is a crucial part of the project, and we will not be able to grade you without a good README.
+  * Generating images will take time. Be sure to account for it!
 
 In addition:
 
 * This is a renderer, so include images that you've made!
 * Be sure to back your claims for optimization with numbers and comparisons.
 * If you reference any other material, please provide a link to it.
-* You wil not be graded on how fast your path tracer runs, but getting close to
-  real-time is always nice!
-* If you have a fast GPU renderer, it is very good to show case this with a
-  video to show interactivity. If you do so, please include a link!
+* You wil not be graded on how fast your path tracer runs, but getting close to real-time is always nice!
+* If you have a fast GPU renderer, it is very good to show case this with a video to show interactivity. If you do so, please include a link!
 
 ### Analysis
 
-* Stream compaction helps most after a few bounces. Print and plot the
-  effects of stream compaction within a single iteration (i.e. the number of
-  unterminated rays after each bounce) and evaluate the benefits you get from
-  stream compaction.
-* Compare scenes which are open (like the given cornell box) and closed
-  (i.e. no light can escape the scene). Again, compare the performance effects
-  of stream compaction! Remember, stream compaction only affects rays which
-  terminate, so what might you expect?
-* For optimizations that target specific kernels, we recommend using
-  stacked bar graphs to convey total execution time and improvements in
-  individual kernels. For example:
+* Stream compaction helps most after a few bounces. Print and plot the effects of stream compaction within a single iteration (i.e. the number of unterminated rays after each bounce) and evaluate the benefits you get from stream compaction.
+* Compare scenes which are open (like the given cornell box) and closed (i.e. no light can escape the scene). Again, compare the performance effects of stream compaction! Remember, stream compaction only affects rays which terminate, so what might you expect?
+* For optimizations that target specific kernels, we recommend using stacked bar graphs to convey total execution time and improvements in individual kernels. For example:
 
   ![Clearly the Macchiato is optimal.](img/stacked_bar_graph.png)
 
@@ -309,19 +289,21 @@ In addition:
 
 ## Submit
 
-If you have modified any of the `CMakeLists.txt` files at all (aside from the
-list of `SOURCE_FILES`), mentions it explicity.
+If you have modified any of the `CMakeLists.txt` files at all (aside from the list of `SOURCE_FILES`), mentions it explicity.
+
 Beware of any build issues discussed on the Piazza.
 
 Open a GitHub pull request so that we can see that you have finished.
+
 The title should be "Project 3: YOUR NAME".
+
 The template of the comment section of your pull request is attached below, you can do some copy and paste:
 
 * [Repo Link](https://link-to-your-repo)
 * (Briefly) Mentions features that you've completed. Especially those bells and whistles you want to highlight
-    * Feature 0
-    * Feature 1
-    * ...
+  * Feature 0
+  * Feature 1
+  * ...
 * Feedback on the project itself, if any.
 
 ## References
