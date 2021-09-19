@@ -312,3 +312,12 @@ The template of the comment section of your pull request is attached below, you 
 * [PBRT] Physically Based Rendering, Second Edition: From Theory To Implementation. Pharr, Matt and Humphreys, Greg. 2010.
 * Antialiasing and Raytracing. Chris Cooksey and Paul Bourke, http://paulbourke.net/miscellaneous/aliasing/
 * [Sampling notes](http://graphics.ucsd.edu/courses/cse168_s14/) from Steve Rotenberg and Matteo Mannino, University of California, San Diego, CSE168: Rendering Algorithms
+* Path Tracer Readme Samples (non-exhaustive list):
+  * https://github.com/byumjin/Project3-CUDA-Path-Tracer
+  * https://github.com/lukedan/Project3-CUDA-Path-Tracer
+  * https://github.com/botforge/CUDA-Path-Tracer
+  * https://github.com/taylornelms15/Project3-CUDA-Path-Tracer
+  * https://github.com/emily-vo/cuda-pathtrace
+  * https://github.com/ascn/toki
+  * https://github.com/gracelgilbert/Project3-CUDA-Path-Tracer
+  * https://github.com/vasumahesh1/Project3-CUDA-Path-Tracer
