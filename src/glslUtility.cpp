@@ -15,6 +15,7 @@ namespace glslUtility {
 
 // embedded passthrough shaders so that default passthrough shaders don't need to be loaded
 static std::string passthroughVS =
+    "   #version 120 \n"
     "   attribute vec4 Position; \n"
     "   attribute vec2 Texcoords; \n"
     "   varying vec2 v_Texcoords; \n"
@@ -24,6 +25,7 @@ static std::string passthroughVS =
     "       gl_Position = Position; \n"
     "   }";
 static std::string passthroughFS =
+    "   #version 120 \n"
     "   varying vec2 v_Texcoords; \n"
     "   \n"
     "   uniform sampler2D u_image; \n"
