@@ -1,10 +1,10 @@
 # Proj 3 CUDA Path Tracer - Instructions
 
-This is due **Monday October 4th** at 11:59pm.
+This is due **Monday October 3th** at 11:59pm.
 
-This project involves a significant bit of running time to generate high-quality images, so be sure to take that into account. You will receive an additional 2 days (due Wednesday, October 6th) for "README and Scene" only updates. However, the standard project requirements for READMEs still apply for the October 4th deadline. You may use these two extra days to improve your images, charts, performance analysis, etc.
+This project involves a significant bit of running time to generate high-quality images, so be sure to take that into account. You will receive an additional 2 days (due Wednesday, October 5th) for "README and Scene" only updates. However, the standard project requirements for READMEs still apply for the October 5th deadline. You may use these two extra days to improve your images, charts, performance analysis, etc.
 
-If you plan to use late days on this project (which we recommend), they will apply to the October 4th deadline. Once you have used your extra days and submitted the project, you will recieve the additional 2 days for "README and Scene" updates only.
+If you plan to use late days on this project (which we recommend), they will apply to the October 5th deadline. Once you have used your extra days and submitted the project, you will recieve the additional 2 days for "README and Scene" updates only.
 
 [Link to "Pathtracing Primer" Slides](https://1drv.ms/p/s!AiLXbdZHgbemhe02FCjXap5whSuYBQ?e=QxnlpM)
 
