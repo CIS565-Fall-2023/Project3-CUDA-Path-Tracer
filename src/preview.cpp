@@ -11,6 +11,7 @@ GLuint pbo;
 GLuint displayImage;
 
 GLFWwindow* window;
+GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
 
@@ -181,6 +182,12 @@ bool init() {
 	return true;
 }
 
+void InitImguiData(GuiDataContainer* guiData)
+{
+	imguiData = guiData;
+}
+
+
 // LOOK: Un-Comment to check ImGui Usage
 void RenderImGui()
 {
@@ -199,7 +206,7 @@ void RenderImGui()
 	static int counter = 0;
 
 	ImGui::Begin("Path Tracer Analytics");                  // Create a window called "Hello, world!" and append into it.
-
+	
 	// LOOK: Un-Comment to check the output window and usage
 	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
 	//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
@@ -212,7 +219,7 @@ void RenderImGui()
 	//	counter++;
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
-
+	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 

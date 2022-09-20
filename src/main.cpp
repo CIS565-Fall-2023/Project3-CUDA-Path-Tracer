@@ -20,6 +20,7 @@ glm::vec3 cameraPosition;
 glm::vec3 ogLookAt; // for recentering the camera
 
 Scene* scene;
+GuiDataContainer* guiData;
 RenderState* renderState;
 int iteration;
 
@@ -42,6 +43,9 @@ int main(int argc, char** argv) {
 
 	// Load scene file
 	scene = new Scene(sceneFile);
+
+	//Create Instance for ImGUIData
+	guiData = new GuiDataContainer();
 
 	// Set up camera stuff from loaded path tracer settings
 	iteration = 0;
@@ -68,6 +72,10 @@ int main(int argc, char** argv) {
 
 	// Initialize CUDA and GL components
 	init();
+
+	// Initialize ImGui Data
+	InitImguiData(guiData);
+	InitDataContainer(guiData);
 
 	// GLFW main loop
 	mainLoop();
