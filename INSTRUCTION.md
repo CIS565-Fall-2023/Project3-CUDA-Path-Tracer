@@ -6,7 +6,7 @@ This project involves a significant bit of running time to generate high-quality
 
 If you plan to use late days on this project (which we recommend), they will apply to the October 5th deadline. Once you have used your extra days and submitted the project, you will recieve the additional 2 days for "README and Scene" updates only.
 
-[Link to "Pathtracing Primer" Slides](https://1drv.ms/p/s!AiLXbdZHgbemhe02FCjXap5whSuYBQ?e=QxnlpM)
+[Link to "Pathtracing Primer" Slides](https://1drv.ms/p/s!AiLXbdZHgbemhe96czmjQ4iKDm0Q1w?e=0mOYnL)
 
 **Summary:**
 
@@ -54,11 +54,9 @@ In this project, you are given code for:
   * Naive ray-scene intersection.
   * A "fake" shading kernel that colors rays based on the material and intersection properties but does NOT compute a new ray based on the BSDF.
 
-**Ask in piazza for clarifications.**
+**Ask in Ed Discussion for clarifications.**
 
 ### Part 1 - Core Features
-
-Follow all the same guidelines for README and Pull Request for your mid-project submission, except that you should create a branch called `mid-project-submission` and open a pull request with that branch. This way you can continue to work on your projects in the master branch.
 
 You will need to implement the following features:
 
@@ -88,7 +86,7 @@ An example set of optional features is:
 
 This list is not comprehensive. If you have a particular idea you would like to implement (e.g. acceleration structures, etc.), please post on Piazza.
 
-**Extra credit**: implement more features on top of the above required ones, with point value up to +20/100 at the grader's discretion (based on difficulty and coolness), generally .
+**Extra credit**: implement more features on top of the above required ones, with point value up to +25/100 at the grader's discretion (based on difficulty and coolness), generally .
 
 #### Visual Improvements
 
@@ -110,8 +108,11 @@ This list is not comprehensive. If you have a particular idea you would like to 
 
 #### Mesh Improvements
 
-* :four: Arbitrary mesh loading and rendering (e.g. glTF 2.0 (preferred) or `obj` files) with toggleable bounding volume intersection culling
-  * You can find models online or export them from your favorite 3D modeling application.  With approval, you may use a third-party loading code to bring the data into C++.
+* Arbitrary mesh loading and rendering (e.g. glTF 2.0 (preferred) or `obj` files) with toggleable bounding volume intersection culling
+  * :four: glTF
+  * :two: OBJ
+  * For other formats, please check on the class forum
+  * You can find models online or export them from your favorite 3D modeling application. With approval, you may use a third-party loading code to bring the data into C++.
     * [tinygltf](https://github.com/syoyo/tinygltf/) is highly recommended for glTF.
     * [tinyObj](https://github.com/syoyo/tinyobjloader) is highly recommended for OBJ.
     * [obj2gltf](https://github.com/CesiumGS/obj2gltf) can be used to convert OBJ to glTF files. You can find similar projects for FBX and other formats.
@@ -131,11 +132,11 @@ This list is not comprehensive. If you have a particular idea you would like to 
   * See below for more resources
 * :six: [Wavefront pathtracing](https://research.nvidia.com/publication/megakernels-considered-harmful-wavefront-path-tracing-gpus):
 Group rays by material without a sorting pass. A sane implementation will require considerable refactoring, since every supported material suddenly needs its own kernel.
-* :five: [*Open Image AI Denoiser*](https://github.com/OpenImageDenoise/oidn) Open Image Denoiser is an image denoiser which works by applying a filter on Monte-Carlo-based pathtracer output. The denoiser runs on the CPU and takes in path tracer output from 1spp to beyond. In order to get full credit for this, you must pass in at least one extra buffer along with the [raw "beauty" buffer](https://github.com/OpenImageDenoise/oidn#open-image-denoise-overview). **Ex:** Beauty + Normals.
+* :five: [*Open Image AI Denoiser or an alternative approve image denoiser*](https://github.com/OpenImageDenoise/oidn) Open Image Denoiser is an image denoiser which works by applying a filter on Monte-Carlo-based pathtracer output. The denoiser runs on the CPU and takes in path tracer output from 1spp to beyond. In order to get full credit for this, you must pass in at least one extra buffer along with the [raw "beauty" buffer](https://github.com/OpenImageDenoise/oidn#open-image-denoise-overview). **Ex:** Beauty + Normals.
   * Part of this extra credit is figuring out where the filter should be called, and how you should manage the data for the filter step.
   * It is important to note that integrating this is not as simple as it may seem at first glance. Library integration, buffer creation, device compatibility, and more are all real problems which will appear, and it may be hard to debug them. Please only try this if you have finished the Part 2 early and would like extra points. While this is difficult, the result would be a significantly faster resolution of the path traced image.
 * :five: Re-startable Path tracing: Save some application state (iteration number, samples so far, acceleration structure) so you can start and stop rendering instead of leaving your computer running for hours at end (which will happen in this project)
-* :five: Switch the project from using CUDA-OpenGL Interop to using CUDA-Vulkan interop (this is a really great one for those of you interested in doing Vulkan). Talk to Janine or Shehzan if you are planning to pursue this.
+* :five: Switch the project from using CUDA-OpenGL Interop to using CUDA-Vulkan interop (this is a really great one for those of you interested in doing Vulkan). Talk to TAs if you are planning to pursue this.
 
 For each extra feature, you must provide the following analysis:
 
@@ -252,7 +253,7 @@ Two examples are provided in the `scenes/` directory: a single emissive sphere, 
 
 ## Third-Party Code Policy
 
-* Use of any third-party code must be approved by asking on our Piazza.
+* Use of any third-party code must be approved by asking on our Ed Discussion.
 * If it is approved, all students are welcome to use it. Generally, we approve use of third-party code that is not a core part of the project. For example, for the path tracer, we would approve using a third-party library for loading models, but would not approve copying and pasting a CUDA function for doing refraction.
 * Third-party code **MUST** be credited in README.md.
 * Using third-party code without its approval, including using another student's code, is an academic integrity violation, and will, at minimum, result in you receiving an F for the semester.
