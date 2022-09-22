@@ -191,10 +191,8 @@ void InitImguiData(GuiDataContainer* guiData)
 // LOOK: Un-Comment to check ImGui Usage
 void RenderImGui()
 {
-	if(io->WantCaptureMouse)
-	{
-		mouseOverImGuiWinow = true;
-	}
+	mouseOverImGuiWinow = io->WantCaptureMouse;
+
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
