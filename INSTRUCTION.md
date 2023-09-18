@@ -84,7 +84,7 @@ An example set of optional features is:
 * Anti-aliasing - :two: points
 * Final rays post processing - :three: points
 
-This list is not comprehensive. If you have a particular idea you would like to implement (e.g. acceleration structures, etc.), please post on Piazza.
+This list is not comprehensive. If you have a particular idea you would like to implement (e.g. acceleration structures, etc.), please post on Ed.
 
 **Extra credit**: implement more features on top of the above required ones, with point value up to +25/100 at the grader's discretion (based on difficulty and coolness), generally .
 
@@ -125,7 +125,7 @@ This list is not comprehensive. If you have a particular idea you would like to 
 * :two: Work-efficient stream compaction using shared memory across multiple blocks. (See [*GPU Gems 3*, Chapter 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda).)
   * Note that you will NOT receieve extra credit for this if you implemented shared memory stream compaction as extra credit for Project 2.
 * :six: Hierarchical spatial data structures - for better ray/scene intersection testing
-  * Octree recommended - this feature is more about traversal on the GPU than perfect tree structure
+  * BVH or Octree recommended - this feature is more about traversal on the GPU than perfect tree structure
   * CPU-side data structure construction is sufficient - GPU-side construction was a [final project.](https://github.com/jeremynewlin/Accel)
   * Make sure this is toggleable for performance comparisons
   * If implemented in conjunction with Arbitrary mesh loading (required for this year), this qualifies as the toggleable bounding volume intersection culling.
@@ -137,6 +137,19 @@ Group rays by material without a sorting pass. A sane implementation will requir
   * It is important to note that integrating this is not as simple as it may seem at first glance. Library integration, buffer creation, device compatibility, and more are all real problems which will appear, and it may be hard to debug them. Please only try this if you have finished the Part 2 early and would like extra points. While this is difficult, the result would be a significantly faster resolution of the path traced image.
 * :five: Re-startable Path tracing: Save some application state (iteration number, samples so far, acceleration structure) so you can start and stop rendering instead of leaving your computer running for hours at end (which will happen in this project)
 * :five: Switch the project from using CUDA-OpenGL Interop to using CUDA-Vulkan interop (this is a really great one for those of you interested in doing Vulkan). Talk to TAs if you are planning to pursue this.
+
+#### Optimization
+**For those of you that are not as interested in the topic of rendering**, we encourage you to focus on optimizing the basic path tracer using GPU programming techniques and more advanced CUDA features.
+In addition to the core features, we do recommend at least implementing an OBJ mesh loader before focusing on optimization so that you can load in heavy geometries to start seeing performance hit.
+Please refer to the course materials (especially the CUDA Performance lecture) and the [CUDA's Best Practice Guide](https://docs.nvidia.com/cuda/pdf/CUDA_C_Best_Practices_Guide.pdf) on how to optimize CUDA performance. 
+Some examples include:
+* Use shared memory to improve memory bandwidth
+* Use intrinsinc functions to improve instruction throughput
+* Use CUDA streams and/or graph for concurrent kernel executions
+
+For each specific optimization technique, please post on Ed Discussion so we can determine the appropriate points to award. 
+
+## Analysis
 
 For each extra feature, you must provide the following analysis:
 
