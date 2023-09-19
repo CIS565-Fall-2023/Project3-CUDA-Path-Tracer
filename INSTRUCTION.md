@@ -102,7 +102,7 @@ This list is not comprehensive. If you have a particular idea you would like to 
   * Provide a performance comparison between the two
 * :two: Direct lighting (by taking a final ray directly to a random point on an emissive object acting as a light source). Or more advanced [PBRT 15.1.1].
 * :four: Subsurface scattering [PBRT 5.6.2, 11.6].
-* :three: [Better hemisphere sampling methods](https://cseweb.ucsd.edu/classes/sp17/cse168-a/CSE168_07_Random.pdf)
+* :three: [Better random number sequences for Monte Carlo ray tracing](https://cseweb.ucsd.edu/classes/sp17/cse168-a/CSE168_07_Random.pdf)
 * :three: Some method of defining object motion, and motion blur by averaging samples at different times in the animation.
 * :three: Use final rays to apply post-processing shaders. Please post your ideas on Piazza before starting.
 
