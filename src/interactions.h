@@ -2,6 +2,47 @@
 
 #include "intersections.h"
 
+__host__ __device__
+void make_coord_space(glm::mat3x3& o2w, glm::vec3 n) {
+    glm::vec3 z = glm::vec3(n.x, n.y, n.z);
+    glm::vec3 h = z;
+    if (fabs(h.x) <= fabs(h.y) && fabs(h.x) <= fabs(h.z))
+        h.x = 1.0;
+    else if (fabs(h.y) <= fabs(h.x) && fabs(h.y) <= fabs(h.z))
+        h.y = 1.0;
+    else
+        h.z = 1.0;
+
+    z = glm::normalize(z);
+    glm::vec3 y = cross(h, z);
+    y = glm::normalize(y);
+    glm::vec3 x = cross(z, y);
+    x = glm::normalize(x);
+
+    o2w[0] = x;
+    o2w[1] = y;
+    o2w[2] = z;
+}
+
+__host__ __device__
+glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float * pdf) {
+    thrust::uniform_real_distribution<float> u01(0, 1);
+
+    //float up = sqrt(u01(rng)); // cos(theta)
+    //float over = sqrt(1 - up * up); // sin(theta)
+    //float around = u01(rng) * TWO_PI;
+    //*pdf = sqrt(1 - up) / PI;
+    //return glm::vec3(cos(around) * over, sin(around) * over, up);
+
+    float Xi1 = u01(rng);
+    float Xi2 = u01(rng);
+
+    float r = sqrt(Xi1);
+    float theta = 2. * PI * Xi2;
+    *pdf = sqrt(1 - Xi1) / PI;
+    return glm::vec3(r * cos(theta), r * sin(theta), sqrt(1 - Xi1));
+}
+
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.

@@ -141,7 +141,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		PathSegment& segment = pathSegments[index];
 
 		segment.ray.origin = cam.position;
-		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+		segment.color = glm::vec3(0.0f, 0.0f, 0.0f);
 
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
@@ -151,6 +151,59 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
+		segment.constantTerm = glm::vec3(1.0f, 1.0f, 1.0f);
+	}
+}
+
+__device__ void computeIntersectionsCore(Geom* geoms, int geoms_size, Ray ray, ShadeableIntersection& intersection) {
+	float t;
+	glm::vec3 intersect_point;
+	glm::vec3 normal;
+	float t_min = FLT_MAX;
+	int hit_geom_index = -1;
+	bool outside = true;
+
+	glm::vec3 tmp_intersect;
+	glm::vec3 tmp_normal;
+
+	// naive parse through global geoms
+
+	for (int i = 0; i < geoms_size; i++)
+	{
+		Geom& geom = geoms[i];
+
+		if (geom.type == CUBE)
+		{
+			t = boxIntersectionTest(geom, ray, tmp_intersect, tmp_normal, outside);
+		}
+		else if (geom.type == SPHERE)
+		{
+			t = sphereIntersectionTest(geom, ray, tmp_intersect, tmp_normal, outside);
+		}
+		// TODO: add more intersection tests here... triangle? metaball? CSG?
+
+		// Compute the minimum t from the intersection tests to determine what
+		// scene geometry object was hit first.
+		if (t > EPSILON && t_min > t)
+		{
+			t_min = t;
+			hit_geom_index = i;
+			intersect_point = tmp_intersect;
+			normal = tmp_normal;
+		}
+	}
+
+
+	if (hit_geom_index == -1)
+	{
+		intersection.t = -1.0f;
+	}
+	else
+	{
+		//The ray hits something
+		intersection.t = t_min;
+		intersection.materialId = geoms[hit_geom_index].materialid;
+		intersection.surfaceNormal = normal;
 	}
 }
 
@@ -171,59 +224,9 @@ __global__ void computeIntersections(
 
 	if (path_index < num_paths)
 	{
-		PathSegment pathSegment = pathSegments[path_index];
-
-		float t;
-		glm::vec3 intersect_point;
-		glm::vec3 normal;
-		float t_min = FLT_MAX;
-		int hit_geom_index = -1;
-		bool outside = true;
-
-		glm::vec3 tmp_intersect;
-		glm::vec3 tmp_normal;
-
-		// naive parse through global geoms
-
-		for (int i = 0; i < geoms_size; i++)
-		{
-			Geom& geom = geoms[i];
-
-			if (geom.type == CUBE)
-			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-			}
-			else if (geom.type == SPHERE)
-			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
-
-			// Compute the minimum t from the intersection tests to determine what
-			// scene geometry object was hit first.
-			if (t > 0.0f && t_min > t)
-			{
-				t_min = t;
-				hit_geom_index = i;
-				intersect_point = tmp_intersect;
-				normal = tmp_normal;
-			}
-		}
-
-		if (hit_geom_index == -1)
-		{
-			intersections[path_index].t = -1.0f;
-		}
-		else
-		{
-			//The ray hits something
-			intersections[path_index].t = t_min;
-			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
-			intersections[path_index].surfaceNormal = normal;
-		}
+		computeIntersectionsCore(geoms, geoms_size, pathSegments[path_index].ray, intersections[path_index]);
 	}
 }
-
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -239,12 +242,15 @@ __global__ void shadeFakeMaterial(
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, Material* materials
+	, Geom * geoms
+	, int geoms_size
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx < num_paths)
 	{
 		ShadeableIntersection intersection = shadeableIntersections[idx];
+		PathSegment& pathSegment = pathSegments[idx];
 		if (intersection.t > 0.0f) { // if the intersection exists...
 		  // Set up the RNG
 		  // LOOK: this is how you use thrust's RNG! Please look at
@@ -258,13 +264,80 @@ __global__ void shadeFakeMaterial(
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
 				pathSegments[idx].remainingBounces = 0;
-				pathSegments[idx].color *= (materialColor * material.emittance);
+				//pathSegments[idx].color *= (materialColor * material.emittance);
+				pathSegment.color += (materialColor * material.emittance * pathSegment.constantTerm);
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-				scatterRay(pathSegments[idx], pathSegments[idx].ray.at(intersection.t), intersection.surfaceNormal, material, rng);
+				glm::mat3x3 o2w;
+				make_coord_space(o2w, intersection.surfaceNormal);
+				glm::mat3x3 w2o(glm::transpose(o2w));
+				glm::vec3 intersect = pathSegments[idx].ray.at(intersection.t);
+				//glm::vec3 localNormal = w2o * intersection.surfaceNormal;
+				//pathSegments[idx].color = localNormal;
+				glm::vec3 bsdf = materialColor * INV_PI; // Hard coded for now
+				glm::vec3 L_direct;
+				float pdf;
+				/* Estimate one bounce direct lighting */
+				int n_sample = 10;
+				int n_valid_sample = 0;
+				for (size_t i = 0; i < n_sample; i++)
+				{
+					glm::vec3 wo = hemiSphereRandomSample(rng, &pdf);
+					float cosineTerm = abs(wo.z);
+					Ray one_bounce_ray;
+				
+					one_bounce_ray.direction = o2w * wo;
+					one_bounce_ray.origin = intersect;
+					ShadeableIntersection oneBounceIntersection;
+					computeIntersectionsCore(geoms, geoms_size, one_bounce_ray, oneBounceIntersection);
+					if (oneBounceIntersection.t > 0.0f){
+						auto oneBounceMat = materials[oneBounceIntersection.materialId];
+						if (oneBounceMat.emittance > 0.0f) {
+							//pathSegments[idx].color = glm::vec3(1.0f);
+							auto Li = oneBounceMat.emittance * oneBounceMat.color;
+							//L_direct += Li * (materialColor * INV_PI) * cosineTerm;
+							n_valid_sample++;
+							L_direct += Li * bsdf * cosineTerm;
+						}
+					}
+				}
+
+
+				float one_over_n = 1.0f / (n_valid_sample + 1);
+				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
+
+				glm::vec3 wo = hemiSphereRandomSample(rng, &pdf);
+				float cosineTerm = abs(wo.z);
+				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
+				
+				pathSegment.ray.origin = intersect;
+				pathSegment.ray.direction = o2w * wo;
+				pathSegment.remainingBounces--;
+
+
+				//pathSegment.remainingBounces--;
+				//pathSegment.beta *= (materialColor * abs(glm::dot(-pathSegment.ray.direction, intersection.surfaceNormal)));
+				//printf("%f\n", abs(glm::dot(-pathSegment.ray.direction, intersection.surfaceNormal)));
+				//printf("pathSegment.beta: %f %f %f\n", pathSegment.beta[0], pathSegment.beta[1], pathSegment.beta[2]);
+				//pathSegment.color *= m.color;
+				//pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng));
+				//pathSegment.ray.origin = pathSegments[idx].ray.at(intersection.t) + 0.0001f * intersection.surfaceNormal;
+				//glm::vec3 one_bounce_radiance = (getFakeEmission() * materialColor /* should calculate cosinetheta as well*/);
+				//
+				///* Calculate next bounces */
+				//glm::vec3 wo = glm::normalize(calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng));
+				//float cosineThetaO = glm::dot(wo, intersection.surfaceNormal);
+				//pathSegment.beta *= (materialColor * cosineThetaO);
+				////pathSegment.beta *= (abs(glm::dot(-pathSegment.ray.direction, intersection.surfaceNormal)));
+
+				//pathSegment.color += one_bounce_radiance;
+				//pathSegment.ray.direction = wo;
+				//pathSegment.remainingBounces--;
+				//pathSegment.ray.origin = pathSegments[idx].ray.at(intersection.t) + 0.0001f * pathSegments[idx].ray.at(intersection.t);
+				//scatterRay(pathSegments[idx], pathSegments[idx].ray.at(intersection.t), intersection.surfaceNormal, material, rng);
 			}
 			// If there was no intersection, color the ray black.
 			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -272,7 +345,7 @@ __global__ void shadeFakeMaterial(
 			// This can be useful for post-processing and image compositing.
 		}
 		else {
-			pathSegments[idx].color = glm::vec3(0.0f);
+			//pathSegments[idx].color = glm::vec3(0.0f);
 			pathSegments[idx].remainingBounces = 0;
 		}
 	}
@@ -396,20 +469,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			num_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials
+			dev_materials,
+			dev_geoms, 
+			hst_scene->geoms.size()
 			);
-		// Use dev_intersections for compaction result
+		
+		// Use dev_paths for compaction result
 		// check if compacted dev_intersections has zero element, if it is, then iteraionComplete should be true.
-		//dev_path_end = thrust::remove_if(dev_paths_ptr, old_end, NoHit()).get();
-		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, HasHit());
-		num_paths = dev_path_end - dev_paths;
-		//printf("%d\n", num_paths);
-		// printf("%d\n", num_paths);
-		// num_paths = new_end - dev_intersections;
 		// If no, then we might be able to store the pixel that has not finished dev_intersection to largely decrease the number 
 		// of pixels that are required to continue raytracing.
-
-		// Meanwhile, we should use early termination here to avoid inifinte bouncing
+		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, HasHit());
+		num_paths = dev_path_end - dev_paths;
 		
 		//iterationComplete = (--constDepth == 0); // TODO: should be based off stream compaction results.
 		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.

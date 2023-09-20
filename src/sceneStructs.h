@@ -67,7 +67,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
-    float constantTerm = 1.0f;
+    glm::vec3 constantTerm;
 };
 
 // Use with a corresponding PathSegment to do:
