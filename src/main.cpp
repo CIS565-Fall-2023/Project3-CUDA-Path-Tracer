@@ -139,7 +139,7 @@ void runCuda() {
 		uchar4* pbo_dptr = NULL;
 		iteration++;
 		cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
-
+		
 		// execute the kernel
 		int frame = 0;
 		pathtrace(pbo_dptr, frame, iteration);

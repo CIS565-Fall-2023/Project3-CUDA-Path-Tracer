@@ -15,6 +15,9 @@ enum GeomType {
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+    __host__ __device__ glm::vec3 at(float t){
+        return origin + direction * t;
+    }
 };
 
 struct Geom {
@@ -64,6 +67,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    float constantTerm = 1.0f;
 };
 
 // Use with a corresponding PathSegment to do:
