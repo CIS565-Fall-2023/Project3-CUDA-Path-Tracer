@@ -71,6 +71,7 @@ struct PathSegment
     Ray ray;
     glm::vec3 color;
     int pixelIndex;
+    int bouncesSoFar;
     int remainingBounces;
 };
 

@@ -224,6 +224,7 @@ void RenderImGui()
 #if FIRST_BOUNCE_CACHE
 	ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
 #endif
+	ImGui::Checkbox("russian roulette", &imguiData->russianRoulette);
 
 	ImGui::End();
 
@@ -244,7 +245,7 @@ void mainLoop() {
 
 		runCuda();
 
-		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
+		string title = "CIS565 Path Tracer | " + Utils::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 		glBindTexture(GL_TEXTURE_2D, displayImage);

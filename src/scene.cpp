@@ -15,9 +15,9 @@ Scene::Scene(string filename) {
     }
     while (fp_in.good()) {
         string line;
-        utilityCore::safeGetline(fp_in, line);
+        Utils::safeGetline(fp_in, line);
         if (!line.empty()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
+            vector<string> tokens = Utils::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
                 loadMaterial(tokens[1]);
                 cout << " " << endl;
@@ -43,7 +43,7 @@ int Scene::loadGeom(string objectid) {
         string line;
 
         //load object type
-        utilityCore::safeGetline(fp_in, line);
+        Utils::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
             if (strcmp(line.c_str(), "sphere") == 0) {
                 cout << "Creating new sphere..." << endl;
@@ -55,17 +55,17 @@ int Scene::loadGeom(string objectid) {
         }
 
         //link material
-        utilityCore::safeGetline(fp_in, line);
+        Utils::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
+            vector<string> tokens = Utils::tokenizeString(line);
             newGeom.materialid = atoi(tokens[1].c_str());
             cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
         }
 
         //load transformations
-        utilityCore::safeGetline(fp_in, line);
+        Utils::safeGetline(fp_in, line);
         while (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
+            vector<string> tokens = Utils::tokenizeString(line);
 
             //load tranformations
             if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
@@ -76,10 +76,10 @@ int Scene::loadGeom(string objectid) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
 
-            utilityCore::safeGetline(fp_in, line);
+            Utils::safeGetline(fp_in, line);
         }
 
-        newGeom.transform = utilityCore::buildTransformationMatrix(
+        newGeom.transform = Utils::buildTransformationMatrix(
                 newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
@@ -98,8 +98,8 @@ int Scene::loadCamera() {
     //load static properties
     for (int i = 0; i < 5; i++) {
         string line;
-        utilityCore::safeGetline(fp_in, line);
-        vector<string> tokens = utilityCore::tokenizeString(line);
+        Utils::safeGetline(fp_in, line);
+        vector<string> tokens = Utils::tokenizeString(line);
         if (strcmp(tokens[0].c_str(), "RES") == 0) {
             camera.resolution.x = atoi(tokens[1].c_str());
             camera.resolution.y = atoi(tokens[2].c_str());
@@ -115,9 +115,9 @@ int Scene::loadCamera() {
     }
 
     string line;
-    utilityCore::safeGetline(fp_in, line);
+    Utils::safeGetline(fp_in, line);
     while (!line.empty() && fp_in.good()) {
-        vector<string> tokens = utilityCore::tokenizeString(line);
+        vector<string> tokens = Utils::tokenizeString(line);
         if (strcmp(tokens[0].c_str(), "EYE") == 0) {
             camera.position = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         } else if (strcmp(tokens[0].c_str(), "LOOKAT") == 0) {
@@ -126,7 +126,7 @@ int Scene::loadCamera() {
             camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
 
-        utilityCore::safeGetline(fp_in, line);
+        Utils::safeGetline(fp_in, line);
     }
 
     //calculate fov based on resolution
@@ -162,8 +162,8 @@ int Scene::loadMaterial(string materialid) {
         //load static properties
         for (int i = 0; i < 7; i++) {
             string line;
-            utilityCore::safeGetline(fp_in, line);
-            vector<string> tokens = utilityCore::tokenizeString(line);
+            Utils::safeGetline(fp_in, line);
+            vector<string> tokens = Utils::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "RGB") == 0) {
                 glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
                 newMaterial.color = color;

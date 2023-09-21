@@ -73,6 +73,7 @@ set(headers
     src/sceneStructs.h
     src/preview.h
     src/utilities.h
+    src/extrautils.hpp
     src/ImGui/imconfig.h
 	
 	src/ImGui/imgui.h

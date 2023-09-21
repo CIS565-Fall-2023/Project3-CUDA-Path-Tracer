@@ -14,6 +14,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
 #include "utilities.h"
+#include "extrautils.hpp"
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
@@ -179,6 +180,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	);
 
 	segment.pixelIndex = index;
+	segment.bouncesSoFar = 0;
 	segment.remainingBounces = traceDepth;
 }
 
@@ -248,12 +250,69 @@ __global__ void computeIntersections(
 	}
 }
 
+struct SegmentProcessingSettings
+{
+	bool russianRoulette;
+};
+
+__device__ void processSegment(PathSegment& segment, ShadeableIntersection intersection, Material* materials, int iter, int idx, SegmentProcessingSettings settings)
+{
+	if (intersection.t <= 0.0f)
+	{
+		segment.color = glm::vec3(0.0f);
+		segment.remainingBounces = 0;
+		return;
+	}
+
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.remainingBounces); // XXX: last argument might not be correct (might need to change it to max trace depth)
+
+	Material material = materials[intersection.materialId];
+
+	if (material.emittance > 0.0f)
+	{
+		segment.color *= (material.color * material.emittance);
+		segment.remainingBounces = 0;
+		return;
+	} 
+	
+	scatterRay(
+		segment,
+		getPointOnRay(segment.ray, intersection.t),
+		intersection.surfaceNormal,
+		material,
+		rng
+	);
+
+	++segment.bouncesSoFar;
+
+	if (--segment.remainingBounces == 0)
+	{
+		segment.color = glm::vec3(0.0f);
+		return;
+	}
+
+	if (settings.russianRoulette && segment.bouncesSoFar > 3)
+	{
+		float q = glm::max(0.05f, 1 - Utils::luminance(segment.color));
+		if (u01(rng) < q)
+		{
+			segment.color = glm::vec3(0.0f);
+			segment.remainingBounces = 0;
+			return;
+		}
+
+		segment.color /= (1 - q);
+	}
+}
+
 __global__ void shadeMaterial(
 	int iter,
 	int num_paths,
 	ShadeableIntersection* shadeableIntersections,
 	PathSegment* pathSegments, 
-	Material* materials
+	Material* materials,
+	SegmentProcessingSettings settings
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -264,42 +323,7 @@ __global__ void shadeMaterial(
 
 	PathSegment segment = pathSegments[idx];
 	ShadeableIntersection intersection = shadeableIntersections[idx];
-	if (intersection.t > 0.0f)
-	{
-
-		thrust::uniform_real_distribution<float> u01(0, 1);
-		thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.remainingBounces); // XXX: last argument might not be correct (might need to change it to max trace depth)
-
-		Material material = materials[intersection.materialId];
-
-		if (material.emittance > 0.0f)
-		{
-			segment.color *= (material.color * material.emittance);
-			segment.remainingBounces = 0;
-		}
-		else
-		{
-			scatterRay(
-				segment,
-				getPointOnRay(segment.ray, intersection.t), 
-				intersection.surfaceNormal, 
-				material,
-				rng
-			);
-
-			if (--segment.remainingBounces == 0)
-			{
-				segment.color = glm::vec3(0.0f);
-			}
-		}
-	}
-	else
-	{
-		segment.color = glm::vec3(0.0f);
-		segment.remainingBounces = 0;
-	}
-	
-	// TODO: russian roulette
+	processSegment(segment, intersection, materials, iter, idx, settings);
 
 	pathSegments[idx] = segment;
 }
@@ -399,12 +423,16 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			);
 		}
 
+		SegmentProcessingSettings settings;
+		settings.russianRoulette = guiData->russianRoulette;
+
 		shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			iter,
 			num_valid_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials
+			dev_materials,
+			settings
 		);
 
 		thrust::device_ptr<PathSegment> middle = thrust::partition(

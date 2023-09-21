@@ -77,8 +77,8 @@ void scatterRay(
     Ray newRay;
     newRay.origin = intersect;
 
-    float diffuseLuminance = glm::dot(m.color, glm::vec3(0.2126, 0.7152, 0.0722));
-    float specularLuminance = glm::dot(m.specular.color, glm::vec3(0.2126, 0.7152, 0.0722));
+    float diffuseLuminance = Utils::luminance(m.color);
+    float specularLuminance = Utils::luminance(m.specular.color);
     float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
 
     thrust::uniform_real_distribution<float> u01(0, 1);
