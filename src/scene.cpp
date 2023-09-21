@@ -4,7 +4,14 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-Scene::Scene(string filename) {
+//// Define these only in *one* .cc file.
+//#define TINYGLTF_IMPLEMENTATION
+//#define STB_IMAGE_IMPLEMENTATION
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
+//// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+//#include "tiny_gltf.h"
+
+HostScene::HostScene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -30,9 +37,12 @@ Scene::Scene(string filename) {
             }
         }
     }
+    /* Only emissive material supported for now  */
+    initLightFromObject();
+    geoms_size = geoms.size();
 }
 
-int Scene::loadGeom(string objectid) {
+int HostScene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
     if (id != geoms.size()) {
         cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
@@ -89,7 +99,7 @@ int Scene::loadGeom(string objectid) {
     }
 }
 
-int Scene::loadCamera() {
+int HostScene::loadCamera() {
     cout << "Loading Camera ..." << endl;
     RenderState &state = this->state;
     Camera &camera = state.camera;
@@ -150,7 +160,19 @@ int Scene::loadCamera() {
     return 1;
 }
 
-int Scene::loadMaterial(string materialid) {
+void HostScene::initLightFromObject()
+{
+    // TODO: Change geoms to meshes after refactoring geom part
+    for (const auto geom : geoms) {
+        auto mat = materials[geom.materialid];
+        if (mat.emittance > EPSILON) {
+            auto light = std::shared_ptr<Light>(new AreaLight(mat.color, mat.emittance));
+            lights.push_back(light);
+        }
+    }
+}
+
+int HostScene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
         cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;

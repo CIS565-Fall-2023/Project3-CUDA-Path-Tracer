@@ -62,17 +62,27 @@ set(GLM_ROOT_DIR "external")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
-set(headers
-    src/main.h
-    src/image.h
-    src/interactions.h
-    src/intersections.h
-    src/glslUtility.hpp
-    src/pathtrace.h
+set(scene
     src/scene.h
     src/sceneStructs.h
+    src/interactions.h
+    src/intersections.h
+    src/light.h
+    src/scene.cpp
+    src/light.cpp
+)
+
+set(core
+    src/main.h
+    src/main.cpp
     src/preview.h
-    src/utilities.h
+    src/preview.cpp
+    src/image.h
+    src/image.cpp
+    src/pathtrace.h
+    src/pathtrace.cu)
+
+set(imgui
     src/ImGui/imconfig.h
 	
 	src/ImGui/imgui.h
@@ -84,18 +94,6 @@ set(headers
      src/ImGui/imstb_rectpack.h 
      src/ImGui/imstb_textedit.h 
      src/ImGui/imstb_truetype.h 
-    )
-
-set(sources
-    src/main.cpp
-    src/stb.cpp
-    src/image.cpp
-    src/glslUtility.cpp
-    src/pathtrace.cu
-    src/scene.cpp
-    src/preview.cpp
-    src/utilities.cpp
-	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
       src/ImGui/imgui_draw.cpp 
@@ -105,16 +103,28 @@ set(sources
      src/ImGui/imgui_widgets.cpp 
     )
 
-list(SORT headers)
-list(SORT sources)
+set(common
+    src/utilities.h
+    src/glslUtility.hpp
+    src/utilities.cpp
+    src/glslUtility.cpp
+    src/stb.cpp
+    )
 
-source_group(Headers FILES ${headers})
-source_group(Sources FILES ${sources})
+list(SORT scene)
+list(SORT core)
+list(SORT imgui)
+list(SORT common)
+
+source_group(Scene FILES ${scene})
+source_group(ImGUI FILES ${imgui})
+source_group(Core FILES ${core})
+source_group(Common FILES ${common})
 
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
-cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
+cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${common} ${scene} ${core} )
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction

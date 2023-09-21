@@ -18,6 +18,7 @@
 #include "intersections.h"
 #include "interactions.h"
 #include "bxdf.h"
+#include "light.h"
 
 #define ERRORCHECK 1
 
@@ -72,13 +73,16 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	}
 }
 
-static Scene* hst_scene = NULL;
+static HostScene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
+static Light** dev_lights = nullptr;
+static Primitive ** dev_primitives = nullptr;
+static int primitve_size = 1;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -87,7 +91,31 @@ void InitDataContainer(GuiDataContainer* imGuiData)
 	guiData = imGuiData;
 }
 
-void pathtraceInit(Scene* scene) {
+__global__ void initAreaLightFromObject(HostScene * scene, Light** lights, Geom* geoms, Material * mats, int geoms_size) {
+	//lights[0] = new AreaLight(glm::vec3(1.0f, 1.0f, 1.0f), 5.0f);
+	int light_index = 0;
+	for (size_t i = 0; i < geoms_size; i++)
+	{
+		auto geom = geoms[i];
+		auto mat = mats[geom.materialid];
+		if (mat.emittance > EPSILON) {
+			lights[light_index] = new AreaLight(mat.color, mat.emittance);
+			light_index++;
+		}
+	}
+}
+
+__global__ void initTestTriangleScenePrimitives(Primitive** primitves) {
+	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+}
+
+void initTestTriangleScene() {
+	cudaMalloc(&dev_primitives, primitve_size * sizeof(Primitive*));
+	initTestTriangleScenePrimitives<<<1,1>>>(dev_primitives);
+}
+
+void pathtraceInit(HostScene* scene) {
 	hst_scene = scene;
 
 	const Camera& cam = hst_scene->state.camera;
@@ -107,7 +135,12 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
+	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light*));
+	//int size = scene->lights.size();
+	initAreaLightFromObject<<<1,1>>>(scene, dev_lights, dev_geoms, dev_materials, scene->geoms.size());
+	initTestTriangleScene();
 	// TODO: initialize any extra device memeory you need
+
 
 	checkCUDAError("pathtraceInit");
 }
@@ -207,6 +240,40 @@ __device__ void computeIntersectionsCore(Geom* geoms, int geoms_size, Ray ray, S
 	}
 }
 
+//TODO: Change to BVH in future!
+__device__ bool intersectCore(Primitive ** primitives, int primitive_size, Ray & ray, ShadeableIntersection& intersection) {
+
+	for (int i = 0; i < primitive_size; i++)
+	{
+		Primitive * primitive = primitives[i];
+
+		if (primitive->intersect(ray, &intersection)) {
+			return true;
+		}
+	}
+	intersection.t = -1.0f;
+	return false;
+}
+
+__global__ void intersect(
+	int depth
+	, int num_paths
+	, PathSegment* pathSegments
+	, Primitive** primitives
+	, int primitives_size
+	, ShadeableIntersection* intersections
+) {
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths)
+	{
+		Ray & ray = pathSegments[path_index].ray;
+		ray.min_t = 0.0;
+		ray.max_t = FLT_MAX;
+		intersectCore(primitives, primitives_size, pathSegments[path_index].ray, intersections[path_index]);
+	}
+}
+
 // TODO:
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
@@ -259,6 +326,8 @@ __global__ void shadeFakeMaterial(
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
+			pathSegment.color = intersection.surfaceNormal;
+			return;
 			glm::vec3 materialColor = material.color;
 
 			// If the material indicates that the object was a light, "light" the ray
@@ -293,22 +362,24 @@ __global__ void shadeFakeMaterial(
 					one_bounce_ray.origin = intersect;
 					ShadeableIntersection oneBounceIntersection;
 					computeIntersectionsCore(geoms, geoms_size, one_bounce_ray, oneBounceIntersection);
-					if (oneBounceIntersection.t > 0.0f){
+					if (oneBounceIntersection.t > EPSILON){
 						auto oneBounceMat = materials[oneBounceIntersection.materialId];
 						if (oneBounceMat.emittance > 0.0f) {
+							n_valid_sample++;
 							//pathSegments[idx].color = glm::vec3(1.0f);
 							auto Li = oneBounceMat.emittance * oneBounceMat.color;
-							//L_direct += Li * (materialColor * INV_PI) * cosineTerm;
-							n_valid_sample++;
+
+							// TODO: Figure out why is it still not so similar to the reference rendered image?
+							//		May be checkout the light propogation chapter of pbrt to find out how we use direct light estimation?
+							//L_direct += Li * bsdf * cosineTerm / pdf;
 							L_direct += Li * bsdf * cosineTerm;
 						}
 					}
 				}
 
-
 				float one_over_n = 1.0f / (n_valid_sample + 1);
 				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
-
+				
 				glm::vec3 wo = hemiSphereRandomSample(rng, &pdf);
 				float cosineTerm = abs(wo.z);
 				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
@@ -317,26 +388,6 @@ __global__ void shadeFakeMaterial(
 				pathSegment.ray.direction = o2w * wo;
 				pathSegment.remainingBounces--;
 
-
-				//pathSegment.remainingBounces--;
-				//pathSegment.beta *= (materialColor * abs(glm::dot(-pathSegment.ray.direction, intersection.surfaceNormal)));
-				//printf("%f\n", abs(glm::dot(-pathSegment.ray.direction, intersection.surfaceNormal)));
-				//printf("pathSegment.beta: %f %f %f\n", pathSegment.beta[0], pathSegment.beta[1], pathSegment.beta[2]);
-				//pathSegment.color *= m.color;
-				//pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng));
-				//pathSegment.ray.origin = pathSegments[idx].ray.at(intersection.t) + 0.0001f * intersection.surfaceNormal;
-				//glm::vec3 one_bounce_radiance = (getFakeEmission() * materialColor /* should calculate cosinetheta as well*/);
-				//
-				///* Calculate next bounces */
-				//glm::vec3 wo = glm::normalize(calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng));
-				//float cosineThetaO = glm::dot(wo, intersection.surfaceNormal);
-				//pathSegment.beta *= (materialColor * cosineThetaO);
-				////pathSegment.beta *= (abs(glm::dot(-pathSegment.ray.direction, intersection.surfaceNormal)));
-
-				//pathSegment.color += one_bounce_radiance;
-				//pathSegment.ray.direction = wo;
-				//pathSegment.remainingBounces--;
-				//pathSegment.ray.origin = pathSegments[idx].ray.at(intersection.t) + 0.0001f * pathSegments[idx].ray.at(intersection.t);
 				//scatterRay(pathSegments[idx], pathSegments[idx].ray.at(intersection.t), intersection.surfaceNormal, material, rng);
 			}
 			// If there was no intersection, color the ray black.
@@ -443,14 +494,25 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d >>> (
+		//computeIntersections <<<numblocksPathSegmentTracing, blockSize1d >>> (
+		//	depth
+		//	, num_paths
+		//	, dev_paths
+		//	, dev_geoms
+		//	, hst_scene->geoms.size()
+		//	, dev_intersections
+		//	);
+
+
+		intersect << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
 			, dev_paths
-			, dev_geoms
-			, hst_scene->geoms.size()
+			, dev_primitives
+			, primitve_size
 			, dev_intersections
 			);
+
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
 		depth++;
@@ -482,8 +544,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		num_paths = dev_path_end - dev_paths;
 		
 		//iterationComplete = (--constDepth == 0); // TODO: should be based off stream compaction results.
-		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
-		 //iterationComplete = (true);
+		//iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
+		 iterationComplete = (true);
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;

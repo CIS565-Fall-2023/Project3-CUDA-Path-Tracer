@@ -26,7 +26,7 @@ using namespace std;
 //----------PATH TRACER----------
 //-------------------------------
 
-extern Scene* scene;
+extern HostScene* scene;
 extern int iteration;
 
 extern int width;
