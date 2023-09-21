@@ -14,8 +14,8 @@ project, and we will not be able to grade you without a good README.
 ### Features
 
 - Basic path tracer
-- Sorting rays to be more contiguous in memory (disabled for now since it actually decreases performance)
-- First bounce cache
+- Toggleable option to sort rays by material type
+- Toggleable first bounce cache (disabled for now since I don't think it works with anti-aliasing)
 
 ### Planned features
 

@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
-	InitDataContainer(guiData);
+	Pathtracer::InitDataContainer(guiData);
 
 	// GLFW main loop
 	mainLoop();
@@ -124,6 +124,9 @@ void runCuda() {
 		cam.position = cameraPosition;
 		cameraPosition += cam.lookAt;
 		cam.position = cameraPosition;
+
+		Pathtracer::onCamChanged();
+
 		camchanged = false;
 	}
 
@@ -131,8 +134,8 @@ void runCuda() {
 	// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not use this buffer
 
 	if (iteration == 0) {
-		pathtraceFree();
-		pathtraceInit(scene);
+		Pathtracer::free();
+		Pathtracer::init(scene);
 	}
 
 	if (iteration < renderState->iterations) {
@@ -142,14 +145,14 @@ void runCuda() {
 
 		// execute the kernel
 		int frame = 0;
-		pathtrace(pbo_dptr, frame, iteration);
+		Pathtracer::pathtrace(pbo_dptr, frame, iteration);
 
 		// unmap buffer object
 		cudaGLUnmapBufferObject(pbo);
 	}
 	else {
 		saveImage();
-		pathtraceFree();
+		Pathtracer::free();
 		cudaDeviceReset();
 		exit(EXIT_SUCCESS);
 	}

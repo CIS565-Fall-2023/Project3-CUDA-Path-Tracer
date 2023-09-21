@@ -20,6 +20,8 @@
 
 #define ERRORCHECK 1
 
+#define FIRST_BOUNCE_CACHE 0
+
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -78,16 +80,29 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
-// TODO: static variables for device memory, any extra info you need, etc
+
 static thrust::device_ptr<PathSegment> dev_thrust_paths = NULL;
 static thrust::device_ptr<ShadeableIntersection> dev_thrust_intersections = NULL;
 
-void InitDataContainer(GuiDataContainer* imGuiData)
+/*
+* Note that this implementation isn't correct (it caches path segments after one bounce instead of
+* the initial bounces themselves, so all second bounces go the same way) but I don't think this
+* first bounce cache will work regardless, so I'm leaving it disabled but untouched.
+*/
+#if FIRST_BOUNCE_CACHE
+	static bool fbcNeedsRefresh = true;
+	static PathSegment* dev_paths_fbc = NULL;
+	static thrust::device_ptr<PathSegment> dev_thrust_paths_fbc = NULL;
+	static int num_valid_paths_fbc;
+#endif
+
+
+void Pathtracer::InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
 }
 
-void pathtraceInit(Scene* scene) {
+void Pathtracer::init(Scene* scene) {
 	hst_scene = scene;
 
 	const Camera& cam = hst_scene->state.camera;
@@ -109,18 +124,25 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
 
-	// TODO: initialize any extra device memory you need
+#if FIRST_BOUNCE_CACHE
+	cudaMalloc(&dev_paths_fbc, pixelcount * sizeof(PathSegment));
+	dev_thrust_paths_fbc = thrust::device_pointer_cast(dev_paths_fbc);
+#endif
+
 
 	checkCUDAError("pathtraceInit");
 }
 
-void pathtraceFree() {
+void Pathtracer::free() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
-	// TODO: clean up any extra device memory you created
+
+#if FIRST_BOUNCE_CACHE
+	cudaFree(dev_paths_fbc);
+#endif
 
 	checkCUDAError("pathtraceFree");
 }
@@ -306,7 +328,7 @@ struct partition_predicate
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
  */
-void pathtrace(uchar4* pbo, int frame, int iter) {
+void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -320,17 +342,32 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
-	generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
-	checkCUDAError("generate camera ray");
-
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_paths = dev_path_end - dev_paths;
+	int num_total_paths = dev_path_end - dev_paths;
+	int num_valid_paths;
 
-	// --- PathSegment Tracing Stage ---
-	// Shoot ray into scene, bounce between objects, push shading chunks
+#if FIRST_BOUNCE_CACHE
+	if (guiData->firstBounceCache && !fbcNeedsRefresh)
+	{
+		thrust::copy(
+			thrust::device,
+			dev_thrust_paths_fbc,
+			dev_thrust_paths_fbc + num_total_paths,
+			dev_thrust_paths
+		);
+		num_valid_paths = num_valid_paths_fbc;
+		++depth;
+	}
+	else
+#endif
+	{
+		generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
+		checkCUDAError("generate camera ray");
+		num_valid_paths = num_total_paths;
+	}
 
-	int num_valid_paths = num_paths;
+
 	while (num_valid_paths > 0) {
 		// clean shading chunks
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
@@ -347,7 +384,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		);
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
-		depth++;
+		++depth;
 
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
@@ -379,6 +416,20 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		num_valid_paths = middle - dev_thrust_paths;
 
+#if FIRST_BOUNCE_CACHE
+		if (guiData->firstBounceCache && depth == 1 && fbcNeedsRefresh)
+		{
+			thrust::copy(
+				thrust::device,
+				dev_thrust_paths,
+				dev_thrust_paths + num_total_paths,
+				dev_thrust_paths_fbc
+			);
+			num_valid_paths_fbc = num_valid_paths;
+			fbcNeedsRefresh = false;
+		}
+#endif
+
 		if (guiData != NULL)
 		{
 			guiData->tracedDepth = depth;
@@ -387,7 +438,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather<<<numBlocksPixels, blockSize1d>>>(num_paths, dev_image, dev_paths);
+	finalGather<<<numBlocksPixels, blockSize1d>>>(num_total_paths, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
 
@@ -399,4 +450,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 
 	checkCUDAError("pathtrace");
+}
+
+void Pathtracer::onCamChanged()
+{
+#if FIRST_BOUNCE_CACHE
+	fbcNeedsRefresh = true;
+#endif
 }

@@ -22,6 +22,7 @@ public:
     int tracedDepth{ 0 };
 
     bool sortByMaterial{ false };
+    bool firstBounceCache{ true };
 };
 
 namespace utilityCore {

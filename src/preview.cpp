@@ -221,6 +221,9 @@ void RenderImGui()
 	ImGui::Text("application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
 	ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
+#if FIRST_BOUNCE_CACHE
+	ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
+#endif
 
 	ImGui::End();
 

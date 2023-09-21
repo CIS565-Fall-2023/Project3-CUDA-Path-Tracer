@@ -3,7 +3,13 @@
 #include <vector>
 #include "scene.h"
 
-void InitDataContainer(GuiDataContainer* guiData);
-void pathtraceInit(Scene *scene);
-void pathtraceFree();
-void pathtrace(uchar4 *pbo, int frame, int iteration);
+namespace Pathtracer
+{
+    void InitDataContainer(GuiDataContainer* guiData);
+
+    void init(Scene* scene);
+    void free();
+    void pathtrace(uchar4* pbo, int frame, int iteration);
+
+    void onCamChanged();
+}
