@@ -20,6 +20,8 @@
 
 #define ERRORCHECK 1
 
+#define SORT_BY_MATERIAL 0
+
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -226,15 +228,6 @@ __global__ void computeIntersections(
 	}
 }
 
-// LOOK: "fake" shader demonstrating what you might do with the info in
-// a ShadeableIntersection, as well as how to use thrust's random number
-// generator. Observe that since the thrust random number generator basically
-// adds "noise" to the iteration, the image should start off noisy and get
-// cleaner as more iterations are computed.
-//
-// Note that this shader does NOT do a BSDF evaluation!
-// Your shaders should handle that - this can allow techniques such as
-// bump mapping.
 __global__ void shadeMaterial(
 	int iter,
 	int num_paths,
@@ -392,12 +385,14 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
 
-		// TODO fix this lol
+#if SORT_BY_MATERIAL
 		thrust::sort_by_key(
+			thrust::device,
 			dev_thrust_intersections,
 			dev_thrust_intersections + num_valid_paths,
 			dev_thrust_paths
 		);
+#endif
 
 		shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			iter,
@@ -408,6 +403,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		);
 
 		thrust::device_ptr<PathSegment> middle = thrust::partition(
+			thrust::device,
 			dev_thrust_paths,
 			dev_thrust_paths + num_valid_paths,
 			partition_predicate()

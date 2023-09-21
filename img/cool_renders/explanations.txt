@@ -1,0 +1,2 @@
+001 - basic path tracing, but I didn't realize that the lambert term is canceled out by the PDF (see here: https://computergraphics.stackexchange.com/questions/9499/confusion-around-lamberts-cosine-law-in-ray-tracing-in-one-weekend)
+002 - sorting just the intersections but not sorting the segments in tandem (seen while debugging thrust sort)

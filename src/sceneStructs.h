@@ -83,7 +83,7 @@ struct ShadeableIntersection
     glm::vec3 surfaceNormal;
     int materialId;
 
-    bool operator<(const ShadeableIntersection& other) const {
+    __host__ __device__ bool operator<(const ShadeableIntersection& other) const {
         return materialId < other.materialId;
     }
 };
