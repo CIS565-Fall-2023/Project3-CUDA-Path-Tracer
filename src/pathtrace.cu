@@ -80,6 +80,7 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 static thrust::device_ptr<PathSegment> dev_thrust_paths = NULL;
+static thrust::device_ptr<ShadeableIntersection> dev_thrust_intersections = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -106,6 +107,7 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
 
 	// TODO: initialize any extra device memory you need
 
@@ -158,10 +160,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	segment.remainingBounces = traceDepth;
 }
 
-// TODO:
-// computeIntersections handles generating ray intersections ONLY.
-// Generating new rays is handled in your shader(s).
-// Feel free to modify the code below.
 __global__ void computeIntersections(
 	int depth
 	, int num_paths
@@ -237,7 +235,7 @@ __global__ void computeIntersections(
 // Note that this shader does NOT do a BSDF evaluation!
 // Your shaders should handle that - this can allow techniques such as
 // bump mapping.
-__global__ void shadeFakeMaterial(
+__global__ void shadeMaterial(
 	int iter,
 	int num_paths,
 	ShadeableIntersection* shadeableIntersections,
@@ -287,6 +285,8 @@ __global__ void shadeFakeMaterial(
 		segment.color = glm::vec3(0.0f);
 		segment.remainingBounces = 0;
 	}
+	
+	// TODO: russian roulette
 
 	pathSegments[idx] = segment;
 }
@@ -389,16 +389,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 		depth++;
 
-		// TODO:
-		// --- Shading Stage ---
-		// Shade path segments based on intersections and generate new rays by
-	  // evaluating the BSDF.
-	  // Start off with just a big kernel that handles all the different
-	  // materials you have in the scenefile.
-	  // TODO: compare between directly shading the path segments and shading
-	  // path segments that have been reshuffled to be contiguous in memory.
+		// TODO: compare between directly shading the path segments and shading
+		// path segments that have been reshuffled to be contiguous in memory.
 
-		shadeFakeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
+		// TODO fix this lol
+		thrust::sort_by_key(
+			dev_thrust_intersections,
+			dev_thrust_intersections + num_valid_paths,
+			dev_thrust_paths
+		);
+
+		shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			iter,
 			num_valid_paths,
 			dev_intersections,

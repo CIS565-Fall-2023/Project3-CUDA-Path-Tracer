@@ -87,6 +87,12 @@ void scatterRay(
         // diffuse
         newRay.direction = calculateRandomDirectionInHemisphere(normal, rng);
         pathSegment.color *= m.color / (diffuseChance);
+
+        /* 
+        disabled because lambert term is canceled out by the PDF
+        https://computergraphics.stackexchange.com/questions/9499/confusion-around-lamberts-cosine-law-in-ray-tracing-in-one-weekend
+        */ 
+        // pathSegment.color *= glm::dot(newRay.direction, normal);
     } 
     else
     {
@@ -95,6 +101,5 @@ void scatterRay(
         pathSegment.color *= m.specular.color / (1 - diffuseChance);
     }
 
-    pathSegment.color *= glm::dot(newRay.direction, normal);
     pathSegment.ray = newRay;
 }
