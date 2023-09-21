@@ -20,8 +20,6 @@
 
 #define ERRORCHECK 1
 
-#define SORT_BY_MATERIAL 0
-
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -322,37 +320,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
-	///////////////////////////////////////////////////////////////////////////
-
-	// Recap:
-	// * Initialize array of path rays (using rays that come out of the camera)
-	//   * You can pass the Camera object to that kernel.
-	//   * Each path ray must carry at minimum a (ray, color) pair,
-	//   * where color starts as the multiplicative identity, white = (1, 1, 1).
-	//   * This has already been done for you.
-	// * For each depth:
-	//   * Compute an intersection in the scene for each path ray.
-	//     A very naive version of this has been implemented for you, but feel
-	//     free to add more primitives and/or a better algorithm.
-	//     Currently, intersection distance is recorded as a parametric distance,
-	//     t, or a "distance along the ray." t = -1.0 indicates no intersection.
-	//     * Color is attenuated (multiplied) by reflections off of any object
-	//   * TODO: Stream compact away all of the terminated paths.
-	//     You may use either your implementation or `thrust::remove_if` or its
-	//     cousins.
-	//     * Note that you can't really use a 2D kernel launch any more - switch
-	//       to 1D.
-	//   * TODO: Shade the rays that intersected something or didn't bottom out.
-	//     That is, color the ray by performing a color computation according
-	//     to the shader, then generate a new ray to continue the ray path.
-	//     We recommend just updating the ray's PathSegment in place.
-	//     Note that this step may come before or after stream compaction,
-	//     since some shaders you write may also cause a path to terminate.
-	// * Finally, add this iteration's results to the image. This has been done
-	//   for you.
-
-	// TODO: perform one iteration of path tracing
-
 	generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
 
@@ -385,14 +352,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
 
-#if SORT_BY_MATERIAL
-		thrust::sort_by_key(
-			thrust::device,
-			dev_thrust_intersections,
-			dev_thrust_intersections + num_valid_paths,
-			dev_thrust_paths
-		);
-#endif
+		if (guiData->sortByMaterial)
+		{
+			thrust::sort_by_key(
+				thrust::device,
+				dev_thrust_intersections,
+				dev_thrust_intersections + num_valid_paths,
+				dev_thrust_paths
+			);
+		}
 
 		shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			iter,
@@ -413,7 +381,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		if (guiData != NULL)
 		{
-			guiData->TracedDepth = depth;
+			guiData->tracedDepth = depth;
 		}
 	}
 

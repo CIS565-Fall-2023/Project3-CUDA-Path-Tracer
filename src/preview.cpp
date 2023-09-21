@@ -199,11 +199,11 @@ void RenderImGui()
 
 	bool show_demo_window = true;
 	bool show_another_window = false;
-	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.0f);
 	static float f = 0.0f;
 	static int counter = 0;
 
-	ImGui::Begin("Path Tracer Analytics");                  // Create a window called "Hello, world!" and append into it.
+	ImGui::Begin("Path Tracer Analytics", 0, ImGuiWindowFlags_AlwaysAutoResize);
 	
 	// LOOK: Un-Comment to check the output window and usage
 	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
@@ -217,14 +217,16 @@ void RenderImGui()
 	//	counter++;
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
-	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
-	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::Text("traced depth %d", imguiData->tracedDepth);
+	ImGui::Text("application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+	ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
+
 	ImGui::End();
 
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 }
 
 bool MouseOverImGuiWindow()
