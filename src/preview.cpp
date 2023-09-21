@@ -232,12 +232,12 @@ bool MouseOverImGuiWindow()
 	return mouseOverImGuiWinow;
 }
 
-void mainLoop() {
+void mainLoop(CudaPathTracer& cuda_pathtracer) {
 	while (!glfwWindowShouldClose(window)) {
 		
 		glfwPollEvents();
 
-		runCuda();
+		runCuda(cuda_pathtracer);
 
 		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());

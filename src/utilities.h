@@ -9,10 +9,7 @@
 #include <string>
 #include <vector>
 
-#define PI                3.1415926535897932384626422832795028841971f
-#define TWO_PI            6.2831853071795864769252867665590057683943f
-#define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
-#define EPSILON           0.00001f
+#include "common.h"
 
 class GuiDataContainer
 {
@@ -29,5 +26,23 @@ namespace utilityCore {
     extern std::vector<std::string> tokenizeString(std::string str);
     extern glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
     extern std::string convertIntToString(int number);
-    extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413
+    extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/
+}
+
+INILNE CPU_GPU void CoordinateSystem(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
+{
+	glm::vec3 up = glm::abs(normal.z) < 0.999f ? glm::vec3(0.f, 0.f, 1.f) : glm::vec3(1.f, 0.f, 0.f);
+	tangent = glm::normalize(glm::cross(up, normal));
+	bitangent = glm::cross(normal, tangent);
+}
+
+INILNE CPU_GPU glm::mat3 LocalToWorld(const::glm::vec3& nor)
+{
+	glm::vec3 tan, bit;
+	CoordinateSystem(nor, tan, bit);
+	return glm::mat3(tan, bit, nor);
+}
+INILNE CPU_GPU glm::mat3 WorldToLocal(const::glm::vec3& nor)
+{
+	return glm::transpose(LocalToWorld(nor));
 }

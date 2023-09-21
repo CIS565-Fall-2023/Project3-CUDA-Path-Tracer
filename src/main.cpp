@@ -30,22 +30,30 @@ int height;
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
+#define JOIN(a, b) a##b
+#define JOIN2(a, b) JOIN(a, b)
+#define STR(a) #a
+#define STR2(a) STR(a)
+
+std::string scene_path = STR2(JOIN2(PROJ_BASE_PATH, /scenes));
 
 int main(int argc, char** argv) {
 	startTimeString = currentTimeString();
 
-	if (argc < 2) {
-		printf("Usage: %s SCENEFILE.txt\n", argv[0]);
-		return 1;
-	}
-
-	const char* sceneFile = argv[1];
+	//if (argc < 2) {
+	//	printf("Usage: %s SCENEFILE.txt\n", argv[0]);
+	//	return 1;
+	//}
+	std::string scene_file = (scene_path + "/cornellBox.txt");
+	const char* sceneFile = scene_file.c_str();
 
 	// Load scene file
 	scene = new Scene(sceneFile);
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
+
+	CudaPathTracer cuda_pt;
 
 	// Set up camera stuff from loaded path tracer settings
 	iteration = 0;
@@ -54,7 +62,7 @@ int main(int argc, char** argv) {
 	width = cam.resolution.x;
 	height = cam.resolution.y;
 
-	glm::vec3 view = cam.view;
+	glm::vec3 view = cam.forward;
 	glm::vec3 up = cam.up;
 	glm::vec3 right = glm::cross(view, up);
 	up = glm::cross(right, view);
@@ -67,34 +75,27 @@ int main(int argc, char** argv) {
 	glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
 	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
 	theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
-	ogLookAt = cam.lookAt;
+	ogLookAt = cam.ref;
 	zoom = glm::length(cam.position - ogLookAt);
 
 	// Initialize CUDA and GL components
 	init();
-
+	cuda_pt.Init(scene);
 	// Initialize ImGui Data
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
 
 	// GLFW main loop
-	mainLoop();
+	mainLoop(cuda_pt);
 
 	return 0;
 }
 
-void saveImage() {
+void saveImage(CudaPathTracer& cuda_pathtracer) {
 	float samples = iteration;
 	// output image file
 	image img(width, height);
-
-	for (int x = 0; x < width; x++) {
-		for (int y = 0; y < height; y++) {
-			int index = x + (y * width);
-			glm::vec3 pix = renderState->image[index];
-			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
-		}
-	}
+	cuda_pathtracer.GetImage(img.pixels);
 
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
@@ -106,50 +107,50 @@ void saveImage() {
 	//img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
-void runCuda() {
+void runCuda(CudaPathTracer& cuda_pathtracer) {
 	if (camchanged) {
-		iteration = 0;
 		Camera& cam = renderState->camera;
 		cameraPosition.x = zoom * sin(phi) * sin(theta);
 		cameraPosition.y = zoom * cos(theta);
 		cameraPosition.z = zoom * cos(phi) * sin(theta);
 
-		cam.view = -glm::normalize(cameraPosition);
-		glm::vec3 v = cam.view;
+		cam.forward = -glm::normalize(cameraPosition);
+		glm::vec3 v = cam.forward;
 		glm::vec3 u = glm::vec3(0, 1, 0);//glm::normalize(cam.up);
 		glm::vec3 r = glm::cross(v, u);
 		cam.up = glm::cross(r, v);
 		cam.right = r;
 
 		cam.position = cameraPosition;
-		cameraPosition += cam.lookAt;
+		cameraPosition += cam.ref;
 		cam.position = cameraPosition;
 		camchanged = false;
+
+		cuda_pathtracer.Reset();
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
 	// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not use this buffer
 
 	if (iteration == 0) {
-		pathtraceFree();
-		pathtraceInit(scene);
+		//pathtraceFree();
+		//cuda_pathtracer.Init(scene);
 	}
 
-	if (iteration < renderState->iterations) {
+	if (cuda_pathtracer.m_Iteration < renderState->iterations) {
 		uchar4* pbo_dptr = NULL;
 		iteration++;
 		cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
 
 		// execute the kernel
 		int frame = 0;
-		pathtrace(pbo_dptr, frame, iteration);
+		cuda_pathtracer.Render(pbo_dptr, frame, iteration);
 
 		// unmap buffer object
 		cudaGLUnmapBufferObject(pbo);
 	}
 	else {
-		saveImage();
-		pathtraceFree();
+		saveImage(cuda_pathtracer);
 		cudaDeviceReset();
 		exit(EXIT_SUCCESS);
 	}
@@ -159,17 +160,15 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	if (action == GLFW_PRESS) {
 		switch (key) {
 		case GLFW_KEY_ESCAPE:
-			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
 		case GLFW_KEY_S:
-			saveImage();
 			break;
 		case GLFW_KEY_SPACE:
 			camchanged = true;
 			renderState = &scene->state;
 			Camera& cam = renderState->camera;
-			cam.lookAt = ogLookAt;
+			cam.ref = ogLookAt;
 			break;
 		}
 	}
@@ -191,7 +190,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 		// compute new camera parameters
 		phi -= (xpos - lastX) / width;
 		theta -= (ypos - lastY) / height;
-		theta = std::fmax(0.001f, std::fmin(theta, PI));
+		theta = std::fmax(0.001f, std::fmin(theta, Pi));
 		camchanged = true;
 	}
 	else if (rightMousePressed) {
@@ -202,15 +201,15 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	else if (middleMousePressed) {
 		renderState = &scene->state;
 		Camera& cam = renderState->camera;
-		glm::vec3 forward = cam.view;
+		glm::vec3 forward = cam.forward;
 		forward.y = 0.0f;
 		forward = glm::normalize(forward);
 		glm::vec3 right = cam.right;
 		right.y = 0.0f;
 		right = glm::normalize(right);
 
-		cam.lookAt -= (float)(xpos - lastX) * right * 0.01f;
-		cam.lookAt += (float)(ypos - lastY) * forward * 0.01f;
+		cam.ref -= (float)(xpos - lastX) * right * 0.01f;
+		cam.ref += (float)(ypos - lastY) * forward * 0.01f;
 		camchanged = true;
 	}
 	lastX = xpos;
