@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include <thrust/random.h>
 
 // CHECKITOUT
 /**
@@ -9,12 +10,13 @@
  */
 __host__ __device__
 glm::vec3 calculateRandomDirectionInHemisphere(
-        glm::vec3 normal, thrust::default_random_engine &rng) {
+        glm::vec3 normal, thrust::default_random_engine &rng, float& z) {
     thrust::uniform_real_distribution<float> u01(0, 1);
 
     float up = sqrt(u01(rng)); // cos(theta)
     float over = sqrt(1 - up * up); // sin(theta)
     float around = u01(rng) * TWO_PI;
+    z = up;
 
     // Find a direction that is not the normal based off of whether or not the
     // normal's components are all equal to sqrt(1/3) or whether or not at
@@ -76,4 +78,29 @@ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+
+    // If the material indicates that the object was a light, "light" the ray
+    if (m.emittance > 0.0f) {
+        pathSegment.color *= (m.color * m.emittance);
+        pathSegment.remainingBounces = -1;
+    }
+    else if (m.hasRefractive > 0.0f) { // transparent material
+        // TODO:
+        pathSegment.color = glm::vec3(0.0f);
+        pathSegment.remainingBounces = -1;
+    }
+    else if (m.hasReflective > 0.0f) { // specular reflection
+        pathSegment.remainingBounces -= 1;
+        pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
+        pathSegment.ray.origin = intersect;
+    }
+    else { // diffuse reflection
+        float z;
+        glm::vec3 wi = calculateRandomDirectionInHemisphere(normal, rng, z);
+        pathSegment.color *= m.color * abs(dot(normal, wi)) / z;
+        pathSegment.ray.direction = wi;
+        pathSegment.ray.origin = intersect;
+        pathSegment.remainingBounces -= 1;
+    }
+
 }
