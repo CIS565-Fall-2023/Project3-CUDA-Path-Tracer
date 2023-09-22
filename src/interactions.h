@@ -75,7 +75,6 @@ void scatterRay(
         thrust::default_random_engine &rng) 
 {
     Ray newRay;
-    newRay.origin = intersect;
 
     float diffuseLuminance = Utils::luminance(m.color);
     float specularLuminance = Utils::luminance(m.specular.color);
@@ -96,10 +95,51 @@ void scatterRay(
     } 
     else
     {
-        // specular
-        newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
-        pathSegment.color *= m.specular.color / (1 - diffuseChance);
+        if (m.hasReflective > 0 && m.hasRefractive > 0)
+        {
+            float cosTheta = abs(glm::dot(pathSegment.ray.direction, normal));
+            float R0 = (1 - m.indexOfRefraction) / (1 + m.indexOfRefraction);
+            R0 = R0 * R0;
+            float fresnel = R0 + (1 - R0) * pow(1.f - cosTheta, 5.f);
+
+            if (u01(rng) < fresnel) // implicit multiplication by fresnel
+            {
+                // reflect
+                newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
+                pathSegment.color *= m.specular.color;
+            } 
+            else
+            {
+                // refract
+                bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
+                newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
+                pathSegment.color *= m.specular.color;
+            }
+        } 
+        else if (m.hasReflective > 0)
+        {
+            newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
+            pathSegment.color *= m.specular.color;
+        } 
+        else if (m.hasRefractive > 0)
+        {
+            bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
+            newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
+            pathSegment.color *= m.specular.color;
+        }
+
+        if (glm::dot(newRay.direction, newRay.direction) == 0)
+        {
+            pathSegment.color = glm::vec3(0);
+            pathSegment.remainingBounces = 0;
+            return;
+        }
+        else
+        {
+            pathSegment.color /= (1 - diffuseChance);
+        }
     }
 
+    newRay.origin = intersect + 0.001f * newRay.direction;
     pathSegment.ray = newRay;
 }

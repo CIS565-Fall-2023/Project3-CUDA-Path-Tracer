@@ -20,5 +20,9 @@ project, and we will not be able to grade you without a good README.
 
 ### Planned features
 
+- Fix first bounce cache (even though it won't actually be used)
 - Refraction
+- Mesh loader
+  - Textures
 - Open Image Denoise
+- Direct/full lighting?
