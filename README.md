@@ -17,11 +17,11 @@ project, and we will not be able to grade you without a good README.
 - Toggleable option to sort rays by material type
 - Toggleable first bounce cache (disabled for now since I don't think it works with anti-aliasing)
 - Russian roulette path termination
+- Refraction
 
 ### Planned features
 
 - Fix first bounce cache (even though it won't actually be used)
-- Refraction
 - Mesh loader
   - Textures
 - Open Image Denoise
