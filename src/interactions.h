@@ -41,6 +41,21 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__
+void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m)
+{
+    newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
+    pathSegment.color *= m.specular.color;
+}
+
+__host__ __device__
+void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m)
+{
+    bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
+    newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
+    pathSegment.color *= m.specular.color;
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -104,28 +119,20 @@ void scatterRay(
 
             if (u01(rng) < fresnel) // implicit multiplication by fresnel
             {
-                // reflect
-                newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
-                pathSegment.color *= m.specular.color;
+                applyReflection(pathSegment, newRay, normal, m);
             } 
             else
             {
-                // refract
-                bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
-                newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
-                pathSegment.color *= m.specular.color;
+                applyRefraction(pathSegment, newRay, normal, m);
             }
         } 
         else if (m.hasReflective > 0)
         {
-            newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
-            pathSegment.color *= m.specular.color;
+            applyReflection(pathSegment, newRay, normal, m);
         } 
         else if (m.hasRefractive > 0)
         {
-            bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
-            newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
-            pathSegment.color *= m.specular.color;
+            applyRefraction(pathSegment, newRay, normal, m);
         }
 
         if (glm::dot(newRay.direction, newRay.direction) == 0)
