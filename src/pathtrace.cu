@@ -106,7 +106,7 @@ __global__ void initAreaLightFromObject(HostScene * scene, Light** lights, Geom*
 }
 
 __global__ void initTestTriangleScenePrimitives(Primitive** primitves) {
-	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f),
+	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -3.0f, 0.0f), glm::vec3(3.0f, -3.0f, 0.0f),
 		glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
@@ -326,7 +326,8 @@ __global__ void shadeFakeMaterial(
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
-			pathSegment.color = intersection.surfaceNormal;
+			//pathSegment.color = intersection.surfaceNormal;
+			pathSegment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 			return;
 			glm::vec3 materialColor = material.color;
 
