@@ -3,3 +3,8 @@
 003 - perfectly specular glass ball with another one behind it (not correct though since normals inside sphere were flipped automatically)
 004 - glass but correct this time
 005 - I have no idea lol, seems like the first bounce cache screwed something up (wasn't even enabled but I was working on it at the time)
+006 - two boxes scene
+007 - dof first attempt
+008 - dof second attempt
+009 - dof but clearly wrong since there's weird vertical lines
+010 - dof works this time after I fixed input parameter to makeSeededRandomEngine (changed segment.bouncesSoFar to segment.remainingBounces)

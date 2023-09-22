@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include "utilities.h"
 
 // CHECKITOUT
 /**
@@ -54,6 +55,29 @@ void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& nor
     bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
     newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
     pathSegment.color *= m.specular.color;
+}
+
+__host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
+{
+    glm::vec2 uOffset = 2.f * u - glm::vec2(1);
+
+    if (uOffset.x == 0 && uOffset.y == 0)
+    {
+        return glm::vec2(0);
+    }
+
+    float theta, r;
+    if (abs(uOffset.x) > abs(uOffset.y))
+    {
+        r = uOffset.x;
+        theta = PI_OVER_FOUR * (uOffset.y / uOffset.x);
+    } 
+    else
+    {
+        r = uOffset.y;
+        theta = PI_OVER_TWO - PI_OVER_FOUR * (uOffset.x / uOffset.y);
+    }
+    return r * glm::vec2(cos(theta), sin(theta));
 }
 
 /**
@@ -147,6 +171,6 @@ void scatterRay(
         }
     }
 
-    newRay.origin = intersect + 0.001f * newRay.direction;
+    newRay.origin = intersect + 0.0001f * newRay.direction;
     pathSegment.ray = newRay;
 }

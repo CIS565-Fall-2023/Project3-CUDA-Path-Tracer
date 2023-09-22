@@ -13,6 +13,7 @@
 #include "scene.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
+#include <glm/gtx/projection.hpp>
 #include "utilities.h"
 #include "extrautils.hpp"
 #include "pathtrace.h"
@@ -161,16 +162,36 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	int index = x + (y * cam.resolution.x);
 	PathSegment& segment = pathSegments[index];
 
-	segment.ray.origin = cam.position;
 	segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-	thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
 	thrust::uniform_real_distribution<float> u01(0, 1);
 
-	segment.ray.direction = glm::normalize(cam.view
+	glm::vec3 noLensDirection = glm::normalize(cam.view
 		- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + u01(rng))
 		- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + u01(rng))
 	);
+
+	if (cam.lensRadius > 0)
+	{
+		float z = glm::length(glm::proj(noLensDirection, cam.view));
+		glm::vec3 pFocus = cam.position + (noLensDirection * cam.focalDistance / z);
+		glm::vec2 pLens = cam.lensRadius * ConcentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
+
+		//Ray newRay;
+		//newRay.origin = cam.position + (pLens.x * cam.right + pLens.y * cam.up);
+		//newRay.direction = noLensDirection;
+		//segment.ray = newRay;
+
+		Ray newRay;
+		newRay.origin = cam.position + (pLens.x * cam.right + pLens.y * cam.up);
+		newRay.direction = glm::normalize(pFocus - newRay.origin);
+		segment.ray = newRay;
+	}
+	else
+	{
+		segment.ray = { cam.position, noLensDirection };
+	}
 
 	segment.pixelIndex = index;
 	segment.bouncesSoFar = 0;
@@ -178,12 +199,12 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 }
 
 __global__ void computeIntersections(
-	int depth
-	, int num_paths
-	, PathSegment* pathSegments
-	, Geom* geoms
-	, int geoms_size
-	, ShadeableIntersection* intersections
+	int depth, 
+	int num_paths, 
+	PathSegment* pathSegments, 
+	Geom* geoms, 
+	int geoms_size, 
+	ShadeableIntersection* intersections
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -257,7 +278,7 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 	}
 
 	thrust::uniform_real_distribution<float> u01(0, 1);
-	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.remainingBounces); // XXX: last argument might not be correct (might need to change it to max trace depth)
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.remainingBounces);
 
 	Material material = materials[intersection.materialId];
 
@@ -328,7 +349,19 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.color;
+
+#if DEBUG_MODE
+		if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
+		{
+			image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);
+		}
+		else
+		{
+			image[iterationPath.pixelIndex] += iterationPath.color;
+		}
+#else
+	image[iterationPath.pixelIndex] += iterationPath.color;
+#endif
 	}
 }
 
