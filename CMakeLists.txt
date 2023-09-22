@@ -80,7 +80,10 @@ set(core
     src/image.h
     src/image.cpp
     src/pathtrace.h
-    src/pathtrace.cu)
+    src/pathtrace.cu
+    src/assembler.h
+    src/assembler.cu
+)
 
 set(imgui
     src/ImGui/imconfig.h
@@ -103,28 +106,39 @@ set(imgui
      src/ImGui/imgui_widgets.cpp 
     )
 
+set(tinygltf
+    src/tinygltf/json.hpp
+    src/tinygltf/stb_image.h
+    src/tinygltf/stb_image_write.h
+    src/tinygltf/tiny_gltf.h
+)
+
 set(common
     src/utilities.h
-    src/glslUtility.hpp
     src/utilities.cpp
+    #src/utilities.cuh
+    #src/utilities.cu
+    src/glslUtility.hpp
     src/glslUtility.cpp
-    src/stb.cpp
+    #src/stb.cpp
     )
 
 list(SORT scene)
 list(SORT core)
 list(SORT imgui)
+list(SORT tinygltf)
 list(SORT common)
 
 source_group(Scene FILES ${scene})
 source_group(ImGUI FILES ${imgui})
 source_group(Core FILES ${core})
 source_group(Common FILES ${common})
+source_group(Tinygltf FILES ${tinygltf})
 
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
-cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${common} ${scene} ${core} )
+cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${tinygltf} ${scene} ${core}  ${common})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction

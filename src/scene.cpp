@@ -3,13 +3,15 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 //// Define these only in *one* .cc file.
-//#define TINYGLTF_IMPLEMENTATION
-//#define STB_IMAGE_IMPLEMENTATION
-//#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 //// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
-//#include "tiny_gltf.h"
+#include "tinygltf/tiny_gltf.h"
 
 HostScene::HostScene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -206,5 +208,26 @@ int HostScene::loadMaterial(string materialid) {
         }
         materials.push_back(newMaterial);
         return 1;
+    }
+}
+
+Scene::Scene(const char* filename)
+{
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+    //bool success = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    bool success = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
+    if (!warn.empty()) {
+		std::cout << "Warn: " << warn << std::endl;
+	}
+    if (!err.empty()) {
+        std::cerr << "Error: " << err << std::endl;
+        assert(0);
+    }
+
+    if (!success) {
+        std::cerr << "Failed to load glTF model." << std::endl;
+        assert(0);
     }
 }

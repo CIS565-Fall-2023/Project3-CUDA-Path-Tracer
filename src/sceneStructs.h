@@ -36,9 +36,9 @@ struct Geom {
 };
 
 struct BoundingBox {
-    __device__ BoundingBox(){}
-    __device__ BoundingBox(glm::vec3 bbmin, glm::vec3 bbmax) : bbmin(bbmin), bbmax(bbmax){}
-    __device__ BoundingBox(float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) : bbmin(xmin, ymin, zmin), bbmax(xmax, ymax, zmax){}
+    __host__ __device__ BoundingBox(){}
+    __host__ __device__ BoundingBox(glm::vec3 bbmin, glm::vec3 bbmax) : bbmin(bbmin), bbmax(bbmax){}
+    __host__ __device__ BoundingBox(float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) : bbmin(xmin, ymin, zmin), bbmax(xmax, ymax, zmax){}
     glm::vec3 bbmin, bbmax;
 };
 
@@ -99,13 +99,16 @@ class Primitive {
 public:
     int materialID;
     __device__ virtual const BoundingBox& getBoundingBox() const = 0;
-    //__device__ virtual bool test(const Ray& r, float& t1, float& t2) const {};
+    __host__ __device__ virtual void test() const {
+        printf("Primitive::test\n");
+    };
 
     __device__ virtual bool hasIntersection(const Ray& r) const {
         return false;
     }
 
     __device__ virtual bool intersect(Ray& r, ShadeableIntersection* isect) const {
+        printf("Primitive::intersect\n");
         return false;
     };
     //__device__ virtual void applyTransformation(const glm::mat3x3 modelMatrix);
@@ -116,7 +119,7 @@ class Sphere : public Primitive {
     float r;
     BoundingBox bb;
 public:
-    Sphere(const glm::vec3& c, const float r) : c(c), r(r), bb(c - r, c + r) {}
+    __host__ __device__ Sphere(const glm::vec3& c, const float r) : c(c), r(r), bb(c - r, c + r) {}
     __device__ const BoundingBox& getBoundingBox() const override {
         return bb;
     }
@@ -134,11 +137,12 @@ class Cube : public Primitive {
     glm::vec3 cubeMax;
     BoundingBox bb;
 public:
-    Cube(const glm::vec3& cubeMin, const glm::vec3& cubeMax) :cubeMin(cubeMin), cubeMax(cubeMax), bb(glm::min(cubeMin, cubeMax), glm::max(cubeMin, cubeMax)) {}
+    __host__ __device__ Cube(const glm::vec3& cubeMin, const glm::vec3& cubeMax) :cubeMin(cubeMin), cubeMax(cubeMax), bb(glm::min(cubeMin, cubeMax), glm::max(cubeMin, cubeMax)) {}
     __device__ const BoundingBox& getBoundingBox() const override { return bb; }
 };
 
 class Triangle : public Primitive {
+public:
     glm::vec3 p1;
     glm::vec3 p2;
     glm::vec3 p3;
@@ -149,16 +153,31 @@ class Triangle : public Primitive {
     glm::vec2 uv2;
     glm::vec2 uv3;
     BoundingBox bb;
-public:
-    __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) : 
-        p1(p1), p2(p2), p3(p3) {}
-    __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 n1, glm::vec3 n2, glm::vec3 n3) :
-        p1(p1), p2(p2), p3(p3), n1(n1), n2(n2), n3(n3) {}
-    __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec2 uv1, glm::vec2 uv2, glm::vec2 uv3): 
-        p1(p1), p2(p2), p3(p3), uv1(uv1), uv2(uv2), uv3(uv3) {}
+    glm::vec3 N;
+    __host__ __device__ Triangle() {}
+    __host__ __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) : 
+        p1(p1), p2(p2), p3(p3) {
+        N = cross(p2 - p1, p3 - p1);
+        bb = BoundingBox(glm::min(p1, glm::min(p2, p3)), glm::max(p1, glm::max(p2, p3)));
+    }
+    __host__ __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 n1, glm::vec3 n2, glm::vec3 n3) :
+        p1(p1), p2(p2), p3(p3), n1(n1), n2(n2), n3(n3) {
+        N = cross(p2 - p1, p3 - p1);
+        bb = BoundingBox(glm::min(p1, glm::min(p2, p3)), glm::max(p1, glm::max(p2, p3)));
+    }
+    __host__ __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec2 uv1, glm::vec2 uv2, glm::vec2 uv3): 
+        p1(p1), p2(p2), p3(p3), uv1(uv1), uv2(uv2), uv3(uv3) {
+        N = cross(p2 - p1, p3 - p1);
+        bb = BoundingBox(glm::min(p1, glm::min(p2, p3)), glm::max(p1, glm::max(p2, p3)));
+    }
+
+    __host__ __device__ virtual void test() const override {
+        //printf("Triangle::test\n");
+        //printf("Pos: %f %f %f\n", p1[0], p1[1], p1[2]);
+    };
 
     __device__ virtual bool has_intersection(const Ray& r) const {
-        assert("Not implemented!" & false);
+        //assert("Not implemented!");
         return true;
     }
 

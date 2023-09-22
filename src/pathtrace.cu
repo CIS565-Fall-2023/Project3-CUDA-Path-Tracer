@@ -19,6 +19,8 @@
 #include "interactions.h"
 #include "bxdf.h"
 #include "light.h"
+#include "assembler.h"
+//#include "utilities.cuh"
 
 #define ERRORCHECK 1
 
@@ -81,8 +83,12 @@ static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Light** dev_lights = nullptr;
-static Primitive ** dev_primitives = nullptr;
+static Primitive** dev_primitives = nullptr;
+static Triangle* dev_triangles= nullptr;
+static Sphere * dev_spheres= nullptr;
 static int primitve_size = 1;
+static PrimitiveAssmbler * pa = new PrimitiveAssmbler();
+static Scene* testScene = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -106,7 +112,7 @@ __global__ void initAreaLightFromObject(HostScene * scene, Light** lights, Geom*
 }
 
 __global__ void initTestTriangleScenePrimitives(Primitive** primitves) {
-	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f),
+	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),
 		glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
@@ -116,6 +122,7 @@ void initTestTriangleScene() {
 }
 
 void pathtraceInit(HostScene* scene) {
+	
 	hst_scene = scene;
 
 	const Camera& cam = hst_scene->state.camera;
@@ -140,6 +147,10 @@ void pathtraceInit(HostScene* scene) {
 	initAreaLightFromObject<<<1,1>>>(scene, dev_lights, dev_geoms, dev_materials, scene->geoms.size());
 	initTestTriangleScene();
 	// TODO: initialize any extra device memeory you need
+	//pa->assembleScenePrimitives(testScene);
+	//pa->movePrimitivesToDevice();
+	cudaDeviceSynchronize();
+	checkCUDAError("Primitive Assmbler failed!");
 
 
 	checkCUDAError("pathtraceInit");
@@ -151,8 +162,9 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
+	cudaFree(dev_lights);
 	// TODO: clean up any extra device memory you created
-
+	//pa->freeBuffer();
 	checkCUDAError("pathtraceFree");
 }
 
@@ -326,7 +338,8 @@ __global__ void shadeFakeMaterial(
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
-			pathSegment.color = intersection.surfaceNormal;
+			//pathSegment.color = intersection.surfaceNormal;
+			pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
 			return;
 			glm::vec3 materialColor = material.color;
 
@@ -431,6 +444,8 @@ struct NoHit {
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
+	checkCUDAError("before generate camera ray");
+
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -503,13 +518,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		//	, dev_intersections
 		//	);
 
+		int primitiveSize = pa->getPrimitiveSize();
+		checkCUDAError("getPrimitiveSize");
 
 		intersect << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
 			, dev_paths
 			, dev_primitives
-			, primitve_size
+			, primitiveSize
 			, dev_intersections
 			);
 
