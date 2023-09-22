@@ -9,16 +9,17 @@
 
 ### Features
 
-- Basic path tracer
+- Basic path tracer with lambert and specular reflection
 - Toggleable option to sort rays by material type
 - Toggleable first bounce cache
   - Disabled for now because it seems to slow performance at higher maximum depths
 - Russian roulette path termination
-- Refraction
+- Specular refraction
+- Depth of field
 
 ### Planned features
 
-- Fix first bounce cache (even though it won't actually be used)
+- Add slider for depth of field? (which should reset pathtracer state when changed)
 - Mesh loader
   - Textures
 - Open Image Denoise
