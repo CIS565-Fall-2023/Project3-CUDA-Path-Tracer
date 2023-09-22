@@ -197,7 +197,6 @@ __global__ void computeIntersections(
 		glm::vec3 normal;
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
-		bool outside = true;
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
@@ -210,11 +209,11 @@ __global__ void computeIntersections(
 
 			if (geom.type == CUBE)
 			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal);
 			}
 			else if (geom.type == SPHERE)
 			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
