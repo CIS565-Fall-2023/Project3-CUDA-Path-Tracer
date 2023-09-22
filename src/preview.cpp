@@ -5,6 +5,9 @@
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_glfw.h"
 #include "ImGui/imgui_impl_opengl3.h"
+
+#include "toggles.h"
+
 GLuint positionLocation = 0;
 GLuint texcoordsLocation = 1;
 GLuint pbo;
@@ -186,7 +189,6 @@ void InitImguiData(GuiDataContainer* guiData)
 {
 	imguiData = guiData;
 }
-
 
 // LOOK: Un-Comment to check ImGui Usage
 void RenderImGui()

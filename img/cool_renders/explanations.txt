@@ -2,3 +2,4 @@
 002 - sorting just the intersections but not sorting the segments in tandem (seen while debugging thrust sort)
 003 - perfectly specular glass ball with another one behind it (not correct though since normals inside sphere were flipped automatically)
 004 - glass but correct this time
+005 - I have no idea lol, seems like the first bounce cache screwed something up (wasn't even enabled but I was working on it at the time)

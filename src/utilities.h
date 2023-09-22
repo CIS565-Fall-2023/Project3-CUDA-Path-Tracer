@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "toggles.h"
+
 #define PI                3.1415926535897932384626422832795028841971f
 #define TWO_PI            6.2831853071795864769252867665590057683943f
 #define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
@@ -22,7 +24,9 @@ public:
     int tracedDepth{ 0 };
 
     bool sortByMaterial{ false };
+#if FIRST_BOUNCE_CACHE
     bool firstBounceCache{ true };
+#endif
     bool russianRoulette{ true };
 };
 

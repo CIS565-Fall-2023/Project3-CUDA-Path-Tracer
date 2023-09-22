@@ -15,7 +15,8 @@ project, and we will not be able to grade you without a good README.
 
 - Basic path tracer
 - Toggleable option to sort rays by material type
-- Toggleable first bounce cache (disabled for now since I don't think it works with anti-aliasing)
+- Toggleable first bounce cache
+  - Disabled for now because it seems to slow performance at higher maximum depths
 - Russian roulette path termination
 - Refraction
 
