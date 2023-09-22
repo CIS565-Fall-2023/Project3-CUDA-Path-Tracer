@@ -278,7 +278,7 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 	}
 
 	thrust::uniform_real_distribution<float> u01(0, 1);
-	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.remainingBounces);
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.bouncesSoFar + 1);
 
 	Material material = materials[intersection.materialId];
 
