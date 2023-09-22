@@ -28,16 +28,16 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
+enum MaterialType {
+    diffuse = 0x1, frenselSpecular = 0x2, emitting = 0x4
+};
+
 struct Material {
     glm::vec3 color;
-    struct {
-        float exponent;
-        glm::vec3 color;
-    } specular;
-    float hasReflective;
-    float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    int type;
+    Material():color(glm::vec3(0)), indexOfRefraction(0), emittance(0), type(1) {}//default diffuse
 };
 
 struct Camera {
@@ -72,5 +72,6 @@ struct PathSegment {
 struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
+  glm::vec3 worldPos;
   int materialId;
 };

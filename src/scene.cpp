@@ -3,6 +3,9 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <tiny_obj_loader.h>
+
+#define TINYOBJLOADER_IMPLEMENTATION
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -27,6 +30,10 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
+            }
+            else if (strcmp(tokens[0].c_str(), "MODEL") == 0)
+            {
+
             }
         }
     }
@@ -160,26 +167,21 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 3; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "RGB") == 0) {
                 glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
                 newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
-                newMaterial.specular.exponent = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
-                glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                newMaterial.specular.color = specColor;
-            } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
-                newMaterial.hasReflective = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
-                newMaterial.hasRefractive = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
-                newMaterial.indexOfRefraction = atof(tokens[1].c_str());
+                float ior = atof(tokens[1].c_str());
+                if (ior != 0.0) newMaterial.type |= MaterialType::frenselSpecular;
+                newMaterial.indexOfRefraction = ior;
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
-                newMaterial.emittance = atof(tokens[1].c_str());
+                float emittance = atof(tokens[1].c_str());
+                if (emittance != 0.0) newMaterial.type |= MaterialType::emitting;
+                newMaterial.emittance = emittance;
             }
         }
         materials.push_back(newMaterial);
