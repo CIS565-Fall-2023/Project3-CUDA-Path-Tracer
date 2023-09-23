@@ -17,6 +17,8 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
+// #define MATERIAL_SORT
+#define CACHE_FIRST_BOUNCE
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -76,7 +78,10 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static PathSegment* dev_tempPaths = NULL;
+static PathSegment* dev_pathsBuffer = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
+static ShadeableIntersection* dev_tempIntersections = NULL;
+static ShadeableIntersection* dev_intersectionsBuffer = NULL;
 static int* dev_bools = NULL;
 static int* dev_nbools = NULL;
 static int* dev_scanBools = NULL;
@@ -134,14 +139,18 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_tempIntersections, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
 	cudaMalloc(&dev_bools, pixelcount * sizeof(int));
 	cudaMalloc(&dev_nbools, pixelcount * sizeof(int));
 	cudaMalloc(&dev_scanBools, pixelcount * sizeof(int));
 	cudaMalloc(&dev_scanNBools, pixelcount * sizeof(int));
-	
 
+#ifdef CACHE_FIRST_BOUNCE
+	cudaMalloc(&dev_intersectionsBuffer, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_pathsBuffer, pixelcount * sizeof(PathSegment));
+#endif
 	checkCUDAError("pathtraceInit");	
 }
 
@@ -157,7 +166,11 @@ void pathtraceFree() {
 	cudaFree(dev_scanBools);
 	cudaFree(dev_scanNBools);
 	cudaFree(dev_tempPaths);
-
+	cudaFree(dev_tempIntersections);
+#ifdef CACHE_FIRST_BOUNCE
+	cudaFree(dev_intersectionsBuffer);
+	cudaFree(dev_pathsBuffer);
+#endif
 	checkCUDAError("pathtraceFree");
 }
 
@@ -201,7 +214,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 __global__ void computeIntersections(
 	int depth
 	, int num_paths
-	, PathSegment* pathSegments
+	, const PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
 	, ShadeableIntersection* intersections
@@ -263,6 +276,7 @@ __global__ void computeIntersections(
 		}
 	}
 }
+
 
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
@@ -373,6 +387,7 @@ __global__ void markPathSegment(int nPaths, int* bools, int* nbools, PathSegment
 	}
 }
 
+// for path termination
 __global__ void pathSegmentScatter(int n, int scanSum, PathSegment* odata, const PathSegment* idata, const int* bools, const int* indicesPos, const int* indicesNeg) {
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (index < n) {
@@ -384,6 +399,35 @@ __global__ void pathSegmentScatter(int n, int scanSum, PathSegment* odata, const
 		}
 	}
 }
+
+// for material sort
+__global__ void kernMapMatBitToBoolean(int n, int i, int* bools, int* ebools, const ShadeableIntersection* idata) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index < n) {
+		bools[index] = ((idata[index].materialId >> i) & 1);
+		ebools[index] = !((idata[index].materialId >> i) & 1);
+	}
+}
+
+// for path termination
+__global__ void pathSegmentAndIntersectionScatter(
+	int n, int negCount,
+	PathSegment* opaths, const PathSegment* ipaths,
+	ShadeableIntersection* ointers, const ShadeableIntersection* iinters,
+	const int* bools, const int* indicesPos, const int* indicesNeg) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index < n) {
+		if (bools[index] > 0) {
+			opaths[indicesPos[index] + negCount] = ipaths[index];
+			ointers[indicesPos[index] + negCount] = iinters[index];
+		}
+		else {
+			opaths[indicesNeg[index]] = ipaths[index];
+			ointers[indicesNeg[index]] = iinters[index];
+		}
+	}
+}
+
 
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
@@ -430,16 +474,31 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// 1D block for path tracing
 	const int blockSize1d = 128;
+	int depth = 0;
+	int num_paths = pixelcount;
 
-
+#ifdef CACHE_FIRST_BOUNCE
+	if (iter == 1) {
+		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+		checkCUDAError("generate camera ray");
+		cudaMemcpy(dev_pathsBuffer, dev_paths, sizeof(PathSegment) * pixelcount, cudaMemcpyDeviceToDevice);
+		checkCUDAError("save dev_pathsBuffer");
+	}
+	else {
+		cudaMemcpy(dev_paths, dev_pathsBuffer, sizeof(PathSegment) * pixelcount, cudaMemcpyDeviceToDevice);
+		checkCUDAError("load dev_pathsBuffer");
+	}
+#else
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
+#endif
 
-	int depth = 0;
+	
 	// PathSegment* dev_path_end = dev_paths + pixelcount;
 	// int num_paths = dev_path_end - dev_paths;
-	int num_paths = pixelcount;
+	
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
+	int mat_num = hst_scene->materials.size();
 
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
@@ -447,19 +506,43 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete) {
 
-		// std::cout << "iter-" << iter << ", depth-" << depth << std::endl;
+		std::cout << "iter-" << iter << ", depth-" << depth << std::endl;
+		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
 		// clean shading chunks
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
+#ifdef CACHE_FIRST_BOUNCE
+		if (iter > 1 && depth == 0) {
+			cudaMemcpy(dev_intersections, dev_intersectionsBuffer, sizeof(ShadeableIntersection) * pixelcount, cudaMemcpyDeviceToDevice);
+			checkCUDAError("load dev_intersectionsBuffer");
+		}
+		else {
+			// tracing
+			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth, num_paths, dev_paths, dev_geoms,
+				hst_scene->geoms.size(), dev_intersections
+				);
+			checkCUDAError("trace one bounce");
+			cudaDeviceSynchronize();
+
+			if (iter == 1 && depth == 0) {
+				cudaMemcpy(dev_intersectionsBuffer, dev_intersections, sizeof(ShadeableIntersection) * pixelcount, cudaMemcpyDeviceToDevice);
+				checkCUDAError("save dev_intersectionsBuffer");
+			}
+		}
+
+#else
 		// tracing
-		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth, num_paths, dev_paths, dev_geoms,
 			hst_scene->geoms.size(), dev_intersections
-		);
+			);
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
+#endif
+
+
 		depth++;
 
 		// TODO:
@@ -470,6 +553,49 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// materials you have in the scenefile.
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
+
+
+		// Sort All Materials
+#ifdef MATERIAL_SORT
+		if (mat_num > 1) {
+			int log2Ceil = 1;
+			int product = 1;
+			while (product < mat_num) {
+				product *= 2;
+				log2Ceil++;
+			}
+			for (int i = 0; i < log2Ceil; i++) {
+				kernMapMatBitToBoolean << <numblocksPathSegmentTracing, blockSize1d >> > (num_paths, i, dev_bools, dev_nbools, dev_intersections);
+				thrust::device_ptr<int> dv_sort_in(dev_bools);
+				thrust::device_ptr<int> dv_sort_out(dev_scanBools);
+				thrust::exclusive_scan(dv_sort_in, dv_sort_in + num_paths, dv_sort_out);
+				thrust::device_ptr<int> dv_sort_nin(dev_nbools);
+				thrust::device_ptr<int> dv_sort_nout(dev_scanNBools);
+				thrust::exclusive_scan(dv_sort_nin, dv_sort_nin + num_paths, dv_sort_nout);
+
+				int neg_count = -1;
+				cudaMemcpy(&neg_count, dev_scanNBools + num_paths - 1, sizeof(int), cudaMemcpyDeviceToHost);
+				int last_bool = -1;
+				cudaMemcpy(&last_bool, dev_bools + num_paths - 1, sizeof(int), cudaMemcpyDeviceToHost);
+				neg_count += (last_bool == 0);
+
+				pathSegmentAndIntersectionScatter << < numblocksPathSegmentTracing, blockSize1d >> > (
+					num_paths, neg_count,
+					dev_tempPaths, dev_paths,
+					dev_tempIntersections, dev_intersections,
+					dev_bools, dev_scanBools, dev_scanNBools);
+
+				PathSegment* tempPath = dev_tempPaths;
+				dev_tempPaths = dev_paths;
+				dev_paths = tempPath;
+				ShadeableIntersection* tempInter = dev_tempIntersections;
+				dev_tempIntersections = dev_intersections;
+				dev_intersections = tempInter;
+			}
+
+		}
+#endif
+
 
 
 		shadeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
@@ -490,18 +616,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		scanSum += lastBool;
 		num_paths = scanSum;
 
-		thrust::device_ptr<int> dv_nin(dev_nbools);
-		thrust::device_ptr<int> dv_nout(dev_scanNBools);
-		thrust::exclusive_scan(dv_nin, dv_nin + pixelcount, dv_nout);
+		if (num_paths > 0) {
+			thrust::device_ptr<int> dv_nin(dev_nbools);
+			thrust::device_ptr<int> dv_nout(dev_scanNBools);
+			thrust::exclusive_scan(dv_nin, dv_nin + pixelcount, dv_nout);
+			pathSegmentScatter << <numBlocksPixels, blockSize1d >> > (pixelcount, num_paths, dev_tempPaths, dev_paths, dev_bools, dev_scanBools, dev_scanNBools);
+			PathSegment* temp = dev_tempPaths;
+			dev_tempPaths = dev_paths;
+			dev_paths = temp;
+		}
 
-		// std::cout << "num_paths = " << num_paths << std::endl;
-
-
-		pathSegmentScatter << <numBlocksPixels, blockSize1d >> > (pixelcount, num_paths, dev_tempPaths, dev_paths, dev_bools, dev_scanBools, dev_scanNBools);
-
-		PathSegment* temp = dev_tempPaths;
-		dev_tempPaths = dev_paths;
-		dev_paths = temp;
+		std::cout << "num_paths = " << num_paths << std::endl;
 		
 
 		iterationComplete = num_paths <= 0 || depth >= traceDepth;
