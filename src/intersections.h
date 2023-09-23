@@ -132,3 +132,39 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* verts, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal)
+{
+    glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    bool intersects = false;
+    glm::vec3 objSpaceIntersection;
+    glm::vec3 objSpaceNormal;
+
+    for (int i = mesh.startTri; i < mesh.startTri + mesh.numTris; ++i)
+    {
+        Vertex v0 = verts[3 * i];
+        Vertex v1 = verts[3 * i + 1];
+        Vertex v2 = verts[3 * i + 2];
+        glm::vec3 barycentricPos;
+        if (glm::intersectRayTriangle(ro, rd, v0.pos, v1.pos, v2.pos, barycentricPos))
+        {
+            intersects = true;
+            objSpaceIntersection = barycentricPos.x * v0.pos + barycentricPos.y * v1.pos + barycentricPos.z * v2.pos;
+            objSpaceNormal = glm::normalize(glm::cross(v1.pos - v0.pos, v2.pos - v0.pos));
+            break;
+        }
+    }
+
+    if (!intersects)
+    {
+        return -1;
+    }
+
+    intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
+    normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objSpaceNormal, 0.f)));
+
+    return glm::length(r.origin - intersectionPoint);
+}

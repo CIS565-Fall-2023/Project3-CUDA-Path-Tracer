@@ -80,6 +80,8 @@ static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
+static Mesh* dev_meshes = NULL;
+static Vertex* dev_vertices = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 
@@ -116,6 +118,12 @@ void Pathtracer::init(Scene* scene) {
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
+	cudaMemcpy(dev_meshes, scene->meshes.data(), scene->meshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_vertices, scene->tris.size() * 3 * sizeof(Vertex));
+	cudaMemcpy(dev_vertices, scene->tris.data(), scene->tris.size() * 3 * sizeof(Vertex), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
@@ -133,6 +141,8 @@ void Pathtracer::free() {
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
+	cudaFree(dev_meshes);
+	cudaFree(dev_vertices);
 	cudaFree(dev_intersections);
 
 #if FIRST_BOUNCE_CACHE
@@ -203,6 +213,8 @@ __global__ void computeIntersections(
 	int num_paths, 
 	PathSegment* pathSegments, 
 	Geom* geoms, 
+	Mesh* meshes,
+	Vertex* verts,
 	int geoms_size, 
 	ShadeableIntersection* intersections
 )
@@ -238,6 +250,10 @@ __global__ void computeIntersections(
 		else if (geom.type == SPHERE)
 		{
 			t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal);
+		}
+		else if (geom.type == MESH)
+		{
+			t = meshIntersectionTest(geom, meshes[geom.geomReferenceId], verts, pathSegment.ray, tmp_intersect, tmp_normal);
 		}
 		// TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -425,6 +441,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				num_valid_paths,
 				dev_paths,
 				dev_geoms,
+				dev_meshes,
+				dev_vertices,
 				hst_scene->geoms.size(),
 				dev_intersections
 			);
