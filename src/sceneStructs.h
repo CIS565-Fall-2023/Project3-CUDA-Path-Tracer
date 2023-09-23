@@ -62,6 +62,12 @@ struct Camera {
     float fovy;
     glm::vec2 pixelLength;
 
+    CPU_ONLY void Recompute() 
+    {
+        forward = glm::normalize(ref - position);
+        right = glm::normalize(glm::cross(forward, {0, 1, 0}));
+        up = glm::normalize(glm::cross(right, forward));
+    }
     CPU_GPU Ray CastRay(const glm::vec2& p)
     {
         glm::vec2 ndc = 2.f * p / glm::vec2(resolution);// TODO: implement antialiasing by jittering the ray 

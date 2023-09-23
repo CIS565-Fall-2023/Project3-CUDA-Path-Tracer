@@ -27,15 +27,17 @@ public:
 
 	static Application* GetApplication() { return s_Instance; }
 
+	static inline int GetKeyState(int key) { return glfwGetKey(s_Instance->m_GLFWwindow, key); }
+	static inline int GetMouseState(int mouse_bn) { return glfwGetMouseButton(s_Instance->m_GLFWwindow, mouse_bn); }
+
 private:
-	void InitPBO();
 	void InitVAO();
 	void InitShader();
 
 	void ResizeGL();
 
 public:
-	GLFWwindow* window;
+	GLFWwindow* m_GLFWwindow;
 	ImGuiIO* io;
 
 	// Opengl handler

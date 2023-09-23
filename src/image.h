@@ -1,5 +1,5 @@
 #pragma once
-
+#include <string>
 #include <glm/glm.hpp>
 #include <cuda_runtime.h>
 using namespace std;

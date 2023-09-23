@@ -65,7 +65,7 @@ Application::~Application()
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 
-	glfwDestroyWindow(window);
+	glfwDestroyWindow(m_GLFWwindow);
 	glfwTerminate();
 
 	s_Instance = nullptr;
@@ -149,17 +149,17 @@ bool Application::Init()
 		exit(EXIT_FAILURE);
 	}
 
-	window = glfwCreateWindow(m_Resolution.x, m_Resolution.y, "CIS 565 Path Tracer", NULL, NULL);
-	if (!window) {
+	m_GLFWwindow = glfwCreateWindow(m_Resolution.x, m_Resolution.y, "CIS 565 Path Tracer", NULL, NULL);
+	if (!m_GLFWwindow) {
 		glfwTerminate();
 		return false;
 	}
-	glfwMakeContextCurrent(window);
+	glfwMakeContextCurrent(m_GLFWwindow);
 
-	glfwSetWindowSizeCallback(window, WindowResizeCallback);
-	glfwSetKeyCallback(window, KeyCallback);
-	glfwSetCursorPosCallback(window, MousePositionCallback);
-	glfwSetMouseButtonCallback(window, MouseButtonCallback);
+	glfwSetWindowSizeCallback(m_GLFWwindow, WindowResizeCallback);
+	glfwSetKeyCallback(m_GLFWwindow, KeyCallback);
+	glfwSetCursorPosCallback(m_GLFWwindow, MousePositionCallback);
+	glfwSetMouseButtonCallback(m_GLFWwindow, MouseButtonCallback);
 
 	// Set up GL context
 	glewExperimental = GL_TRUE;
@@ -173,7 +173,7 @@ bool Application::Init()
 	ImGui::CreateContext();
 	io = &ImGui::GetIO(); (void)io;
 	ImGui::StyleColorsLight();
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplGlfw_InitForOpenGL(m_GLFWwindow, true);
 	ImGui_ImplOpenGL3_Init("#version 120");
 	
 	// Initialize other stuff
@@ -195,30 +195,34 @@ void Application::OnWindowResize(GLFWwindow* window, int x, int y)
 	m_Resolution.y = y;
 
 	ResizeGL();
+	m_SandBox->OnWindowResize(x, y);
 }
 
 void Application::OnMouseButton(GLFWwindow* window, int button, int action, int mods)
 {
+	m_SandBox->OnMouseButton(button, action, mods);
 }
 
 void Application::OnKey(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+	m_SandBox->OnKey(key, scancode, action, mods);
 }
 
 void Application::OnMousePosition(GLFWwindow* window, double x, double y)
 {
+	m_SandBox->OnMousePosition(x, y);
 }
 
 bool Application::Run()
 {
-	while (!glfwWindowShouldClose(window)) 
+	while (!glfwWindowShouldClose(m_GLFWwindow)) 
 	{
 		glfwPollEvents();
 
 		m_SandBox->Run();
 
 		std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(0) + " Iterations";
-		glfwSetWindowTitle(window, title.c_str());
+		glfwSetWindowTitle(m_GLFWwindow, title.c_str());
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 		glBindTexture(GL_TEXTURE_2D, displayImage);
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_Resolution.x, m_Resolution.y, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
@@ -233,7 +237,7 @@ bool Application::Run()
 		// Render ImGui Stuff
 		//m_SandBox->DrawImGui();
 
-		glfwSwapBuffers(window);
+		glfwSwapBuffers(m_GLFWwindow);
 	}
 	return 0;
 }

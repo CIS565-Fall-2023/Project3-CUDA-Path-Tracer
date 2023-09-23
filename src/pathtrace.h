@@ -24,7 +24,7 @@ public:
 		cudaGraphicsUnregisterResource(cuda_pbo_dest_resource);
 	}
 
-	CPU_ONLY void Render(uchar4* pbo, int frame, int iter);
+	CPU_ONLY void Render();
 public:
 	int m_Iteration;
 	

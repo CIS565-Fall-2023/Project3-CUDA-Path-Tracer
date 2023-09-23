@@ -361,7 +361,7 @@ CPU_ONLY void CudaPathTracer::RegisterPBO(unsigned int pbo)
 	checkCUDAError("Get PBO pointer Error");
 }
 
-CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
+CPU_ONLY void CudaPathTracer::Render()
 {
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
@@ -388,7 +388,7 @@ CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 2 && num_paths > 0) {
+	while (depth < 5 && num_paths > 0) {
 		depth++;
 
 		// clean shading chunks

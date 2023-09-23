@@ -5,6 +5,7 @@
 class CudaPathTracer;
 class Scene;
 class RenderState;
+class CameraController;
 
 class SandBox
 {
@@ -26,11 +27,7 @@ protected:
 public:
 	uPtr<Scene> m_Scene;
 	uPtr<CudaPathTracer> m_PathTracer;
+	uPtr< CameraController> m_CameraController;
 
 	std::string m_StartTimeString;
-
-	float zoom, theta, phi;
-	glm::vec3 cameraPosition;
-	glm::vec3 ogLookAt; // for recentering the camera
-	bool camchanged = true;
 };
