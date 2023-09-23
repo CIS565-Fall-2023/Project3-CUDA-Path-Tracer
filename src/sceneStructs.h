@@ -17,6 +17,10 @@ struct Ray {
     glm::vec3 direction;
 };
 
+__device__ Ray SpawnRay(glm::vec3 pos, glm::vec3 wi) {
+    return Ray{ pos + wi * 0.0001f, wi };
+}
+
 struct Geom {
     enum GeomType type;
     int materialid;
@@ -70,7 +74,9 @@ struct PathSegment {
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection {
-  float t;
-  glm::vec3 surfaceNormal;
-  int materialId;
+    glm::vec3 pos;
+    float t;
+    glm::vec3 surfaceNormal;
+    int materialId;
+    glm::vec3 woW;
 };
