@@ -126,15 +126,6 @@ int Scene::loadMesh(string filePath)
     newMesh.startTri = startTri;
     newMesh.numTris = numTris;
 
-    //for (int i = startTri; i < startTri + numTris; ++i)
-    //{
-    //    const auto& tri = tris[i];
-    //    std::cout << glm::to_string(tri[0].pos) << std::endl;
-    //    std::cout << glm::to_string(tri[1].pos) << std::endl;
-    //    std::cout << glm::to_string(tri[2].pos) << std::endl;
-    //    std::cout << std::endl;
-    //}
-
     int meshIndex = meshes.size();
     meshes.push_back(newMesh);
     meshIndices[filePath] = meshIndex;

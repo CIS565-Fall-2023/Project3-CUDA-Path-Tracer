@@ -155,12 +155,15 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
             continue;
         }
 
-        glm::vec3 intersectPos = barycentricPos.x * v0.pos + barycentricPos.y * v1.pos + barycentricPos.z * v2.pos;
-        float newT = glm::length(intersectPos - ro);
+        glm::vec3 triNormal = glm::normalize(glm::cross(v1.pos - v0.pos, v2.pos - v0.pos));
+        float newT;
+        glm::intersectRayPlane(ro, rd, v0.pos, triNormal, newT);
+        glm::vec3 intersectPos = ro + rd * newT;
+
         if (newT < t)
         {
             objSpaceIntersection = intersectPos;
-            objSpaceNormal = glm::normalize(glm::cross(v1.pos - v0.pos, v2.pos - v0.pos));
+            objSpaceNormal = triNormal;
             intersects = true;
             t = newT;
         }

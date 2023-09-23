@@ -255,17 +255,16 @@ __global__ void computeIntersections(
 		{
 			t = meshIntersectionTest(geom, meshes[geom.geomReferenceId], verts, pathSegment.ray, tmp_intersect, tmp_normal);
 		}
-		// TODO: add more intersection tests here... triangle? metaball? CSG?
 
-		// Compute the minimum t from the intersection tests to determine what
-		// scene geometry object was hit first.
-		if (t > 0.0f && t_min > t)
+		if (t < 0 || t > t_min)
 		{
-			t_min = t;
-			hit_geom_index = i;
-			intersect_point = tmp_intersect;
-			normal = tmp_normal;
+			continue;
 		}
+
+		t_min = t;
+		hit_geom_index = i;
+		intersect_point = tmp_intersect;
+		normal = tmp_normal;
 	}
 
 	if (hit_geom_index == -1)
