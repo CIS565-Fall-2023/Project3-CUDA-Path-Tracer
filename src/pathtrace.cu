@@ -295,6 +295,12 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 		return;
 	}
 
+#if DEBUG_SHOW_NORMALS
+	segment.color = (intersection.surfaceNormal + 1.f) / 2.f;
+	segment.remainingBounces = 0;
+	return;
+#endif
+
 	thrust::uniform_real_distribution<float> u01(0, 1);
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.bouncesSoFar + 1);
 
@@ -368,7 +374,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	{
 		PathSegment iterationPath = iterationPaths[index];
 
-#if DEBUG_MODE
+#if DEBUG_NAN_MAGENTA
 		if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
 		{
 			image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);

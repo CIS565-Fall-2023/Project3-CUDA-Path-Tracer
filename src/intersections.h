@@ -140,6 +140,7 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     bool intersects = false;
+    float t = FLT_MAX;
     glm::vec3 objSpaceIntersection;
     glm::vec3 objSpaceNormal;
 
@@ -149,12 +150,19 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
         Vertex v1 = verts[3 * i + 1];
         Vertex v2 = verts[3 * i + 2];
         glm::vec3 barycentricPos;
-        if (glm::intersectRayTriangle(ro, rd, v0.pos, v1.pos, v2.pos, barycentricPos))
+        if (!glm::intersectRayTriangle(ro, rd, v0.pos, v1.pos, v2.pos, barycentricPos))
         {
-            intersects = true;
-            objSpaceIntersection = barycentricPos.x * v0.pos + barycentricPos.y * v1.pos + barycentricPos.z * v2.pos;
+            continue;
+        }
+
+        glm::vec3 intersectPos = barycentricPos.x * v0.pos + barycentricPos.y * v1.pos + barycentricPos.z * v2.pos;
+        float newT = glm::length(intersectPos - ro);
+        if (newT < t)
+        {
+            objSpaceIntersection = intersectPos;
             objSpaceNormal = glm::normalize(glm::cross(v1.pos - v0.pos, v2.pos - v0.pos));
-            break;
+            intersects = true;
+            t = newT;
         }
     }
 

@@ -9,3 +9,5 @@
 009 - dof but clearly wrong since there's weird vertical lines
 010 - dof works this time after I fixed input parameter to makeSeededRandomEngine (changed segment.bouncesSoFar to segment.remainingBounces)
 011 - monkey (seems like the normals are a bit messed up though)
+012 - monkey normals
+013 - monkey at an angle (doesn't look right)
