@@ -10,6 +10,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    MODEL
 };
 
 struct Ray {
@@ -17,15 +18,25 @@ struct Ray {
     glm::vec3 direction;
 };
 
-struct Geom {
-    enum GeomType type;
-    int materialid;
+struct ObjectTransform {
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+};
+
+struct Geom {
+    enum GeomType type;
+    int materialid;
+    ObjectTransform Transform;
+};
+
+struct Model {
+    int materialid;
+    int triangleStart, triangleEnd;
+    ObjectTransform Transform;
 };
 
 enum MaterialType {

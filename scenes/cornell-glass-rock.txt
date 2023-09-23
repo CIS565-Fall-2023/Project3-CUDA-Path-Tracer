@@ -28,10 +28,10 @@ RGB         .98 .98 .98
 REFRIOR     0
 EMITTANCE   0
 
-// Glass
+// Diamond
 MATERIAL 5
 RGB         0.99 0.99 0.99
-REFRIOR     1.6
+REFRIOR     2.0
 EMITTANCE   0
 
 
@@ -41,7 +41,7 @@ RES         800 800
 FOVY        45
 ITERATIONS  10000
 DEPTH       8
-FILE        cornell-glass-sphere
+FILE        cornell-glass-rock
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
@@ -95,18 +95,11 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
+// Model
 OBJECT 6
-geometry sphere
-material 4
-TRANS       -2 4 -2
-ROTAT       0 0 0
+model ../scenes/models/uploads_files_725976_BlackGem.obj
+material 5
+TRANS       0 3 0
+ROTAT       -90 0 0
 SCALE       3 3 3
 
-// Sphere
-OBJECT 7
-geometry sphere
-material 5
-TRANS       2 5 2
-ROTAT       0 0 0
-SCALE       4 4 4

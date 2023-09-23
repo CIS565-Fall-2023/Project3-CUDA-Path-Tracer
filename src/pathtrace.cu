@@ -90,7 +90,10 @@ static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
+static Model* dev_models = NULL;
 static Material* dev_materials = NULL;
+static glm::ivec3* dev_triangles = NULL;
+static glm::vec3* dev_vertices = NULL;
 static PathSegment* dev_paths1 = NULL;
 static PathSegment* dev_paths2 = NULL;
 static ShadeableIntersection* dev_intersections1 = NULL;
@@ -118,6 +121,18 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
+	if (scene->models.size())
+	{
+		cudaMalloc(&dev_models, scene->models.size() * sizeof(Model));
+		cudaMemcpy(dev_models, scene->models.data(), scene->models.size() * sizeof(Model), cudaMemcpyHostToDevice);
+
+		cudaMalloc(&dev_triangles, scene->triangles.size() * sizeof(glm::ivec3));
+		cudaMemcpy(dev_triangles, scene->triangles.data(), scene->triangles.size() * sizeof(glm::ivec3), cudaMemcpyHostToDevice);
+
+		cudaMalloc(&dev_vertices, scene->verticies.size() * sizeof(glm::vec3));
+		cudaMemcpy(dev_vertices, scene->verticies.data(), scene->verticies.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+	}
+
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
@@ -130,11 +145,17 @@ void pathtraceInit(Scene* scene) {
 	checkCUDAError("pathtraceInit");
 }
 
-void pathtraceFree() {
+void pathtraceFree(Scene* scene) {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths1);
 	cudaFree(dev_paths2);
 	cudaFree(dev_geoms);
+	if (scene->models.size())
+	{
+		cudaFree(dev_models);
+		cudaFree(dev_triangles);
+		cudaFree(dev_vertices);
+	}
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections1);
 	cudaFree(dev_intersections2);
@@ -155,6 +176,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+	thrust::default_random_engine rng = makeSeededRandomEngine(x, y, iter);
+	thrust::uniform_real_distribution<float> u01(0, 1);
 
 	if (x < cam.resolution.x && y < cam.resolution.y) {
 		int index = x + (y * cam.resolution.x);
@@ -165,8 +188,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + 0.5f * (u01(rng) * 2.0f - 1.0f))
+			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + 0.5f * (u01(rng) * 2.0f - 1.0f))
 		);
 
 		segment.pixelIndex = index;
@@ -184,6 +207,10 @@ __global__ void compute_intersection(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
+	, Model* models
+	, glm::ivec3* modelTriangles
+	, glm::vec3* modelVertices
+	, int models_size
 	, ShadeableIntersection* intersections
 	, int* rayValid
 	, glm::vec3* image
@@ -194,11 +221,11 @@ __global__ void compute_intersection(
 	if (path_index < num_paths)
 	{
 		PathSegment& pathSegment = pathSegments[path_index];
-		float t;
+		float t = -1.0;
 		glm::vec3 intersect_point;
 		glm::vec3 normal;
 		float t_min = FLT_MAX;
-		int hit_geom_index = -1;
+		int hit_material_index = -1;
 		bool outside = true;
 
 		glm::vec3 tmp_intersect;
@@ -225,12 +252,33 @@ __global__ void compute_intersection(
 			if (t > 0.0f && t_min > t)
 			{
 				t_min = t;
-				hit_geom_index = i;
+				hit_material_index = geom.materialid;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
 			}
 		}
-		if (hit_geom_index == -1)//hits nothing
+		for (int i = 0; i < models_size; i++)
+		{
+			glm::vec3 baryCoord;
+			Model& model = models[i];
+			for (int i = model.triangleStart; i != model.triangleEnd; i++)
+			{
+				const glm::ivec3& tri = modelTriangles[i];
+				const glm::vec3& v0 = modelVertices[tri[0]];
+				const glm::vec3& v1 = modelVertices[tri[1]];
+				const glm::vec3& v2 = modelVertices[tri[2]];
+				t = triangleIntersectionTest(model.Transform, v0, v1, v2, pathSegment.ray, tmp_intersect, tmp_normal, baryCoord);
+				if (t > 0.0f && t_min > t)
+				{
+					t_min = t;
+					hit_material_index = model.materialid;
+					intersect_point = tmp_intersect;
+					normal = tmp_normal;
+				}
+			}
+		}
+
+		if (t_min==FLT_MAX)//hits nothing
 		{
 			rayValid[path_index] = 0;
 		}
@@ -238,7 +286,7 @@ __global__ void compute_intersection(
 		{
 			//The ray hits something
 			intersections[path_index].t = t_min;
-			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+			intersections[path_index].materialId = hit_material_index;
 			intersections[path_index].surfaceNormal = normal;
 			intersections[path_index].worldPos = intersect_point;
 			rayValid[path_index] = 1;
@@ -509,6 +557,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_paths1
 			, dev_geoms
 			, hst_scene->geoms.size()
+			, dev_models
+			, dev_triangles
+			, dev_vertices
+			, hst_scene->models.size()
 			, dev_intersections1
 			, rayValid
 			, dev_image

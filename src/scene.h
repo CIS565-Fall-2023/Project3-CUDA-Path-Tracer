@@ -14,14 +14,18 @@ class Scene {
 private:
     ifstream fp_in;
     int loadMaterial(string materialid);
-    int loadGeom(string objectid);
+    int loadObject(string objectid);
     int loadCamera();
-    void loadModel();
+    bool loadModel(const string&, int);
+    bool loadGeometry(const string&,int);
 public:
     Scene(string filename);
     ~Scene();
 
     std::vector<Geom> geoms;
+    std::vector<Model> models;
     std::vector<Material> materials;
+    std::vector<glm::ivec3> triangles;
+    std::vector<glm::vec3> verticies;
     RenderState state;
 };

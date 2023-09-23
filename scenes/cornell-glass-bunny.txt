@@ -41,7 +41,7 @@ RES         800 800
 FOVY        45
 ITERATIONS  10000
 DEPTH       8
-FILE        cornell-glass-sphere
+FILE        cornell-glass-bunny
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
@@ -49,7 +49,7 @@ UP          0 1 0
 
 // Ceiling light
 OBJECT 0
-cube
+geometry cube
 material 0
 TRANS       0 10 0
 ROTAT       0 0 0
@@ -57,7 +57,7 @@ SCALE       3 .3 3
 
 // Floor
 OBJECT 1
-cube
+geometry cube
 material 1
 TRANS       0 0 0
 ROTAT       0 0 0
@@ -65,7 +65,7 @@ SCALE       10 .01 10
 
 // Ceiling
 OBJECT 2
-cube
+geometry cube
 material 1
 TRANS       0 10 0
 ROTAT       0 0 90
@@ -73,7 +73,7 @@ SCALE       .01 10 10
 
 // Back wall
 OBJECT 3
-cube
+geometry cube
 material 1
 TRANS       0 5 -5
 ROTAT       0 90 0
@@ -81,7 +81,7 @@ SCALE       .01 10 10
 
 // Left wall
 OBJECT 4
-cube
+geometry cube
 material 2
 TRANS       -5 5 0
 ROTAT       0 0 0
@@ -89,24 +89,17 @@ SCALE       .01 10 10
 
 // Right wall
 OBJECT 5
-cube
+geometry cube
 material 3
 TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
+// Model
 OBJECT 6
-sphere
-material 4
-TRANS       -2 4 -2
-ROTAT       0 0 0
-SCALE       3 3 3
-
-// Sphere
-OBJECT 7
-sphere
+model ../scenes/models/bunny.obj
 material 5
-TRANS       2 5 2
+TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       4 4 4
+SCALE       30 30 30
+
