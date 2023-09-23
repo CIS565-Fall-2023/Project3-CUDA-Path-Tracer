@@ -123,7 +123,7 @@ void scatterRay(
     if (u01(rng) < diffuseChance)
     {
         // diffuse
-        newRay.direction = calculateRandomDirectionInHemisphere(normal, rng);
+        newRay.direction = calculateRandomDirectionInHemisphere(normal, rng); // XXX: make normal face same direction as ray? (e.g. for inside of sphere)
         pathSegment.color *= m.color / (diffuseChance);
 
         /* 

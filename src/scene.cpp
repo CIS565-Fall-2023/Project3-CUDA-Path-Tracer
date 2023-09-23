@@ -4,7 +4,13 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#define TINYGLTF_IMPLEMENTATION
+
+#include "tinygltf/tiny_gltf.h"
+
 Scene::Scene(string filename) {
+    basePath = filename.substr(0, filename.rfind('/') + 1);
+
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -32,6 +38,109 @@ Scene::Scene(string filename) {
     }
 }
 
+int Scene::loadMesh(string filePath)
+{
+    if (meshIndices.find(filePath) != meshIndices.end())
+    {
+        return meshIndices[filePath];
+    }
+
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, this->basePath + filePath);
+    if (!warn.empty())
+    {
+        printf("Warn: %s\n", warn.c_str());
+    }
+    if (!err.empty())
+    {
+        printf("Err: %s\n", err.c_str());
+    }
+    if (!ret)
+    {
+        printf("Failed to parse glTF\n");
+        return -1;
+    }
+
+    int startTri = tris.size();
+    int numTris = 0;
+
+    for (auto& nodeIndex : model.scenes[model.defaultScene].nodes)
+    {
+        const tinygltf::Node& node = model.nodes[nodeIndex];
+        if (node.mesh >= 0)
+        {
+            const tinygltf::Mesh& mesh = model.meshes[node.mesh];
+
+            for (const tinygltf::Primitive& primitive : mesh.primitives)
+            {
+                const tinygltf::Accessor& positionAccessor = model.accessors[primitive.attributes.at("POSITION")];
+                const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
+                const tinygltf::Buffer& positionBuffer = model.buffers[positionBufferView.buffer];
+
+                const float* positionData = reinterpret_cast<const float*>(&positionBuffer.data[positionBufferView.byteOffset + positionAccessor.byteOffset]);
+
+                if (primitive.indices >= 0)
+                {
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+                    const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+                    const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
+
+                    const uint16_t* indexData = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset]);
+
+                    for (size_t i = 0; i < indexAccessor.count; i += 3)
+                    {
+                        Triangle triangle;
+                        for (int j = 0; j < 3; ++j)
+                        {
+                            int vertexIndex = indexData[i + j];
+                            glm::vec3 pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                            triangle[j] = { pos };
+                        }
+                        tris.push_back(triangle);
+                        ++numTris;
+                    }
+                }
+                else
+                {
+                    for (size_t i = 0; i < positionAccessor.count; i += 3)
+                    {
+                        Triangle triangle;
+                        for (int j = 0; j < 3; ++j)
+                        {
+                            glm::vec3 pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
+                            triangle[j] = { pos };
+                        }
+                        tris.push_back(triangle);
+                        ++numTris;
+                    }
+                }
+            }
+        }
+    }
+
+    Mesh newMesh;
+    newMesh.startTri = startTri;
+    newMesh.numTris = numTris;
+
+    //for (int i = startTri; i < startTri + numTris; ++i)
+    //{
+    //    const auto& tri = tris[i];
+    //    std::cout << glm::to_string(tri[0].pos) << std::endl;
+    //    std::cout << glm::to_string(tri[1].pos) << std::endl;
+    //    std::cout << glm::to_string(tri[2].pos) << std::endl;
+    //    std::cout << std::endl;
+    //}
+
+    int meshIndex = meshes.size();
+    meshes.push_back(newMesh);
+    meshIndices[filePath] = meshIndex;
+    return meshIndex;
+}
+
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
     if (id != geoms.size()) {
@@ -51,6 +160,13 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
+            } else if (strcmp(line.c_str(), "mesh") == 0) {
+                string filePath;
+                Utils::safeGetline(fp_in, filePath);
+                string fullPath = basePath + filePath;
+                cout << "Creating new mesh from " << fullPath << "..." << endl;
+                newGeom.type = MESH;
+                newGeom.geomReferenceId = loadMesh(fullPath);
             }
         }
 

@@ -5,6 +5,7 @@
 #include <vector>
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
+#include <array>
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
@@ -12,6 +13,7 @@ enum GeomType
 {
     SPHERE,
     CUBE,
+    MESH
 };
 
 struct Ray 
@@ -24,6 +26,7 @@ struct Geom
 {
     enum GeomType type;
     int materialid;
+    int geomReferenceId; // for now, used only for meshes
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -44,6 +47,20 @@ struct Material
     float indexOfRefraction;
     float emittance;
 };
+
+struct Mesh
+{
+    // TODO: bounding box transform
+    int startTri;
+    int numTris;
+};
+
+struct Vertex
+{
+    glm::vec3 pos;
+};
+
+using Triangle = std::array<Vertex, 3>;
 
 struct Camera 
 {
