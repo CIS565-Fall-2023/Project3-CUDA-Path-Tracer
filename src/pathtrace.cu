@@ -1,6 +1,9 @@
 #include <cstdio>
 #include <cuda.h>
 #include <cmath>
+#include <GL/glew.h>
+#include <cuda_gl_interop.h>
+
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
@@ -32,12 +35,16 @@ struct RemoveInvalidPaths {
 CPU_ONLY CudaPathTracer::~CudaPathTracer()
 {
 	// free ptr
-	SafeCudaFree(dev_image);  // no-op if dev_image is null
+	SafeCudaFree(dev_hdr_img);  // no-op if dev_image is null
 	SafeCudaFree(dev_paths);
 	SafeCudaFree(dev_geoms);
 	SafeCudaFree(dev_materials);
 	SafeCudaFree(dev_intersections);
-	// TODO: clean up any extra device memory you created
+
+	if (cuda_pbo_dest_resource)
+	{
+		UnRegisterPBO();
+	}
 
 	checkCUDAError("CudaPathTracer delete Error!");
 }
@@ -315,8 +322,8 @@ CPU_ONLY void CudaPathTracer::Init(Scene* scene)
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
-	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
-	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
+	cudaMalloc(&dev_hdr_img, pixelcount * sizeof(glm::vec3));
+	cudaMemset(dev_hdr_img, 0, pixelcount * sizeof(glm::vec3));
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
 	cudaMalloc(&dev_terminated_paths, pixelcount * sizeof(PathSegment));
@@ -338,9 +345,24 @@ CPU_ONLY void CudaPathTracer::Init(Scene* scene)
 	checkCUDAError("pathtraceInit");
 }
 
+CPU_ONLY void CudaPathTracer::GetImage(uchar4* host_image)
+{
+	const Camera& cam = hst_scene->state.camera;
+	// Retrieve image from GPU
+	cudaMemcpy(host_image, dev_img, cam.resolution.x * cam.resolution.y * sizeof(uchar4), cudaMemcpyDeviceToHost);
+}
+
+CPU_ONLY void CudaPathTracer::RegisterPBO(unsigned int pbo)
+{
+	cudaGraphicsGLRegisterBuffer(&cuda_pbo_dest_resource, pbo, cudaGraphicsMapFlagsNone);
+	size_t byte_count = resolution.x * resolution.y * 4 * sizeof(uchar4);
+	cudaGraphicsMapResources(1, &cuda_pbo_dest_resource, 0);
+	cudaGraphicsResourceGetMappedPointer((void**)&dev_img, &byte_count, cuda_pbo_dest_resource);
+	checkCUDAError("Get PBO pointer Error");
+}
+
 CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
 {
-	device_image = pbo;
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -366,7 +388,7 @@ CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 5 && num_paths > 0) {
+	while (depth < 2 && num_paths > 0) {
 		depth++;
 
 		// clean shading chunks
@@ -393,7 +415,7 @@ CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
 	  // materials you have in the scenefile.
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
-	  
+
 		//shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 		//	iter,
 		//	num_paths,
@@ -403,7 +425,7 @@ CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
 		//	);
 		//iterationComplete = true; // TODO: should be based off stream compaction results.
 		KernelNaiveGI << <numblocksPathSegmentTracing, blockSize1d >> > (m_Iteration, num_paths,
-																		 dev_intersections, dev_paths, dev_materials);
+			dev_intersections, dev_paths, dev_materials);
 
 		if (guiData != nullptr)
 		{
@@ -413,24 +435,17 @@ CPU_ONLY void CudaPathTracer::Render(uchar4* pbo, int frame, int iter)
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	
+
 	float u = 1.f / static_cast<float>(m_Iteration + 1); // used for interpolation between last frame and this frame
 
-	finalGather << <numBlocksPixels, blockSize1d >> > (u, num_paths, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (u, num_paths, dev_hdr_img, dev_paths);
 	checkCUDAError("Final Gather failed");
 	cudaDeviceSynchronize();
 	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, dev_image);
+	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (dev_img, cam.resolution, dev_hdr_img);
 
 	checkCUDAError("pathtrace");
 	++m_Iteration;
-}
-
-CPU_ONLY void CudaPathTracer::GetImage(uchar4* host_image)
-{
-	const Camera& cam = hst_scene->state.camera;
-	// Retrieve image from GPU
-	cudaMemcpy(host_image, device_image, cam.resolution.x * cam.resolution.y * sizeof(uchar4), cudaMemcpyDeviceToHost);
 }

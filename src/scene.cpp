@@ -32,6 +32,10 @@ Scene::Scene(string filename) {
     }
 }
 
+Scene::~Scene()
+{
+}
+
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
     if (id != geoms.size()) {

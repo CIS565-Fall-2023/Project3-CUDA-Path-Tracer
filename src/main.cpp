@@ -2,6 +2,9 @@
 #include "preview.h"
 #include <cstring>
 
+#include "application.h"
+#include "sandbox.h"
+
 static std::string startTimeString;
 
 // For camera controls
@@ -35,59 +38,64 @@ int height;
 #define STR(a) #a
 #define STR2(a) STR(a)
 
-std::string scene_path = STR2(JOIN2(PROJ_BASE_PATH, /scenes));
-
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
 	startTimeString = currentTimeString();
-
+	
 	//if (argc < 2) {
 	//	printf("Usage: %s SCENEFILE.txt\n", argv[0]);
 	//	return 1;
 	//}
-	std::string scene_file = (scene_path + "/cornellBox.txt");
-	const char* sceneFile = scene_file.c_str();
+	//std::string scene_path = STR2(JOIN2(PROJ_BASE_PATH, /scenes));
+	//std::string scene_file = (scene_path + "/cornellBox.txt");
+	//const char* sceneFile = scene_file.c_str();
+	//
+	//// Load scene file
+	//scene = new Scene(sceneFile);
+	//
+	////Create Instance for ImGUIData
+	//guiData = new GuiDataContainer();
+	//
+	//// Set up camera stuff from loaded path tracer settings
+	////iteration = 0;
+	//renderState = &scene->state;
+	//Camera& cam = renderState->camera;
+	//width = cam.resolution.x;
+	//height = cam.resolution.y;
+	//
+	//glm::vec3 view = cam.forward;
+	//glm::vec3 up = cam.up;
+	//glm::vec3 right = glm::cross(view, up);
+	//up = glm::cross(right, view);
+	//
+	//cameraPosition = cam.position;
+	//
+	//// compute phi (horizontal) and theta (vertical) relative 3D axis
+	//// so, (0 0 1) is forward, (0 1 0) is up
+	//glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
+	//glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
+	//phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
+	//theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
+	//ogLookAt = cam.ref;
+	//zoom = glm::length(cam.position - ogLookAt);
 
-	// Load scene file
-	scene = new Scene(sceneFile);
+	Application app({680, 680});
+	SandBox sandbox;
+	app.SetSandBox(&sandbox);
+	
+	sandbox.m_PathTracer->RegisterPBO(app.pbo);
+	//CudaPathTracer cuda_pt;
+	//init();
+	//cuda_pt.Init(scene);
+	//cuda_pt.RegisterPBO(pbo);
 
-	//Create Instance for ImGUIData
-	guiData = new GuiDataContainer();
-
-	CudaPathTracer cuda_pt;
-
-	// Set up camera stuff from loaded path tracer settings
-	iteration = 0;
-	renderState = &scene->state;
-	Camera& cam = renderState->camera;
-	width = cam.resolution.x;
-	height = cam.resolution.y;
-
-	glm::vec3 view = cam.forward;
-	glm::vec3 up = cam.up;
-	glm::vec3 right = glm::cross(view, up);
-	up = glm::cross(right, view);
-
-	cameraPosition = cam.position;
-
-	// compute phi (horizontal) and theta (vertical) relative 3D axis
-	// so, (0 0 1) is forward, (0 1 0) is up
-	glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
-	glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
-	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
-	theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
-	ogLookAt = cam.ref;
-	zoom = glm::length(cam.position - ogLookAt);
-
-	// Initialize CUDA and GL components
-	init();
-	cuda_pt.Init(scene);
 	// Initialize ImGui Data
-	InitImguiData(guiData);
-	InitDataContainer(guiData);
+	//InitImguiData(guiData);
+	//InitDataContainer(guiData);
 
 	// GLFW main loop
-	mainLoop(cuda_pt);
-
+	//mainLoop(cuda_pt);
+	app.Run();
 	return 0;
 }
 
@@ -138,16 +146,16 @@ void runCuda(CudaPathTracer& cuda_pathtracer) {
 	}
 
 	if (cuda_pathtracer.m_Iteration < renderState->iterations) {
-		uchar4* pbo_dptr = NULL;
+		//uchar4* pbo_dptr = NULL;
 		iteration++;
-		cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
+		//cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
 
 		// execute the kernel
 		int frame = 0;
-		cuda_pathtracer.Render(pbo_dptr, frame, iteration);
+		cuda_pathtracer.Render(nullptr, frame, iteration);
 
 		// unmap buffer object
-		cudaGLUnmapBufferObject(pbo);
+		//cudaGLUnmapBufferObject(pbo);
 	}
 	else {
 		saveImage(cuda_pathtracer);

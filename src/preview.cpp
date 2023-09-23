@@ -15,14 +15,6 @@ GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
 
-std::string currentTimeString() {
-	time_t now;
-	time(&now);
-	char buf[sizeof "0000-00-00_00-00-00z"];
-	strftime(buf, sizeof buf, "%Y-%m-%d_%H-%M-%Sz", gmtime(&now));
-	return std::string(buf);
-}
-
 //-------------------------------
 //----------SETUP STUFF----------
 //-------------------------------
@@ -172,7 +164,7 @@ bool init() {
 	// Initialize other stuff
 	initVAO();
 	initTextures();
-	initCuda();
+	//initCuda();
 	initPBO();
 	GLuint passthroughProgram = initShader();
 
@@ -186,7 +178,6 @@ void InitImguiData(GuiDataContainer* guiData)
 {
 	imguiData = guiData;
 }
-
 
 // LOOK: Un-Comment to check ImGui Usage
 void RenderImGui()
@@ -253,7 +244,7 @@ void mainLoop(CudaPathTracer& cuda_pathtracer) {
 		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
 
 		// Render ImGui Stuff
-		RenderImGui();
+		//RenderImGui();
 
 		glfwSwapBuffers(window);
 	}
