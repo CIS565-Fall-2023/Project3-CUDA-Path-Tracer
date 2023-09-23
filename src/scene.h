@@ -10,6 +10,8 @@
 #include "sceneStructs.h"
 #include "light.h"
 #include <thrust/device_vector.h>
+#include "tinygltf/tiny_gltf.h"
+
 
 using namespace std;
 
@@ -45,7 +47,10 @@ public:
     thrust::device_vector<Geom*> geoms;
     thrust::device_vector<Material*> mats;
     Light ** lights;
-    int light_size;
+    int light_size = 0;
+    tinygltf::Model model;
+    std::vector<glm::vec3> triangles;
+    Scene(const char* filename);
     ~Scene() {
         //FreePtrVector<<<1,1>>>(geoms);
         //FreePtrVector<<<1,1>>>(mats);
@@ -58,3 +63,5 @@ public:
     }
 
 };
+
+

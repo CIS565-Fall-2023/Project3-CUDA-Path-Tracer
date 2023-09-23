@@ -19,6 +19,8 @@
 #include "interactions.h"
 #include "bxdf.h"
 #include "light.h"
+#include "assembler.h"
+//#include "utilities.cuh"
 
 #define ERRORCHECK 1
 
@@ -81,8 +83,12 @@ static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Light** dev_lights = nullptr;
-static Primitive ** dev_primitives = nullptr;
+static Primitive** dev_primitives = nullptr;
+static Triangle* dev_triangles= nullptr;
+static Sphere * dev_spheres= nullptr;
 static int primitve_size = 1;
+static PrimitiveAssmbler * pa = new PrimitiveAssmbler();
+static Scene* testScene = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -105,17 +111,18 @@ __global__ void initAreaLightFromObject(HostScene * scene, Light** lights, Geom*
 	}
 }
 
-__global__ void initTestTriangleScenePrimitives(Primitive** primitves) {
-	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -3.0f, 0.0f), glm::vec3(3.0f, -3.0f, 0.0f),
-		glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-}
-
-void initTestTriangleScene() {
-	cudaMalloc(&dev_primitives, primitve_size * sizeof(Primitive*));
-	initTestTriangleScenePrimitives<<<1,1>>>(dev_primitives);
-}
+//__global__ void initTestTriangleScenePrimitives(Primitive** primitves) {
+//	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),
+//		glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+//}
+//
+//void initTestTriangleScene() {
+//	cudaMalloc(&dev_primitives, primitve_size * sizeof(Primitive*));
+//	initTestTriangleScenePrimitives<<<1,1>>>(dev_primitives);
+//}
 
 void pathtraceInit(HostScene* scene) {
+	
 	hst_scene = scene;
 
 	const Camera& cam = hst_scene->state.camera;
@@ -137,9 +144,17 @@ void pathtraceInit(HostScene* scene) {
 
 	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light*));
 	//int size = scene->lights.size();
-	initAreaLightFromObject<<<1,1>>>(scene, dev_lights, dev_geoms, dev_materials, scene->geoms.size());
-	initTestTriangleScene();
+	//initAreaLightFromObject<<<1,1>>>(scene, dev_lights, dev_geoms, dev_materials, scene->geoms.size());
+	//initTestTriangleScene();
 	// TODO: initialize any extra device memeory you need
+	pa = new PrimitiveAssmbler();
+	pa->assembleScenePrimitives(testScene);
+	auto triangles = pa->triangles.data();
+	cudaMalloc(&dev_triangles, pa->triangles.size() * sizeof(Triangle));
+	cudaMemcpy(dev_triangles, triangles, pa->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	//pa->movePrimitivesToDevice();
+	cudaDeviceSynchronize();
+	checkCUDAError("Primitive Assmbler failed!");
 
 
 	checkCUDAError("pathtraceInit");
@@ -151,8 +166,11 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
+	//cudaFree(dev_lights);
 	// TODO: clean up any extra device memory you created
-
+	//pa->freeBuffer();
+	cudaFree(dev_triangles);
+	delete pa;
 	checkCUDAError("pathtraceFree");
 }
 
@@ -241,13 +259,11 @@ __device__ void computeIntersectionsCore(Geom* geoms, int geoms_size, Ray ray, S
 }
 
 //TODO: Change to BVH in future!
-__device__ bool intersectCore(Primitive ** primitives, int primitive_size, Ray & ray, ShadeableIntersection& intersection) {
+__device__ bool intersectCore(Triangle * triangles, int triangles_size, Ray & ray, ShadeableIntersection& intersection) {
 
-	for (int i = 0; i < primitive_size; i++)
+	for (int i = 0; i < triangles_size; i++)
 	{
-		Primitive * primitive = primitives[i];
-
-		if (primitive->intersect(ray, &intersection)) {
+		if (triangles[i].intersect(ray, &intersection)) {
 			return true;
 		}
 	}
@@ -259,8 +275,8 @@ __global__ void intersect(
 	int depth
 	, int num_paths
 	, PathSegment* pathSegments
-	, Primitive** primitives
-	, int primitives_size
+	, Triangle* triangles
+	, int triangles_size
 	, ShadeableIntersection* intersections
 ) {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -270,7 +286,7 @@ __global__ void intersect(
 		Ray & ray = pathSegments[path_index].ray;
 		ray.min_t = 0.0;
 		ray.max_t = FLT_MAX;
-		intersectCore(primitives, primitives_size, pathSegments[path_index].ray, intersections[path_index]);
+		intersectCore(triangles, triangles_size, pathSegments[path_index].ray, intersections[path_index]);
 	}
 }
 
@@ -327,7 +343,7 @@ __global__ void shadeFakeMaterial(
 
 			Material material = materials[intersection.materialId];
 			//pathSegment.color = intersection.surfaceNormal;
-			pathSegment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+			pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
 			return;
 			glm::vec3 materialColor = material.color;
 
@@ -432,6 +448,8 @@ struct NoHit {
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
+	checkCUDAError("before generate camera ray");
+
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -504,13 +522,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		//	, dev_intersections
 		//	);
 
+		int primitiveSize = pa->getPrimitiveSize();
+		checkCUDAError("getPrimitiveSize");
 
 		intersect << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
 			, dev_paths
-			, dev_primitives
-			, primitve_size
+			, dev_triangles
+			, pa->triangles.size()
 			, dev_intersections
 			);
 
