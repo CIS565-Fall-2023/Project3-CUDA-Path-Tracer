@@ -11,49 +11,33 @@ struct BsdfSample
     glm::vec3 f;
     glm::vec3 wiW;
     float pdf;
-    int sampledType;
+    BsdfSampleType sampledType;
 };
-
-enum BsdfSampleType
-{
-    diffuse_refl = 1,
-    spec_refl = 1 << 1,
-    spec_trans = 1 << 2,
-    spec_glass = 1 << 3,
-    microfacet_refl = 1 << 4,
-    plastic = 1 << 5,
-    diffuse_trans = 1 << 6,
-    microfacet_trans = 1 << 7;
-};
-
 __device__ glm::vec3 f_diffuse(glm::vec3 albedo)
 {
     return albedo / PI;
 }
 
-__device__ glm::vec3 sample_f_diffuse(glm::vec3 albedo, glm::vec2 xi, glm::vec3 nor, glm::vec3& wiW,
-    float& pdf, int& sampledType)
+__device__ glm::vec3 sample_f_diffuse(glm::vec3 albedo, glm::vec3 xi, glm::vec3 nor, BsdfSample& sample)
 {
-    glm::vec3 wi = squareToHemisphereCosine(xi);
-    pdf = squareToHemisphereCosinePDF(wi);
-    wiW = LocalToWorld(nor) * wi;
-    sampledType = DIFFUSE_REFL;
+    glm::vec3 wi = squareToHemisphereCosine(glm::vec2(xi.x, xi.y));
+    sample.pdf = squareToHemisphereCosinePDF(wi);
+    sample.wiW = LocalToWorld(nor) * wi;
+    sample.sampledType = BsdfSampleType::diffuse_refl;
     return f_diffuse(albedo);
 }
 
-__device__ glm::vec3 sample_f_specular_refl(glm::vec3 albedo, glm::vec3 nor, glm::vec3 wo, glm::vec3& wiW,
-    int& sampledType)
+__device__ glm::vec3 sample_f_specular_refl(glm::vec3 albedo, glm::vec3 nor, glm::vec3 wo, BsdfSample& sample)
 {
     glm::vec3 wi = reflect(-wo, glm::vec3(0, 0, 1));
-    wiW = LocalToWorld(nor) * wi;
-    sampledType = SPEC_REFL;
+    sample.wiW = LocalToWorld(nor) * wi;
+    sample.sampledType = BsdfSampleType::spec_refl;
     if (wi.z == 0)
         return glm::vec3(0.);
     return albedo / AbsCosTheta(wi);
 }
 
-__device__ glm::vec3 sample_f_specular_trans(glm::vec3 albedo, glm::vec3 nor, glm::vec3 wo, glm::vec3& wiW,
-    int& sampledType)
+__device__ glm::vec3 sample_f_specular_trans(glm::vec3 albedo, glm::vec3 nor, glm::vec3 wo, BsdfSample& sample)
 {
     float etaA = 1.;
     float etaB = 1.55;
@@ -65,8 +49,8 @@ __device__ glm::vec3 sample_f_specular_trans(glm::vec3 albedo, glm::vec3 nor, gl
     {
         return glm::vec3(0.);
     }
-    wiW = LocalToWorld(nor) * wi;
-    sampledType = SPEC_TRANS;
+    sample.wiW = LocalToWorld(nor) * wi;
+    sample.sampledType = BsdfSampleType::spec_trans;
     return albedo / AbsCosTheta(wi);
 }
 
@@ -141,49 +125,47 @@ __device__ glm::vec3 fresnelDieletricConductor(float cosThetaI)
     return ratio;
 }
 
-__device__ glm::vec3 sample_f_metal(glm::vec3 albedo, glm::vec3 nor, glm::vec2 xi, glm::vec3 wo, glm::vec3& wiW,
-    int& sampledType)
+__device__ glm::vec3 sample_f_metal(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
 {
-    float random = rng();
+    float random = xi.z;
     if (random < 0.5)
     {
-        glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, wiW, sampledType);
-        sampledType = SPEC_REFL;
-        return 2.f * fresnelDieletricConductor(dot(nor, normalize(wiW))) * R;
+        glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
+        sample.sampledType = BsdfSampleType::spec_refl;
+        return 2.f * fresnelDieletricConductor(dot(nor, normalize(sample.wiW))) * R;
     }
     else
     {
-        glm::vec3 T = sample_f_specular_trans(albedo, nor, wo, wiW, sampledType);
-        sampledType = SPEC_TRANS;
+        glm::vec3 T = sample_f_specular_trans(albedo, nor, wo, sample);
+        sample.sampledType = BsdfSampleType::spec_trans;
         return 2.f *
             (glm::vec3(1.) -
-                fresnelDieletricConductor(dot(nor, normalize(wiW)))) *
+                fresnelDieletricConductor(dot(nor, normalize(sample.wiW)))) *
             T;
     }
 }
 
-__device__ glm::vec3 sample_f_glass(glm::vec3 albedo, glm::vec3 nor, glm::vec2 xi, glm::vec3 wo, glm::vec3& wiW,
-    int& sampledType)
+__device__ glm::vec3 sample_f_glass(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
 {
-    float random = rng();
+    float random = xi.z;
     if (random < 0.5)
     {
-        glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, wiW, sampledType);
-        sampledType = SPEC_REFL;
-        return 2.f * fresnelDielectricEval(dot(nor, normalize(wiW)), 1.55) * R;
+        glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
+        sample.sampledType = BsdfSampleType::spec_refl;
+        return 2.f * fresnelDielectricEval(dot(nor, normalize(sample.wiW)), 1.55) * R;
     }
     else
     {
-        glm::vec3 T = sample_f_specular_trans(albedo, nor, wo, wiW, sampledType);
-        sampledType = SPEC_TRANS;
+        glm::vec3 T = sample_f_specular_trans(albedo, nor, wo, sample);
+        sample.sampledType = BsdfSampleType::spec_trans;
         return 2.f *
             (glm::vec3(1.) -
-                fresnelDielectricEval(dot(nor, normalize(wiW)), 1.55)) *
+                fresnelDielectricEval(dot(nor, normalize(sample.wiW)), 1.55)) *
             T;
     }
 }
 
-__device__ glm::vec3 sample_wh(glm::vec3 wo, glm::vec2 xi, float roughness)
+__device__ glm::vec3 sample_wh(glm::vec3 wo, glm::vec3 xi, float roughness)
 {
     glm::vec3 wh;
 
@@ -293,26 +275,24 @@ __device__ glm::vec3 f_microfacet_trans(glm::vec3 albedo, glm::vec3 wo, glm::vec
         (cosThetaI * cosThetaO * sqrtDenom * sqrtDenom));
 }
 
-__device__ glm::vec3 sample_f_microfacet_refl(glm::vec3 albedo, glm::vec3 nor, glm::vec2 xi, glm::vec3 wo,
+__device__ glm::vec3 sample_f_microfacet_refl(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo,
 
-    float roughness, glm::vec3& wiW, float& pdf,
-    int& sampledType)
+    float roughness, BsdfSample& sample)
 {
     if (wo.z == 0)
         return glm::vec3(0.f);
     glm::vec3 wh = sample_wh(wo, xi, roughness);
     glm::vec3 wi = reflect(-wo, wh);
-    wiW = LocalToWorld(nor) * wi;
+    sample.wiW = LocalToWorld(nor) * wi;
     if (!SameHemisphere(wo, wi))
         return glm::vec3(0.f);
 
-    pdf = trowbridgeReitzPdf(wo, wh, roughness) / (4 * dot(wo, wh));
+    sample.pdf = trowbridgeReitzPdf(wo, wh, roughness) / (4 * dot(wo, wh));
     return f_microfacet_refl(albedo, wo, wi, roughness);
 }
 
-__device__ glm::vec3 sample_f_microfacet_trans(glm::vec3 albedo, glm::vec3 nor, glm::vec2 xi, glm::vec3 wo,
-    float roughness, float etaB, glm::vec3& wiW,
-    float& pdf, int& sampledType)
+__device__ glm::vec3 sample_f_microfacet_trans(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo,
+    float roughness, float etaB, BsdfSample& sample)
 {
     float etaA = 1.;
     if (wo.z == 0)
@@ -325,109 +305,89 @@ __device__ glm::vec3 sample_f_microfacet_trans(glm::vec3 albedo, glm::vec3 nor, 
     float eta = CosTheta(wo) > 0 ? (etaA / etaB) : (etaB / etaA);
     if (!Refract(wo, wh, eta, wi))
         return glm::vec3(0);
-    wiW = LocalToWorld(nor) * wi;
-    pdf = pdf_microfacet_trans(wo, wi, etaB, roughness);
+    sample.wiW = LocalToWorld(nor) * wi;
+    sample.pdf = pdf_microfacet_trans(wo, wi, etaB, roughness);
     return f_microfacet_trans(albedo, wo, wi, etaB, roughness);
 }
 
-__device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, glm::vec2 xi, glm::vec3 wo,
-    float roughness, float eta, glm::vec3& wiW,
-    float& pdf, int& sampledType)
+__device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo,
+    float roughness, float eta, BsdfSample& sample)
 {
     glm::vec3 wh = sample_wh(wo, xi, roughness);
     float pr = fresnelDielectricEval(dot(wo, wh), eta).x;
     float pt = 1 - pr;
-    float random = rng();
+    float random = xi.z;
     if (random < pr)
     {
-        glm::vec3 R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness, wiW,
-            pdf, sampledType);
-        sampledType = MICROFACET_REFL;
-        pdf *= pr;
+        glm::vec3 R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness, sample);
+        sample.sampledType = BsdfSampleType::microfacet_refl;
+        sample.pdf *= pr;
         return R * pr;
     }
     else
     {
-        glm::vec3 T = sample_f_microfacet_trans(albedo, nor, xi, wo, roughness, eta,
-            wiW, pdf, sampledType);
-        sampledType = MICROFACET_TRANS;
-        pdf *= pt;
+        glm::vec3 T = sample_f_microfacet_trans(albedo, nor, xi, wo, roughness, eta, sample);
+        sample.sampledType = BsdfSampleType::microfacet_trans;
+        sample.pdf *= pt;
         return T * pt;
     }
 }
 
-__device__ glm::vec3 computeAlbedo(const Material mat, glm::vec3 nor)
+__device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor)
 {
-    glm::vec3 albedo = isect.material.albedo;
+    glm::vec3 albedo = mat.color;
 #if N_TEXTURES
-    if (isect.material.albedoTex != -1)
+    if (mat.albedoTex != -1)
     {
         albedo *=
-            texture(u_Texsamplers[isect.material.albedoTex], isect.uv).rgb;
+            texture(u_Texsamplers[mat.albedoTex], isect.uv).rgb;
         albedo.rgb = pow(albedo, glm::vec3(2.2));
     }
 #endif
     return albedo;
 }
 
-__device__ glm::vec3 computeNormal(const Material mat, glm::vec3 nor)
+__device__ float computeRoughness(const Material& mat, glm::vec3 nor)
 {
-    glm::vec3 nor = isect.nor;
+    float roughness = mat.roughness;
 #if N_TEXTURES
-    if (isect.material.normalTex != -1)
-    {
-        glm::vec3 localNor =
-            texture(u_Texsamplers[isect.material.normalTex], isect.uv).rgb;
-        glm::vec3 tan, bit;
-        coordinateSystem(nor, tan, bit);
-        nor = mat3(tan, bit, nor) * localNor;
-    }
-#endif
-    return nor;
-}
-
-__device__ float computeRoughness(const Material mat, glm::vec3 nor)
-{
-    float roughness = isect.material.roughness;
-#if N_TEXTURES
-    if (isect.material.roughnessTex != -1)
+    if (mat.roughnessTex != -1)
     {
         roughness =
-            texture(u_Texsamplers[isect.material.roughnessTex], isect.uv).r;
+            texture(u_Texsamplers[mat.roughnessTex], isect.uv).r;
     }
 #endif
     return roughness;
 }
 
-__device__ glm::vec3 f(const Material mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
+__device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
 {
-    glm::vec3 nor = computeNormal(isect);
     glm::vec3 wo = WorldToLocal(nor) * woW;
     glm::vec3 wi = WorldToLocal(nor) * wiW;
 
     if (wo.z == 0)
         return glm::vec3(0.f);
 
-    if (isect.material.type == DIFFUSE_REFL)
+    if (mat.type == BsdfSampleType::diffuse_refl)
     {
-        return f_diffuse(computeAlbedo(isect));
+        return f_diffuse(computeAlbedo(mat, nor));
     }
-    else if (isect.material.type == SPEC_REFL ||
-        isect.material.type == SPEC_TRANS ||
-        isect.material.type == SPEC_GLASS)
+    else if (mat.type == BsdfSampleType::spec_refl ||
+        mat.type == BsdfSampleType::spec_trans ||
+        mat.type == BsdfSampleType::spec_glass)
     {
         return glm::vec3(0.f);
     }
-    else if (isect.material.type == MICROFACET_REFL)
+    else if (mat.type == BsdfSampleType::microfacet_refl)
     {
-        return f_microfacet_refl(computeAlbedo(isect), wo, wi,
-            computeRoughness(isect));
+        return f_microfacet_refl(computeAlbedo(mat, nor), wo, wi,
+            computeRoughness(mat, nor));
     }
-    else if (isect.material.type == MICROFACET_TRANS)
+    else if (mat.type == BsdfSampleType::microfacet_trans)
     {
-        return f_microfacet_trans(computeAlbedo(isect), wo, wi,
-            isect.material.eta,
-            computeRoughness(isect));
+        return f_microfacet_trans(computeAlbedo(mat, nor), wo, wi,
+            mat.eta,
+            computeRoughness(mat, nor));
     }
     else
     {
@@ -435,51 +395,45 @@ __device__ glm::vec3 f(const Material mat, glm::vec3 nor, glm::vec3 woW, glm::ve
     }
 }
 
-__device__ glm::vec3 sample_f(const Material mat, glm::vec3 nor, glm::vec3 woW, glm::vec2 xi, BsdfSample& sample)
+__device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 xi, BsdfSample& sample)
 {
     glm::vec3 wo = WorldToLocal(nor) * woW;
 
-    if (isect.material.type == DIFFUSE_REFL)
+    if (mat.type == BsdfSampleType::diffuse_refl)
     {
-        return sample_f_diffuse(computeAlbedo(isect), xi, nor, wiW, pdf,
-            sampledType);
+        return sample_f_diffuse(computeAlbedo(mat, nor), xi, nor, sample);
     }
-    else if (isect.material.type == SPEC_REFL)
+    else if (mat.type == BsdfSampleType::spec_refl)
     {
-        pdf = 1.;
-        return sample_f_specular_refl(computeAlbedo(isect), nor, wo, wiW,
-            sampledType);
+        sample.pdf = 1.;
+        return sample_f_specular_refl(computeAlbedo(mat, nor), nor, wo, sample);
     }
-    else if (isect.material.type == SPEC_TRANS)
+    else if (mat.type == BsdfSampleType::spec_trans)
     {
-        pdf = 1.;
-        return sample_f_specular_trans(computeAlbedo(isect), nor, wo, wiW,
-            sampledType);
+        sample.pdf = 1.;
+        return sample_f_specular_trans(computeAlbedo(mat, nor), nor, wo, sample);
     }
-    else if (isect.material.type == SPEC_GLASS)
+    else if (mat.type == BsdfSampleType::spec_glass)
     {
-        pdf = 1.;
+        sample.pdf = 1.;
 #if Al || Au || Cu
-        return sample_f_metal(computeAlbedo(isect), nor, xi, wo, wiW,
-            sampledType);
+        return sample_f_metal(computeAlbedo(mat, nor), nor, xi, wo, sample);
 #else
-        return sample_f_glass(computeAlbedo(isect), nor, xi, wo, wiW,
-            sampledType);
+        return sample_f_glass(computeAlbedo(mat, nor), nor, xi, wo, sample);
 #endif
     }
-    else if (isect.material.type == MICROFACET_REFL)
+    else if (mat.type == BsdfSampleType::microfacet_refl)
     {
-        return sample_f_microfacet_refl(computeAlbedo(isect), nor, xi, wo,
-            computeRoughness(isect), wiW, pdf,
-            sampledType);
+        return sample_f_microfacet_refl(computeAlbedo(mat, nor), nor, xi, wo,
+            computeRoughness(mat, nor), sample);
     }
-    else if (isect.material.type == MICROFACET_TRANS)
+    else if (mat.type == BsdfSampleType::microfacet_trans)
     {
         return sample_f_rough_dieletric(
-            computeAlbedo(isect), nor, xi, wo, computeRoughness(isect),
-            isect.material.eta, wiW, pdf, sampledType);
+            computeAlbedo(mat, nor), nor, xi, wo, computeRoughness(mat, nor),
+            mat.eta, sample);
     }
-    else if (isect.material.type == PLASTIC)
+    else if (mat.type == BsdfSampleType::plastic)
     {
         return glm::vec3(1, 0, 1);
     }
@@ -489,33 +443,32 @@ __device__ glm::vec3 sample_f(const Material mat, glm::vec3 nor, glm::vec3 woW, 
     }
 }
 
-__device__ float pdf(const Material mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
+__device__ float pdf(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
 {
-    glm::vec3 nor = computeNormal(isect);
     glm::vec3 wo = WorldToLocal(nor) * woW;
     glm::vec3 wi = WorldToLocal(nor) * wiW;
 
     if (wo.z == 0)
 
-        if (isect.material.type == DIFFUSE_REFL)
+        if (mat.type == BsdfSampleType::diffuse_refl)
         {
             return squareToHemisphereCosinePDF(wi);
         }
-        else if (isect.material.type == SPEC_REFL ||
-            isect.material.type == SPEC_TRANS ||
-            isect.material.type == SPEC_GLASS)
+        else if (mat.type == BsdfSampleType::spec_refl ||
+            mat.type == BsdfSampleType::spec_trans ||
+            mat.type == BsdfSampleType::spec_glass)
         {
             return 0.f;
         }
-        else if (isect.material.type == MICROFACET_REFL)
+        else if (mat.type == BsdfSampleType::microfacet_refl)
         {
             glm::vec3 wh = normalize(wo + wi);
-            return trowbridgeReitzPdf(wo, wh, computeRoughness(isect)) /
+            return trowbridgeReitzPdf(wo, wh, computeRoughness(mat, nor)) /
                 (4 * dot(wo, wh));
         }
-        else if (isect.material.type == MICROFACET_TRANS)
+        else if (mat.type == BsdfSampleType::microfacet_trans)
         {
-            return pdf_microfacet_trans(wo, wi, isect.material.eta, computeRoughness(isect));
+            return pdf_microfacet_trans(wo, wi, mat.eta, computeRoughness(mat, nor));
         }
         else
         {

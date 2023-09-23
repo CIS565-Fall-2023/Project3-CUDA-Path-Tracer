@@ -7,6 +7,20 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
+
+enum BsdfSampleType
+{
+    diffuse_refl = 1,
+    spec_refl = 1 << 1,
+    spec_trans = 1 << 2,
+    spec_glass = 1 << 3,
+    microfacet_refl = 1 << 4,
+    plastic = 1 << 5,
+    diffuse_trans = 1 << 6,
+    microfacet_trans = 1 << 7
+};
+
+
 enum GeomType {
     SPHERE,
     CUBE,
@@ -17,7 +31,7 @@ struct Ray {
     glm::vec3 direction;
 };
 
-__device__ Ray SpawnRay(glm::vec3 pos, glm::vec3 wi) {
+__device__ static Ray SpawnRay(glm::vec3 pos, glm::vec3 wi) {
     return Ray{ pos + wi * 0.0001f, wi };
 }
 
@@ -33,6 +47,7 @@ struct Geom {
 };
 
 struct Material {
+    BsdfSampleType type;
     glm::vec3 color;
     struct {
         float exponent;
@@ -42,6 +57,8 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    float roughness;
+    float eta;
 };
 
 struct Camera {

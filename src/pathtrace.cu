@@ -38,12 +38,6 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #endif
 }
 
-__host__ __device__
-thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
-    int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
-    return thrust::default_random_engine(h);
-}
-
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
     int iter, glm::vec3* image) {
@@ -305,7 +299,7 @@ __global__ void shadeMaterial(
             // TODO: replace this! you should be able to start with basically a one-liner
             else {
                 BsdfSample sample;
-                sample_f(material, intersection.surfaceNormal, intersection.woW, glm::vec2(u01(rng), u01(rng)), sample);
+                sample_f(material, intersection.surfaceNormal, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
                 if (sample.pdf <= 0) {
                     pathSegments[idx].remainingBounces = 0;
                     pathSegments[idx].pixelIndex = -1;
@@ -427,7 +421,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
       // TODO: compare between directly shading the path segments and shading
       // path segments that have been reshuffled to be contiguous in memory.
 
-        shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+        shadeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
             iter,
             num_paths,
             dev_intersections,

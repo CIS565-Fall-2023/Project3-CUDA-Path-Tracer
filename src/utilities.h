@@ -1,6 +1,10 @@
 #pragma once
 
-#include "glm/glm.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include <cuda_runtime.h>
 #include <algorithm>
 #include <istream>
 #include <iterator>
@@ -39,39 +43,39 @@ namespace utilityCore
 }
 
 // Functions
-__device__ float AbsDot(glm::vec3 a, glm::vec3 b)
+__host__ __device__ inline float AbsDot(glm::vec3 a, glm::vec3 b)
 {
     return abs(dot(a, b));
 }
 
-__device__ float CosTheta(glm::vec3 w) { return w.z; }
-__device__ float Cos2Theta(glm::vec3 w) { return w.z * w.z; }
-__device__ float AbsCosTheta(glm::vec3 w) { return abs(w.z); }
-__device__ float Sin2Theta(glm::vec3 w)
+__host__ __device__ inline float CosTheta(glm::vec3 w) { return w.z; }
+__host__ __device__ inline float Cos2Theta(glm::vec3 w) { return w.z * w.z; }
+__host__ __device__ inline float AbsCosTheta(glm::vec3 w) { return abs(w.z); }
+__host__ __device__ inline float Sin2Theta(glm::vec3 w)
 {
     return glm::max(0.f, 1.f - Cos2Theta(w));
 }
-__device__ float SinTheta(glm::vec3 w) { return sqrt(Sin2Theta(w)); }
-__device__ float TanTheta(glm::vec3 w) { return SinTheta(w) / CosTheta(w); }
+__host__ __device__ inline float SinTheta(glm::vec3 w) { return sqrt(Sin2Theta(w)); }
+__host__ __device__ inline float TanTheta(glm::vec3 w) { return SinTheta(w) / CosTheta(w); }
 
-__device__ float Tan2Theta(glm::vec3 w)
+__host__ __device__ inline float Tan2Theta(glm::vec3 w)
 {
     return Sin2Theta(w) / Cos2Theta(w);
 }
 
-__device__ float CosPhi(glm::vec3 w)
+__host__ __device__ inline float CosPhi(glm::vec3 w)
 {
     float sinTheta = SinTheta(w);
     return (sinTheta == 0) ? 1 : glm::clamp(w.x / sinTheta, -1.f, 1.f);
 }
-__device__ float SinPhi(glm::vec3 w)
+__host__ __device__ inline float SinPhi(glm::vec3 w)
 {
     float sinTheta = SinTheta(w);
     return (sinTheta == 0) ? 0 : glm::clamp(w.y / sinTheta, -1.f, 1.f);
 }
-__device__ float Cos2Phi(glm::vec3 w) { return CosPhi(w) * CosPhi(w); }
-__device__ float Sin2Phi(glm::vec3 w) { return SinPhi(w) * SinPhi(w); }
-__device__ bool Refract(glm::vec3 wi, glm::vec3 n, float eta, glm::vec3& wt)
+__host__ __device__ inline float Cos2Phi(glm::vec3 w) { return CosPhi(w) * CosPhi(w); }
+__host__ __device__ inline float Sin2Phi(glm::vec3 w) { return SinPhi(w) * SinPhi(w); }
+__device__ static bool Refract(glm::vec3 wi, glm::vec3 n, float eta, glm::vec3& wt)
 {
     // Compute cos theta using Snell's law
     float cosThetaI = dot(n, wi);
@@ -86,17 +90,17 @@ __device__ bool Refract(glm::vec3 wi, glm::vec3 n, float eta, glm::vec3& wt)
     return true;
 }
 
-__device__ glm::vec3 Faceforward(glm::vec3 n, glm::vec3 v)
+__device__ static glm::vec3 Faceforward(glm::vec3 n, glm::vec3 v)
 {
     return (dot(n, v) < 0.f) ? -n : n;
 }
 
-__device__ bool SameHemisphere(glm::vec3 w, glm::vec3 wp)
+__device__ static bool SameHemisphere(glm::vec3 w, glm::vec3 wp)
 {
     return w.z * wp.z > 0;
 }
 
-__device__ void coordinateSystem(glm::vec3& v1, glm::vec3& v2, glm::vec3& v3)
+__device__ static void coordinateSystem(glm::vec3& v1, glm::vec3& v2, glm::vec3& v3)
 {
     if (abs(v1.x) > abs(v1.y))
         v2 = glm::vec3(-v1.z, 0, v1.x) / sqrt(v1.x * v1.x + v1.z * v1.z);
@@ -105,24 +109,24 @@ __device__ void coordinateSystem(glm::vec3& v1, glm::vec3& v2, glm::vec3& v3)
     v3 = cross(v1, v2);
 }
 
-__device__ glm::mat3 LocalToWorld(glm::vec3 nor)
+__device__ static glm::mat3 LocalToWorld(glm::vec3 nor)
 {
     glm::vec3 tan, bit;
     coordinateSystem(nor, tan, bit);
     return glm::mat3(tan, bit, nor);
 }
 
-__device__ glm::mat3 WorldToLocal(glm::vec3 nor)
+__device__ static glm::mat3 WorldToLocal(glm::vec3 nor)
 {
     return transpose(LocalToWorld(nor));
 }
 
-__device__ float DistanceSquared(glm::vec3 p1, glm::vec3 p2)
+__device__ static float DistanceSquared(glm::vec3 p1, glm::vec3 p2)
 {
     return dot(p1 - p2, p1 - p2);
 }
 
-__device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi)
+__device__ static glm::vec3 squareToDiskConcentric(glm::vec2 xi)
 {
     // TODO
     glm::vec2 uOffset = xi * 2.f - 1.f;
@@ -142,7 +146,7 @@ __device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi)
     return r * glm::vec3(cos(theta), sin(theta), 0);
 }
 
-__device__ glm::vec3 squareToHemisphereCosine(glm::vec2 xi)
+__device__ static glm::vec3 squareToHemisphereCosine(glm::vec2 xi)
 {
     float x = xi.x, y = xi.y;
     glm::vec3 ret;
@@ -153,13 +157,13 @@ __device__ glm::vec3 squareToHemisphereCosine(glm::vec2 xi)
     return ret;
 }
 
-__device__ float squareToHemisphereCosinePDF(glm::vec3 sample)
+__device__ static float squareToHemisphereCosinePDF(glm::vec3 sample)
 {
     // DONE
     return sample.z * INV_PI;
 }
 
-__device__ glm::vec3 squareToSphereUniform(glm::vec2 sample)
+__device__ static glm::vec3 squareToSphereUniform(glm::vec2 sample)
 {
     // TODO
     glm::vec3 ret;
@@ -171,7 +175,7 @@ __device__ glm::vec3 squareToSphereUniform(glm::vec2 sample)
     return ret;
 }
 
-__device__ float squareToSphereUniformPDF(glm::vec3 sample)
+__device__ static float squareToSphereUniformPDF(glm::vec3 sample)
 {
     // TODO
     return INV_FOUR_PI;
