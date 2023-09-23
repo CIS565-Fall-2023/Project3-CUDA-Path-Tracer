@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
 #include "utilities.h"
+#include "glm/gtx/intersect.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
@@ -141,7 +142,8 @@ public:
     __device__ const BoundingBox& getBoundingBox() const override { return bb; }
 };
 
-class Triangle : public Primitive {
+//class Triangle : public Primitive {
+class Triangle{
 public:
     glm::vec3 p1;
     glm::vec3 p2;
@@ -171,7 +173,7 @@ public:
         bb = BoundingBox(glm::min(p1, glm::min(p2, p3)), glm::max(p1, glm::max(p2, p3)));
     }
 
-    __host__ __device__ virtual void test() const override {
+    __host__ __device__ virtual void test() const {
         //printf("Triangle::test\n");
         //printf("Pos: %f %f %f\n", p1[0], p1[1], p1[2]);
     };
@@ -182,35 +184,22 @@ public:
     }
 
 
-    __device__ bool Triangle::intersect(Ray& r, ShadeableIntersection * isect) const override {
-        // Part 1, Task 3:
-        // implement ray-triangle intersection. When an intersection takes
-        // place, the Intersection data should be updated accordingly
+    __device__ bool Triangle::intersect(Ray& r, ShadeableIntersection* isect) const {
         //printf("Triangle::intersect\n");
-        auto N = cross(p2 - p1, p3 - p1);
-        if (fabs(dot(r.direction, N)) < EPSILON) return false;
-        double t = dot(p1 - r.origin, N) / dot(r.direction, N);
-
-        if (r.min_t < t && t < r.max_t) {
-            float N_norm2 = N.length() * N.length();
-            auto alpha = dot(cross(p3 - p2, r.at(t) - p2), N) / N_norm2;
-            auto beta = dot(cross(p1 - p3, r.at(t) - p1), N) / N_norm2;
-            // if (alpha < 0 || beta < 0 || 1.-alpha-beta < 0) return false;
-            if (alpha > 0 && beta > 0 && 1. - alpha - beta > 0) {
-
+        glm::vec3 bary;
+        bool hasHit = glm::intersectRayTriangle(r.origin, r.direction, p1, p2, p3, bary);
+        if (hasHit) {
+            glm::vec3 intersection = bary.x * p1 + bary.y * p2 + bary.z * p3;
+            float t = (intersection - r.origin).length();
+            if (r.min_t < t && t < r.max_t) {
                 r.max_t = t;
                 isect->t = t;
-                //printf("t = %f\n", t);
-                //isect->bsdf = get_bsdf();
-                isect->primitive = this;
-
-                isect->surfaceNormal = glm::normalize(alpha * n1 + beta * n2 + (1 - alpha - beta) * n3);
-                // isect->n = Vector3D(alpha,  beta, (1-alpha-beta)).unit();
-                return true;
+                //isect->primitive = this;
+                isect->surfaceNormal = bary.x * n1 + bary.y * n2 + bary.z * n3;
             }
         }
-        return false;
+        return hasHit;
     }
 
-    __device__ const BoundingBox& getBoundingBox() const override { return bb; }
+    __device__ const BoundingBox& getBoundingBox() const { return bb; }
 };
