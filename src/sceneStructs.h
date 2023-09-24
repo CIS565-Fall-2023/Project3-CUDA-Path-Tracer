@@ -50,9 +50,9 @@ struct Material
 
 struct Mesh
 {
-    // TODO: bounding box transform
     int startTri;
     int numTris;
+    glm::mat4 bboxInverseTransform;
 };
 
 struct Vertex

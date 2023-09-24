@@ -68,6 +68,9 @@ int Scene::loadMesh(string filePath)
     int startTri = tris.size();
     int numTris = 0;
 
+    glm::vec3 minPos = glm::vec3(FLT_MAX);
+    glm::vec3 maxPos = glm::vec3(FLT_MIN);
+
     for (auto& nodeIndex : model.scenes[model.defaultScene].nodes)
     {
         const tinygltf::Node& node = model.nodes[nodeIndex];
@@ -99,6 +102,8 @@ int Scene::loadMesh(string filePath)
                             int vertexIndex = indexData[i + j];
                             glm::vec3 pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
                             triangle[j] = { pos };
+                            minPos = glm::min(minPos, pos);
+                            maxPos = glm::max(maxPos, pos);
                         }
                         tris.push_back(triangle);
                         ++numTris;
@@ -113,6 +118,8 @@ int Scene::loadMesh(string filePath)
                         {
                             glm::vec3 pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
                             triangle[j] = { pos };
+                            minPos = glm::min(minPos, pos);
+                            maxPos = glm::max(maxPos, pos);
                         }
                         tris.push_back(triangle);
                         ++numTris;
@@ -125,6 +132,10 @@ int Scene::loadMesh(string filePath)
     Mesh newMesh;
     newMesh.startTri = startTri;
     newMesh.numTris = numTris;
+
+    glm::vec3 size = maxPos - minPos;
+    glm::vec3 center = minPos + size / 2.f;
+    newMesh.bboxInverseTransform = glm::inverse(Utils::buildTransformationMatrix(center, glm::vec3(0), size));
 
     int meshIndex = meshes.size();
     meshes.push_back(newMesh);

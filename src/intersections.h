@@ -34,6 +34,37 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+__host__ __device__ bool unitBoxIntersection(const Ray& q, float& tmin, float& tmax, glm::vec3 tmin_n, glm::vec3 tmax_n)
+{
+    tmin = -1e38f;
+    tmax = 1e38f;
+    for (int xyz = 0; xyz < 3; ++xyz)
+    {
+        float qdxyz = q.direction[xyz];
+        /*if (glm::abs(qdxyz) > 0.00001f)*/
+        {
+            float t1 = (-0.5f - q.origin[xyz]) / qdxyz;
+            float t2 = (+0.5f - q.origin[xyz]) / qdxyz;
+            float ta = glm::min(t1, t2);
+            float tb = glm::max(t1, t2);
+            glm::vec3 n;
+            n[xyz] = t2 < t1 ? +1 : -1;
+            if (ta > 0 && ta > tmin)
+            {
+                tmin = ta;
+                tmin_n = n;
+            }
+            if (tb < tmax)
+            {
+                tmax = tb;
+                tmax_n = n;
+            }
+        }
+    }
+
+    return tmax >= tmin && tmax > 0;
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,
@@ -46,35 +77,17 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
 __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
         glm::vec3 &intersectionPoint, glm::vec3 &normal) {
     Ray q;
-    q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
+    q.origin = multiplyMV(box.inverseTransform, glm::vec4(r.origin, 1.0f));
     q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
-    float tmin = -1e38f;
-    float tmax = 1e38f;
+    float tmin;
+    float tmax;
     glm::vec3 tmin_n;
     glm::vec3 tmax_n;
-    for (int xyz = 0; xyz < 3; ++xyz) {
-        float qdxyz = q.direction[xyz];
-        /*if (glm::abs(qdxyz) > 0.00001f)*/ {
-            float t1 = (-0.5f - q.origin[xyz]) / qdxyz;
-            float t2 = (+0.5f - q.origin[xyz]) / qdxyz;
-            float ta = glm::min(t1, t2);
-            float tb = glm::max(t1, t2);
-            glm::vec3 n;
-            n[xyz] = t2 < t1 ? +1 : -1;
-            if (ta > 0 && ta > tmin) {
-                tmin = ta;
-                tmin_n = n;
-            }
-            if (tb < tmax) {
-                tmax = tb;
-                tmax_n = n;
-            }
-        }
-    }
-
-    if (tmax >= tmin && tmax > 0) {
-        if (tmin <= 0) {
+    if (unitBoxIntersection(q, tmin, tmax, tmin_n, tmax_n)) 
+    {
+        if (tmin <= 0) 
+        {
             tmin = tmax;
             tmin_n = tmax_n;
         }
@@ -136,6 +149,21 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* verts, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal)
 {
+    {
+        Ray q;
+        q.origin = multiplyMV(mesh.bboxInverseTransform * geom.inverseTransform, glm::vec4(r.origin, 1.0f));
+        q.direction = glm::normalize(multiplyMV(mesh.bboxInverseTransform * geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+        float tmin;
+        float tmax;
+        glm::vec3 tmin_n;
+        glm::vec3 tmax_n;
+        if (!unitBoxIntersection(q, tmin, tmax, tmin_n, tmax_n))
+        {
+            return -1;
+        }
+    }
+
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
