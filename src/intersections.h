@@ -146,26 +146,29 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-__host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* verts, Ray r,
+__host__ __device__ bool intersectAABB(const Ray& ray, const glm::vec3 bboxMin, const glm::vec3 bboxMax)
+{
+    float tx1 = (bboxMin.x - ray.origin.x) / ray.direction.x, tx2 = (bboxMax.x - ray.origin.x) / ray.direction.x;
+    float tmin = min(tx1, tx2), tmax = max(tx1, tx2);
+    float ty1 = (bboxMin.y - ray.origin.y) / ray.direction.y, ty2 = (bboxMax.y - ray.origin.y) / ray.direction.y;
+    tmin = max(tmin, min(ty1, ty2)), tmax = min(tmax, max(ty1, ty2));
+    float tz1 = (bboxMin.z - ray.origin.z) / ray.direction.z, tz2 = (bboxMax.z - ray.origin.z) / ray.direction.z;
+    tmin = max(tmin, min(tz1, tz2)), tmax = min(tmax, max(tz1, tz2));
+    return tmax >= tmin && tmax > 0;
+}
+
+__host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Triangle* tris, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal)
 {
-    {
-        Ray q;
-        q.origin = multiplyMV(mesh.bboxInverseTransform * geom.inverseTransform, glm::vec4(r.origin, 1.0f));
-        q.direction = glm::normalize(multiplyMV(mesh.bboxInverseTransform * geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
-
-        float tmin;
-        float tmax;
-        glm::vec3 tmin_n;
-        glm::vec3 tmax_n;
-        if (!unitBoxIntersection(q, tmin, tmax, tmin_n, tmax_n))
-        {
-            return -1;
-        }
-    }
-
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    Ray transformedRay = { ro, rd };
+
+    if (!intersectAABB(transformedRay, mesh.bboxMin, mesh.bboxMax))
+    {
+        return -1;
+    }
 
     bool intersects = false;
     float tMin = FLT_MAX;
@@ -174,9 +177,10 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
 
     for (int i = mesh.startTri; i < mesh.startTri + mesh.numTris; ++i)
     {
-        const glm::vec3 v0 = verts[3 * i].pos;
-        const glm::vec3 v1 = verts[3 * i + 1].pos;
-        const glm::vec3 v2 = verts[3 * i + 2].pos;
+        const Triangle& tri = tris[i];
+        const glm::vec3& v0 = tri.v0.pos;
+        const glm::vec3& v1 = tri.v1.pos;
+        const glm::vec3& v2 = tri.v2.pos;
 
         glm::vec3 barycentricPos;
         if (!glm::intersectRayTriangle(ro, rd, v0, v1, v2, barycentricPos))

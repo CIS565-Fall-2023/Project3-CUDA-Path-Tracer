@@ -52,7 +52,9 @@ struct Mesh
 {
     int startTri;
     int numTris;
-    glm::mat4 bboxInverseTransform;
+    //glm::mat4 bboxInverseTransform;
+    glm::vec3 bboxMin;
+    glm::vec3 bboxMax;
 };
 
 struct Vertex
@@ -60,7 +62,13 @@ struct Vertex
     glm::vec3 pos;
 };
 
-using Triangle = std::array<Vertex, 3>;
+struct Triangle
+{
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+    glm::vec3 centroid;
+};
 
 struct Camera 
 {

@@ -97,14 +97,27 @@ int Scene::loadMesh(string filePath)
                     for (size_t i = 0; i < indexAccessor.count; i += 3)
                     {
                         Triangle triangle;
-                        for (int j = 0; j < 3; ++j)
-                        {
-                            int vertexIndex = indexData[i + j];
-                            glm::vec3 pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                            triangle[j] = { pos };
-                            minPos = glm::min(minPos, pos);
-                            maxPos = glm::max(maxPos, pos);
-                        }
+
+                        int vertexIndex = indexData[i];
+                        glm::vec3 pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                        triangle.v0 = { pos };
+                        minPos = glm::min(minPos, pos);
+                        maxPos = glm::max(maxPos, pos);
+
+                        vertexIndex = indexData[i + 1];
+                        pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                        triangle.v1 = { pos };
+                        minPos = glm::min(minPos, pos);
+                        maxPos = glm::max(maxPos, pos);
+
+                        vertexIndex = indexData[i + 2];
+                        pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                        triangle.v2 = { pos };
+                        minPos = glm::min(minPos, pos);
+                        maxPos = glm::max(maxPos, pos);
+
+                        triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
+
                         tris.push_back(triangle);
                         ++numTris;
                     }
@@ -114,13 +127,24 @@ int Scene::loadMesh(string filePath)
                     for (size_t i = 0; i < positionAccessor.count; i += 3)
                     {
                         Triangle triangle;
-                        for (int j = 0; j < 3; ++j)
-                        {
-                            glm::vec3 pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
-                            triangle[j] = { pos };
-                            minPos = glm::min(minPos, pos);
-                            maxPos = glm::max(maxPos, pos);
-                        }
+                        
+                        glm::vec3 pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
+                        triangle.v0 = { pos };
+                        minPos = glm::min(minPos, pos);
+                        maxPos = glm::max(maxPos, pos);
+
+                        pos = glm::vec3(positionData[(i + 1) * 3], positionData[(i + 1) * 3 + 1], positionData[(i + 1) * 3 + 2]);
+                        triangle.v1 = { pos };
+                        minPos = glm::min(minPos, pos);
+                        maxPos = glm::max(maxPos, pos);
+
+                        pos = glm::vec3(positionData[(i + 2) * 3], positionData[(i + 2) * 3 + 1], positionData[(i + 2) * 3 + 2]);
+                        triangle.v2 = { pos };
+                        minPos = glm::min(minPos, pos);
+                        maxPos = glm::max(maxPos, pos);
+
+                        triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
+
                         tris.push_back(triangle);
                         ++numTris;
                     }
@@ -133,9 +157,11 @@ int Scene::loadMesh(string filePath)
     newMesh.startTri = startTri;
     newMesh.numTris = numTris;
 
-    glm::vec3 size = maxPos - minPos;
-    glm::vec3 center = minPos + size / 2.f;
-    newMesh.bboxInverseTransform = glm::inverse(Utils::buildTransformationMatrix(center, glm::vec3(0), size));
+    //glm::vec3 size = maxPos - minPos;
+    //glm::vec3 center = minPos + size / 2.f;
+    //newMesh.bboxInverseTransform = glm::inverse(Utils::buildTransformationMatrix(center, glm::vec3(0), size));
+    newMesh.bboxMin = minPos;
+    newMesh.bboxMax = maxPos;
 
     int meshIndex = meshes.size();
     meshes.push_back(newMesh);

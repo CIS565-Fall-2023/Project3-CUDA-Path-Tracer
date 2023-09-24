@@ -81,7 +81,7 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static Mesh* dev_meshes = NULL;
-static Vertex* dev_vertices = NULL;
+static Triangle* dev_tris = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 
@@ -121,8 +121,8 @@ void Pathtracer::init(Scene* scene) {
 	cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
 	cudaMemcpy(dev_meshes, scene->meshes.data(), scene->meshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
 
-	cudaMalloc(&dev_vertices, scene->tris.size() * 3 * sizeof(Vertex));
-	cudaMemcpy(dev_vertices, scene->tris.data(), scene->tris.size() * 3 * sizeof(Vertex), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
+	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
@@ -142,7 +142,7 @@ void Pathtracer::free() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_meshes);
-	cudaFree(dev_vertices);
+	cudaFree(dev_tris);
 	cudaFree(dev_intersections);
 
 #if FIRST_BOUNCE_CACHE
@@ -214,7 +214,7 @@ __global__ void computeIntersections(
 	PathSegment* pathSegments, 
 	Geom* geoms, 
 	Mesh* meshes,
-	Vertex* verts,
+	Triangle* tris,
 	int geoms_size, 
 	ShadeableIntersection* intersections
 )
@@ -253,7 +253,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, meshes[geom.referenceId], verts, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = meshIntersectionTest(geom, meshes[geom.referenceId], tris, pathSegment.ray, tmp_intersect, tmp_normal);
 		}
 
 		if (t < 0 || t > t_min)
@@ -447,7 +447,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				dev_paths,
 				dev_geoms,
 				dev_meshes,
-				dev_vertices,
+				dev_tris,
 				hst_scene->geoms.size(),
 				dev_intersections
 			);
