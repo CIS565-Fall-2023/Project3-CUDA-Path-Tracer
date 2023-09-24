@@ -52,7 +52,6 @@ struct Mesh
 {
     int startTri;
     int numTris;
-    //glm::mat4 bboxInverseTransform;
     glm::vec3 bboxMin;
     glm::vec3 bboxMax;
 };
