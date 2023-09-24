@@ -90,9 +90,11 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-		// TODO: implement antialiasing by jittering the ray
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		thrust::uniform_real_distribution<float> u01(-1.2, 1.2);
+
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x  - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
 
@@ -225,6 +227,84 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
+__device__ glm::vec3 sampleHemisphereCosine(glm::vec2 i, float& pdf) {
+	float sinTheta = sqrt(1.0 - i.x);
+	float cosTheta = sqrt(i.x);
+	float sinPhi = sin(TWO_PI * i.y);
+	float cosPhi = cos(TWO_PI * i.y);
+	float x = sinTheta * cosPhi;
+	float y = sinTheta * sinPhi;
+	float z = cosTheta;
+	pdf = z * INV_PI;
+	return glm::vec3(x, y, z);
+}
+
+__device__ glm::mat3 tangentToWorld(glm::vec3 worldNorm) {
+	glm::vec3 up = abs(worldNorm.z) < 0.999 ? glm::vec3(0.0, 0.0, 1.0) : glm::vec3(1.0, 0.0, 0.0);
+	glm::vec3 tangent = normalize(cross(up, worldNorm));
+	glm::vec3 bitangent = cross(worldNorm, tangent);
+	return glm::mat3(tangent, bitangent, worldNorm);
+}
+
+__device__ glm::vec3 sampleRay(
+	glm::vec3 wi
+	, glm::vec3 norm
+	, Material material
+	, int iter, int depth
+	, int path_idx
+	, float& out_pdf) {
+
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth );
+	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+	glm::vec3 sampleDir = sampleHemisphereCosine(glm::vec2(u01(rng), u01(rng)), out_pdf);
+	glm::mat3 rotMat = tangentToWorld(norm);
+	return rotMat * sampleDir;
+}
+
+__global__ void processPBR(
+	int iter, int depth
+	, int num_paths
+	, ShadeableIntersection* intersections
+	, PathSegment* pathSegments
+	, Material* materials
+)
+{
+	int path_idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (path_idx >= num_paths)return; // no light
+	PathSegment& seg = pathSegments[path_idx];
+	ShadeableIntersection& intersect = intersections[path_idx];
+	if (seg.remainingBounces <= 0) // end bounce
+	{
+		return;
+	}
+	--seg.remainingBounces;
+	if (intersect.t <= 0.) // no intersection
+	{
+		seg.color = glm::vec3(0.f);
+		seg.remainingBounces = 0;
+		return;
+	}
+	Material material = materials[intersect.materialId];
+	if (material.emittance > 0) // hit light
+	{
+		seg.color *= (material.color * material.emittance);
+		seg.remainingBounces = 0;
+		return;
+	}
+	if (seg.remainingBounces <= 0) // end bounce and didn't hit light
+	{
+		seg.color = glm::vec3(0.);
+		return;
+	}
+	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
+	float pdf = 1.f;
+	seg.ray.direction = sampleRay(-seg.ray.direction, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
+	glm::vec3 bsdf = material.color * INV_PI;
+	//           albedo           absdot
+	seg.color *= (bsdf * glm::vec3(glm::dot(intersect.surfaceNormal, seg.ray.direction))/pdf);
+}
+
+
 // Add the current iteration's output to the overall image
 __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
 {
@@ -272,10 +352,10 @@ void PathTracer::pathtraceInit(Scene* scene)
 	checkCUDAError("pathtraceInit");
 }
 
-
 void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 {
 	const int traceDepth = hst_scene->state.traceDepth;
+
 	const Camera& cam = hst_scene->state.camera;
 
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -331,7 +411,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_paths = dev_path_end - dev_paths;
+	int num_paths = pixelcount;
 
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
@@ -354,7 +434,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			);
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
-		depth++;
+		
 
 		 //TODO:
 		 //--- Shading Stage ---
@@ -364,15 +444,15 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	  // materials you have in the scenefile.
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
-
-		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
-			iter,
-			num_paths,
-			dev_intersections,
-			dev_paths,
-			dev_materials
+		processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter, depth
+			, num_paths
+			, dev_intersections
+			, dev_paths
+			, dev_materials
 			);
-		iterationComplete = true; // TODO: should be based off stream compaction results.
+		depth++;
+		iterationComplete = depth >= (traceDepth); // TODO: should be based off stream compaction results.
 
 		if (guiData != NULL)
 		{
