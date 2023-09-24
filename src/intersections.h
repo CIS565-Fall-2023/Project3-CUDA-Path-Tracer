@@ -34,7 +34,7 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
-__host__ __device__ bool unitBoxIntersection(const Ray& q, float& tmin, float& tmax, glm::vec3 tmin_n, glm::vec3 tmax_n)
+__host__ __device__ bool unitBoxIntersection(const Ray& q, float& tmin, float& tmax, glm::vec3& tmin_n, glm::vec3& tmax_n)
 {
     tmin = -1e38f;
     tmax = 1e38f;
