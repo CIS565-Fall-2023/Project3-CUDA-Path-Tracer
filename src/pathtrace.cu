@@ -254,11 +254,8 @@ __global__ void computeIntersections(
 // Your shaders should handle that - this can allow techniques such as
 // bump mapping.
 __global__ void shadeFakeMaterial(
-	int iter
-	, int num_paths
-	, ShadeableIntersection* shadeableIntersections
-	, PathSegment* pathSegments
-	, Material* materials
+	int iter, int num_paths, ShadeableIntersection* shadeableIntersections, 
+	PathSegment* pathSegments, Material* materials
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -268,18 +265,19 @@ __global__ void shadeFakeMaterial(
 		if (intersection.t > 0.0f) { // if the intersection exists...
 		    // Set up the RNG
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
+			// thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
 
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
-				pathSegments[idx].color *= materialColor * material.emittance;
-				// pathSegments[idx].remainingBounces = 0;
+				pathSegments[idx].color *= (materialColor * material.emittance);
+				//pathSegments[idx].remainingBounces = 0;
 			}
 			else {
-				scatterRay(pathSegments[idx], pathSegments[idx].ray.origin, intersection.surfaceNormal,
+				glm::vec3 intersectPoint = getPointOnRay(pathSegments[idx].ray, intersection.t);
+				scatterRay(pathSegments[idx], intersectPoint, intersection.surfaceNormal,
 					material, rng);
 			}
 		}
@@ -399,8 +397,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);
-
-	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
