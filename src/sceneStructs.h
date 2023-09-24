@@ -47,17 +47,17 @@ struct Geom {
 };
 
 struct Material {
-    glm::vec3 color;
+    glm::vec3 color = glm::vec3(0.0);
     struct {
-        float exponent;
-        glm::vec3 color;
+        float exponent = 0.0;
+        glm::vec3 color = glm::vec3(0.0);
     } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
-    float emittance;
-    float roughness;
-    float eta;
+    float hasReflective = 0.0;
+    float hasRefractive = 0.0;
+    float indexOfRefraction = 0.0;
+    float emittance = 0.0;
+    float roughness = 0.0;
+    float eta = 0.0;
 };
 
 struct Camera {

@@ -8,7 +8,6 @@
 
 struct BsdfSample
 {
-    glm::vec3 f;
     glm::vec3 wiW;
     float pdf;
     BsdfSampleType sampledType;
@@ -400,7 +399,6 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW,
 {
     glm::vec3 wo = WorldToLocal(nor) * woW;
 
-
     if (mat.hasReflective != 0.f)
     {
         if (mat.roughness != 0.f)
@@ -421,7 +419,7 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW,
                 computeAlbedo(mat, nor), nor, xi, wo, computeRoughness(mat, nor),
                 mat.eta, sample);
         }
-        else{
+        else {
             sample.pdf = 1.;
             return sample_f_specular_trans(computeAlbedo(mat, nor), nor, wo, sample);
         }

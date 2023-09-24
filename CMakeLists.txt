@@ -25,7 +25,7 @@ endif()
 ########################################
 find_package(CUDA 10 REQUIRED)
 include(${CMAKE_MODULE_PATH}/CUDAComputesList.cmake)
-
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} --extended-lambda)
 list(APPEND CUDA_NVCC_FLAGS ${CUDA_GENERATE_CODE})
 list(APPEND CUDA_NVCC_FLAGS_DEBUG "-g -G")
 set(CUDA_VERBOSE_BUILD ON)
