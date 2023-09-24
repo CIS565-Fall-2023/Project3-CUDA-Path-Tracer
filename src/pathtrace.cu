@@ -39,6 +39,7 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #endif
 }
 
+
 __host__ __device__
 thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
 	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
@@ -245,30 +246,6 @@ void PathTracer::initDataContainer(GuiDataContainer* guiData)
 	m_guiData = guiData;
 }
 
-//void pathtraceInit(Scene* scene) {
-//	hst_scene = scene;
-//
-//	const Camera& cam = hst_scene->state.camera;
-//	const int pixelcount = cam.resolution.x * cam.resolution.y;
-//
-//	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
-//	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
-//
-//	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
-//
-//	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
-//	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
-//
-//	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
-//	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
-//
-//	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
-//	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
-//
-//	// TODO: initialize any extra device memeory you need
-//
-//	checkCUDAError("pathtraceInit");
-//}
 void PathTracer::pathtraceInit(Scene* scene)
 {
 	hst_scene = scene;

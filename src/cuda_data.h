@@ -23,7 +23,6 @@ public:
 	}
 	void malloc(int size, const char* error_msg = "malloc error") {
 		free();
-		std::cout << "malloc" << std::endl;
 		cudaMalloc(&dev_ptr, size * sizeof(*dev_ptr));
 
 		cudaError_t err = cudaGetLastError();

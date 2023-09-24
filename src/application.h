@@ -25,11 +25,11 @@ struct UserInput {
 
 class Application
 {
-private:
+public:
     int m_width;
     int m_height;
     int m_iteration;
-
+private:
     GLFWwindow* m_window;
     std::unique_ptr<Scene> m_scene;
     std::unique_ptr<PathTracer> m_tracer;
@@ -48,6 +48,7 @@ private:
     void initCuda();
     void initVAO();
     void initCallbacks();
+    void initCamera();
     GLuint initShader();
     
     void deleteTexture(GLuint* tex);
@@ -58,9 +59,7 @@ private:
     glm::vec3 getPixelColor(int x, int y);
     
     void pathTrace();
-
-    Camera& getCamera();
-
+    
 public:
     UserInput m_input;
     static Application& getInstance();
@@ -69,4 +68,7 @@ public:
     std::string getOutputImageName();
     void cleanupCuda();
     void run();
+
+    Camera& getCamera();
+    void updateCameraView();
 };
