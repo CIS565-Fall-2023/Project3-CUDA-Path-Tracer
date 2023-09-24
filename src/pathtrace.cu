@@ -98,9 +98,10 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
+
 static ShadeableIntersection* dev_intersections = NULL;
 static ShadeableIntersection* dev_first_bounce_intersections = NULL;
-
+static int* dev_stencil = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -130,6 +131,8 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_first_bounce_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_first_bounce_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
+	cudaMalloc(&dev_stencil, pixelcount * sizeof(int));
+
 	checkCUDAError("pathtraceInit");
 }
 
@@ -138,8 +141,11 @@ void pathtraceFree() {
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
+
 	cudaFree(dev_intersections);
 	cudaFree(dev_first_bounce_intersections);
+	cudaFree(dev_stencil);
+
 	checkCUDAError("pathtraceFree");
 }
 
@@ -265,7 +271,7 @@ __global__ void shadeFakeMaterial(
 		if (intersection.t > 0.0f) { // if the intersection exists...
 		    // Set up the RNG
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			// thrust::uniform_real_distribution<float> u01(0, 1);
+			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
@@ -273,7 +279,40 @@ __global__ void shadeFakeMaterial(
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
 				pathSegments[idx].color *= (materialColor * material.emittance);
-				//pathSegments[idx].remainingBounces = 0;
+			}
+			else {
+				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+				pathSegments[idx].color *= u01(rng); // apply some noise because why not
+			}
+		}
+		else {
+			// If there was no intersection, color the ray black and terminate the ray.
+			pathSegments[idx].color = glm::vec3(0.0f);
+		}
+	}
+}
+
+__global__ void shadeBDFSMaterial(
+	int iter, int num_paths, ShadeableIntersection* shadeableIntersections,
+	PathSegment* pathSegments, Material* materials
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths)
+	{
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+		if (intersection.t > 0.0f) { // if the intersection exists...
+			// Set up the RNG
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+
+			Material material = materials[intersection.materialId];
+			glm::vec3 materialColor = material.color;
+
+			// If the material indicates that the object was a light, "light" the ray
+			if (material.emittance > 0.0f) {
+				pathSegments[idx].color *= (materialColor * material.emittance);
+				// pathSegments[idx].remainingBounces = 0;
 			}
 			else {
 				glm::vec3 intersectPoint = getPointOnRay(pathSegments[idx].ray, intersection.t);
@@ -289,6 +328,8 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
+
+
 // Add the current iteration's output to the overall image
 __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
 {
@@ -298,6 +339,13 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	{
 		PathSegment iterationPath = iterationPaths[index];
 		image[iterationPath.pixelIndex] += iterationPath.color;
+	}
+}
+
+__global__ void computeStencil(int num_paths, PathSegment* paths, int* stencil) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths) {
+		stencil[idx] = (paths[idx].remainingBounces > 0) ? 1 : 0;
 	}
 }
 
@@ -374,17 +422,21 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// evaluating the BSDF.
 		// Start off with just a big kernel that handles all the different
 		// materials you have in the scenefile.
-		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+		shadeBDFSMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter, num_paths, dev_intersections, dev_paths, dev_materials);
+		checkCUDAError("shade BDFS material failed!");
+
+		computeStencil << <numblocksPathSegmentTracing, blockSize1d >> > (num_paths, dev_paths, dev_stencil);
 
 		// stream compaction
-		thrust::device_ptr<PathSegment> new_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, isPathTerminated());
-		num_paths = new_end.get() - dev_paths;
-		
+		thrust::device_ptr<int> dev_thrust_stencil = thrust::device_pointer_cast(dev_stencil);
+		auto new_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, dev_thrust_stencil, thrust::logical_not<int>());
+		num_paths = new_end - dev_thrust_paths;
+
 		printf("Depth: %d\n", depth);
 		printf("Num of Paths: %d\n", num_paths);
 
-		if (num_paths <= 0 || depth >= traceDepth) {
+		if (num_paths <= 0 || depth >= 2) {
 			iterationComplete = true;
 		}
 
