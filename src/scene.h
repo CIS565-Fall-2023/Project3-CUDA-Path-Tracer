@@ -23,6 +23,7 @@ private:
     int loadMesh(string filePath);
     int buildBvh(int startTri, int numTris);
     void bvhUpdateNodeBounds(BvhNode& node);
+    float bvhEvaluateSAH(BvhNode& node, int axis, float pos);
     void bvhSubdivide(BvhNode& node);
 
     unordered_map<string, int> meshIndices;

@@ -193,38 +193,65 @@ int Scene::buildBvh(int startTri, int numTris)
 
 void Scene::bvhUpdateNodeBounds(BvhNode& node)
 {
-    node.aabbMin = glm::vec3(FLT_MAX);
-    node.aabbMax = glm::vec3(-FLT_MAX);
+    node.aabb = AABB();
     for (int i = 0; i < node.triCount; ++i)
     {
         Triangle& leafTri = tris[bvhTriIdx[node.leftFirst + i]];
-        node.aabbMin = glm::min(node.aabbMin, leafTri.v0.pos);
-        node.aabbMin = glm::min(node.aabbMin, leafTri.v1.pos);
-        node.aabbMin = glm::min(node.aabbMin, leafTri.v2.pos);
-        node.aabbMax = glm::max(node.aabbMax, leafTri.v0.pos);
-        node.aabbMax = glm::max(node.aabbMax, leafTri.v1.pos);
-        node.aabbMax = glm::max(node.aabbMax, leafTri.v2.pos);
+        node.aabb.grow(leafTri.v0.pos);
+        node.aabb.grow(leafTri.v1.pos);
+        node.aabb.grow(leafTri.v2.pos);
     }
+}
+
+float Scene::bvhEvaluateSAH(BvhNode& node, int axis, float pos)
+{
+    AABB leftBox, rightBox;
+    int leftCount = 0, rightCount = 0;
+    for (int i = 0; i < node.triCount; ++i)
+    {
+        const Triangle& triangle = tris[bvhTriIdx[node.leftFirst + i]];
+        if (triangle.centroid[axis] < pos)
+        {
+            ++leftCount;
+            leftBox.grow(triangle);
+        }
+        else
+        {
+            ++rightCount;
+            rightBox.grow(triangle);
+        }
+    }
+    float cost = leftCount * leftBox.surfaceArea() + rightCount * rightBox.surfaceArea();
+    return cost > 0 ? cost : FLT_MAX;
 }
 
 void Scene::bvhSubdivide(BvhNode& node)
 {
-    if (node.triCount <= 2)
+    int bestAxis = -1;
+    float bestPos = 0, bestCost = FLT_MAX;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        for (int i = 0; i < node.triCount; ++i)
+        {
+            const Triangle& tri = tris[bvhTriIdx[node.leftFirst + i]];
+            float candidatePos = tri.centroid[axis];
+            float cost = bvhEvaluateSAH(node, axis, candidatePos);
+            if (cost < bestCost)
+            {
+                bestPos = candidatePos;
+                bestAxis = axis;
+                bestCost = cost;
+            }
+        }
+    }
+    int axis = bestAxis;
+    float splitPos = bestPos;
+
+    float parentCost = node.triCount * node.aabb.surfaceArea();
+    if (bestCost >= parentCost)
     {
         return;
     }
-
-    glm::vec3 extent = node.aabbMax - node.aabbMin;
-    int axis = 0;
-    if (extent.y > extent.x)
-    {
-        axis = 1;
-    }
-    if (extent.z > extent[axis])
-    {
-        axis = 2;
-    }
-    float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
 
     int i = node.leftFirst;
     int j = i + node.triCount - 1;

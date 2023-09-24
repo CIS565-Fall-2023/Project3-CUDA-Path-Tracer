@@ -67,16 +67,41 @@ struct Triangle
     glm::vec3 centroid;
 };
 
+struct AABB
+{
+    glm::vec3 bMin = glm::vec3(FLT_MAX), bMax = glm::vec3(-FLT_MAX);
+    __host__ __device__ void grow(const glm::vec3& p)
+    {
+        bMin = glm::min(bMin, p);
+        bMax = glm::max(bMax, p);
+    }
+    __host__ __device__ void grow(const Triangle& tri)
+    {
+        grow(tri.v0.pos);
+        grow(tri.v1.pos);
+        grow(tri.v2.pos);
+    }
+    __host__ __device__ glm::vec3 extent()
+    {
+        return bMax - bMin;
+    }
+    __host__ __device__ float surfaceArea()
+    {
+        glm::vec3 extent = this->extent();
+        return extent.x * extent.y + extent.y * extent.z + extent.z * extent.x;
+    }
+};
+
 struct BvhNode
 {
-    glm::vec3 aabbMin, aabbMax;
+    AABB aabb;
     int leftFirst, triCount;
     __host__ __device__ bool isLeaf() const { return triCount > 0; }
 
     __host__ friend std::ostream& operator<<(std::ostream& os, const BvhNode& node)
     {
-        os << "bounding box: [" << node.aabbMin.x << ", " << node.aabbMin.y << ", " << node.aabbMin.z << "] - ["
-            << node.aabbMax.x << ", " << node.aabbMax.y << ", " << node.aabbMax.z << "]" << std::endl;
+        os << "bounding box: [" << node.aabb.bMin.x << ", " << node.aabb.bMin.y << ", " << node.aabb.bMin.z << "] - ["
+            << node.aabb.bMax.x << ", " << node.aabb.bMax.y << ", " << node.aabb.bMax.z << "]" << std::endl;
         os << "leftFirst: " << node.leftFirst << ", triCount: " << node.triCount;
         return os;
     }

@@ -174,7 +174,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
         const BvhNode& node = bvhNodes[currNodeIdx];
 
         float tmin;
-        if (!intersectAABB(ro, rdR, node.aabbMin, node.aabbMax, tmin) || tmin > t)
+        if (!intersectAABB(ro, rdR, node.aabb.bMin, node.aabb.bMax, tmin) || tmin > t)
         {
             continue;
         }
