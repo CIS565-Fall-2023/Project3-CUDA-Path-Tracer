@@ -168,7 +168,7 @@ int Scene::loadGeom(string objectid) {
                 string fullPath = basePath + filePath;
                 cout << "Creating new mesh from " << fullPath << "..." << endl;
                 newGeom.type = MESH;
-                newGeom.geomReferenceId = loadMesh(fullPath);
+                newGeom.referenceId = loadMesh(fullPath);
             }
         }
 

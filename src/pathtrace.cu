@@ -253,7 +253,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, meshes[geom.geomReferenceId], verts, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = meshIntersectionTest(geom, meshes[geom.referenceId], verts, pathSegment.ray, tmp_intersect, tmp_normal);
 		}
 
 		if (t < 0 || t > t_min)

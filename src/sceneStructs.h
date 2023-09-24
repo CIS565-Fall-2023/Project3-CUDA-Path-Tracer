@@ -26,7 +26,7 @@ struct Geom
 {
     enum GeomType type;
     int materialid;
-    int geomReferenceId; // for now, used only for meshes
+    int referenceId; // for now, used only for meshes
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
