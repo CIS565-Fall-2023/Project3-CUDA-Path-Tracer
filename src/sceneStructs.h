@@ -47,7 +47,6 @@ struct Geom {
 };
 
 struct Material {
-    BsdfSampleType type;
     glm::vec3 color;
     struct {
         float exponent;

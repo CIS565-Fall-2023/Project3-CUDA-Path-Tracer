@@ -368,7 +368,7 @@ __device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::v
     if (wo.z == 0)
         return glm::vec3(0.f);
 
-    if (mat.type == BsdfSampleType::diffuse_refl)
+    /*if (mat.type == BsdfSampleType::diffuse_refl)
     {
         return f_diffuse(computeAlbedo(mat, nor));
     }
@@ -392,28 +392,41 @@ __device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::v
     else
     {
         return glm::vec3(1, 0, 1);
-    }
+    }*/
+    return glm::vec3(1, 0, 1);
 }
 
 __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 xi, BsdfSample& sample)
 {
     glm::vec3 wo = WorldToLocal(nor) * woW;
 
-    if (mat.type == BsdfSampleType::diffuse_refl)
+
+    if (mat.hasReflective != 0.f)
     {
-        return sample_f_diffuse(computeAlbedo(mat, nor), xi, nor, sample);
+        if (mat.roughness != 0.f)
+        {
+            return sample_f_microfacet_refl(computeAlbedo(mat, nor), nor, xi, wo,
+                computeRoughness(mat, nor), sample);
+        }
+        else {
+            sample.pdf = 1.;
+            return sample_f_specular_refl(computeAlbedo(mat, nor), nor, wo, sample);
+        }
     }
-    else if (mat.type == BsdfSampleType::spec_refl)
+    else if (mat.hasRefractive != 0.f)
     {
-        sample.pdf = 1.;
-        return sample_f_specular_refl(computeAlbedo(mat, nor), nor, wo, sample);
+        if (mat.roughness != 0.f)
+        {
+            return sample_f_rough_dieletric(
+                computeAlbedo(mat, nor), nor, xi, wo, computeRoughness(mat, nor),
+                mat.eta, sample);
+        }
+        else{
+            sample.pdf = 1.;
+            return sample_f_specular_trans(computeAlbedo(mat, nor), nor, wo, sample);
+        }
     }
-    else if (mat.type == BsdfSampleType::spec_trans)
-    {
-        sample.pdf = 1.;
-        return sample_f_specular_trans(computeAlbedo(mat, nor), nor, wo, sample);
-    }
-    else if (mat.type == BsdfSampleType::spec_glass)
+    else if (mat.indexOfRefraction > 0.8)
     {
         sample.pdf = 1.;
 #if Al || Au || Cu
@@ -422,24 +435,9 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW,
         return sample_f_glass(computeAlbedo(mat, nor), nor, xi, wo, sample);
 #endif
     }
-    else if (mat.type == BsdfSampleType::microfacet_refl)
-    {
-        return sample_f_microfacet_refl(computeAlbedo(mat, nor), nor, xi, wo,
-            computeRoughness(mat, nor), sample);
-    }
-    else if (mat.type == BsdfSampleType::microfacet_trans)
-    {
-        return sample_f_rough_dieletric(
-            computeAlbedo(mat, nor), nor, xi, wo, computeRoughness(mat, nor),
-            mat.eta, sample);
-    }
-    else if (mat.type == BsdfSampleType::plastic)
-    {
-        return glm::vec3(1, 0, 1);
-    }
     else
     {
-        return glm::vec3(1, 0, 1);
+        return sample_f_diffuse(computeAlbedo(mat, nor), xi, nor, sample);
     }
 }
 
@@ -448,7 +446,7 @@ __device__ float pdf(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec
     glm::vec3 wo = WorldToLocal(nor) * woW;
     glm::vec3 wi = WorldToLocal(nor) * wiW;
 
-    if (wo.z == 0)
+    /*if (wo.z == 0)
 
         if (mat.type == BsdfSampleType::diffuse_refl)
         {
@@ -473,5 +471,6 @@ __device__ float pdf(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec
         else
         {
             return 0.f;
-        }
+        }*/
+    return 0.f;
 }
