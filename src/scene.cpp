@@ -202,8 +202,8 @@ int Scene::loadGeom(string objectid) {
         Utils::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
             vector<string> tokens = Utils::tokenizeString(line);
-            newGeom.materialid = atoi(tokens[1].c_str());
-            cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
+            newGeom.materialId = atoi(tokens[1].c_str());
+            cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialId << "..." << endl;
         }
 
         //load transformations
@@ -302,8 +302,8 @@ int Scene::loadCamera() {
     return 1;
 }
 
-int Scene::loadMaterial(string materialid) {
-    int id = atoi(materialid.c_str());
+int Scene::loadMaterial(string materialId) {
+    int id = atoi(materialId.c_str());
     if (id != materials.size()) {
         cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
         return -1;

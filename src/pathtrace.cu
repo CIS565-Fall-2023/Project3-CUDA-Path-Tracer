@@ -275,7 +275,7 @@ __global__ void computeIntersections(
 	{
 		//The ray hits something
 		intersections[path_index].t = t_min;
-		intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+		intersections[path_index].materialId = geoms[hit_geom_index].materialId;
 		intersections[path_index].surfaceNormal = normal;
 	}
 }
