@@ -7,6 +7,20 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
+
+enum BsdfSampleType
+{
+    diffuse_refl = 1,
+    spec_refl = 1 << 1,
+    spec_trans = 1 << 2,
+    spec_glass = 1 << 3,
+    microfacet_refl = 1 << 4,
+    plastic = 1 << 5,
+    diffuse_trans = 1 << 6,
+    microfacet_trans = 1 << 7
+};
+
+
 enum GeomType {
     SPHERE,
     CUBE,
@@ -16,6 +30,10 @@ struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
 };
+
+__device__ static Ray SpawnRay(glm::vec3 pos, glm::vec3 wi) {
+    return Ray{ pos + wi * 0.0001f, wi };
+}
 
 struct Geom {
     enum GeomType type;
@@ -29,15 +47,17 @@ struct Geom {
 };
 
 struct Material {
-    glm::vec3 color;
+    glm::vec3 color = glm::vec3(0.0);
     struct {
-        float exponent;
-        glm::vec3 color;
+        float exponent = 0.0;
+        glm::vec3 color = glm::vec3(0.0);
     } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
-    float emittance;
+    float hasReflective = 0.0;
+    float hasRefractive = 0.0;
+    float indexOfRefraction = 0.0;
+    float emittance = 0.0;
+    float roughness = 0.0;
+    float eta = 0.0;
 };
 
 struct Camera {
@@ -70,7 +90,9 @@ struct PathSegment {
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection {
-  float t;
-  glm::vec3 surfaceNormal;
-  int materialId;
+    glm::vec3 pos;
+    float t;
+    glm::vec3 surfaceNormal;
+    int materialId;
+    glm::vec3 woW;
 };
