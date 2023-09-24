@@ -26,6 +26,10 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+
+    // Bounding box
+    glm::vec3 minPoint;
+    glm::vec3 maxPoint;
 };
 
 struct Material {

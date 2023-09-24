@@ -17,7 +17,7 @@
 
 #define ERRORCHECK 1
 
-#define SORT_MATERIALS 1
+#define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -184,6 +184,34 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
+__device__ bool boundingBoxTest(const Ray* ray, const Geom* geom) {
+	float min_t = EPSILON;
+	float max_t = 1000.f;
+
+	for (int a = 0; a < 3; a++) {
+		float o = ray->origin[a];
+		float invD = 1.0f / ray->direction[a];
+
+		float t0 = (geom->minPoint[a] - o) * invD;
+		float t1 = (geom->maxPoint[a] - o) * invD;
+
+		if (invD < 0) {
+			float tmp = t0;
+			t0 = t1;
+			t1 = tmp;
+		}
+
+		min_t = fmax(t0, min_t);
+		max_t = fmin(t1, max_t);
+
+		if (max_t <= min_t) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 // TODO:
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
@@ -218,6 +246,11 @@ __global__ void computeIntersections(
 		for (int i = 0; i < geoms_size; i++)
 		{
 			Geom& geom = geoms[i];
+
+			// test bounding box
+			if (!boundingBoxTest(&pathSegment.ray, &geom)) {
+				continue;
+			}
 
 			if (geom.type == CUBE)
 			{
@@ -378,7 +411,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
 	// 2D block for generating ray from camera
-	const dim3 blockSize2d(8, 8);
+	const dim3 blockSize2d(32, 32);
 	const dim3 blocksPerGrid2d(
 		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
@@ -418,13 +451,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// TODO: perform one iteration of path tracing
 
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
-	checkCUDAError("generate camera ray");
 
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_paths = dev_path_end - dev_paths;
-	int cur_num_paths = num_paths;
-
+	int num_paths = pixelcount;
 
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
@@ -432,17 +462,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete) {
 		// clean shading chunks
-		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+		cudaMemset(dev_intersections, 0, num_paths * sizeof(ShadeableIntersection));
 
 		// tracing
-		dim3 numblocksPathSegmentTracing = (cur_num_paths + blockSize1d - 1) / blockSize1d;
+		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
 #if FIRST_BOUNCE_CACHE
 		if (iter == 1 || depth != 0) {
 
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
-				, cur_num_paths
+				, num_paths
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
@@ -465,7 +495,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, hst_scene->geoms.size()
 			, dev_intersections
 			);
-		checkCUDAError("trace one bounce");
 #endif
 
 		depth++;
@@ -485,19 +514,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		shadeBSDFMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
-			cur_num_paths,
+			num_paths,
 			dev_intersections,
 			dev_paths,
 			dev_materials
 			);
 
-		checkCUDAError("BSDF shade");
-
 		// remove rays with zero remaining bounces
 		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, isPathValid());
-		cur_num_paths = dev_path_end - dev_paths;
+		num_paths = dev_path_end - dev_paths;
 
-		iterationComplete = (depth >= traceDepth || cur_num_paths <= 0); // TODO: should be based off stream compaction results.
+		iterationComplete = (depth >= traceDepth || num_paths <= 0); // TODO: should be based off stream compaction results.
 
 		if (guiData != NULL)
 		{
@@ -507,7 +534,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
 

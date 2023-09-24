@@ -84,6 +84,15 @@ int Scene::loadGeom(string objectid) {
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
+        newGeom.minPoint = glm::vec3(newGeom.transform * glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f));
+        newGeom.maxPoint = glm::vec3(newGeom.transform * glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
+
+        for (int i = 0; i < 3; ++i) {
+            if (newGeom.minPoint[i] > newGeom.maxPoint[i]) {
+                std::swap(newGeom.minPoint[i], newGeom.maxPoint[i]);
+            }
+        }
+
         geoms.push_back(newGeom);
         return 1;
     }
