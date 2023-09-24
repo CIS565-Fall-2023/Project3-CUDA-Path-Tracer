@@ -162,8 +162,8 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
     int stack[32]; // assume BVH depth doesn't exceed 32
     int stackPtr = 0;
     stack[stackPtr++] = nodeIdx;
-    bool intersects = false;
     t = FLT_MAX;
+    triIdx = -1;
 
     while (stackPtr > 0)
     {
@@ -196,7 +196,6 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
                 {
                     t = barycentricPos.z;
                     triIdx = potentialTriIdx;
-                    intersects = true;
                 }
             }
         }
@@ -207,7 +206,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
         }
     }
 
-    return intersects;
+    return triIdx != -1;
 }
 
 __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,

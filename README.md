@@ -17,7 +17,7 @@
 - Specular refraction
 - Depth of field
 - glTF mesh loading
-  - Bounding box around each mesh to prevent unnecessary intersection checks
+- BVH construction and traversal
 
 ### Planned features
 
