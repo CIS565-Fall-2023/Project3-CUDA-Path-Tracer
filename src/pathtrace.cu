@@ -21,7 +21,7 @@
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
-#define CACHE_FIRST_BOUNCE 0
+#define CACHE_FIRST_BOUNCE 1
 #define SORT_RAY_BY_MATERIAL 1
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -99,8 +99,6 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
-// TODO: static variables for device memory, any extra info you need, etc
-// ...
 static ShadeableIntersection* dev_first_bounce_intersections = NULL;
 
 
@@ -129,7 +127,6 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-	// TODO: initialize any extra device memeory you need
 	cudaMalloc(&dev_first_bounce_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_first_bounce_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
@@ -142,7 +139,6 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
-	// TODO: clean up any extra device memory you created
 	cudaFree(dev_first_bounce_intersections);
 	checkCUDAError("pathtraceFree");
 }
@@ -270,11 +266,9 @@ __global__ void shadeFakeMaterial(
 	{
 		ShadeableIntersection intersection = shadeableIntersections[idx];
 		if (intersection.t > 0.0f) { // if the intersection exists...
-		  // Set up the RNG
-		  // LOOK: this is how you use thrust's RNG! Please look at
-		  // makeSeededRandomEngine as well.
+		    // Set up the RNG
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
+			// thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
@@ -285,29 +279,16 @@ __global__ void shadeFakeMaterial(
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
 			// like what you would expect from shading in a rasterizer like OpenGL.
-			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-				//float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-				//pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-				//pathSegments[idx].color *= u01(rng); // apply some noise because why not
-
-				// Handle reflection for perfectly specular-reflective material
-				if (material.hasReflective > 0.0f) {
-					pathSegments[idx].ray.direction = glm::reflect(pathSegments[idx].ray.direction, intersection.surfaceNormal);
-					pathSegments[idx].color *= materialColor;
-				}
-				else {
-					// Handle scattering for ideal diffuse surfaces
-					pathSegments[idx].ray.direction = calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng);
-					pathSegments[idx].color *= materialColor;
-				}
+				scatterRay(pathSegments[idx], pathSegments[idx].ray.origin, intersection.surfaceNormal,
+					material, rng);
 			}
+		}
+		else {
 			// If there was no intersection, color the ray black.
 			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
 			// used for opacity, in which case they can indicate "no opacity".
 			// This can be useful for post-processing and image compositing.
-		}
-		else {
 			pathSegments[idx].color = glm::vec3(0.0f);
 		}
 	}
@@ -330,8 +311,8 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
+	printf("Iter: %d\n", iter);
 	const int traceDepth = hst_scene->state.traceDepth;
-	// printf("Trace Depth: %d \n", traceDepth);
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
@@ -387,32 +368,33 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	bool iterationComplete = false;
 	while (!iterationComplete) {
-		
+
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
-		// clean shading chunks
-		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
-		checkCUDAError("clean shading chunks failed!");
-
-
-		if (CACHE_FIRST_BOUNCE && iter > 1) {
+		if (depth == 0 && CACHE_FIRST_BOUNCE && iter > 1) {
+			printf("Cache from first bounce\n");
 			cudaMemcpy(dev_intersections, dev_first_bounce_intersections,
 				pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
 		}
 		else {
-			// clean shading chunks
-
 			// tracing
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections);
 			checkCUDAError("trace one bounce");
 
-			if (CACHE_FIRST_BOUNCE) {
+			// cache the first bounce for the first iteration
+			if (depth == 0 && CACHE_FIRST_BOUNCE && iter == 1) {
+				printf("Cache to first bounce!\n");
 				cudaMemcpy(dev_first_bounce_intersections, dev_intersections,
 					pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+				checkCUDAError("cache first bounce failed!");
 			}
 		}
 
+		// clean shading chunks
+		/*cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+		checkCUDAError("clean shading chunks failed!");*/
+		
 		cudaDeviceSynchronize();
 		depth++;
 
@@ -432,16 +414,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// evaluating the BSDF.
 		// Start off with just a big kernel that handles all the different
 		// materials you have in the scenefile.
-		
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter, num_paths, dev_intersections, dev_paths, dev_materials);
 
 		// stream compaction
 		thrust::device_ptr<PathSegment> new_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, isPathTerminated());
 		num_paths = new_end.get() - dev_paths;
-
-		/*printf("Depth: %d\n", depth);
-		printf("Num of Paths: %d\n", num_paths);*/
+		
+		printf("Depth: %d\n", depth);
+		printf("Num of Paths: %d\n", num_paths);
 
 		if (num_paths <= 0 || depth >= traceDepth) {
 			iterationComplete = true;
