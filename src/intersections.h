@@ -149,6 +149,7 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
         const glm::vec3 v0 = verts[3 * i].pos;
         const glm::vec3 v1 = verts[3 * i + 1].pos;
         const glm::vec3 v2 = verts[3 * i + 2].pos;
+
         glm::vec3 barycentricPos;
         if (!glm::intersectRayTriangle(ro, rd, v0, v1, v2, barycentricPos))
         {

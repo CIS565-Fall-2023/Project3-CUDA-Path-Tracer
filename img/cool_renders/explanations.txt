@@ -13,3 +13,4 @@
 013 - monkey at an angle (doesn't look right)
 014 - testing barycentric coords
 015 - monkey normals for comparison with #014
+016 - ??? (barycentric coordinates machine broke)
