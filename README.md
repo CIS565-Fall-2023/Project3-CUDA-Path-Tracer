@@ -16,11 +16,11 @@
 - Russian roulette path termination
 - Specular refraction
 - Depth of field
+- glTF mesh loading
+  - Bounding box around each mesh to prevent unnecessary intersection checks
 
 ### Planned features
 
 - Add slider for depth of field? (which should reset pathtracer state when changed)
-- Mesh loader
-  - Textures
 - Open Image Denoise
 - Direct/full lighting?
