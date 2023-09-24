@@ -146,10 +146,10 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-__host__ __device__ bool intersectAABB(const Ray& ray, const glm::vec3 bboxMin, const glm::vec3 bboxMax)
+__host__ __device__ bool intersectAABB(const Ray& ray, const glm::vec3 bboxMin, const glm::vec3 bboxMax, float& tmin)
 {
     float tx1 = (bboxMin.x - ray.origin.x) / ray.direction.x, tx2 = (bboxMax.x - ray.origin.x) / ray.direction.x;
-    float tmin = min(tx1, tx2), tmax = max(tx1, tx2);
+    tmin = min(tx1, tx2); float tmax = max(tx1, tx2);
     float ty1 = (bboxMin.y - ray.origin.y) / ray.direction.y, ty2 = (bboxMax.y - ray.origin.y) / ray.direction.y;
     tmin = max(tmin, min(ty1, ty2)), tmax = min(tmax, max(ty1, ty2));
     float tz1 = (bboxMin.z - ray.origin.z) / ray.direction.z, tz2 = (bboxMax.z - ray.origin.z) / ray.direction.z;
@@ -170,7 +170,8 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
         const int currNodeIdx = stack[--stackPtr];
         const BvhNode& node = bvhNodes[currNodeIdx];
 
-        if (!intersectAABB(ray, node.aabbMin, node.aabbMax))
+        float tmin;
+        if (!intersectAABB(ray, node.aabbMin, node.aabbMax, tmin) || tmin > t)
         {
             continue;
         }
