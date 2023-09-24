@@ -4,6 +4,8 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <curand_kernel.h>
+
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -15,6 +17,8 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
+#define RANDVEC3 glm::vec3(curand_uniform(local_rand_state),curand_uniform(local_rand_state),curand_uniform(local_rand_state))
+
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -219,6 +223,20 @@ __global__ void computeIntersections(
 	}
 }
 
+__device__ glm::vec3 random_in_unit_sphere(thrust::default_random_engine& rng) {
+	glm::vec3 p;
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	do {
+		p = 2.0f * glm::vec3(u01(rng), u01(rng), u01(rng)) - glm::vec3(1, 1, 1);
+	} while (glm::length2(p) >= 1.0f);
+	return p;
+}
+
+// This is the reflection function from the pseudocode
+__device__ glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n) {
+	return v - 2.0f * glm::dot(v, n) * n;
+}
+
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -250,22 +268,32 @@ __global__ void shadeFakeMaterial(
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
 
-			// If the material indicates that the object was a light, "light" the ray
-			if (material.emittance > 0.0f) {
-				pathSegments[idx].color *= (materialColor * material.emittance);
+			if (material.hasReflective == 0 && material.hasRefractive == 0) {
+				glm::vec3 target = intersection.surfaceNormal + random_in_unit_sphere(rng);
+				pathSegments[idx].ray.direction = target;
+				pathSegments[idx].color *= materialColor;
 			}
-			// Otherwise, do some pseudo-lighting computation. This is actually more
-			// like what you would expect from shading in a rasterizer like OpenGL.
-			// TODO: replace this! you should be able to start with basically a one-liner
-			else {
-				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-				pathSegments[idx].color *= u01(rng); // apply some noise because why not
+
+			else if (material.hasReflective == 1) {
+				pathSegments[idx].ray.direction = reflect(pathSegments[idx].ray.direction, intersection.surfaceNormal);
+				pathSegments[idx].color *= materialColor;
 			}
-			// If there was no intersection, color the ray black.
-			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-			// used for opacity, in which case they can indicate "no opacity".
-			// This can be useful for post-processing and image compositing.
+			//// If the material indicates that the object was a light, "light" the ray
+			//if (material.emittance > 0.0f) {
+			//	pathSegments[idx].color *= (materialColor * material.emittance);
+			//}
+			//// Otherwise, do some pseudo-lighting computation. This is actually more
+			//// like what you would expect from shading in a rasterizer like OpenGL.
+			//// TODO: replace this! you should be able to start with basically a one-liner
+			//else {
+			//	float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+			//	pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+			//	pathSegments[idx].color *= u01(rng); // apply some noise because why not
+			//}
+			//// If there was no intersection, color the ray black.
+			//// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
+			//// used for opacity, in which case they can indicate "no opacity".
+			//// This can be useful for post-processing and image compositing.
 		}
 		else {
 			pathSegments[idx].color = glm::vec3(0.0f);
