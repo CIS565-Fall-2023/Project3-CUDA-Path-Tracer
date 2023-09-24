@@ -143,9 +143,9 @@ __device__ glm::vec3 sample_f_glass(glm::vec3 albedo, glm::vec3 nor, glm::vec3 x
     float random = xi.z;
     if (random < 0.5)
     {
-       glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
-       sample.sampledType = BsdfSampleType::spec_refl | BsdfSampleType::spec_trans;
-       return 2.f * fresnelDielectricEval(dot(nor, normalize(sample.wiW)), indexOfRefraction) * R;
+        glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
+        sample.sampledType = BsdfSampleType::spec_refl | BsdfSampleType::spec_trans;
+        return 2.f * fresnelDielectricEval(dot(nor, normalize(sample.wiW)), indexOfRefraction) * R;
     }
     else
     {
