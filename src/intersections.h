@@ -183,23 +183,12 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
         {
             continue;
         }
-        
-        /*
-        Really not sure what barycentricPos actually gives here - multiplying its components by v0 v1 v2 doesn't seem to work properly
-        and using it directly as the position also doesn't work.
-        */
-        //glm::vec3 intersectPos = barycentricPos.x * v0 + barycentricPos.y * v1 + barycentricPos.z * v2;
-        //float t = glm::length(intersectPos - ro);
 
-        glm::vec3 triNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-        float t;
-        glm::intersectRayPlane(ro, rd, v0, triNormal, t);
-        glm::vec3 intersectPos = ro + rd * t;
-
+        float t = barycentricPos.z;
         if (t < tMin)
         {
-            objSpaceIntersection = intersectPos;
-            objSpaceNormal = triNormal;
+            objSpaceIntersection = ro + rd * t;
+            objSpaceNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
             intersects = true;
             tMin = t;
         }
