@@ -4,6 +4,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <device_launch_parameters.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -67,56 +68,6 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	}
 }
 
-static Scene* hst_scene = NULL;
-static GuiDataContainer* guiData = NULL;
-static glm::vec3* dev_image = NULL;
-static Geom* dev_geoms = NULL;
-static Material* dev_materials = NULL;
-static PathSegment* dev_paths = NULL;
-static ShadeableIntersection* dev_intersections = NULL;
-// TODO: static variables for device memory, any extra info you need, etc
-// ...
-
-void InitDataContainer(GuiDataContainer* imGuiData)
-{
-	guiData = imGuiData;
-}
-
-void pathtraceInit(Scene* scene) {
-	hst_scene = scene;
-
-	const Camera& cam = hst_scene->state.camera;
-	const int pixelcount = cam.resolution.x * cam.resolution.y;
-
-	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
-	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
-
-	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
-
-	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
-	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
-	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
-	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
-
-	// TODO: initialize any extra device memeory you need
-
-	checkCUDAError("pathtraceInit");
-}
-
-void pathtraceFree() {
-	cudaFree(dev_image);  // no-op if dev_image is null
-	cudaFree(dev_paths);
-	cudaFree(dev_geoms);
-	cudaFree(dev_materials);
-	cudaFree(dev_intersections);
-	// TODO: clean up any extra device memory you created
-
-	checkCUDAError("pathtraceFree");
-}
 
 /**
 * Generate PathSegments with rays from the camera through the screen into the
@@ -289,9 +240,67 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
  */
-void pathtrace(uchar4* pbo, int frame, int iter) {
+void PathTracer::initDataContainer(GuiDataContainer* guiData)
+{
+	m_guiData = guiData;
+}
+
+//void pathtraceInit(Scene* scene) {
+//	hst_scene = scene;
+//
+//	const Camera& cam = hst_scene->state.camera;
+//	const int pixelcount = cam.resolution.x * cam.resolution.y;
+//
+//	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
+//	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
+//
+//	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+//
+//	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
+//	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+//
+//	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
+//	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+//
+//	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
+//	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+//
+//	// TODO: initialize any extra device memeory you need
+//
+//	checkCUDAError("pathtraceInit");
+//}
+void PathTracer::pathtraceInit(Scene* scene)
+{
+	hst_scene = scene;
+
+	const Camera& cam = hst_scene->state.camera;
+	const int pixelcount = cam.resolution.x * cam.resolution.y;
+
+	this->dev_img.malloc(pixelcount, "Malloc dev_img error");
+	cudaMemset(this->dev_img.get(), 0, pixelcount * sizeof(glm::vec3));
+	
+	this->dev_path.malloc(pixelcount, "Malloc dev_path error");
+
+	this->dev_geoms.malloc(scene->geoms.size());
+	cudaMemcpy(this->dev_geoms.get(), scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+
+	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
+	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+
+	this->dev_intersect.malloc(pixelcount);
+	cudaMemset(dev_intersect.get(), 0, pixelcount * sizeof(ShadeableIntersection));
+
+	// TODO: initialize any extra device memeory you need
+
+	checkCUDAError("pathtraceInit");
+}
+
+
+void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
+{
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
+
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
 	// 2D block for generating ray from camera
@@ -302,7 +311,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// 1D block for path tracing
 	const int blockSize1d = 128;
-
 	///////////////////////////////////////////////////////////////////////////
 
 	// Recap:
@@ -333,7 +341,14 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//   for you.
 
 	// TODO: perform one iteration of path tracing
-
+	PathSegment* dev_paths = this->dev_path.get();
+	ShadeableIntersection* dev_intersections = this->dev_intersect.get();
+	Geom* dev_geoms = this->dev_geoms.get();
+	Scene* hst_scene = this->hst_scene;
+	Material* dev_materials = this->dev_mat.get();
+	GuiDataContainer* guiData = this->m_guiData;
+	glm::vec3* dev_image = this->dev_img.get();
+	
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
 
@@ -364,9 +379,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 		depth++;
 
-		// TODO:
-		// --- Shading Stage ---
-		// Shade path segments based on intersections and generate new rays by
+		 //TODO:
+		 //--- Shading Stage ---
+		 //Shade path segments based on intersections and generate new rays by
 	  // evaluating the BSDF.
 	  // Start off with just a big kernel that handles all the different
 	  // materials you have in the scenefile.

@@ -1,0 +1,72 @@
+#pragma once
+#include <ctime>
+//#include "main.h"
+#include "preview.h"
+#include "ImGui/imgui.h"
+#include "ImGui/imgui_impl_glfw.h"
+#include "ImGui/imgui_impl_opengl3.h"
+#include "pathtrace.h"
+#include <GL/glew.h>
+#include <memory>
+#include <GLFW/glfw3.h>
+#include <cuda_gl_interop.h>
+#include "glslUtility.hpp"
+#include "pathtrace.h"
+#include "image.h"
+struct UserInput {
+    bool mouseOverGuiWindow;
+    // For camera controls
+    bool leftMousePressed = false;
+    bool rightMousePressed = false;
+    bool middleMousePressed = false;
+    double lastX;
+    double lastY;
+};
+
+class Application
+{
+private:
+    int m_width;
+    int m_height;
+    int m_iteration;
+
+    GLFWwindow* m_window;
+    std::unique_ptr<Scene> m_scene;
+    std::unique_ptr<PathTracer> m_tracer;
+    std::unique_ptr<GuiDataContainer> m_guiData;
+    
+    GLuint m_imgId;
+    GLuint m_pbo = (GLuint)NULL;
+    
+    Application();
+    Application(const Application& _ref);
+    Application& operator=(const Application& ref);
+    
+    bool init();
+    void initTextures();
+    void initPBO();
+    void initCuda();
+    void initVAO();
+    void initCallbacks();
+    GLuint initShader();
+    
+    void deleteTexture(GLuint* tex);
+    void deletePBO(GLuint* pbo);
+    
+    void renderImGui();
+    std::string currentTimeString();
+    glm::vec3 getPixelColor(int x, int y);
+    
+    void pathTrace();
+
+    Camera& getCamera();
+
+public:
+    UserInput m_input;
+    static Application& getInstance();
+    void loadScene(const char* path);
+    void saveImage(const char* filename);
+    std::string getOutputImageName();
+    void cleanupCuda();
+    void run();
+};
