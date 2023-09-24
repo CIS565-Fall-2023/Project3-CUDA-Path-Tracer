@@ -10,7 +10,7 @@ struct BsdfSample
 {
     glm::vec3 wiW;
     float pdf;
-    BsdfSampleType sampledType;
+    uint32_t sampledType;
 };
 __device__ glm::vec3 f_diffuse(glm::vec3 albedo)
 {
@@ -36,10 +36,10 @@ __device__ glm::vec3 sample_f_specular_refl(glm::vec3 albedo, glm::vec3 nor, glm
     return albedo / AbsCosTheta(wi);
 }
 
-__device__ glm::vec3 sample_f_specular_trans(glm::vec3 albedo, glm::vec3 nor, glm::vec3 wo, BsdfSample& sample)
+__device__ glm::vec3 sample_f_specular_trans(glm::vec3 albedo, glm::vec3 nor, float eta, glm::vec3 wo, BsdfSample& sample)
 {
     float etaA = 1.;
-    float etaB = 1.55;
+    float etaB = eta;
     bool entering = CosTheta(wo) > 0;
     float etaI = entering ? etaA : etaB;
     float etaT = entering ? etaB : etaA;
@@ -53,7 +53,7 @@ __device__ glm::vec3 sample_f_specular_trans(glm::vec3 albedo, glm::vec3 nor, gl
     return albedo / AbsCosTheta(wi);
 }
 
-__device__ glm::vec3 fresnelDielectricEval(float cosThetaI, float eta)
+__device__ float fresnelDielectricEval(float cosThetaI, float eta)
 {
     float etaI = 1.;
     float etaT = eta;
@@ -70,17 +70,17 @@ __device__ glm::vec3 fresnelDielectricEval(float cosThetaI, float eta)
     float sinThetaI = glm::sqrt(glm::max(0.f, 1 - cosThetaI * cosThetaI));
     float sinThetaT = etaI / etaT * sinThetaI;
     if (sinThetaT >= 1.)
-        return glm::vec3(1.);
+        return 1.f;
     float cosThetaT = glm::sqrt(glm::max(0.f, 1 - sinThetaT * sinThetaT));
     float Rparl = ((etaT * cosThetaI) - (etaI * cosThetaT)) /
         ((etaT * cosThetaI) + (etaI * cosThetaT));
     float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) /
         ((etaI * cosThetaI) + (etaT * cosThetaT));
     float ratio = (Rparl * Rparl + Rperp * Rperp) / 2;
-    return glm::vec3(ratio);
+    return ratio;
 }
 
-__device__ glm::vec3 fresnelDieletricConductor(float cosThetaI)
+__device__ glm::vec3 fresnelDieletricConductor(float cosThetaI, glm::vec3 etat, glm::vec3 k)
 {
 
     glm::vec3 etai = glm::vec3(1, 1, 1);
@@ -93,9 +93,6 @@ __device__ glm::vec3 fresnelDieletricConductor(float cosThetaI)
     glm::vec3 k = glm::vec3(3.89346, 2.4567, 2.13024);
 #else
 #if Al
-    glm::vec3 etat = glm::vec3(1.64884, 0.881674, 0.518685);
-    glm::vec3 k = glm::vec3(9.18441, 6.27709, 4.81076);
-#else
     glm::vec3 etat = glm::vec3(1.64884, 0.881674, 0.518685);
     glm::vec3 k = glm::vec3(9.18441, 6.27709, 4.81076);
 #endif
@@ -124,43 +121,37 @@ __device__ glm::vec3 fresnelDieletricConductor(float cosThetaI)
     return ratio;
 }
 
-__device__ glm::vec3 sample_f_metal(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
+__device__ glm::vec3 sample_f_metal(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, Material::Metal metal, glm::vec3 wo, BsdfSample& sample)
 {
     float random = xi.z;
     if (random < 0.5)
     {
         glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
-        sample.sampledType = BsdfSampleType::spec_refl;
-        return 2.f * fresnelDieletricConductor(dot(nor, normalize(sample.wiW))) * R;
+        sample.sampledType = BsdfSampleType::spec_refl | BsdfSampleType::spec_trans;
+        return 2.f * fresnelDieletricConductor(dot(nor, normalize(sample.wiW)), metal.etat, metal.k) * R;
     }
     else
     {
-        glm::vec3 T = sample_f_specular_trans(albedo, nor, wo, sample);
-        sample.sampledType = BsdfSampleType::spec_trans;
-        return 2.f *
-            (glm::vec3(1.) -
-                fresnelDieletricConductor(dot(nor, normalize(sample.wiW)))) *
-            T;
+        glm::vec3 T = sample_f_specular_trans(albedo, nor, glm::length(metal.etat), wo, sample);
+        sample.sampledType = BsdfSampleType::spec_refl | BsdfSampleType::spec_trans;
+        return 2.f * (glm::vec3(1.) - fresnelDieletricConductor(dot(nor, normalize(sample.wiW)), metal.etat, metal.k)) * T;
     }
 }
 
-__device__ glm::vec3 sample_f_glass(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
+__device__ glm::vec3 sample_f_glass(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, float indexOfRefraction, glm::vec3 wo, BsdfSample& sample)
 {
     float random = xi.z;
     if (random < 0.5)
     {
-        glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
-        sample.sampledType = BsdfSampleType::spec_refl;
-        return 2.f * fresnelDielectricEval(dot(nor, normalize(sample.wiW)), 1.55) * R;
+       glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
+       sample.sampledType = BsdfSampleType::spec_refl | BsdfSampleType::spec_trans;
+       return 2.f * fresnelDielectricEval(dot(nor, normalize(sample.wiW)), indexOfRefraction) * R;
     }
     else
     {
-        glm::vec3 T = sample_f_specular_trans(albedo, nor, wo, sample);
-        sample.sampledType = BsdfSampleType::spec_trans;
-        return 2.f *
-            (glm::vec3(1.) -
-                fresnelDielectricEval(dot(nor, normalize(sample.wiW)), 1.55)) *
-            T;
+        glm::vec3 T = sample_f_specular_trans(albedo, nor, indexOfRefraction, wo, sample);
+        sample.sampledType = BsdfSampleType::spec_refl | BsdfSampleType::spec_trans;
+        return 2.f * (glm::vec3(1.) - fresnelDielectricEval(dot(nor, normalize(sample.wiW)), indexOfRefraction)) * T;
     }
 }
 
@@ -313,7 +304,7 @@ __device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, g
     float roughness, float eta, BsdfSample& sample)
 {
     glm::vec3 wh = sample_wh(wo, xi, roughness);
-    float pr = fresnelDielectricEval(dot(wo, wh), eta).x;
+    float pr = fresnelDielectricEval(dot(wo, wh), eta);
     float pt = 1 - pr;
     float random = xi.z;
     if (random < pr)
@@ -398,8 +389,24 @@ __device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::v
 __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 xi, BsdfSample& sample)
 {
     glm::vec3 wo = WorldToLocal(nor) * woW;
-
-    if (mat.hasReflective != 0.f)
+    if (mat.hasRefractive != 0.f)
+    {
+        if (mat.roughness != 0.f)
+        {
+            return sample_f_rough_dieletric(computeAlbedo(mat, nor), nor, xi, wo, computeRoughness(mat, nor), mat.indexOfRefraction, sample);
+        }
+        else {
+            sample.pdf = 1.;
+            if (mat.indexOfRefraction == 0)
+            {
+                return sample_f_metal(computeAlbedo(mat, nor), nor, xi, mat.metal, wo, sample);
+            }
+            else {
+                return sample_f_specular_trans(computeAlbedo(mat, nor), nor, mat.indexOfRefraction, wo, sample);
+            }
+        }
+    }
+    else if (mat.hasReflective != 0.f)
     {
         if (mat.roughness != 0.f)
         {
@@ -410,28 +417,6 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW,
             sample.pdf = 1.;
             return sample_f_specular_refl(computeAlbedo(mat, nor), nor, wo, sample);
         }
-    }
-    else if (mat.hasRefractive != 0.f)
-    {
-        if (mat.roughness != 0.f)
-        {
-            return sample_f_rough_dieletric(
-                computeAlbedo(mat, nor), nor, xi, wo, computeRoughness(mat, nor),
-                mat.eta, sample);
-        }
-        else {
-            sample.pdf = 1.;
-            return sample_f_specular_trans(computeAlbedo(mat, nor), nor, wo, sample);
-        }
-    }
-    else if (mat.indexOfRefraction > 0.8)
-    {
-        sample.pdf = 1.;
-#if Al || Au || Cu
-        return sample_f_metal(computeAlbedo(mat, nor), nor, xi, wo, sample);
-#else
-        return sample_f_glass(computeAlbedo(mat, nor), nor, xi, wo, sample);
-#endif
     }
     else
     {

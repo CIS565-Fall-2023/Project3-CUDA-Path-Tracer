@@ -48,7 +48,7 @@ struct Geom {
 
 struct Material {
     glm::vec3 color = glm::vec3(0.0);
-    struct {
+    struct Specular {
         float exponent = 0.0;
         glm::vec3 color = glm::vec3(0.0);
     } specular;
@@ -57,7 +57,10 @@ struct Material {
     float indexOfRefraction = 0.0;
     float emittance = 0.0;
     float roughness = 0.0;
-    float eta = 0.0;
+    struct Metal {
+        glm::vec3 k = glm::vec3(9.18441, 6.27709, 4.81076);
+        glm::vec3 etat = glm::vec3(1.64884, 0.881674, 0.518685);
+    } metal;
 };
 
 struct Camera {
