@@ -78,10 +78,16 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
+
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
+
 static Mesh* dev_meshes = NULL;
 static Triangle* dev_tris = NULL;
+
+static BvhNode* dev_bvh_nodes = NULL;
+static int* dev_bvh_tri_idx = NULL;
+
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 
@@ -109,21 +115,23 @@ void Pathtracer::init(Scene* scene) {
 	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
-	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
-	dev_thrust_paths = thrust::device_pointer_cast(dev_paths);
-
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
-
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
 	cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
 	cudaMemcpy(dev_meshes, scene->meshes.data(), scene->meshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
-
 	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_bvh_nodes, scene->bvhNodes.size() * sizeof(BvhNode));
+	cudaMemcpy(dev_bvh_nodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_bvh_tri_idx, scene->bvhTriIdx.size() * sizeof(int));
+	cudaMemcpy(dev_bvh_tri_idx, scene->bvhTriIdx.data(), scene->bvhTriIdx.size() * sizeof(int), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+	dev_thrust_paths = thrust::device_pointer_cast(dev_paths);
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
@@ -138,11 +146,17 @@ void Pathtracer::init(Scene* scene) {
 
 void Pathtracer::free() {
 	cudaFree(dev_image);  // no-op if dev_image is null
-	cudaFree(dev_paths);
+
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
+
 	cudaFree(dev_meshes);
 	cudaFree(dev_tris);
+
+	cudaFree(dev_bvh_nodes);
+	cudaFree(dev_bvh_tri_idx);
+
+	cudaFree(dev_paths);
 	cudaFree(dev_intersections);
 
 #if FIRST_BOUNCE_CACHE
@@ -212,10 +226,12 @@ __global__ void computeIntersections(
 	int depth, 
 	int num_paths, 
 	PathSegment* pathSegments, 
-	Geom* geoms, 
+	Geom* geoms,
+	int geoms_size,
 	Mesh* meshes,
 	Triangle* tris,
-	int geoms_size, 
+	BvhNode* bvhNodes,
+	int* bvhTriIdx,
 	ShadeableIntersection* intersections
 )
 {
@@ -253,7 +269,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, meshes[geom.referenceId], tris, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = meshIntersectionTest(geom, meshes[geom.referenceId], tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal);
 		}
 
 		if (t < 0 || t > t_min)
@@ -412,7 +428,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
 	// 1D block for path tracing
-	const int blockSize1d = 128;
+	const int blockSize1d = 512;
 
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
@@ -446,9 +462,11 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				num_valid_paths,
 				dev_paths,
 				dev_geoms,
+				hst_scene->geoms.size(),
 				dev_meshes,
 				dev_tris,
-				hst_scene->geoms.size(),
+				dev_bvh_nodes,
+				dev_bvh_tri_idx,
 				dev_intersections
 			);
 			checkCUDAError("trace one bounce");

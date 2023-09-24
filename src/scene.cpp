@@ -69,7 +69,7 @@ int Scene::loadMesh(string filePath)
     int numTris = 0;
 
     glm::vec3 minPos = glm::vec3(FLT_MAX);
-    glm::vec3 maxPos = glm::vec3(FLT_MIN);
+    glm::vec3 maxPos = glm::vec3(-FLT_MAX);
 
     for (auto& nodeIndex : model.scenes[model.defaultScene].nodes)
     {
@@ -119,6 +119,7 @@ int Scene::loadMesh(string filePath)
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
                         tris.push_back(triangle);
+                        bvhTriIdx.push_back(startTri + numTris);
                         ++numTris;
                     }
                 }
@@ -146,6 +147,7 @@ int Scene::loadMesh(string filePath)
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
                         tris.push_back(triangle);
+                        bvhTriIdx.push_back(startTri + numTris);
                         ++numTris;
                     }
                 }
@@ -154,19 +156,116 @@ int Scene::loadMesh(string filePath)
     }
 
     Mesh newMesh;
-    newMesh.startTri = startTri;
-    newMesh.numTris = numTris;
-
-    //glm::vec3 size = maxPos - minPos;
-    //glm::vec3 center = minPos + size / 2.f;
-    //newMesh.bboxInverseTransform = glm::inverse(Utils::buildTransformationMatrix(center, glm::vec3(0), size));
-    newMesh.bboxMin = minPos;
-    newMesh.bboxMax = maxPos;
+    newMesh.bvhRootNode = buildBvh(startTri, numTris);
 
     int meshIndex = meshes.size();
     meshes.push_back(newMesh);
     meshIndices[filePath] = meshIndex;
     return meshIndex;
+}
+
+int Scene::buildBvh(int startTri, int numTris)
+{
+    bvhNodes.reserve(bvhNodes.size() + 2 * numTris);
+
+    int rootNodeIdx = bvhNodes.size();
+    bvhNodes.emplace_back();
+    //bvhNodes.emplace_back(); // for alignment of left and right child
+
+    BvhNode& root = bvhNodes[rootNodeIdx];
+    root.leftFirst = startTri, root.triCount = numTris;
+    bvhUpdateNodeBounds(root);
+    bvhSubdivide(root);
+
+    //int totalTris = 0;
+    //for (int i = 0; i < bvhNodes.size(); ++i)
+    //{
+    //    cout << bvhNodes[i] << endl;
+    //    cout << endl;
+    //    totalTris += bvhNodes[i].triCount;
+    //}
+
+    //cout << numTris << endl;
+    //cout << totalTris << endl;
+
+    return rootNodeIdx;
+}
+
+void Scene::bvhUpdateNodeBounds(BvhNode& node)
+{
+    node.aabbMin = glm::vec3(FLT_MAX);
+    node.aabbMax = glm::vec3(-FLT_MAX);
+    for (int i = 0; i < node.triCount; ++i)
+    {
+        Triangle& leafTri = tris[bvhTriIdx[node.leftFirst + i]];
+        node.aabbMin = glm::min(node.aabbMin, leafTri.v0.pos);
+        node.aabbMin = glm::min(node.aabbMin, leafTri.v1.pos);
+        node.aabbMin = glm::min(node.aabbMin, leafTri.v2.pos);
+        node.aabbMax = glm::max(node.aabbMax, leafTri.v0.pos);
+        node.aabbMax = glm::max(node.aabbMax, leafTri.v1.pos);
+        node.aabbMax = glm::max(node.aabbMax, leafTri.v2.pos);
+    }
+}
+
+void Scene::bvhSubdivide(BvhNode& node)
+{
+    if (node.triCount <= 2)
+    {
+        return;
+    }
+
+    glm::vec3 extent = node.aabbMax - node.aabbMin;
+    int axis = 0;
+    if (extent.y > extent.x)
+    {
+        axis = 1;
+    }
+    if (extent.z > extent[axis])
+    {
+        axis = 2;
+    }
+    float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
+
+    int i = node.leftFirst;
+    int j = i + node.triCount - 1;
+    while (i <= j)
+    {
+        if (tris[bvhTriIdx[i]].centroid[axis] < splitPos)
+        {
+            ++i;
+        }
+        else
+        {
+            std::swap(bvhTriIdx[i], bvhTriIdx[j--]);
+        }
+    }
+
+    int leftCount = i - node.leftFirst;
+    if (leftCount == 0 || leftCount == node.triCount)
+    {
+        return;
+    }
+
+    int leftChildIdx = bvhNodes.size();
+
+    bvhNodes.emplace_back();
+    BvhNode& leftChild = bvhNodes.back();
+    leftChild.leftFirst = node.leftFirst;
+    leftChild.triCount = leftCount;
+
+    bvhNodes.emplace_back();
+    BvhNode& rightChild = bvhNodes.back();
+    rightChild.leftFirst = i;
+    rightChild.triCount = node.triCount - leftCount;
+
+    node.leftFirst = leftChildIdx;
+    node.triCount = 0;
+
+    bvhUpdateNodeBounds(leftChild);
+    bvhUpdateNodeBounds(rightChild);
+
+    bvhSubdivide(leftChild);
+    bvhSubdivide(rightChild);
 }
 
 int Scene::loadGeom(string objectid) {

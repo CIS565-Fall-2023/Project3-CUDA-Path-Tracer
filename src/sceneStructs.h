@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
 #include <array>
+#include <iostream>
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
@@ -50,10 +51,7 @@ struct Material
 
 struct Mesh
 {
-    int startTri;
-    int numTris;
-    glm::vec3 bboxMin;
-    glm::vec3 bboxMax;
+    int bvhRootNode; // TODO: remove Mesh and have Geom store this instead
 };
 
 struct Vertex
@@ -67,6 +65,21 @@ struct Triangle
     Vertex v1;
     Vertex v2;
     glm::vec3 centroid;
+};
+
+struct BvhNode
+{
+    glm::vec3 aabbMin, aabbMax;
+    int leftFirst, triCount;
+    __host__ __device__ bool isLeaf() const { return triCount > 0; }
+
+    __host__ friend std::ostream& operator<<(std::ostream& os, const BvhNode& node)
+    {
+        os << "bounding box: [" << node.aabbMin.x << ", " << node.aabbMin.y << ", " << node.aabbMin.z << "] - ["
+            << node.aabbMax.x << ", " << node.aabbMax.y << ", " << node.aabbMax.z << "]" << std::endl;
+        os << "leftFirst: " << node.leftFirst << ", triCount: " << node.triCount;
+        return os;
+    }
 };
 
 struct Camera 

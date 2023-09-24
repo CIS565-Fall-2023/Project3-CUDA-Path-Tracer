@@ -157,51 +157,80 @@ __host__ __device__ bool intersectAABB(const Ray& ray, const glm::vec3 bboxMin, 
     return tmax >= tmin && tmax > 0;
 }
 
-__host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Triangle* tris, Ray r,
-    glm::vec3& intersectionPoint, glm::vec3& normal)
+__host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const Triangle* tris, const BvhNode* bvhNodes, const int* bvhTriIdx, float& t, int& triIdx)
+{
+    int stack[32]; // assume BVH depth doesn't exceed 32
+    int stackPtr = 0;
+    stack[stackPtr++] = nodeIdx;
+    bool intersects = false;
+    t = FLT_MAX;
+
+    while (stackPtr > 0)
+    {
+        const int currNodeIdx = stack[--stackPtr];
+        const BvhNode& node = bvhNodes[currNodeIdx];
+
+        if (!intersectAABB(ray, node.aabbMin, node.aabbMax))
+        {
+            continue;
+        }
+
+        if (node.isLeaf())
+        {
+            for (int i = 0; i < node.triCount; ++i)
+            {
+                const int potentialTriIdx = bvhTriIdx[node.leftFirst + i];
+                const Triangle& tri = tris[potentialTriIdx];
+                const glm::vec3& v0 = tri.v0.pos;
+                const glm::vec3& v1 = tri.v1.pos;
+                const glm::vec3& v2 = tri.v2.pos;
+
+                glm::vec3 barycentricPos;
+                if (!glm::intersectRayTriangle(ray.origin, ray.direction, v0, v1, v2, barycentricPos))
+                {
+                    continue;
+                }
+
+                if (barycentricPos.z < t)
+                {
+                    t = barycentricPos.z;
+                    triIdx = potentialTriIdx;
+                    intersects = true;
+                }
+            }
+        }
+        else
+        {
+            stack[stackPtr++] = node.leftFirst;
+            stack[stackPtr++] = node.leftFirst + 1;
+        }
+    }
+
+    return intersects;
+}
+
+__host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
+    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     Ray transformedRay = { ro, rd };
 
-    if (!intersectAABB(transformedRay, mesh.bboxMin, mesh.bboxMax))
+    float t;
+    int triIdx;
+    if (!intersectBvh(transformedRay, mesh.bvhRootNode, tris, bvhNodes, bvhTriIdx, t, triIdx))
     {
         return -1;
     }
 
-    bool intersects = false;
-    float tMin = FLT_MAX;
-    glm::vec3 objSpaceIntersection;
-    glm::vec3 objSpaceNormal;
+    const Triangle& tri = tris[triIdx];
+    const glm::vec3& v0 = tri.v0.pos;
+    const glm::vec3& v1 = tri.v1.pos;
+    const glm::vec3& v2 = tri.v2.pos;
 
-    for (int i = mesh.startTri; i < mesh.startTri + mesh.numTris; ++i)
-    {
-        const Triangle& tri = tris[i];
-        const glm::vec3& v0 = tri.v0.pos;
-        const glm::vec3& v1 = tri.v1.pos;
-        const glm::vec3& v2 = tri.v2.pos;
-
-        glm::vec3 barycentricPos;
-        if (!glm::intersectRayTriangle(ro, rd, v0, v1, v2, barycentricPos))
-        {
-            continue;
-        }
-
-        float t = barycentricPos.z;
-        if (t < tMin)
-        {
-            objSpaceIntersection = ro + rd * t;
-            objSpaceNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-            intersects = true;
-            tMin = t;
-        }
-    }
-
-    if (!intersects)
-    {
-        return -1;
-    }
+    glm::vec3 objSpaceIntersection = ro + rd * t;
+    glm::vec3 objSpaceNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
 
     intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objSpaceNormal, 0.f)));
