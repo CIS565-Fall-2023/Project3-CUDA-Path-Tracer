@@ -140,32 +140,39 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Vertex* ver
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     bool intersects = false;
-    float t = FLT_MAX;
+    float tMin = FLT_MAX;
     glm::vec3 objSpaceIntersection;
     glm::vec3 objSpaceNormal;
 
     for (int i = mesh.startTri; i < mesh.startTri + mesh.numTris; ++i)
     {
-        Vertex v0 = verts[3 * i];
-        Vertex v1 = verts[3 * i + 1];
-        Vertex v2 = verts[3 * i + 2];
+        const glm::vec3 v0 = verts[3 * i].pos;
+        const glm::vec3 v1 = verts[3 * i + 1].pos;
+        const glm::vec3 v2 = verts[3 * i + 2].pos;
         glm::vec3 barycentricPos;
-        if (!glm::intersectRayTriangle(ro, rd, v0.pos, v1.pos, v2.pos, barycentricPos))
+        if (!glm::intersectRayTriangle(ro, rd, v0, v1, v2, barycentricPos))
         {
             continue;
         }
+        
+        /*
+        Really not sure what barycentricPos actually gives here - multiplying its components by v0 v1 v2 doesn't seem to work properly
+        and using it directly as the position also doesn't work.
+        */
+        //glm::vec3 intersectPos = barycentricPos.x * v0 + barycentricPos.y * v1 + barycentricPos.z * v2;
+        //float t = glm::length(intersectPos - ro);
 
-        glm::vec3 triNormal = glm::normalize(glm::cross(v1.pos - v0.pos, v2.pos - v0.pos));
-        float newT;
-        glm::intersectRayPlane(ro, rd, v0.pos, triNormal, newT);
-        glm::vec3 intersectPos = ro + rd * newT;
+        glm::vec3 triNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+        float t;
+        glm::intersectRayPlane(ro, rd, v0, triNormal, t);
+        glm::vec3 intersectPos = ro + rd * t;
 
-        if (newT < t)
+        if (t < tMin)
         {
             objSpaceIntersection = intersectPos;
             objSpaceNormal = triNormal;
             intersects = true;
-            t = newT;
+            tMin = t;
         }
     }
 

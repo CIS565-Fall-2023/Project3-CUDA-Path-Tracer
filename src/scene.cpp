@@ -221,6 +221,10 @@ int Scene::loadCamera() {
         }
     }
 
+#if DEBUG_SHOW_NORMALS
+    state.traceDepth = 1;
+#endif
+
     string line;
     Utils::safeGetline(fp_in, line);
     while (!line.empty() && fp_in.good()) {
