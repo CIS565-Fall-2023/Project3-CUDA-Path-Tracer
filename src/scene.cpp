@@ -170,23 +170,23 @@ int Scene::buildBvh(int startTri, int numTris)
 
     int rootNodeIdx = bvhNodes.size();
     bvhNodes.emplace_back();
-    //bvhNodes.emplace_back(); // for alignment of left and right child
-
     BvhNode& root = bvhNodes[rootNodeIdx];
     root.leftFirst = startTri, root.triCount = numTris;
     bvhUpdateNodeBounds(root);
     bvhSubdivide(root);
 
-    //int totalTris = 0;
-    //for (int i = 0; i < bvhNodes.size(); ++i)
-    //{
-    //    cout << bvhNodes[i] << endl;
-    //    cout << endl;
-    //    totalTris += bvhNodes[i].triCount;
-    //}
+    /*
+    int totalTris = 0;
+    for (int i = 0; i < bvhNodes.size(); ++i)
+    {
+        cout << bvhNodes[i] << endl;
+        cout << endl;
+        totalTris += bvhNodes[i].triCount;
+    }
 
-    //cout << numTris << endl;
-    //cout << totalTris << endl;
+    cout << numTris << endl;
+    cout << totalTris << endl;
+    */
 
     return rootNodeIdx;
 }
@@ -293,7 +293,12 @@ int Scene::loadGeom(string objectid) {
                 string fullPath = basePath + filePath;
                 cout << "Creating new mesh from " << fullPath << "..." << endl;
                 newGeom.type = MESH;
+
+                auto time1 = Utils::timeSinceEpochMillisec();
                 newGeom.referenceId = loadMesh(fullPath);
+                auto time2 = Utils::timeSinceEpochMillisec();
+                auto timeTaken = (time2 - time1);
+                cout << "Took " << timeTaken << " ms to build BVH" << endl;
             }
         }
 

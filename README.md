@@ -24,3 +24,7 @@
 - Add slider for depth of field? (which should reset pathtracer state when changed)
 - Open Image Denoise
 - Direct/full lighting?
+
+### Attribution
+
+- BVH tutorial: https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/, with some additional help from ChatGPT

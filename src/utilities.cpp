@@ -8,6 +8,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <iostream>
 #include <cstdio>
+#include <chrono>
 
 #include "utilities.h"
 
@@ -109,4 +110,10 @@ std::istream& Utils::safeGetline(std::istream& is, std::string& t) {
             t += (char)c;
         }
     }
+}
+
+uint64_t Utils::timeSinceEpochMillisec()
+{
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
