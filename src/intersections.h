@@ -46,47 +46,44 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
-    Ray q;
-    q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
-    q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
+        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) 
+{
+    Ray local_ray(multiplyMV(box.inverseTransform, glm::vec4(r.origin, 1.0f)),
+                   glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f))));
 
-    float tmin = -1e38f;
-    float tmax = 1e38f;
-    glm::vec3 tmin_n;
-    glm::vec3 tmax_n;
-    for (int xyz = 0; xyz < 3; ++xyz) {
-        float qdxyz = q.direction[xyz];
-        /*if (glm::abs(qdxyz) > 0.00001f)*/ {
-            float t1 = (-0.5f - q.origin[xyz]) / qdxyz;
-            float t2 = (+0.5f - q.origin[xyz]) / qdxyz;
-            float ta = glm::min(t1, t2);
-            float tb = glm::max(t1, t2);
-            glm::vec3 n;
-            n[xyz] = t2 < t1 ? +1 : -1;
-            if (ta > 0 && ta > tmin) {
-                tmin = ta;
-                tmin_n = n;
-            }
-            if (tb < tmax) {
-                tmax = tb;
-                tmax_n = n;
-            }
-        }
-    }
+    glm::vec3 inv_dir = 1.f / local_ray.direction;
+    glm::vec3 t_near = (glm::vec3(-0.5f) - local_ray.origin) * inv_dir;
+    glm::vec3 t_far = (glm::vec3(0.5f) - local_ray.origin) * inv_dir;
 
-    if (tmax >= tmin && tmax > 0) {
-        outside = true;
-        if (tmin <= 0) {
-            tmin = tmax;
-            tmin_n = tmax_n;
-            outside = false;
-        }
-        intersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
-        normal = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(tmin_n, 0.0f)));
-        return glm::length(r.origin - intersectionPoint);
+    glm::vec3 t_min = glm::min(t_near, t_far);
+    glm::vec3 t_max = glm::max(t_near, t_far);
+
+    float t0 = glm::max(glm::max(t_min.x, t_min.y), t_min.z);
+    float t1 = glm::min(glm::min(t_max.x, t_max.y), t_max.z);
+
+    if (t0 > t1) return -1.f;
+
+    if (t0 > 0.f)
+    {
+        glm::vec3 v1(t_min.y, t_min.z, t_min.x);
+        glm::vec3 v2(t_min.z, t_min.x, t_min.y);
+
+        normal = -glm::sign(local_ray.direction) * glm::step(v1, t_min) * glm::step(v2, t_min);
+        normal = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(normal, 0.f)));
+        intersectionPoint = r * t0;
+        return t0;
     }
-    return -1;
+    if (t1 > 0.f)
+    {
+        glm::vec3 v1(t_max.y, t_max.z, t_max.x);
+        glm::vec3 v2(t_max.z, t_max.x, t_max.y);
+
+        normal = -glm::sign(local_ray.direction) * glm::step(v1, t_max) * glm::step(v2, t_max);
+        normal = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(normal, 0.f)));
+        intersectionPoint = r * t1;
+        return t1;
+    }
+    return -1.f;
 }
 
 // CHECKITOUT

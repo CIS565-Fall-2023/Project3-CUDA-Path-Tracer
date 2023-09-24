@@ -6,6 +6,7 @@ class CudaPathTracer;
 class Scene;
 class RenderState;
 class CameraController;
+class GPUScene;
 
 class SandBox
 {
@@ -28,6 +29,7 @@ public:
 	uPtr<Scene> m_Scene;
 	uPtr<CudaPathTracer> m_PathTracer;
 	uPtr< CameraController> m_CameraController;
+	uPtr<GPUScene> m_GPUScene;
 
 	std::string m_StartTimeString;
 };

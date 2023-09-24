@@ -24,7 +24,7 @@ public:
 		cudaGraphicsUnregisterResource(cuda_pbo_dest_resource);
 	}
 
-	CPU_ONLY void Render();
+	CPU_ONLY void Render(GPUScene& scene);
 public:
 	int m_Iteration;
 	

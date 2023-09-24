@@ -22,6 +22,8 @@ struct Ray
         :origin(o), direction(d)
     {}
 
+    CPU_GPU glm::vec3 operator*(const float& t) const { return origin + t * direction; }
+
 public:
     CPU_GPU static Ray SpawnRay(const glm::vec3& o, const glm::vec3& dir)
     {
@@ -113,17 +115,38 @@ struct PathSegment {
     glm::vec3 radiance{0, 0, 0};
     int pixelIndex;
     int remainingBounces;
-
+    CPU_GPU void Reset() 
+    {
+        throughput = glm::vec3(1.f);
+        radiance = glm::vec3(0.f);
+        pixelIndex = 0;
+    }
     CPU_GPU void Terminate() { remainingBounces = 0; }
     CPU_GPU bool IsEnd() const { return remainingBounces <= 0; }
+};
+
+struct Intersection
+{
+    int shapeId;
+    int materialId;
+    float t;
+    glm::vec2 uv; // local uv
 };
 
 // Use with a corresponding PathSegment to do:
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
-struct ShadeableIntersection {
-  float t;
-  glm::vec3 surfaceNormal;
-  glm::vec3 surfacePosition;
-  int materialId;
+struct ShadeableIntersection 
+{
+    float t;
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 uv;
+    int materialId;
+
+    CPU_GPU void Reset()
+    {
+        t = -1.f;
+        materialId = -1.f;
+    }
 };
