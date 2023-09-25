@@ -27,6 +27,9 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
+            } else if (strcmp(tokens[0].c_str(), "TRIANGLE") == 0) {
+                loadTriangle(tokens[1]);
+                cout << " " << endl;
             }
         }
     }
@@ -183,6 +186,44 @@ int Scene::loadMaterial(string materialid) {
             }
         }
         materials.push_back(newMaterial);
+        return 1;
+    }
+}
+
+int Scene::loadTriangle(string triid) {
+    int id = atoi(triid.c_str());
+    if (id != tris.size()) {
+        cout << "ERROR: OBJECT ID does not match expected number of tris" << endl;
+        return -1;
+    }
+    else {
+        cout << "Loading Tri " << id << "..." << endl;
+        Triangle tri;
+        string line;
+
+        //link material
+        utilityCore::safeGetline(fp_in, line);
+        if (!line.empty() && fp_in.good()) {
+            vector<string> tokens = utilityCore::tokenizeString(line);
+            tri.materialid = atoi(tokens[1].c_str());
+            cout << "Connecting Tri " << triid << " to Material " << tri.materialid << "..." << endl;
+        }
+
+        //load vertices
+        utilityCore::safeGetline(fp_in, line);
+        int vi = 0; // vertex id
+        while (!line.empty() && fp_in.good() && vi < 3) {
+            vector<string> tokens = utilityCore::tokenizeString(line);
+
+            //load vertex
+            tri.vertices[vi] = glm::vec3(atof(tokens[0].c_str()), atof(tokens[1].c_str()), atof(tokens[2].c_str()));
+
+            utilityCore::safeGetline(fp_in, line);
+            vi++;
+        }
+
+
+        tris.push_back(tri);
         return 1;
     }
 }

@@ -142,3 +142,36 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+// By default, make the triangle default
+__host__ __device__ float triangleIntersectionTest(Triangle tri, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+
+    outside = true;
+    glm::vec3 v01 = tri.vertices[1] - tri.vertices[0];
+    glm::vec3 v02 = tri.vertices[2] - tri.vertices[0];
+    glm::vec3 dx02 = glm::cross(r.direction, v02);
+
+    float d0 = glm::dot(v01, dx02);
+    if (d0 < 0.000001f){ return -1.0f; }
+
+    float d = 1.0f / d0;
+    glm::vec3 v0o = r.origin - tri.vertices[0];
+    float b1 = d * glm::dot(v0o, dx02);
+    if (b1 < 0.0f || b1 > 1.0f) { return -1.0f; }
+
+    glm::vec3 v0ox01 = glm::cross(v0o, v01);
+    float b2 = d * glm::dot(r.direction, v0ox01);
+    if (b2 < 0.0f || b2 + b1 > 1.0f) { return -1.0f; }
+
+    float t = d * glm::dot(v02, v0ox01);
+    if (t < 0.0f) { return -1.0f;}
+
+    intersectionPoint = t * r.direction + r.origin;
+
+    normal = normalize(glm::cross(v01, v02));
+    // normal *= (dot(normal, r.direction) > 0 ? -1 : 1);
+
+    return t;
+    
+}

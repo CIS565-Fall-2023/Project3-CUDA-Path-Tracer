@@ -87,6 +87,7 @@ static int* dev_bools = NULL;
 static int* dev_nbools = NULL;
 static int* dev_scanBools = NULL;
 static int* dev_scanNBools = NULL;
+static Triangle* dev_tris = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -135,6 +136,9 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
+	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
@@ -142,7 +146,6 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	cudaMalloc(&dev_tempIntersections, pixelcount * sizeof(ShadeableIntersection));
 
-	// TODO: initialize any extra device memeory you need
 	cudaMalloc(&dev_bools, pixelcount * sizeof(int));
 	cudaMalloc(&dev_nbools, pixelcount * sizeof(int));
 	cudaMalloc(&dev_scanBools, pixelcount * sizeof(int));
@@ -159,9 +162,10 @@ void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
+	cudaFree(dev_tris);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
-	// TODO: clean up any extra device memory you created
+
 	cudaFree(dev_bools);
 	cudaFree(dev_nbools);
 	cudaFree(dev_scanBools);
@@ -218,6 +222,8 @@ __global__ void computeIntersections(
 	, const PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
+	, Triangle* tris
+	, int tris_size
 	, ShadeableIntersection* intersections
 )
 {
@@ -231,14 +237,14 @@ __global__ void computeIntersections(
 		glm::vec3 intersect_point;
 		glm::vec3 normal;
 		float t_min = FLT_MAX;
-		int hit_geom_index = -1;
+		int hit_index = -1;
+		bool hit_geom = true;
 		bool outside = true;
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
 
 		// naive parse through global geoms
-
 		for (int i = 0; i < geoms_size; i++)
 		{
 			Geom& geom = geoms[i];
@@ -258,13 +264,26 @@ __global__ void computeIntersections(
 			if (t > 0.0f && t_min > t)
 			{
 				t_min = t;
-				hit_geom_index = i;
+				hit_index = i;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
 			}
 		}
 
-		if (hit_geom_index == -1)
+		for (int i = 0; i < tris_size; i++) {
+			Triangle& tri = tris[i];
+			t = triangleIntersectionTest(tri, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			if (t > 0.0f && t_min > t)
+			{
+				t_min = t;
+				hit_index = i;
+				hit_geom = false;
+				intersect_point = tmp_intersect;
+				normal = tmp_normal;
+			}
+		}
+
+		if (hit_index == -1)
 		{
 			intersections[path_index].t = -1.0f;
 		}
@@ -272,7 +291,7 @@ __global__ void computeIntersections(
 		{
 			//The ray hits something
 			intersections[path_index].t = t_min;
-			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+			intersections[path_index].materialId = hit_geom ? geoms[hit_index].materialid : tris[hit_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
 		}
 	}
@@ -514,16 +533,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	bool iterationComplete = false;
 	while (!iterationComplete) {
-
-		/*
-		for (int i = 0; i < 1000; i++) {
-			thrust::default_random_engine trng = makeSeededRandomEngine(depth, i, iter);
-			thrust::uniform_real_distribution<float> tu01(0, 1); // u01(rng) to get random (0, 1)
-			std::cout << tu01(trng) << " ";
-			std::cout << std::endl;
-		}
-		*/
-
 		
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
@@ -538,9 +547,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		else {
 			// tracing
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
-				depth, num_paths, dev_paths, dev_geoms,
-				hst_scene->geoms.size(), dev_intersections
-				);
+				depth, num_paths, dev_paths,
+				dev_geoms, hst_scene->geoms.size(),
+				dev_tris, hst_scene->tris.size(),
+				dev_intersections
+			);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
 

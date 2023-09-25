@@ -28,6 +28,11 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
+struct Triangle {
+    int materialid;
+    glm::vec3 vertices[3];
+};
+
 struct Material {
     glm::vec3 color;
     struct {
