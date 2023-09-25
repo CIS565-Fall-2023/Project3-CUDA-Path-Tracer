@@ -108,6 +108,9 @@ void saveImage() {
 
 void runCuda() {
 	if (camchanged) {
+		pathtraceFreeAll();
+		currentlyCaching = false;
+
 		iteration = 0;
 		Camera& cam = renderState->camera;
 		cameraPosition.x = zoom * sin(phi) * sin(theta);
