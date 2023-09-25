@@ -40,9 +40,9 @@ Scene::Scene(string filename) {
 
 int Scene::loadMesh(string filePath)
 {
-    if (meshIndices.find(filePath) != meshIndices.end())
+    if (bvhRootIndices.find(filePath) != bvhRootIndices.end())
     {
-        return meshIndices[filePath];
+        return bvhRootIndices[filePath];
     }
 
     tinygltf::Model model;
@@ -140,13 +140,9 @@ int Scene::loadMesh(string filePath)
         }
     }
 
-    Mesh newMesh;
-    newMesh.bvhRootNode = buildBvh(startTri, numTris);
-
-    int meshIndex = meshes.size();
-    meshes.push_back(newMesh);
-    meshIndices[filePath] = meshIndex;
-    return meshIndex;
+    int bvhRootNodeIdx = buildBvh(startTri, numTris);
+    bvhRootIndices[filePath] = bvhRootNodeIdx;
+    return bvhRootNodeIdx;
 }
 
 int Scene::buildBvh(int startTri, int numTris)
@@ -303,7 +299,7 @@ int Scene::loadGeom(string objectid) {
                 newGeom.type = MESH;
 
                 auto time1 = Utils::timeSinceEpochMillisec();
-                newGeom.referenceId = loadMesh(fullPath);
+                newGeom.bvhRootNodeIdx = loadMesh(fullPath);
                 auto time2 = Utils::timeSinceEpochMillisec();
                 auto timeTaken = (time2 - time1);
                 cout << "Took " << timeTaken << " ms to build BVH" << endl;

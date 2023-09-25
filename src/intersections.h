@@ -214,7 +214,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
     return triIdx != -1;
 }
 
-__host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
+__host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
     Ray r, glm::vec3& intersectionPoint, glm::vec3& normal)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
@@ -224,7 +224,7 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Mesh mesh, Triangle* t
 
     float t;
     int triIdx;
-    if (!intersectBvh(transformedRay, mesh.bvhRootNode, tris, bvhNodes, bvhTriIdx, t, triIdx))
+    if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, bvhTriIdx, t, triIdx))
     {
         return -1;
     }

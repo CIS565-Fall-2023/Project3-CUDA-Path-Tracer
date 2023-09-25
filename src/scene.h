@@ -26,7 +26,7 @@ private:
     float bvhEvaluateSAH(BvhNode& node, int axis, float pos);
     void bvhSubdivide(BvhNode& node);
 
-    unordered_map<string, int> meshIndices;
+    unordered_map<string, int> bvhRootIndices;
 
 public:
     Scene(string filename);
@@ -34,7 +34,6 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
-    std::vector<Mesh> meshes;
     std::vector<Triangle> tris;
     std::vector<BvhNode> bvhNodes;
     std::vector<int> bvhTriIdx;

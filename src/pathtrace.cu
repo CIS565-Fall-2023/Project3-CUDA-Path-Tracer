@@ -82,7 +82,6 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 
-static Mesh* dev_meshes = NULL;
 static Triangle* dev_tris = NULL;
 
 static BvhNode* dev_bvh_nodes = NULL;
@@ -120,8 +119,6 @@ void Pathtracer::init(Scene* scene) {
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
-	cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
-	cudaMemcpy(dev_meshes, scene->meshes.data(), scene->meshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
 	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
@@ -150,7 +147,6 @@ void Pathtracer::free() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 
-	cudaFree(dev_meshes);
 	cudaFree(dev_tris);
 
 	cudaFree(dev_bvh_nodes);
@@ -228,7 +224,6 @@ __global__ void computeIntersections(
 	PathSegment* pathSegments, 
 	Geom* geoms,
 	int geoms_size,
-	Mesh* meshes,
 	Triangle* tris,
 	BvhNode* bvhNodes,
 	int* bvhTriIdx,
@@ -269,7 +264,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, meshes[geom.referenceId], tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = meshIntersectionTest(geom, tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal);
 		}
 
 		if (t < 0 || t > t_min)
@@ -463,7 +458,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				dev_paths,
 				dev_geoms,
 				hst_scene->geoms.size(),
-				dev_meshes,
 				dev_tris,
 				dev_bvh_nodes,
 				dev_bvh_tri_idx,

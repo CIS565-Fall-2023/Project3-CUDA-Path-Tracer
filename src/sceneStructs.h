@@ -27,7 +27,7 @@ struct Geom
 {
     enum GeomType type;
     int materialId;
-    int referenceId; // for now, used only for meshes
+    int bvhRootNodeIdx; // used only for meshes
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -47,11 +47,6 @@ struct Material
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
-};
-
-struct Mesh
-{
-    int bvhRootNode; // TODO: remove Mesh and have Geom store this instead
 };
 
 struct Vertex
