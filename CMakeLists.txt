@@ -66,6 +66,7 @@ include_directories(${GLM_INCLUDE_DIRS})
 # https://stackoverflow.com/questions/47910256/cmake-how-to-normalize-paths
 file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}/scenes" SCENE_PATH)
 add_definitions(-DSCENE_PATH="${SCENE_PATH}/")
+add_definitions(-DROOT_PATH="${CMAKE_SOURCE_DIR}")
 
 file(GLOB SRC_FILES 
     "${PROJECT_SOURCE_DIR}/src/*.c"

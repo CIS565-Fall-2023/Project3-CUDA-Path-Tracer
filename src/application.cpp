@@ -335,7 +335,7 @@ std::string Application::getOutputImageName()
 {
 	std::string filename = m_scene.get()->state.imageName;
 	std::ostringstream ss;
-	ss << filename << "." << currentTimeString() << "." << m_iteration << "samp";
+	ss<< ROOT_PATH << "/img/" << filename << "." << currentTimeString() << "." << m_iteration << "samp";
 	filename = ss.str();
 	return filename;
 }

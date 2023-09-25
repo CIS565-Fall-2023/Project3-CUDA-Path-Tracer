@@ -94,8 +94,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		thrust::uniform_real_distribution<float> u01(-1.2, 1.2);
 
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x  - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + u01(rng) - (float)cam.resolution.y * 0.5f)
 		);
 
 		segment.pixelIndex = index;
@@ -273,7 +273,7 @@ __global__ void processPBR(
 	if (path_idx >= num_paths)return; // no light
 	PathSegment& seg = pathSegments[path_idx];
 	ShadeableIntersection& intersect = intersections[path_idx];
-	if (seg.remainingBounces <= 0) // end bounce
+	if (seg.remainingBounces <= 0.1) // end bounce
 	{
 		return;
 	}
@@ -296,12 +296,18 @@ __global__ void processPBR(
 		seg.color = glm::vec3(0.);
 		return;
 	}
-	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
 	float pdf = 1.f;
+
+	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
+	
 	seg.ray.direction = sampleRay(-seg.ray.direction, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
+
+	//fix strange artifact
+	seg.ray.origin += 0.01f * seg.ray.direction;
+
 	glm::vec3 bsdf = material.color * INV_PI;
 	//           albedo           absdot
-	seg.color *= (bsdf * glm::vec3(glm::dot(intersect.surfaceNormal, seg.ray.direction))/pdf);
+	seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction),0.f,1.f)/pdf);
 }
 
 
@@ -355,7 +361,6 @@ void PathTracer::pathtraceInit(Scene* scene)
 void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 {
 	const int traceDepth = hst_scene->state.traceDepth;
-
 	const Camera& cam = hst_scene->state.camera;
 
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
