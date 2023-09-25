@@ -95,12 +95,28 @@ void scatterRay(
         pathSegment.ray.origin = intersect;
     }
     else { // diffuse reflection
+
+
+
         float z;
         glm::vec3 wi = calculateRandomDirectionInHemisphere(normal, rng, z);
-        pathSegment.color *= m.color * abs(dot(normal, wi)) / z;
-        pathSegment.ray.direction = wi;
-        pathSegment.ray.origin = intersect;
+        if (dot(normal, wi) < 0) {
+            wi = -wi;
+        }
+
+        // glm::vec3 wi = normal;
+
+        //pathSegment.color = wi * 0.5f + glm::vec3(0.5f);
+        //pathSegment.remainingBounces = -1;
+        //return;
+        
+        // glm::vec3 wi = normal;
+
+        pathSegment.ray.direction = glm::normalize(wi);
+        pathSegment.ray.origin = intersect + normal * 0.001f;
         pathSegment.remainingBounces -= 1;
+        // pathSegment.color *= m.color * abs(dot(normal, wi)) / z;
+        pathSegment.color *= m.color;
     }
 
 }

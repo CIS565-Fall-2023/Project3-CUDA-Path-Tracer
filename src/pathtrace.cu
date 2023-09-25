@@ -17,8 +17,9 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-// #define MATERIAL_SORT
+#define MATERIAL_SORT
 #define CACHE_FIRST_BOUNCE
+// #define DEBUG_OUTPUT
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -335,6 +336,7 @@ __global__ void shadeFakeMaterial(
 __global__ void shadeMaterial(
 	int iter
 	, int num_paths
+	, int depth
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, Material* materials
@@ -348,7 +350,7 @@ __global__ void shadeMaterial(
 			// Set up the RNG
 			// LOOK: this is how you use thrust's RNG! Please look at
 			// makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::default_random_engine rng = makeSeededRandomEngine(depth, idx, iter);
 			// thrust::uniform_real_distribution<float> u01(0, 1); // u01(rng) to get random (0, 1)
 
 			Material material = materials[intersection.materialId];
@@ -371,7 +373,14 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.color * (float)(iterationPath.remainingBounces < 0);
+		image[iterationPath.pixelIndex] += iterationPath.color * (float)abs(iterationPath.remainingBounces);
+		/*if (iterationPath.remainingBounces == 0) {
+			image[iterationPath.pixelIndex] += glm::vec3(1.0f, 0.0f, 1.0f);
+		}
+		else {
+			image[iterationPath.pixelIndex] += iterationPath.color * (float)abs(iterationPath.remainingBounces);
+		}*/
+		
 	}
 }
 
@@ -506,7 +515,16 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete) {
 
-		std::cout << "iter-" << iter << ", depth-" << depth << std::endl;
+		/*
+		for (int i = 0; i < 1000; i++) {
+			thrust::default_random_engine trng = makeSeededRandomEngine(depth, i, iter);
+			thrust::uniform_real_distribution<float> tu01(0, 1); // u01(rng) to get random (0, 1)
+			std::cout << tu01(trng) << " ";
+			std::cout << std::endl;
+		}
+		*/
+
+		
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
 		// clean shading chunks
@@ -599,7 +617,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 
 		shadeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
-			iter, num_paths,
+			iter, num_paths, depth,
 			dev_intersections, dev_paths, dev_materials
 		);
 		
@@ -614,21 +632,23 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		thrust::exclusive_scan(dv_in, dv_in + pixelcount, dv_out);
 		cudaMemcpy(&scanSum, dev_scanBools + pixelcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
 		scanSum += lastBool;
-		num_paths = scanSum;
+		
 
-		if (num_paths > 0) {
+		if (scanSum > 0) {
 			thrust::device_ptr<int> dv_nin(dev_nbools);
 			thrust::device_ptr<int> dv_nout(dev_scanNBools);
 			thrust::exclusive_scan(dv_nin, dv_nin + pixelcount, dv_nout);
-			pathSegmentScatter << <numBlocksPixels, blockSize1d >> > (pixelcount, num_paths, dev_tempPaths, dev_paths, dev_bools, dev_scanBools, dev_scanNBools);
+			pathSegmentScatter << <numBlocksPixels, blockSize1d >> > (pixelcount, scanSum, dev_tempPaths, dev_paths, dev_bools, dev_scanBools, dev_scanNBools);
 			PathSegment* temp = dev_tempPaths;
 			dev_tempPaths = dev_paths;
 			dev_paths = temp;
 		}
 
-		std::cout << "num_paths = " << num_paths << std::endl;
-		
+#ifdef DEBUG_OUTPUT
+		std::cout << "iter-" << iter << ", depth-" << depth << ", paths: " << num_paths << " -> " << scanSum << std::endl;
+#endif
 
+		num_paths = scanSum;
 		iterationComplete = num_paths <= 0 || depth >= traceDepth;
 	
 		if (guiData != NULL){ guiData->TracedDepth = depth; }
