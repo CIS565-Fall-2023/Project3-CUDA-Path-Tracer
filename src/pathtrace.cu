@@ -16,8 +16,8 @@
 #include "interactions.h"
 #include "material.h"
 
+#define ANTIALIASING 0
 #define ERRORCHECK 1
-
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -162,19 +162,25 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 {
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
-
     if (x < cam.resolution.x && y < cam.resolution.y) {
+        float rx = 0.f;
+        float ry = 0.f;
         int index = x + (y * cam.resolution.x);
         PathSegment& segment = pathSegments[index];
-
+#if ANTIALIASING
+        thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+            thrust::uniform_real_distribution<float> u(-0.5, 0.5);
+            rx = u(rng);
+            ry = u(rng);
+#endif // ANTIALIASING
         segment.ray.origin = cam.position;
         segment.color = glm::vec3(0.f);
         segment.throughput = glm::vec3(1.f);
 
         // TODO: implement antialiasing by jittering the ray
         segment.ray.direction = glm::normalize(cam.view
-            - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-            - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+            - cam.right * cam.pixelLength.x * ((float)x + rx - (float)cam.resolution.x * 0.5f)
+            - cam.up * cam.pixelLength.y * ((float)y + ry - (float)cam.resolution.y * 0.5f)
         );
 
         segment.pixelIndex = index;
@@ -480,7 +486,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
     // Assemble this iteration and apply it to the image
     int num_paths_valid = dev_paths_terminated_end - dev_paths_terminated_thrust;
     dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-    checkCudaMem(dev_paths_terminated, num_paths_valid);
     finalGather << <numBlocksPixels, blockSize1d >> > (num_paths_valid, dev_image, dev_paths_terminated);
 
     ///////////////////////////////////////////////////////////////////////////
