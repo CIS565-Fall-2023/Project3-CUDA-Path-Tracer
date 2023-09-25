@@ -99,7 +99,7 @@ void saveImage() {
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
 	ss << filename << "." << startTimeString << "." << samples << "samp";
-	filename = ss.str();
+	filename = "img/" + ss.str();
 
 	// CHECKITOUT
 	img.savePNG(filename);

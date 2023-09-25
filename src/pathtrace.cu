@@ -215,6 +215,7 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].intersectPoint = intersect_point;
 		}
 	}
 }
@@ -273,6 +274,37 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
+__global__ void shadeMaterial(
+	int iter,
+	int num_paths,
+	ShadeableIntersection* shadeableIntersections,
+	PathSegment* pathSegments,
+	Material* materials
+) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths) {
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+
+		if (intersection.t > 0.0f) {
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+
+			Material material = materials[intersection.materialId];
+			glm::vec3 materialColor = material.color;
+
+			if (material.emittance > 0.0f) {
+				pathSegments[idx].color *= (materialColor * material.emittance);
+			}
+			else {
+				scatterRay(pathSegments[idx], intersection.intersectPoint, intersection.surfaceNormal, material, rng);
+			}
+		}
+		else {
+			pathSegments[idx].color = glm::vec3(0.0f);
+		}
+	}
+}
+
 // Add the current iteration's output to the overall image
 __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
 {
@@ -284,6 +316,13 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 		image[iterationPath.pixelIndex] += iterationPath.color;
 	}
 }
+
+struct is_terminated {
+	__host__ __device__
+		bool operator()(const PathSegment& path) {
+		return path.remainingBounces <= 0;
+	}
+};
 
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
@@ -367,20 +406,26 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// TODO:
 		// --- Shading Stage ---
 		// Shade path segments based on intersections and generate new rays by
-	  // evaluating the BSDF.
-	  // Start off with just a big kernel that handles all the different
-	  // materials you have in the scenefile.
-	  // TODO: compare between directly shading the path segments and shading
-	  // path segments that have been reshuffled to be contiguous in memory.
+		// evaluating the BSDF.
+		// Start off with just a big kernel that handles all the different
+		// materials you have in the scenefile.
+		// TODO: compare between directly shading the path segments and shading
+		// path segments that have been reshuffled to be contiguous in memory.
 
-		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+		shadeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
 			dev_intersections,
 			dev_paths,
 			dev_materials
-			);
-		iterationComplete = true; // TODO: should be based off stream compaction results.
+		    );
+
+		dev_path_end = thrust::remove_if(thrust::device, dev_paths, dev_path_end, is_terminated());
+		num_paths = dev_path_end - dev_paths;
+		
+		if (num_paths <= 0 || depth >= traceDepth) {
+			iterationComplete = true;
+		}
 
 		if (guiData != NULL)
 		{
