@@ -174,6 +174,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
         const BvhNode& node = bvhNodes[currNodeIdx];
 
         float tmin;
+        // if ray doesn't intersect or intersection point is past closest triangle so far, skip this subtree
         if (!intersectAABB(ro, rdR, node.aabb.bMin, node.aabb.bMax, tmin) || tmin > t)
         {
             continue;
@@ -189,7 +190,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
                 const glm::vec3& v1 = tri.v1.pos;
                 const glm::vec3& v2 = tri.v2.pos;
 
-                glm::vec3 barycentricPos;
+                glm::vec3 barycentricPos; // as I understand it, (x, y) are the first two barycentric coordinates and z is t
                 if (!glm::intersectRayTriangle(ray.origin, ray.direction, v0, v1, v2, barycentricPos))
                 {
                     continue;
@@ -204,6 +205,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
         }
         else
         {
+            // don't check intersections here unnecessarily, instead add to stack for now
             stack[stackPtr++] = node.leftFirst;
             stack[stackPtr++] = node.leftFirst + 1;
         }

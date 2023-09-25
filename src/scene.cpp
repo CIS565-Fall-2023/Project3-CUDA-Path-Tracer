@@ -68,9 +68,6 @@ int Scene::loadMesh(string filePath)
     int startTri = tris.size();
     int numTris = 0;
 
-    glm::vec3 minPos = glm::vec3(FLT_MAX);
-    glm::vec3 maxPos = glm::vec3(-FLT_MAX);
-
     for (auto& nodeIndex : model.scenes[model.defaultScene].nodes)
     {
         const tinygltf::Node& node = model.nodes[nodeIndex];
@@ -101,20 +98,14 @@ int Scene::loadMesh(string filePath)
                         int vertexIndex = indexData[i];
                         glm::vec3 pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
                         triangle.v0 = { pos };
-                        minPos = glm::min(minPos, pos);
-                        maxPos = glm::max(maxPos, pos);
 
                         vertexIndex = indexData[i + 1];
                         pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
                         triangle.v1 = { pos };
-                        minPos = glm::min(minPos, pos);
-                        maxPos = glm::max(maxPos, pos);
 
                         vertexIndex = indexData[i + 2];
                         pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
                         triangle.v2 = { pos };
-                        minPos = glm::min(minPos, pos);
-                        maxPos = glm::max(maxPos, pos);
 
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
@@ -131,18 +122,12 @@ int Scene::loadMesh(string filePath)
                         
                         glm::vec3 pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
                         triangle.v0 = { pos };
-                        minPos = glm::min(minPos, pos);
-                        maxPos = glm::max(maxPos, pos);
 
                         pos = glm::vec3(positionData[(i + 1) * 3], positionData[(i + 1) * 3 + 1], positionData[(i + 1) * 3 + 2]);
                         triangle.v1 = { pos };
-                        minPos = glm::min(minPos, pos);
-                        maxPos = glm::max(maxPos, pos);
 
                         pos = glm::vec3(positionData[(i + 2) * 3], positionData[(i + 2) * 3 + 1], positionData[(i + 2) * 3 + 2]);
                         triangle.v2 = { pos };
-                        minPos = glm::min(minPos, pos);
-                        maxPos = glm::max(maxPos, pos);
 
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
@@ -175,7 +160,7 @@ int Scene::buildBvh(int startTri, int numTris)
     bvhUpdateNodeBounds(root);
     bvhSubdivide(root);
 
-    /*
+#if DEBUG_PRINT_BVH
     int totalTris = 0;
     for (int i = 0; i < bvhNodes.size(); ++i)
     {
@@ -186,7 +171,7 @@ int Scene::buildBvh(int startTri, int numTris)
 
     cout << numTris << endl;
     cout << totalTris << endl;
-    */
+#endif
 
     return rootNodeIdx;
 }
@@ -196,10 +181,8 @@ void Scene::bvhUpdateNodeBounds(BvhNode& node)
     node.aabb = AABB();
     for (int i = 0; i < node.triCount; ++i)
     {
-        Triangle& leafTri = tris[bvhTriIdx[node.leftFirst + i]];
-        node.aabb.grow(leafTri.v0.pos);
-        node.aabb.grow(leafTri.v1.pos);
-        node.aabb.grow(leafTri.v2.pos);
+        const Triangle& leafTri = tris[bvhTriIdx[node.leftFirst + i]];
+        node.aabb.grow(leafTri);
     }
 }
 
@@ -227,25 +210,23 @@ float Scene::bvhEvaluateSAH(BvhNode& node, int axis, float pos)
 
 void Scene::bvhSubdivide(BvhNode& node)
 {
-    int bestAxis = -1;
-    float bestPos = 0, bestCost = FLT_MAX;
-    for (int axis = 0; axis < 3; ++axis)
+    int axis = -1;
+    float splitPos = 0, bestCost = FLT_MAX;
+    for (int candidateAxis = 0; candidateAxis < 3; ++candidateAxis)
     {
         for (int i = 0; i < node.triCount; ++i)
         {
             const Triangle& tri = tris[bvhTriIdx[node.leftFirst + i]];
-            float candidatePos = tri.centroid[axis];
-            float cost = bvhEvaluateSAH(node, axis, candidatePos);
+            float candidatePos = tri.centroid[candidateAxis];
+            float cost = bvhEvaluateSAH(node, candidateAxis, candidatePos);
             if (cost < bestCost)
             {
-                bestPos = candidatePos;
-                bestAxis = axis;
+                splitPos = candidatePos;
+                axis = candidateAxis;
                 bestCost = cost;
             }
         }
     }
-    int axis = bestAxis;
-    float splitPos = bestPos;
 
     float parentCost = node.triCount * node.aabb.surfaceArea();
     if (bestCost >= parentCost)

@@ -474,9 +474,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		}
 		++depth;
 
-		// TODO: compare between directly shading the path segments and shading
-		// path segments that have been reshuffled to be contiguous in memory.
-
 		if (guiData->sortByMaterial)
 		{
 			thrust::sort_by_key(

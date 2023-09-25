@@ -98,6 +98,7 @@ struct BvhNode
     int leftFirst, triCount;
     __host__ __device__ bool isLeaf() const { return triCount > 0; }
 
+#if DEBUG_PRINT_BVH
     __host__ friend std::ostream& operator<<(std::ostream& os, const BvhNode& node)
     {
         os << "bounding box: [" << node.aabb.bMin.x << ", " << node.aabb.bMin.y << ", " << node.aabb.bMin.z << "] - ["
@@ -105,6 +106,7 @@ struct BvhNode
         os << "leftFirst: " << node.leftFirst << ", triCount: " << node.triCount;
         return os;
     }
+#endif
 };
 
 struct Camera 
