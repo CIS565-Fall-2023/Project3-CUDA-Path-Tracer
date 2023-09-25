@@ -32,7 +32,7 @@ struct Ray {
 };
 
 __device__ static Ray SpawnRay(glm::vec3 pos, glm::vec3 wi) {
-    return Ray{ pos + wi * 0.0001f, wi };
+    return Ray{ pos + wi * 0.01f, wi };
 }
 
 struct Geom {
@@ -88,6 +88,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    glm::vec3 throughput;
 };
 
 // Use with a corresponding PathSegment to do:

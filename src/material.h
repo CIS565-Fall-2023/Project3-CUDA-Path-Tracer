@@ -402,7 +402,7 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec3 woW,
                 return sample_f_metal(computeAlbedo(mat, nor), nor, xi, mat.metal, wo, sample);
             }
             else {
-                return sample_f_specular_trans(computeAlbedo(mat, nor), nor, mat.indexOfRefraction, wo, sample);
+                return sample_f_glass(computeAlbedo(mat, nor), nor, xi, mat.indexOfRefraction, wo, sample);
             }
         }
     }

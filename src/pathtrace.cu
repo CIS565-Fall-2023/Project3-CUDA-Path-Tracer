@@ -168,7 +168,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
         PathSegment& segment = pathSegments[index];
 
         segment.ray.origin = cam.position;
-        segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+        segment.color = glm::vec3(0.f);
+        segment.throughput = glm::vec3(1.f);
 
         // TODO: implement antialiasing by jittering the ray
         segment.ray.direction = glm::normalize(cam.view
@@ -283,7 +284,7 @@ __global__ void shadeMaterial(
 
             // If the material indicates that the object was a light, "light" the ray
             if (material.emittance > 0.0f) {
-                pSeg.color *= (materialColor * material.emittance);
+                pSeg.color = pSeg.throughput * (materialColor * material.emittance);
                 pSeg.remainingBounces = 0;
             }
             // Otherwise, do some pseudo-lighting computation. This is actually more
@@ -298,12 +299,8 @@ __global__ void shadeMaterial(
                 }
                 else {
                     pSeg.remainingBounces -= 1;
-                    if (pSeg.remainingBounces == 0)
-                        pSeg.color = glm::vec3(0.0);
-                    else {
-                        pSeg.color *= bsdf / sample.pdf * AbsDot(intersection.surfaceNormal, sample.wiW);
-                        pSeg.ray = SpawnRay(intersection.pos, sample.wiW);
-                    }
+                    pSeg.throughput *= bsdf / sample.pdf * AbsDot(intersection.surfaceNormal, sample.wiW);
+                    pSeg.ray = SpawnRay(intersection.pos, sample.wiW);
                 }
             }
             // If there was no intersection, color the ray black.
@@ -483,6 +480,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
     // Assemble this iteration and apply it to the image
     int num_paths_valid = dev_paths_terminated_end - dev_paths_terminated_thrust;
     dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
+    checkCudaMem(dev_paths_terminated, num_paths_valid);
     finalGather << <numBlocksPixels, blockSize1d >> > (num_paths_valid, dev_image, dev_paths_terminated);
 
     ///////////////////////////////////////////////////////////////////////////
