@@ -89,8 +89,8 @@ struct AABB
 
 struct BvhNode
 {
-    AABB aabb;
-    int leftFirst, triCount;
+    AABB aabb; // 6 floats = 24 bytes
+    int leftFirst, triCount; // 2 ints = 8 bytes
     __host__ __device__ bool isLeaf() const { return triCount > 0; }
 
 #if DEBUG_PRINT_BVH
