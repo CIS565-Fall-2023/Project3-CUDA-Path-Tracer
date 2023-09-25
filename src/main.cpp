@@ -43,6 +43,8 @@ int main(int argc, char** argv) {
 
 	// Load scene file
 	scene = new Scene(sceneFile);
+	scene->buildBVH();
+	scene->buildStacklessBVH();
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();

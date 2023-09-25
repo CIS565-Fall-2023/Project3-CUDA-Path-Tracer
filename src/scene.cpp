@@ -51,7 +51,8 @@ namespace std {
 bool Scene::loadModel(const string& modelPath, int objectid)
 {
     cout << "Loading Model " << modelPath << " ..." << endl;
-    Model model;
+    Object model;
+    model.type = MODEL;
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -133,7 +134,8 @@ bool Scene::loadModel(const string& modelPath, int objectid)
     model.Transform.translation, model.Transform.rotation, model.Transform.scale);
     model.Transform.inverseTransform = glm::inverse(model.Transform.transform);
     model.Transform.invTranspose = glm::inverseTranspose(model.Transform.transform);
-    models.emplace_back(model);
+    
+    objects.emplace_back(model);
 
     return true;
 }
@@ -141,7 +143,7 @@ bool Scene::loadModel(const string& modelPath, int objectid)
 bool Scene::loadGeometry(const string& type, int objectid)
 {
     string line;
-    Geom newGeom;
+    Object newGeom;
     //load geometry type
     if (type == "sphere") {
         cout << "Creating new sphere..." << endl;
@@ -184,13 +186,13 @@ bool Scene::loadGeometry(const string& type, int objectid)
     newGeom.Transform.inverseTransform = glm::inverse(newGeom.Transform.transform);
     newGeom.Transform.invTranspose = glm::inverseTranspose(newGeom.Transform.transform);
 
-    geoms.push_back(newGeom);
+    objects.push_back(newGeom);
     return true;
 }
 
 int Scene::loadObject(string objectid) {
     int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
+    if (id != objects.size()) {
         cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
         return -1;
     } else {
@@ -304,4 +306,30 @@ int Scene::loadMaterial(string materialid) {
         materials.push_back(newMaterial);
         return 1;
     }
+}
+
+void Scene::buildBVH()
+{
+    for (int i=0;i<objects.size();i++)
+    {
+        const Object& obj = objects[i];
+        if (obj.type == MODEL)
+        {
+            for (int j = obj.triangleStart; j != obj.triangleEnd; j++)
+            {
+                primitives.emplace_back(obj, i, j, &triangles[0], &verticies[0]);
+            }
+        }
+        else
+        {
+            primitives.emplace_back(obj, i);
+        }
+    }
+    bvhroot = buildBVHTreeRecursiveSAH(primitives, 0, primitives.size());
+    assert(checkBVHTreeFull(bvhroot));
+}
+
+void Scene::buildStacklessBVH()
+{
+    compactBVHTreeForStacklessTraverse(bvhArray, bvhroot);
 }

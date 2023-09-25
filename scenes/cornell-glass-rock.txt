@@ -31,7 +31,7 @@ EMITTANCE   0
 // Diamond
 MATERIAL 5
 RGB         0.99 0.99 0.99
-REFRIOR     2.0
+REFRIOR     1.5
 EMITTANCE   0
 
 

@@ -7,7 +7,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
-
+#include "bvh.h"
 using namespace std;
 
 class Scene {
@@ -18,14 +18,19 @@ private:
     int loadCamera();
     bool loadModel(const string&, int);
     bool loadGeometry(const string&,int);
+    
 public:
+    void buildBVH();
+    void buildStacklessBVH();
     Scene(string filename);
     ~Scene();
 
-    std::vector<Geom> geoms;
-    std::vector<Model> models;
+    std::vector<Object> objects;
     std::vector<Material> materials;
     std::vector<glm::ivec3> triangles;
     std::vector<glm::vec3> verticies;
+    std::vector<Primitive> primitives;
+    std::vector<BVHGPUNode> bvhArray;
     RenderState state;
+    BVHNode* bvhroot = nullptr;
 };

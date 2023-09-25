@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
 
+
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
 enum GeomType {
@@ -27,17 +28,47 @@ struct ObjectTransform {
     glm::mat4 invTranspose;
 };
 
-struct Geom {
+struct Object {
     enum GeomType type;
-    int materialid;
-    ObjectTransform Transform;
-};
-
-struct Model {
     int materialid;
     int triangleStart, triangleEnd;
     ObjectTransform Transform;
 };
+
+struct BoundingBox {
+    glm::vec3 pMin, pMax;
+    BoundingBox() :pMin(glm::vec3(1e38f)), pMax(glm::vec3(-1e38f)) {}
+    glm::vec3 center() const { return (pMin + pMax) * 0.5f; }
+};
+
+BoundingBox Union(const BoundingBox& b1, const BoundingBox& b2);
+BoundingBox Union(const BoundingBox& b1, const glm::vec3& p);
+float BoxArea(const BoundingBox& b);
+
+struct Primitive {
+    int objID;
+    int offset;//offset for triangles in model
+    BoundingBox bbox;
+    Primitive(const Object& obj, int objID, int triangleOffset = -1, const glm::ivec3* triangles = nullptr, const glm::vec3* vertices = nullptr);
+};
+
+struct BVHNode {
+    int axis;
+    BVHNode* left, * right;
+    int startPrim, endPrim;
+    BoundingBox bbox;
+};
+
+struct BVHGPUNode
+{
+    int axis;
+    BoundingBox bbox;
+    int parent, left, right;
+    int startPrim, endPrim;
+    BVHGPUNode() :axis(-1), parent(-1), left(-1), right(-1), startPrim(-1), endPrim(-1){}
+};
+
+
 
 enum MaterialType {
     diffuse = 0x1, frenselSpecular = 0x2, emitting = 0x4
