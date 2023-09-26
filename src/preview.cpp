@@ -15,6 +15,10 @@ GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
 
+extern RenderState* renderState;
+extern float zoom, theta, phi;
+extern bool camchanged;
+
 std::string currentTimeString() {
 	time_t now;
 	time(&now);
@@ -219,6 +223,20 @@ void RenderImGui()
 	//ImGui::Text("counter = %d", counter);
 	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::End();
+
+	ImGui::Begin("Camera Settings");
+	if (ImGui::SliderFloat("Theta", &theta, 0.0f, PI))
+		camchanged = true;
+	if(ImGui::SliderFloat("Phi", &phi, 0.0f, TWO_PI))
+		camchanged = true;
+	if(ImGui::SliderFloat("Lookat x", &renderState->camera.lookAt.x, -10.0f, 10.0f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Lookat y", &renderState->camera.lookAt.y, -10.0f, 10.0f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Lookat z", &renderState->camera.lookAt.z, -10.0f, 10.0f))
+		camchanged = true;
+
 	ImGui::End();
 
 

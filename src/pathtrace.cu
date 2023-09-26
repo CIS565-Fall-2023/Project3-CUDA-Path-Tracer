@@ -5,6 +5,7 @@
 #include <thrust/random.h>
 #include <thrust/remove.h>
 #include <thrust/device_ptr.h>
+#include <thrust/sort.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -22,6 +23,7 @@
 
 #define MAX_ITER 8
 #define USE_BVH 1
+#define SORT_BY_MATERIAL_TYPE 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -193,7 +195,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 #if STOCHASTIC_SAMPLING
-
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + 0.5f * (u01(rng) * 2.0f - 1.0f))
@@ -205,7 +206,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
 #endif
-
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
@@ -376,6 +376,7 @@ __global__ void compute_intersection_bvh_stackless(
 	int depth
 	, int num_paths
 	, PathSegment* pathSegments
+	, Material* materials
 	, const Object* objects
 	, int geoms_size
 	, const glm::ivec3* modelTriangles
@@ -464,97 +465,9 @@ __global__ void compute_intersection_bvh_stackless(
 	if (intersected)
 	{
 		intersections[path_index] = tmpIntersection;
+		intersections[path_index].type = materials[tmpIntersection.materialId].type;
 	}
 }
-
-
-__device__ inline glm::vec2 util_sample_disk_uniform(const glm::vec2& random)
-{
-	float r = sqrt(random.x);
-	float theta = TWO_PI * random.y;
-	return glm::vec2(r * cos(theta), r * sin(theta));
-}
-
-__device__ inline glm::vec3 util_sample_hemisphere_cosine(const glm::vec2& random)
-{
-	glm::vec2 t = util_sample_disk_uniform(random);
-	return glm::vec3(t.x, t.y, sqrt(1 - t.x * t.x - t.y * t.y));
-}
-
-__device__ inline float util_math_abscos(const glm::vec3& w)
-{
-	return abs(w.z);
-}
-
-__device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
-{
-	*wi = util_sample_hemisphere_cosine(random);
-	*pdf = wo.z > 0 ? util_math_abscos(*wi) * INV_PI : 0;
-	return diffuseAlbedo * INV_PI;
-}
-
-__device__ inline float util_math_sin_cos_convert(float sinOrCos)
-{
-	return sqrt(max(1 - sinOrCos * sinOrCos, 0.0f));
-}
-
-__device__ float util_transport_frensel_dielectric(float cosThetaI, float etaI, float etaT)
-{
-	float sinThetaI = util_math_sin_cos_convert(cosThetaI);
-	float sinThetaT = etaI / etaT * sinThetaI;
-	if (sinThetaT >= 1) return 1;//total reflection
-	float cosThetaT = util_math_sin_cos_convert(sinThetaT);
-	float rparll = ((etaT * cosThetaI) - (etaI * cosThetaT)) / ((etaT * cosThetaI) + (etaI * cosThetaT));
-	float rperpe = ((etaI * cosThetaI) - (etaT * cosThetaT)) / ((etaI * cosThetaI) + (etaT * cosThetaT));
-	return (rparll * rparll + rperpe * rperpe) * 0.5;
-}
-
-__device__ inline bool util_geomerty_refract(const glm::vec3& wi, const glm::vec3& n, float eta, glm::vec3* wt)
-{
-	float cosThetaI = glm::dot(wi, n);
-	float sin2ThetaI = max(0.0f, 1 - cosThetaI * cosThetaI);
-	float sin2ThetaT = eta * eta * sin2ThetaI;
-	if (sin2ThetaT >= 1) return false;
-	float cosThetaT = sqrt(1 - sin2ThetaT);
-	*wt = eta * (-wi) + (eta * cosThetaI - cosThetaT) * n;
-	return true;
-}
-
-__device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec3& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
-{
-	float frensel = util_transport_frensel_dielectric(util_math_abscos(wo), refIdx.x, refIdx.y);
-	if (random.x < frensel)
-	{
-		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
-		*pdf = frensel;
-		return frensel * reflectionAlbedo / util_math_abscos(*wi);
-	}
-	else
-	{
-		glm::vec3 n = glm::dot(wo, glm::vec3(0, 0, 1)) > 0 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
-		glm::vec3 refractedRay;
-		if (!util_geomerty_refract(wo, n, refIdx.x / refIdx.y, &refractedRay)) return glm::vec3(0);
-		*wi = refractedRay;
-		*pdf = 1 - frensel;
-		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y*refIdx.y);
-		return val / util_math_abscos(*wi);
-	}
-}
-
-//Get tangent space vectors
-__device__ void util_math_get_TBN(const glm::vec3& N, glm::vec3* T, glm::vec3* B)
-{
-	float x = N.x, y = N.y, z = N.z;
-	float sz = z < 0 ? -1 : 1;
-	float a = 1.0f / (sz + z);
-	float ya = y * a;
-	float b = x * ya;
-	float c = x * sz;
-	(*T) = glm::vec3(c * x * a - 1, sz * b, c);
-	(*B) = glm::vec3(b, y * ya - sz, y);
-}
-
-
 
 
 __global__ void scatter_on_intersection(
@@ -568,61 +481,64 @@ __global__ void scatter_on_intersection(
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_paths)
-	{
-		ShadeableIntersection intersection = shadeableIntersections[idx];
-		// Set up the RNG
-		// LOOK: this is how you use thrust's RNG! Please look at
-		// makeSeededRandomEngine as well.
-		thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-		thrust::uniform_real_distribution<float> u01(0, 1);
+	if (idx >= num_paths) return;
+	ShadeableIntersection intersection = shadeableIntersections[idx];
+	// Set up the RNG
+	// LOOK: this is how you use thrust's RNG! Please look at
+	// makeSeededRandomEngine as well.
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+	thrust::uniform_real_distribution<float> u01(0, 1);
 
-		Material material = materials[intersection.materialId];
-		glm::vec3 materialColor = material.color;
+	Material material = materials[intersection.materialId];
+	glm::vec3 materialColor = material.color;
 #if VIS_NORMAL
-		image[pathSegments[idx].pixelIndex] += (intersection.surfaceNormal + glm::vec3(1.0)) * 0.5f;
-		rayValid[idx] = 0;
-		return;
+	image[pathSegments[idx].pixelIndex] += (intersection.surfaceNormal + glm::vec3(1.0)) * 0.5f;
+	rayValid[idx] = 0;
+	return;
 #endif
 
-		// If the material indicates that the object was a light, "light" the ray
-		if (material.type & MaterialType::emitting) {
-			pathSegments[idx].color *= (materialColor * material.emittance);
+	// If the material indicates that the object was a light, "light" the ray
+	if (material.type == MaterialType::emitting) {
+		pathSegments[idx].color *= (materialColor * material.emittance);
+		rayValid[idx] = 0;
+		if (!util_math_is_nan(pathSegments[idx].color))
+			image[pathSegments[idx].pixelIndex] += pathSegments[idx].color;
+	}
+	else {
+		glm::vec3& woInWorld = pathSegments[idx].ray.direction;
+		const glm::vec3& N = glm::normalize(intersection.surfaceNormal);
+		glm::vec3 B, T;
+		util_math_get_TBN(N, &T, &B);
+		glm::mat3 TBN(T, B, N);
+		glm::vec3 wo = glm::transpose(TBN) * (-woInWorld);
+		wo = glm::normalize(wo);
+		float pdf = 0;
+		glm::vec3 wi, bxdf;
+		if (material.type == MaterialType::frenselSpecular)
+		{
+			glm::vec2 iors = glm::dot(woInWorld, N) < 0 ? glm::vec2(1.0, material.indexOfRefraction) : glm::vec2(material.indexOfRefraction, 1.0);
+			bxdf = bxdf_frensel_specular_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor, materialColor, iors);
+		}
+		else if (material.type == MaterialType::microfacet)
+		{
+			bxdf = bxdf_microfacet_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor, material.roughness);
+		}
+		else
+			bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor);
+		if (pdf > 0)
+		{
+			pathSegments[idx].color *= bxdf * util_math_abscos(wi) / pdf;
+			glm::vec3 newDir = glm::normalize(TBN * wi);
+			glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
+			pathSegments[idx].ray.origin = intersection.worldPos + offset * SCATTER_ORIGIN_OFFSETMULT;
+			pathSegments[idx].ray.direction = newDir;
+			rayValid[idx] = 1;
+		}
+		else
+		{
 			rayValid[idx] = 0;
-			if (!util_math_is_nan(pathSegments[idx].color))
-				image[pathSegments[idx].pixelIndex] += pathSegments[idx].color;
 		}
-		else {
-			glm::vec3& woInWorld = pathSegments[idx].ray.direction;
-			const glm::vec3& N = glm::normalize(intersection.surfaceNormal);
-			glm::vec3 B, T;
-			util_math_get_TBN(N, &T, &B);
-			glm::mat3 TBN(T, B, N);
-			glm::vec3 wo = glm::transpose(TBN) * (-woInWorld);
-			wo = glm::normalize(wo);
-			float pdf = 0;
-			glm::vec3 wi, bxdf;
-			if (material.type & MaterialType::frenselSpecular)
-			{
-				glm::vec2 iors = glm::dot(woInWorld, N) < 0 ? glm::vec2(1.0, material.indexOfRefraction) : glm::vec2(material.indexOfRefraction, 1.0);
-				bxdf = bxdf_frensel_specular_sample_f(wo, &wi, glm::vec3(u01(rng), u01(rng), u01(rng)), &pdf, materialColor, materialColor, iors);
-			}
-			else
-				bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor);
-			if (pdf > 0)
-			{
-				pathSegments[idx].color *= bxdf * util_math_abscos(wi) / pdf;
-				glm::vec3 newDir = glm::normalize(TBN * wi);
-				glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
-				pathSegments[idx].ray.origin = intersection.worldPos + offset * SCATTER_ORIGIN_OFFSETMULT;
-				pathSegments[idx].ray.direction = newDir;
-				rayValid[idx] = 1;
-			}
-			else
-			{
-				rayValid[idx] = 0;
-			}
-		}
+
 	}
 }
 
@@ -639,7 +555,13 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	}
 }
 
-int compact_rays(int* rayValid,int* rayIndex,int numRays)
+struct mat_comp {
+	__host__ __device__ bool operator()(const ShadeableIntersection& a, const ShadeableIntersection& b) const {
+		return a.type < b.type;
+	}
+};
+
+int compact_rays(int* rayValid,int* rayIndex,int numRays, bool sortByMat=false)
 {
 	thrust::device_ptr<PathSegment> dev_thrust_paths1(dev_paths1), dev_thrust_paths2(dev_paths2);
 	thrust::device_ptr<ShadeableIntersection> dev_thrust_intersections1(dev_intersections1), dev_thrust_intersections2(dev_intersections2);
@@ -652,6 +574,11 @@ int compact_rays(int* rayValid,int* rayIndex,int numRays)
 	nextNumRays += tmp;
 	thrust::scatter_if(dev_thrust_paths1, dev_thrust_paths1 + numRays, dev_thrust_rayIndex, dev_thrust_rayValid, dev_thrust_paths2);
 	thrust::scatter_if(dev_thrust_intersections1, dev_thrust_intersections1 + numRays, dev_thrust_rayIndex, dev_thrust_rayValid, dev_thrust_intersections2);
+	if (sortByMat)
+	{
+		mat_comp cmp;
+		thrust::sort_by_key(dev_thrust_intersections2, dev_thrust_intersections2 + nextNumRays, dev_thrust_paths2, cmp);
+	}
 	std::swap(dev_paths1, dev_paths2);
 	std::swap(dev_intersections1, dev_intersections2);
 	return nextNumRays;
@@ -735,6 +662,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			depth
 			, numRays
 			, dev_paths1
+			, dev_materials
 			, dev_objs
 			, hst_scene->objects.size()
 			, dev_triangles
@@ -764,7 +692,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 		depth++;
 
+#if SORT_BY_MATERIAL_TYPE
+		numRays = compact_rays(rayValid, rayIndex, numRays, true);
+#else
 		numRays = compact_rays(rayValid, rayIndex, numRays);
+#endif
 
 		// TODO:
 		// --- Shading Stage ---

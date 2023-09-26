@@ -215,6 +215,8 @@ int Scene::loadObject(string objectid) {
     }
 }
 
+
+
 int Scene::loadCamera() {
     cout << "Loading Camera ..." << endl;
     RenderState &state = this->state;
@@ -286,7 +288,7 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
@@ -295,13 +297,19 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.color = color;
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 float ior = atof(tokens[1].c_str());
-                if (ior != 0.0) newMaterial.type |= MaterialType::frenselSpecular;
+                if (ior != 0.0) newMaterial.type = MaterialType::frenselSpecular;
                 newMaterial.indexOfRefraction = ior;
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 float emittance = atof(tokens[1].c_str());
-                if (emittance != 0.0) newMaterial.type |= MaterialType::emitting;
+                if (emittance != 0.0) newMaterial.type = MaterialType::emitting;
                 newMaterial.emittance = emittance;
             }
+            else if (strcmp(tokens[0].c_str(), "ROUGHNESS") == 0) {
+                float roughness = atof(tokens[1].c_str());
+                if (roughness != -1.0f) newMaterial.type = MaterialType::microfacet;
+                newMaterial.roughness = roughness;
+            }
+
         }
         materials.push_back(newMaterial);
         return 1;

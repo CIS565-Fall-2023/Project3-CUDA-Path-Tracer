@@ -2,78 +2,144 @@
 
 #include "intersections.h"
 
-// CHECKITOUT
-/**
- * Computes a cosine-weighted random direction in a hemisphere.
- * Used for diffuse lighting.
- */
-__host__ __device__
-glm::vec3 calculateRandomDirectionInHemisphere(
-        glm::vec3 normal, thrust::default_random_engine &rng) {
-    thrust::uniform_real_distribution<float> u01(0, 1);
-
-    float up = sqrt(u01(rng)); // cos(theta)
-    float over = sqrt(1 - up * up); // sin(theta)
-    float around = u01(rng) * TWO_PI;
-
-    // Find a direction that is not the normal based off of whether or not the
-    // normal's components are all equal to sqrt(1/3) or whether or not at
-    // least one component is less than sqrt(1/3). Learned this trick from
-    // Peter Kutz.
-
-    glm::vec3 directionNotNormal;
-    if (abs(normal.x) < SQRT_OF_ONE_THIRD) {
-        directionNotNormal = glm::vec3(1, 0, 0);
-    } else if (abs(normal.y) < SQRT_OF_ONE_THIRD) {
-        directionNotNormal = glm::vec3(0, 1, 0);
-    } else {
-        directionNotNormal = glm::vec3(0, 0, 1);
-    }
-
-    // Use not-normal direction to generate two perpendicular directions
-    glm::vec3 perpendicularDirection1 =
-        glm::normalize(glm::cross(normal, directionNotNormal));
-    glm::vec3 perpendicularDirection2 =
-        glm::normalize(glm::cross(normal, perpendicularDirection1));
-
-    return up * normal
-        + cos(around) * over * perpendicularDirection1
-        + sin(around) * over * perpendicularDirection2;
+//Get tangent space vectors
+__device__ void util_math_get_TBN(const glm::vec3& N, glm::vec3* T, glm::vec3* B)
+{
+	float x = N.x, y = N.y, z = N.z;
+	float sz = z < 0 ? -1 : 1;
+	float a = 1.0f / (sz + z);
+	float ya = y * a;
+	float b = x * ya;
+	float c = x * sz;
+	(*T) = glm::vec3(c * x * a - 1, sz * b, c);
+	(*B) = glm::vec3(b, y * ya - sz, y);
 }
 
-/**
- * Scatter a ray with some probabilities according to the material properties.
- * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
- * A perfect specular surface scatters in the reflected ray direction.
- * In order to apply multiple effects to one surface, probabilistically choose
- * between them.
- *
- * The visual effect you want is to straight-up add the diffuse and specular
- * components. You can do this in a few ways. This logic also applies to
- * combining other types of materias (such as refractive).
- *
- * - Always take an even (50/50) split between a each effect (a diffuse bounce
- *   and a specular bounce), but divide the resulting color of either branch
- *   by its probability (0.5), to counteract the chance (0.5) of the branch
- *   being taken.
- *   - This way is inefficient, but serves as a good starting point - it
- *     converges slowly, especially for pure-diffuse or pure-specular.
- * - Pick the split based on the intensity of each material color, and divide
- *   branch result by that branch's probability (whatever probability you use).
- *
- * This method applies its changes to the Ray parameter `ray` in place.
- * It also modifies the color `color` of the ray in place.
- *
- * You may need to change the parameter list for your purposes!
- */
-__host__ __device__
-void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        const Material &m,
-        thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+__device__ inline glm::vec2 util_sample_disk_uniform(const glm::vec2& random)
+{
+	float r = sqrt(random.x);
+	float theta = TWO_PI * random.y;
+	return glm::vec2(r * cos(theta), r * sin(theta));
 }
+
+__device__ inline glm::vec3 util_sample_hemisphere_cosine(const glm::vec2& random)
+{
+	glm::vec2 t = util_sample_disk_uniform(random);
+	return glm::vec3(t.x, t.y, sqrt(1 - t.x * t.x - t.y * t.y));
+}
+
+__device__ inline float util_math_abscos(const glm::vec3& w)
+{
+	return abs(w.z);
+}
+
+
+
+__device__ inline float util_math_sin_cos_convert(float sinOrCos)
+{
+	return sqrt(max(1 - sinOrCos * sinOrCos, 0.0f));
+}
+
+__device__ inline float util_math_frensel_dielectric(float cosThetaI, float etaI, float etaT)
+{
+	float sinThetaI = util_math_sin_cos_convert(cosThetaI);
+	float sinThetaT = etaI / etaT * sinThetaI;
+	if (sinThetaT >= 1) return 1;//total reflection
+	float cosThetaT = util_math_sin_cos_convert(sinThetaT);
+	float rparll = ((etaT * cosThetaI) - (etaI * cosThetaT)) / ((etaT * cosThetaI) + (etaI * cosThetaT));
+	float rperpe = ((etaI * cosThetaI) - (etaT * cosThetaT)) / ((etaI * cosThetaI) + (etaT * cosThetaT));
+	return (rparll * rparll + rperpe * rperpe) * 0.5;
+}
+
+__device__ inline bool util_geomerty_refract(const glm::vec3& wi, const glm::vec3& n, float eta, glm::vec3* wt)
+{
+	float cosThetaI = glm::dot(wi, n);
+	float sin2ThetaI = max(0.0f, 1 - cosThetaI * cosThetaI);
+	float sin2ThetaT = eta * eta * sin2ThetaI;
+	if (sin2ThetaT >= 1) return false;
+	float cosThetaT = sqrt(1 - sin2ThetaT);
+	*wt = eta * (-wi) + (eta * cosThetaI - cosThetaT) * n;
+	return true;
+}
+
+__device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float r)
+{
+	return f0 + (1.0f - f0) * pow(1.0f - r, 5.0f);
+}
+
+//https://hal.science/hal-01509746/document
+__device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float roughness, const glm::vec2& rand)
+{
+	glm::vec3 v = glm::normalize(glm::vec3(wo.x * roughness, wo.y * roughness, wo.z));
+	glm::vec3 t1 = v.z > 1 - EPSILON ? glm::vec3(1, 0, 0) : glm::cross(v, glm::vec3(0, 0, 1));
+	glm::vec3 t2 = glm::cross(t1, v);
+	float a = 1 / (1 + v.z);
+	float r = sqrt(rand.x);
+	float phi = rand.y < a ? rand.y / a * PI : ((rand.y - a) / (1.0 - a) + 1) * PI;
+	float p1 = r * cos(phi);
+	float p2 = r * sin(phi);
+	p2 *= rand.y < a ? 1.0 : v.z;
+	glm::vec3 h = p1 * t1 + p2 * t2 + sqrt(max(0.0f, 1.0f - p1 * p1 - p2 * p2)) * v;
+	return glm::normalize(glm::vec3(h.x * roughness, h.y * roughness, max(0.0f, h.z)));
+}
+
+__device__ inline float util_math_smith_ggx_masking(const glm::vec3& wo, float a2)
+{
+	float NoV = util_math_abscos(wo);
+	return 2 * NoV / (sqrt(NoV * NoV * (1 - a2) + a2) + NoV);
+}
+
+__device__ inline float util_math_smith_ggx_shadowing_masking(const glm::vec3& wi, const glm::vec3& wo, float a2)
+{
+	float NoL = util_math_abscos(wi);
+	float NoV = util_math_abscos(wo);
+	float denom = NoL * sqrt(NoV * NoV * (1 - a2) + a2) + NoV * sqrt(NoL * NoL * (1 - a2) + a2);
+	return 2.0 * NoL * NoV / denom;
+}
+
+__device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
+{
+	*wi = util_sample_hemisphere_cosine(random);
+	*pdf = wo.z > 0 ? util_math_abscos(*wi) * INV_PI : 0;
+	return diffuseAlbedo * INV_PI;
+}
+
+__device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
+{
+	float frensel = util_math_frensel_dielectric(util_math_abscos(wo), refIdx.x, refIdx.y);
+	if (random.x < frensel)
+	{
+		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
+		*pdf = frensel;
+		return frensel * reflectionAlbedo / util_math_abscos(*wi);
+	}
+	else
+	{
+		glm::vec3 n = glm::dot(wo, glm::vec3(0, 0, 1)) > 0 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+		glm::vec3 refractedRay;
+		if (!util_geomerty_refract(wo, n, refIdx.x / refIdx.y, &refractedRay)) return glm::vec3(0);
+		*wi = refractedRay;
+		*pdf = 1 - frensel;
+		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y * refIdx.y);
+		return val / util_math_abscos(*wi);
+	}
+}
+
+__device__ glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, float roughness)
+{
+	float a2 = roughness * roughness;
+	glm::vec3 h = util_math_sample_ggx_vndf(wo, roughness, random);
+	*wi = glm::reflect(-wo, h);
+	if ((*wi).z > 0)
+	{
+		glm::vec3 F = util_math_fschlick(reflectionAlbedo, glm::dot(wo, h));
+		float G1 = util_math_smith_ggx_masking(wo, a2);
+		float G2 = util_math_smith_ggx_shadowing_masking(*wi, wo, a2);
+		*pdf = (*wi).z;//pdf is already divided
+		return F * G2 / G1;
+	}
+	else
+		return glm::vec3(0);
+}
+
+

@@ -71,15 +71,16 @@ struct BVHGPUNode
 
 
 enum MaterialType {
-    diffuse = 0x1, frenselSpecular = 0x2, emitting = 0x4
+    diffuse, frenselSpecular, microfacet, emitting
 };
 
 struct Material {
     glm::vec3 color;
     float indexOfRefraction;
     float emittance;
-    int type;
-    Material():color(glm::vec3(0)), indexOfRefraction(0), emittance(0), type(1) {}//default diffuse
+    float roughness;
+    MaterialType type;
+    Material():color(glm::vec3(0)), indexOfRefraction(0), emittance(0), type(diffuse) {}//default diffuse
 };
 
 struct Camera {
@@ -116,4 +117,5 @@ struct ShadeableIntersection {
   glm::vec3 surfaceNormal;
   glm::vec3 worldPos;
   int materialId;
+  MaterialType type;
 };
