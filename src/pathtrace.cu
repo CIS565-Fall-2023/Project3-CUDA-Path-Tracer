@@ -4,6 +4,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <thrust/device_ptr.h>
 #include <device_launch_parameters.h>
 
 #include "sceneStructs.h"
@@ -273,11 +274,10 @@ __global__ void processPBR(
 	if (path_idx >= num_paths)return; // no light
 	PathSegment& seg = pathSegments[path_idx];
 	ShadeableIntersection& intersect = intersections[path_idx];
-	if (seg.remainingBounces <= 0.1) // end bounce
+	if (seg.remainingBounces <= 0) // end bounce
 	{
 		return;
 	}
-	--seg.remainingBounces;
 	if (intersect.t <= 0.) // no intersection
 	{
 		seg.color = glm::vec3(0.f);
@@ -291,11 +291,13 @@ __global__ void processPBR(
 		seg.remainingBounces = 0;
 		return;
 	}
+	--seg.remainingBounces;
 	if (seg.remainingBounces <= 0) // end bounce and didn't hit light
 	{
 		seg.color = glm::vec3(0.);
 		return;
 	}
+
 	float pdf = 1.f;
 
 	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
@@ -309,6 +311,15 @@ __global__ void processPBR(
 	//           albedo           absdot
 	seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction),0.f,1.f)/pdf);
 }
+
+struct is_black
+{
+	__host__ __device__
+		bool operator()(const PathSegment& seg)
+	{
+		return seg.color == glm::vec3(0.);
+	}
+};
 
 
 // Add the current iteration's output to the overall image
@@ -415,9 +426,10 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
-	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_paths = pixelcount;
 
+	thrust::device_ptr<PathSegment> thrust_paths(dev_paths);
+	thrust::device_ptr<PathSegment> thrust_paths_end(dev_paths + pixelcount);
+	int num_paths = thrust_paths_end - thrust_paths;
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
@@ -440,15 +452,14 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
 		
-
-		 //TODO:
-		 //--- Shading Stage ---
-		 //Shade path segments based on intersections and generate new rays by
-	  // evaluating the BSDF.
-	  // Start off with just a big kernel that handles all the different
-	  // materials you have in the scenefile.
-	  // TODO: compare between directly shading the path segments and shading
-	  // path segments that have been reshuffled to be contiguous in memory.
+		//TODO:
+		//--- Shading Stage ---
+		//Shade path segments based on intersections and generate new rays by
+		// evaluating the BSDF.
+		// Start off with just a big kernel that handles all the different
+		// materials you have in the scenefile.
+		// TODO: compare between directly shading the path segments and shading
+		// path segments that have been reshuffled to be contiguous in memory.
 		processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter, depth
 			, num_paths
@@ -456,9 +467,17 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, dev_paths
 			, dev_materials
 			);
-		depth++;
-		iterationComplete = depth >= (traceDepth); // TODO: should be based off stream compaction results.
 
+		// * TODO: Stream compact away all of the terminated paths.
+		// You may use either your implementation or `thrust::remove_if` or its
+		// cousins.
+		// * Note that you can't really use a 2D kernel launch any more - switch
+		// to 1D.
+		thrust_paths_end = thrust::remove_if(thrust_paths, thrust_paths_end, is_black());
+		num_paths = thrust_paths_end - thrust_paths;
+
+		depth++;
+		iterationComplete = depth >= (traceDepth);
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;
