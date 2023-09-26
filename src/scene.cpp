@@ -144,9 +144,9 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
             triangle.n2 = glm::vec3(normalData[indexData[i + 1] * normalStride], normalData[indexData[i + 1] * normalStride + 1], normalData[indexData[i + 1] * normalStride + 2]);
             triangle.n3 = glm::vec3(normalData[indexData[i + 2] * normalStride], normalData[indexData[i + 2] * normalStride + 1], normalData[indexData[i + 2] * normalStride + 2]);
 
-            triangle.n1 = glm::vec3(normalTransform * glm::vec4(triangle.n1, 0.0f));
-            triangle.n1 = glm::vec3(normalTransform * glm::vec4(triangle.n1, 0.0f));
-            triangle.n1 = glm::vec3(normalTransform * glm::vec4(triangle.n1, 0.0f));
+            triangle.n1 = glm::normalize(glm::vec3(normalTransform * glm::vec4(triangle.n1, 0.0f)));
+            triangle.n2 = glm::normalize(glm::vec3(normalTransform * glm::vec4(triangle.n2, 0.0f)));
+            triangle.n3 = glm::normalize(glm::vec3(normalTransform * glm::vec4(triangle.n3, 0.0f)));
 
             triangle.uv1 = glm::vec2(uvData[indexData[i] * uvStride], uvData[indexData[i] * uvStride + 1]);
             triangle.uv2 = glm::vec2(uvData[indexData[i + 1] * uvStride], uvData[indexData[i + 1] * uvStride + 1]);

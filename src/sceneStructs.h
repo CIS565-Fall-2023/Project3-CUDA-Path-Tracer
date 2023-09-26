@@ -190,14 +190,14 @@ public:
         glm::vec3 bary;
         bool hasHit = glm::intersectRayTriangle(r.origin, r.direction, p1, p2, p3, bary);
         if (hasHit) {
-            glm::vec3 intersection = bary.x * p1 + bary.y * p2 + bary.z * p3;
+            glm::vec3 intersection = (1.0f-bary.x-bary.y) * p1 + bary.x * p2 + bary.y * p3;
             float t = (intersection - r.origin).length();
             if (r.min_t < t && t < r.max_t) {
                 r.max_t = t;
                 isect->t = t;
                 //isect->primitive = this;
                 isect->materialId = materialID;
-                isect->surfaceNormal = bary.x * n1 + bary.y * n2 + bary.z * n3;
+                isect->surfaceNormal = (1.0f - bary.x - bary.y) * n1 + bary.x * n2 + bary.y * n3;
             }
         }
         return hasHit;

@@ -347,8 +347,8 @@ __global__ void shadeFakeMaterial(
 
 			Material material = materials[intersection.materialId];
 			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
-			pathSegment.color = get_debug_color(bsdfStruct);
-			//pathSegment.color = intersection.surfaceNormal;
+			//pathSegment.color = get_debug_color(bsdfStruct);
+			pathSegment.color = intersection.surfaceNormal;
 			//pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
 			return;
 			glm::vec3 materialColor = material.color;
