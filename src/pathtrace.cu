@@ -316,9 +316,9 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 
 	Material material = materials[intersection.materialId];
 
-	if (material.emittance > 0.0f)
+	if (material.emission.strength > 0)
 	{
-		segment.color *= (material.color * material.emittance);
+		segment.color *= material.emission.color * material.emission.strength;
 		segment.remainingBounces = 0;
 		return;
 	} 

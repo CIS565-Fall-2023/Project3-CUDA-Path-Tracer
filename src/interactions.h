@@ -115,7 +115,7 @@ void scatterRay(
 {
     Ray newRay;
 
-    float diffuseLuminance = Utils::luminance(m.color);
+    float diffuseLuminance = Utils::luminance(m.diffuse.color);
     float specularLuminance = Utils::luminance(m.specular.color);
     float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
 
@@ -124,13 +124,13 @@ void scatterRay(
     {
         // diffuse
         newRay.direction = calculateRandomDirectionInHemisphere(normal, rng); // XXX: make normal face same direction as ray? (e.g. for inside of sphere)
-        pathSegment.color *= m.color / (diffuseChance);
+        pathSegment.color *= m.diffuse.color / (diffuseChance);
 
         /* 
         disabled because lambert term is canceled out by the PDF
         https://computergraphics.stackexchange.com/questions/9499/confusion-around-lamberts-cosine-law-in-ray-tracing-in-one-weekend
         */ 
-        // pathSegment.color *= glm::dot(newRay.direction, normal);
+        // pathSegment.diffuse.color *= glm::dot(newRay.direction, normal);
     } 
     else
     {

@@ -26,13 +26,13 @@ Scene::Scene(string filename) {
             vector<string> tokens = Utils::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
                 loadMaterial(tokens[1]);
-                cout << " " << endl;
+                cout << endl;
             } else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
                 loadGeom(tokens[1]);
-                cout << " " << endl;
+                cout << endl;
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
-                cout << " " << endl;
+                cout << endl;
             }
         }
     }
@@ -395,7 +395,6 @@ int Scene::loadGeom(string objectid) {
         while (!line.empty() && fp_in.good()) {
             vector<string> tokens = Utils::tokenizeString(line);
 
-            //load tranformations
             if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
                 newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
@@ -500,28 +499,29 @@ int Scene::loadMaterial(string materialId) {
         cout << "Loading Material " << id << "..." << endl;
         Material newMaterial;
 
-        //load static properties
-        for (int i = 0; i < 7; i++) {
-            string line;
-            Utils::safeGetline(fp_in, line);
+        string line;
+        Utils::safeGetline(fp_in, line);
+        while (!line.empty()) {
             vector<string> tokens = Utils::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "RGB") == 0) {
-                glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
-                newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
+            if (strcmp(tokens[0].c_str(), "DIFF_COL") == 0) {
+                newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "SPEC_EX") == 0) {
                 newMaterial.specular.exponent = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
-                glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                newMaterial.specular.color = specColor;
+            } else if (strcmp(tokens[0].c_str(), "SPEC_COL") == 0) {
+                newMaterial.specular.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.hasReflective = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
                 newMaterial.hasRefractive = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
-                newMaterial.emittance = atof(tokens[1].c_str());
+            } else if (strcmp(tokens[0].c_str(), "EMIT_COL") == 0) {
+                newMaterial.emission.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "EMIT_STR") == 0) {
+                newMaterial.emission.strength = atof(tokens[1].c_str());
             }
+
+            Utils::safeGetline(fp_in, line);
         }
         materials.push_back(newMaterial);
         return 1;

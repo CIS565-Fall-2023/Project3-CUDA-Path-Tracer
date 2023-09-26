@@ -38,15 +38,21 @@ struct Geom
 
 struct Material 
 {
-    glm::vec3 color;
     struct {
-        float exponent;
-        glm::vec3 color;
+        glm::vec3 color = glm::vec3(1, 0, 1);
+        int textureIdx = -1;
+    } diffuse;
+    struct {
+        float exponent = 0;
+        glm::vec3 color = glm::vec3(0);
     } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
-    float emittance;
+    float hasReflective = 0;
+    float hasRefractive = 0;
+    float indexOfRefraction = 1.45;
+    struct {
+        glm::vec3 color = glm::vec3(0);
+        float strength = 0;
+    } emission;
 };
 
 struct Vertex
