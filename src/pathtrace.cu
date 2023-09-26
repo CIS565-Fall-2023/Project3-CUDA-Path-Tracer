@@ -87,8 +87,8 @@ static Primitive** dev_primitives = nullptr;
 static Triangle* dev_triangles= nullptr;
 static Sphere * dev_spheres= nullptr;
 static int primitve_size = 1;
-static Scene * pa = new Scene();
-static DeprecatedScene* testScene = new DeprecatedScene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
+static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
+//static DeprecatedScene* testScene = new DeprecatedScene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -147,8 +147,6 @@ void pathtraceInit(HostScene* scene) {
 	//initAreaLightFromObject<<<1,1>>>(scene, dev_lights, dev_geoms, dev_materials, scene->geoms.size());
 	//initTestTriangleScene();
 	// TODO: initialize any extra device memeory you need
-	pa = new Scene();
-	pa->assembleScenePrimitives(testScene);
 	auto triangles = pa->triangles.data();
 	cudaMalloc(&dev_triangles, pa->triangles.size() * sizeof(Triangle));
 	cudaMemcpy(dev_triangles, triangles, pa->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
@@ -170,7 +168,6 @@ void pathtraceFree() {
 	// TODO: clean up any extra device memory you created
 	//pa->freeBuffer();
 	cudaFree(dev_triangles);
-	delete pa;
 	checkCUDAError("pathtraceFree");
 }
 
