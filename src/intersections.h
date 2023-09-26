@@ -215,25 +215,12 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
     return triIdx != -1;
 }
 
-// https://gamedev.stackexchange.com/a/23745
 __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 p)
 {
-    auto v0 = b - a;
-    auto v1 = c - a;
-    auto v2 = p - a;
-
-    float d00 = glm::dot(v0, v0);
-    float d01 = glm::dot(v0, v1);
-    float d11 = glm::dot(v1, v1);
-    float d20 = glm::dot(v2, v0);
-    float d21 = glm::dot(v2, v1);
-    float mult = 1.0f / (d00 * d11 - d01 * d01);
-
-    float v = (d11 * d20 - d01 * d21) * mult;
-    float w = (d00 * d21 - d01 * d20) * mult;
-    float u = 1.0f - v - w;
-
-    return glm::vec3(u, v, w);
+    float denomReciprocal = 1.0f / ((a.x - c.x) * (b.y - c.y) - (b.x - c.x) * (a.y - c.y));
+    float b0 = ((p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y)) * denomReciprocal;
+    float b1 = ((a.x - c.x) * (p.y - c.y) - (p.x - c.x) * (a.y - c.y)) * denomReciprocal;
+    return glm::vec3(b0, b1, 1.0f - b0 - b1);
 }
 
 __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
