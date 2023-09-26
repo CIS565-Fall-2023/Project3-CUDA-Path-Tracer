@@ -2,6 +2,10 @@
 #include <vector>
 #include "depScene.h"
 #include "sceneStructs.h"
+#include <cuda_runtime.h>
+#include <cuda.h>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 class Scene {
     std::vector<Sphere> spheres;
@@ -21,5 +25,4 @@ public:
         return triangles.size() + spheres.size();
     }
     void initTriangles();
-    void freeBuffer();
 };

@@ -70,6 +70,8 @@ set(scene
     src/light.h
     src/depScene.cpp
     src/light.cpp
+    src/scene.h
+    src/scene.cpp
 )
 
 set(core
@@ -81,8 +83,6 @@ set(core
     src/image.cpp
     src/pathtrace.h
     src/pathtrace.cu
-    src/scene.h
-    src/scene.cu
 )
 
 set(imgui
