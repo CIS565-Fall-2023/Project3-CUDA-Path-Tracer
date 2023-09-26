@@ -4,23 +4,42 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
 
-using namespace std;
+#include <json.hpp>
+
+typedef nlohmann::json Json;
+
+namespace std
+{
+    namespace filesystem
+    {
+        class path;
+    }
+}
 
 class Scene {
-private:
-    ifstream fp_in;
-    int loadMaterial(string materialid);
-    int loadGeom(string objectid);
-    int loadCamera();
 public:
-    Scene(string filename);
-    ~Scene();
+    void LoadGeoms(const Json& geometry_json, const std::filesystem::path& res_path);
+    void LoadMaterials(const Json& material_json, const std::filesystem::path& res_path);
+    void LoadCamera(const Json& camera_json);
+
+    void ReadObj(const std::string& obj_file_path,
+                unsigned int matrial_id);
+public:
+    Scene(const std::filesystem::path& res_path, const std::string& scene_filename);
+    ~Scene() = default;
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
+
+    std::vector<glm::vec3> m_Vertices;
+    std::vector<glm::ivec4> m_vIds;
+
+    std::unordered_map<std::string, unsigned int> m_MaterialMap;
+
     RenderState state;
 };

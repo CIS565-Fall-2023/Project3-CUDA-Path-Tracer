@@ -2,11 +2,10 @@
 
 #include <thrust/device_ptr.h>
 #include <vector>
-#include "scene.h"
-
-void InitDataContainer(GuiDataContainer* guiData);
+#include "sceneStructs.h"
 
 class GPUScene;
+class Scene;
 
 class CudaPathTracer
 {
@@ -24,7 +23,7 @@ public:
 		cudaGraphicsUnregisterResource(cuda_pbo_dest_resource);
 	}
 
-	CPU_ONLY void Render(GPUScene& scene);
+	CPU_ONLY void Render(GPUScene& scene, const Camera& camera);
 public:
 	int m_Iteration;
 	

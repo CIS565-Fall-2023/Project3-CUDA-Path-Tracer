@@ -1,192 +1,257 @@
-#include <iostream>
 #include "scene.h"
+#include <iostream>
 #include <cstring>
+#include <filesystem>
+
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-Scene::Scene(string filename) {
-    cout << "Reading scene from " << filename << " ..." << endl;
-    cout << " " << endl;
-    char* fname = (char*)filename.c_str();
-    fp_in.open(fname);
-    if (!fp_in.is_open()) {
-        cout << "Error reading from file - aborting!" << endl;
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+typedef tinyobj::ObjReader ObjReader;
+typedef tinyobj::ObjReaderConfig ObjReaderConfig;
+
+template<typename T>
+inline void SafeGet(const Json& json, const char* attr, T& value)
+{
+    if (json.contains(attr)) value = json[attr].get<T>();
+}
+template<typename T, typename D, unsigned int N>
+inline void SafeGetVec(const Json& json, const char* attr, T& value)
+{
+    if (json.contains(attr))
+    {
+        for (int i = 0; i < N; ++i)
+        {
+            value[i] = json[attr][i].get<D>();
+        }
+    }
+}
+
+void ComputeTransform(const glm::vec3& translate, const glm::vec3& rotate, const glm::vec3& scale,
+    glm::mat4& transform, glm::mat3& TransposeInvTransform)
+{
+    glm::mat4 T = glm::translate(glm::mat4(1.f), translate);
+
+    glm::mat4 S = glm::scale(glm::mat4(1.f), scale);
+
+    glm::mat4 Rx = glm::rotate(glm::mat4(1.f), glm::radians(rotate.x), { 1.f, 0.f, 0.f });
+    glm::mat4 Ry = glm::rotate(glm::mat4(1.f), glm::radians(rotate.y), { 0.f, 1.f, 0.f });
+    glm::mat4 Rz = glm::rotate(glm::mat4(1.f), glm::radians(rotate.z), { 0.f, 0.f, 1.f });
+
+    transform = T * Rx * Ry * Rz * S;
+    TransposeInvTransform = glm::transpose(glm::inverse(glm::mat3(transform)));
+}
+
+void AddPlane_Triangles(int start_id, std::vector<glm::vec3>& vertices, std::vector<glm::ivec4>& triangles, int material_id)
+{
+    vertices.emplace_back(-1, -1, 0);
+    vertices.emplace_back(1, -1, 0);
+    vertices.emplace_back(1, 1, 0);
+    vertices.emplace_back(-1, 1, 0);
+
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(0, 1, 2, material_id)); // front
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(0, 2, 3, material_id)); // front
+}
+
+void AddCude_Triangles(int start_id, std::vector<glm::vec3>& vertices, std::vector<glm::ivec4>& triangles, int material_id)
+{
+    vertices.emplace_back(1, 1, -1);
+    vertices.emplace_back(1, -1, -1);
+    vertices.emplace_back(-1, -1, -1);
+    vertices.emplace_back(-1, 1, -1);
+
+    vertices.emplace_back(1, 1, 1);
+    vertices.emplace_back(1, -1, 1);
+    vertices.emplace_back(-1, -1, 1);
+    vertices.emplace_back(-1, 1, 1);
+
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(0, 1, 2, material_id)); // front
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(0, 2, 3, material_id)); // front
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(5, 4, 7, material_id)); // back
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(5, 7, 6, material_id)); // back
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(6, 7, 3, material_id)); // right
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(6, 3, 2, material_id)); // right
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(0, 5, 1, material_id)); // left
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(0, 4, 5, material_id)); // left
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(3, 7, 4, material_id)); // top
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(3, 4, 0, material_id)); // top
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(2, 1, 5, material_id)); // bottom
+    triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(2, 5, 6, material_id)); // bottom
+}
+
+void ApplyTransform(int start_id, std::vector<glm::vec3>& vertices,
+    const glm::vec3& translate, const glm::vec3& rotate, const glm::vec3& scale)
+{
+    glm::mat4 transform;
+    glm::mat3 inv_transpose;
+    ComputeTransform(translate, rotate, scale, transform, inv_transpose);
+    for (int i = start_id; i < vertices.size(); ++i)
+    {
+        vertices[i] = glm::vec3(transform * glm::vec4(vertices[i], 1.f));
+    }
+}
+
+Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_filename) 
+{
+    std::filesystem::path scene_path(res_path);
+    scene_path.append(scene_filename);
+    if (!std::filesystem::directory_entry(scene_path).exists())
+    {
+        printf("Error reading from %s - aborting!", scene_path.string().c_str());
         throw;
     }
-    while (fp_in.good()) {
-        string line;
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
-                loadMaterial(tokens[1]);
-                cout << " " << endl;
-            } else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
-                loadGeom(tokens[1]);
-                cout << " " << endl;
-            } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
-                loadCamera();
-                cout << " " << endl;
-            }
-        }
-    }
+    
+    std::cout << "Reading scene from " << scene_path.string() << " ..." << std::endl;
+
+    std::ifstream fp_in(scene_path);
+
+    Json scene_json = Json::parse(fp_in);
+
+    std::string res_path_str;
+    SafeGet<std::string>(scene_json, "resources path", res_path_str);
+
+    std::filesystem::path scene_res_path(res_path);
+
+    LoadCamera(scene_json["camera"]);
+    LoadMaterials(scene_json["materials"], scene_res_path); 
+    LoadGeoms(scene_json["geomerties"], scene_res_path);
+
+    std::cout << "Reading scene success!"<< std::endl;
 }
 
-Scene::~Scene()
+void Scene::LoadGeoms(const Json& geometry_json, const std::filesystem::path& res_path)
 {
-}
+    std::cout << "Loading Geometry ..." << std::endl;
+    for (unsigned int i = 0; i < geometry_json.size(); ++i)
+    {
+        std::string name;
+        std::string type;
+        std::string material_name;
 
-int Scene::loadGeom(string objectid) {
-    int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
-        cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-        return -1;
-    } else {
-        cout << "Loading Geom " << id << "..." << endl;
-        Geom newGeom;
-        string line;
+        glm::vec3 translate(0.f), rotate(0.f), scale(1.f);
 
-        //load object type
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            if (strcmp(line.c_str(), "sphere") == 0) {
-                cout << "Creating new sphere..." << endl;
-                newGeom.type = SPHERE;
-            } else if (strcmp(line.c_str(), "cube") == 0) {
-                cout << "Creating new cube..." << endl;
-                newGeom.type = CUBE;
+        SafeGet<std::string>(geometry_json[i], "type", type);
+        SafeGet<std::string>(geometry_json[i], "name", name);
+        SafeGet<std::string>(geometry_json[i], "material", material_name);
+
+        SafeGetVec<glm::vec3, float, 3>(geometry_json[i], "translation", translate);
+        SafeGetVec<glm::vec3, float, 3>(geometry_json[i], "rotation", rotate);
+        SafeGetVec<glm::vec3, float, 3>(geometry_json[i], "scale", scale);
+
+        auto it = m_MaterialMap.find(material_name);
+        int material_id = (it != m_MaterialMap.end() ? it->second: 0);
+
+        if (type == "plane")
+        {
+            int start_id = m_Vertices.size();
+            AddPlane_Triangles(start_id, m_Vertices, m_vIds, material_id);
+            ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
+        }
+        else if (type == "cube")
+        {
+            int start_id = m_Vertices.size();
+            AddCude_Triangles(start_id, m_Vertices, m_vIds, material_id);
+            ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
+        }
+        else if (type == "obj")
+        {
+            std::string obj_path_str;
+            SafeGet<std::string>(geometry_json[i], "path", obj_path_str);
+
+            std::filesystem::path obj_path(res_path);
+            obj_path.append(obj_path_str);
+            if (std::filesystem::directory_entry(obj_path).exists())
+            {
+                int start_id = m_Vertices.size();
+                ReadObj(obj_path.string(), material_id);
+                ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
+            }
+            else
+            {
+                std::cout << obj_path.string() << std::endl;
             }
         }
-
-        //link material
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            newGeom.materialid = atoi(tokens[1].c_str());
-            cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
+        else
+        {
+            assert(false);
         }
-
-        //load transformations
-        utilityCore::safeGetline(fp_in, line);
-        while (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-
-            //load tranformations
-            if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-                newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-                newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-
-            utilityCore::safeGetline(fp_in, line);
-        }
-
-        newGeom.transform = utilityCore::buildTransformationMatrix(
-                newGeom.translation, newGeom.rotation, newGeom.scale);
-        newGeom.inverseTransform = glm::inverse(newGeom.transform);
-        newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
-
-        geoms.push_back(newGeom);
-        return 1;
     }
+    std::cout << "Loading Geomerties Success!" << std::endl;
 }
 
-int Scene::loadCamera() {
-    cout << "Loading Camera ..." << endl;
+void Scene::LoadCamera(const Json& camera_json) 
+{
+    std::cout << "Loading Camera ..." << std::endl;
     RenderState &state = this->state;
     Camera &camera = state.camera;
-    float fovy;
 
-    //load static properties
-    for (int i = 0; i < 5; i++) {
-        string line;
-        utilityCore::safeGetline(fp_in, line);
-        vector<string> tokens = utilityCore::tokenizeString(line);
-        if (strcmp(tokens[0].c_str(), "RES") == 0) {
-            camera.resolution.x = atoi(tokens[1].c_str());
-            camera.resolution.y = atoi(tokens[2].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FOVY") == 0) {
-            fovy = atof(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "ITERATIONS") == 0) {
-            state.iterations = atoi(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "DEPTH") == 0) {
-            state.traceDepth = atoi(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
-            state.imageName = tokens[1];
-        }
-    }
+    SafeGet<float>(camera_json, "fovy", camera.fovy);
+    SafeGet<unsigned int>(camera_json, "interation", state.iterations);
+    SafeGet<int>(camera_json, "depth", state.traceDepth);
+    SafeGetVec<glm::vec3, float, 3>(camera_json, "ref", camera.ref);
+    SafeGetVec<glm::vec3, float, 3>(camera_json, "position", camera.position);
+    SafeGetVec<glm::vec3, float, 3>(camera_json, "up", camera.up);
+    SafeGetVec<glm::ivec2, unsigned int, 2>(camera_json, "resolution", camera.resolution);
 
-    string line;
-    utilityCore::safeGetline(fp_in, line);
-    while (!line.empty() && fp_in.good()) {
-        vector<string> tokens = utilityCore::tokenizeString(line);
-        if (strcmp(tokens[0].c_str(), "EYE") == 0) {
-            camera.position = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-        } else if (strcmp(tokens[0].c_str(), "LOOKAT") == 0) {
-            camera.ref = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-        } else if (strcmp(tokens[0].c_str(), "UP") == 0) {
-            camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-        }
-
-        utilityCore::safeGetline(fp_in, line);
-    }
-
-    //calculate fov based on resolution
-    float yscaled = tan(fovy * (Pi / 180));
-    float xscaled = (yscaled * camera.resolution.x) / camera.resolution.y;
-    float fovx = (atan(xscaled) * 180) / Pi;
-    camera.fovy = fovy;
-
-    camera.right = glm::normalize(glm::cross(camera.forward, camera.up));
-    camera.pixelLength = glm::vec2(2 * xscaled / (float)camera.resolution.x,
-                                   2 * yscaled / (float)camera.resolution.y);
-
-    camera.forward = glm::normalize(camera.ref - camera.position);
-
-    //set up render camera stuff
-    int arraylen = camera.resolution.x * camera.resolution.y;
-    state.image.resize(arraylen);
-    std::fill(state.image.begin(), state.image.end(), glm::vec3());
-
-    cout << "Loaded camera!" << endl;
-    return 1;
+    std::cout << "Loading Camera Success!" << std::endl;
 }
 
-int Scene::loadMaterial(string materialid) {
-    int id = atoi(materialid.c_str());
-    if (id != materials.size()) {
-        cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
-        return -1;
-    } else {
-        cout << "Loading Material " << id << "..." << endl;
-        Material newMaterial;
+void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path& res_path)
+{
+    std::cout << "Loading Materials ..." << std::endl;
+    for (unsigned int i = 0; i < material_json.size(); ++i)
+    {
+        Material material;
+        std::string name;
+        SafeGet<std::string>(material_json[i], "name", name);
 
-        //load static properties
-        for (int i = 0; i < 7; i++) {
-            string line;
-            utilityCore::safeGetline(fp_in, line);
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "RGB") == 0) {
-                glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
-                newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
-                newMaterial.specular.exponent = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
-                glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                newMaterial.specular.color = specColor;
-            } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
-                newMaterial.hasReflective = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
-                newMaterial.hasRefractive = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
-                newMaterial.indexOfRefraction = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
-                newMaterial.emittance = atof(tokens[1].c_str());
-            }
+        m_MaterialMap.emplace(name, i);
+
+        SafeGetVec<glm::vec3, float, 3>(material_json[i], "albedo", material.albedo);
+        SafeGet<float>(material_json[i], "emittance", material.emittance);
+        materials.push_back(std::move(material));
+    }
+    std::cout << "Loading Materials Success!" << std::endl;
+}
+
+void Scene::ReadObj(const std::string& obj_file_path,
+                    unsigned int matrial_id)
+{
+    ObjReader reader;
+    ObjReaderConfig config;
+    
+    // we want the mesh to be triangulated
+    config.triangulate = true;
+    //config.triangulation_method = "earcut";
+    reader.ParseFromFile(obj_file_path, config);
+
+    if (!reader.Error().empty()) std::cerr << "TinyObjReader: " << reader.Error();
+
+    if (!reader.Warning().empty()) std::cout << "TinyObjReader: " << reader.Warning();
+
+    auto& attribs = reader.GetAttrib();
+    auto& shapes = reader.GetShapes();
+    
+    unsigned int start_id = m_Vertices.size();
+
+    m_Vertices.resize(m_Vertices.size() + attribs.vertices.size() / 3);
+
+    std::memcpy(&m_Vertices[start_id],
+                attribs.vertices.data(), 
+                attribs.vertices.size() * sizeof(float));
+
+    for (auto& shape : shapes)
+    {
+        m_vIds.reserve(m_vIds.size() + shape.mesh.indices.size() / 3);
+        for (int i = 0; i < shape.mesh.indices.size(); i += 3)
+        {
+            m_vIds.emplace_back(start_id + shape.mesh.indices[i].vertex_index,
+                                   start_id + shape.mesh.indices[i + 1].vertex_index,
+                                   start_id + shape.mesh.indices[i + 2].vertex_index,
+                                   matrial_id);
         }
-        materials.push_back(newMaterial);
-        return 1;
     }
 }

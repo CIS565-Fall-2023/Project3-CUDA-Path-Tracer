@@ -9,7 +9,6 @@
 #include <thrust/remove.h>
 
 #include "sceneStructs.h"
-#include "scene.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
 #include "utilities.h"
@@ -17,9 +16,10 @@
 #include "intersections.h"
 #include "interactions.h"
 
-#include "common.h"
 #include "sampler.h"
 #include "gpuScene.h"
+#include "scene.h"
+#include "rng.h"
 
 struct CompactTerminatedPaths {
 	CPU_GPU bool operator() (const PathSegment& segment) {
@@ -88,7 +88,6 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 	writePixel(pix, pbo[write_index]);
 }
 
-static Scene* hst_scene = nullptr;
 static GuiDataContainer* guiData = nullptr;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
@@ -114,7 +113,10 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
 		segment.Reset();
-		segment.ray = cam.CastRay({x, y});
+		
+		CudaRNG rng(iter, index, 0);
+
+		segment.ray = cam.CastRay({x + rng.rand(), y + rng.rand()});
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
@@ -187,7 +189,7 @@ __global__ void shadeFakeMaterial(
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
+			glm::vec3 materialColor = material.albedo;
 
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
@@ -240,41 +242,39 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 	
 	if (intersection.materialId >= 0)
 	{
-		pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
-		//PathSegment segment = pathSegments[idx];
-		//
-		//Material material = materials[intersection.materialId];
-		//glm::vec3 materialColor = material.color;
-		//
-		//if (material.emittance > 0.f) 
-		//{
-		//	glm::vec3 final_throughput = segment.throughput * material.emittance;
-		//	pathSegments[idx].radiance = final_throughput;
-		//	pathSegments[idx].Terminate();
-		//}
-		//else
-		//{		
-		//	glm::vec3 wo = WorldToLocal(intersection.normal) * -segment.ray.direction;
-		//	if (wo.z < 0.f)
-		//	{
-		//		pathSegments[idx].Terminate();
-		//		return;
-		//	}
-		//
-		//	thrust::default_random_engine rng = makeSeededRandomEngine(iteration, idx, 0);
-		//	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
-		//
-		//	// naive diffuse surface
-		//	glm::vec2 xi(u01(rng), u01(rng));
-		//	glm::vec3 wi = SquareToHemisphereCosine(xi);
-		//	glm::vec3 wiW = glm::normalize(LocalToWorld(intersection.normal) * wi);
-		//
-		//	float pdf = SquareToHemisphereCosinePDF(wi);
-		//
-		//	// generate new ray
-		//	pathSegments[idx].ray = Ray::SpawnRay(intersection.position, wiW);
-		//	pathSegments[idx].throughput *= materialColor * InvPi * wi.z / pdf;
-		//}
+		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
+		PathSegment segment = pathSegments[idx];
+		
+		Material material = materials[intersection.materialId];
+		glm::vec3 materialColor = material.albedo;
+		
+		if (material.emittance > 0.f) 
+		{
+			glm::vec3 final_throughput = segment.throughput * material.emittance;
+			pathSegments[idx].radiance = final_throughput;
+			pathSegments[idx].Terminate();
+		}
+		else
+		{		
+			glm::vec3 wo = WorldToLocal(intersection.normal) * -segment.ray.direction;
+			if (wo.z < 0.f)
+			{
+				pathSegments[idx].Terminate();
+				return;
+			}
+
+			CudaRNG rng(iteration, idx, segment.remainingBounces);
+			glm::vec2 xi(rng.rand(), rng.rand());
+			glm::vec3 wi = SquareToHemisphereCosine(xi);
+			glm::vec3 wiW = glm::normalize(LocalToWorld(intersection.normal) * wi);
+		
+			float pdf = SquareToHemisphereCosinePDF(wi);
+		
+			// generate new ray
+			pathSegments[idx].ray = Ray::SpawnRay(intersection.position, wiW);
+			pathSegments[idx].throughput *= materialColor * InvPi * wi.z / pdf;
+			--pathSegments[idx].remainingBounces;
+		}
 	}
 	else
 	{
@@ -285,10 +285,11 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 CPU_ONLY void CudaPathTracer::Init(Scene* scene)
 {
 	m_Iteration = 0;
-	hst_scene = scene;
 
-	const Camera& cam = hst_scene->state.camera;
+	const Camera& cam = scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
+	
+	resolution = cam.resolution;
 
 	cudaMalloc(&dev_hdr_img, pixelcount * sizeof(glm::vec3));
 	cudaMemset(dev_hdr_img, 0, pixelcount * sizeof(glm::vec3));
@@ -315,9 +316,8 @@ CPU_ONLY void CudaPathTracer::Init(Scene* scene)
 
 CPU_ONLY void CudaPathTracer::GetImage(uchar4* host_image)
 {
-	const Camera& cam = hst_scene->state.camera;
-	// Retrieve image from GPU
-	cudaMemcpy(host_image, dev_img, cam.resolution.x * cam.resolution.y * sizeof(uchar4), cudaMemcpyDeviceToHost);
+	//Retrieve image from GPU
+	cudaMemcpy(host_image, dev_img, resolution.x * resolution.y * sizeof(uchar4), cudaMemcpyDeviceToHost);
 }
 
 CPU_ONLY void CudaPathTracer::RegisterPBO(unsigned int pbo)
@@ -329,23 +329,21 @@ CPU_ONLY void CudaPathTracer::RegisterPBO(unsigned int pbo)
 	checkCUDAError("Get PBO pointer Error");
 }
 
-CPU_ONLY void CudaPathTracer::Render(GPUScene& scene)
+CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 {
-	const int traceDepth = hst_scene->state.traceDepth;
-	const Camera& cam = hst_scene->state.camera;
-	const int pixelcount = cam.resolution.x * cam.resolution.y;
+	const int pixelcount = camera.resolution.x * camera.resolution.y;
 
 	// TODO: might change to dynamic block size
 	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);
 	const dim3 blocksPerGrid2d(
-		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
-		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
+		(camera.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
+		(camera.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, m_Iteration, traceDepth, dev_paths);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (camera, m_Iteration, 8, dev_paths);
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
@@ -391,7 +389,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene)
 	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (dev_img, cam.resolution, dev_hdr_img);
+	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (dev_img, camera.resolution, dev_hdr_img);
 
 	checkCUDAError("pathtrace");
 	++m_Iteration;

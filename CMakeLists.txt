@@ -62,6 +62,8 @@ set(GLM_ROOT_DIR "external")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
+set(EXTERAL_ROOT_DIR "external")
+
 set(PT_SRC_DIR "src")
 
 file(GLOB_RECURSE PathTracer_Headers 
@@ -87,6 +89,10 @@ source_group(Sources FILES ${PathTracer_Sources})
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${PathTracer_Sources} ${PathTracer_Headers})
+target_include_directories(${CMAKE_PROJECT_NAME}
+PUBLIC
+    ${EXTERAL_ROOT_DIR}
+)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction

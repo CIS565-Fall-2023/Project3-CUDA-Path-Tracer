@@ -43,15 +43,8 @@ struct Geom {
 };
 
 struct Material {
-    glm::vec3 color;
-    struct {
-        float exponent;
-        glm::vec3 color;
-    } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
-    float emittance;
+    glm::vec3 albedo{0.f};
+    float emittance = 0.f;
 };
 
 struct Camera {
@@ -72,7 +65,7 @@ struct Camera {
     }
     CPU_GPU Ray CastRay(const glm::vec2& p)
     {
-        glm::vec2 ndc = 2.f * p / glm::vec2(resolution);// TODO: implement antialiasing by jittering the ray 
+        glm::vec2 ndc = 2.f * p / glm::vec2(resolution); 
         ndc.x = ndc.x - 1.f;
         ndc.y = 1.f - ndc.y;
 
