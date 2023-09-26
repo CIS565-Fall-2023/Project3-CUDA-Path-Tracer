@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "scene.h"
+#include "depScene.h"
 #include "sceneStructs.h"
 
 class PrimitiveAssmbler {
@@ -20,6 +20,6 @@ public:
     int getPrimitiveSize() const{
         return triangles.size() + spheres.size();
     }
-    void assembleScenePrimitives(Scene* scene);
+    void assembleScenePrimitives(DeprecatedScene* scene);
     void freeBuffer();
 };

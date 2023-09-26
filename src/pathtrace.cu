@@ -10,7 +10,7 @@
 #include <thrust/partition.h>
 
 #include "sceneStructs.h"
-#include "scene.h"
+#include "depScene.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
 #include "utilities.h"
@@ -88,7 +88,7 @@ static Triangle* dev_triangles= nullptr;
 static Sphere * dev_spheres= nullptr;
 static int primitve_size = 1;
 static PrimitiveAssmbler * pa = new PrimitiveAssmbler();
-static Scene* testScene = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
+static DeprecatedScene* testScene = new DeprecatedScene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 

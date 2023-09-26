@@ -63,12 +63,12 @@ find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
 set(scene
-    src/scene.h
+    src/depScene.h
     src/sceneStructs.h
     src/interactions.h
     src/intersections.h
     src/light.h
-    src/scene.cpp
+    src/depScene.cpp
     src/light.cpp
 )
 

@@ -158,7 +158,7 @@ void PrimitiveAssmbler::movePrimitivesToDevice()
     //offset += spheres.size();
 }
 
-void PrimitiveAssmbler::assembleScenePrimitives(Scene* scene)
+void PrimitiveAssmbler::assembleScenePrimitives(DeprecatedScene* scene)
 {
     auto model = scene->model;
     auto initTransform = glm::mat4x4(1.0f);
