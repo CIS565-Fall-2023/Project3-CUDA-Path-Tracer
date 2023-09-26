@@ -24,6 +24,7 @@ private:
     int buildBvh(int startTri, int numTris);
     void bvhUpdateNodeBounds(BvhNode& node);
     float bvhEvaluateSAH(BvhNode& node, int axis, float pos);
+    float bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos);
     void bvhSubdivide(BvhNode& node);
 
     unordered_map<string, int> bvhRootIndices;

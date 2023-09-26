@@ -204,10 +204,9 @@ float Scene::bvhEvaluateSAH(BvhNode& node, int axis, float pos)
     return cost > 0 ? cost : FLT_MAX;
 }
 
-void Scene::bvhSubdivide(BvhNode& node)
+float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos)
 {
-    int axis = -1;
-    float splitPos = 0, bestCost = FLT_MAX;
+    float bestCost = FLT_MAX;
     for (int candidateAxis = 0; candidateAxis < 3; ++candidateAxis)
     {
         for (int i = 0; i < node.triCount; ++i)
@@ -223,9 +222,16 @@ void Scene::bvhSubdivide(BvhNode& node)
             }
         }
     }
+    return bestCost;
+}
 
-    float parentCost = node.triCount * node.aabb.surfaceArea();
-    if (bestCost >= parentCost)
+void Scene::bvhSubdivide(BvhNode& node)
+{
+    int axis;
+    float splitPos;
+    float bestCost = bvhFindBestSplitPlane(node, axis, splitPos);
+
+    if (bestCost >= node.cost())
     {
         return;
     }

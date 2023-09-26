@@ -76,11 +76,11 @@ struct AABB
         grow(tri.v1.pos);
         grow(tri.v2.pos);
     }
-    __host__ __device__ glm::vec3 extent()
+    __host__ __device__ glm::vec3 extent() const
     {
         return bMax - bMin;
     }
-    __host__ __device__ float surfaceArea()
+    __host__ __device__ float surfaceArea() const
     {
         glm::vec3 extent = this->extent();
         return extent.x * extent.y + extent.y * extent.z + extent.z * extent.x;
@@ -92,6 +92,7 @@ struct BvhNode
     AABB aabb; // 6 floats = 24 bytes
     int leftFirst, triCount; // 2 ints = 8 bytes
     __host__ __device__ bool isLeaf() const { return triCount > 0; }
+    __host__ __device__ float cost() const { return triCount * aabb.surfaceArea(); }
 
 #if DEBUG_PRINT_BVH
     __host__ friend std::ostream& operator<<(std::ostream& os, const BvhNode& node)
