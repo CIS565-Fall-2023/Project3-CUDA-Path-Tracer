@@ -248,18 +248,39 @@ __device__ glm::mat3 tangentToWorld(glm::vec3 worldNorm) {
 }
 
 __device__ glm::vec3 sampleRay(
-	glm::vec3 wi
+	glm::vec3 wo
 	, glm::vec3 norm
 	, Material material
 	, int iter, int depth
 	, int path_idx
 	, float& out_pdf) {
 
-	thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth );
-	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
-	glm::vec3 sampleDir = sampleHemisphereCosine(glm::vec2(u01(rng), u01(rng)), out_pdf);
-	glm::mat3 rotMat = tangentToWorld(norm);
-	return rotMat * sampleDir;
+	if (material.hasReflective) {
+		glm::vec3 reflect = glm::reflect(-wo, norm);
+		out_pdf = 1.;
+		return reflect;
+	}
+	else {
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth);
+		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+		glm::vec3 sampleDir = sampleHemisphereCosine(glm::vec2(u01(rng), u01(rng)), out_pdf);
+		glm::mat3 rotMat = tangentToWorld(norm);
+		return rotMat * sampleDir;
+	}
+	return norm;
+}
+
+__device__ glm::vec3 getBSDF(
+	glm::vec3 wi
+	, glm::vec3 wo
+	, glm::vec3 norm
+	, Material material
+) {
+	if (material.hasReflective) {
+		float absdot = glm::clamp(glm::dot(wi, norm), 0.001f, 1.f);
+		return material.color / absdot;
+	}
+	return material.color * INV_PI;
 }
 
 __global__ void processPBR(
@@ -302,12 +323,14 @@ __global__ void processPBR(
 
 	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
 	
-	seg.ray.direction = sampleRay(-seg.ray.direction, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
+	glm::vec3 wo = -seg.ray.direction;
+
+	seg.ray.direction = sampleRay(wo, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
 
 	//fix strange artifact
 	seg.ray.origin += 0.01f * seg.ray.direction;
 
-	glm::vec3 bsdf = material.color * INV_PI;
+	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
 	//           albedo           absdot
 	seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction),0.f,1.f)/pdf);
 }
