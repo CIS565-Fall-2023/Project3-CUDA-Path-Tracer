@@ -223,19 +223,6 @@ __global__ void computeIntersections(
 	}
 }
 
-__device__ glm::vec3 random_in_unit_sphere(thrust::default_random_engine& rng) {
-	glm::vec3 p;
-	thrust::uniform_real_distribution<float> u01(0, 1);
-	do {
-		p = 2.0f * glm::vec3(u01(rng), u01(rng), u01(rng)) - glm::vec3(1, 1, 1);
-	} while (glm::length2(p) >= 1.0f);
-	return p;
-}
-
-// This is the reflection function from the pseudocode
-__device__ glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n) {
-	return v - 2.0f * glm::dot(v, n) * n;
-}
 
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
@@ -268,32 +255,23 @@ __global__ void shadeFakeMaterial(
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
 
-			if (material.hasReflective == 0 && material.hasRefractive == 0) {
-				glm::vec3 target = intersection.surfaceNormal + random_in_unit_sphere(rng);
-				pathSegments[idx].ray.direction = target;
-				pathSegments[idx].color *= materialColor;
+			
+			// If the material indicates that the object was a light, "light" the ray
+			if (material.emittance > 0.0f) {
+				pathSegments[idx].color *= (materialColor * material.emittance);
 			}
-
-			else if (material.hasReflective == 1) {
-				pathSegments[idx].ray.direction = reflect(pathSegments[idx].ray.direction, intersection.surfaceNormal);
-				pathSegments[idx].color *= materialColor;
+			// Otherwise, do some pseudo-lighting computation. This is actually more
+			// like what you would expect from shading in a rasterizer like OpenGL.
+			// TODO: replace this! you should be able to start with basically a one-liner
+			else {
+				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+				pathSegments[idx].color *= u01(rng); // apply some noise because why not
 			}
-			//// If the material indicates that the object was a light, "light" the ray
-			//if (material.emittance > 0.0f) {
-			//	pathSegments[idx].color *= (materialColor * material.emittance);
-			//}
-			//// Otherwise, do some pseudo-lighting computation. This is actually more
-			//// like what you would expect from shading in a rasterizer like OpenGL.
-			//// TODO: replace this! you should be able to start with basically a one-liner
-			//else {
-			//	float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-			//	pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-			//	pathSegments[idx].color *= u01(rng); // apply some noise because why not
-			//}
-			//// If there was no intersection, color the ray black.
-			//// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-			//// used for opacity, in which case they can indicate "no opacity".
-			//// This can be useful for post-processing and image compositing.
+			// If there was no intersection, color the ray black.
+			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
+			// used for opacity, in which case they can indicate "no opacity".
+			// This can be useful for post-processing and image compositing.
 		}
 		else {
 			pathSegments[idx].color = glm::vec3(0.0f);
