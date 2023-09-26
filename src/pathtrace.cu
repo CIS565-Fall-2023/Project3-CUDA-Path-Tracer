@@ -330,6 +330,7 @@ __global__ void shadeFakeMaterial(
 	, Material* materials
 	, Geom * geoms
 	, int geoms_size
+	, BSDFStruct * bsdfStructs
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -345,8 +346,10 @@ __global__ void shadeFakeMaterial(
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
+			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
+			pathSegment.color = get_debug_color(bsdfStruct);
 			//pathSegment.color = intersection.surfaceNormal;
-			pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
+			//pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
 			return;
 			glm::vec3 materialColor = material.color;
 
@@ -557,7 +560,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials,
 			dev_geoms, 
-			hst_scene->geoms.size()
+			hst_scene->geoms.size(),
+			dev_bsdfStructs
 			);
 		
 		// Use dev_paths for compaction result

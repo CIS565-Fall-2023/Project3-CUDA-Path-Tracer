@@ -29,3 +29,15 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         break;
     }
 }
+
+__device__ glm::vec3 get_debug_color(BSDFStruct& bsdfStruct) {
+	switch (bsdfStruct.bsdfType)
+	{
+	case DIFFUSE:
+		return glm::vec3(1.0f, 0.0f, 0.0f);
+	case EMISSIVE:
+		return glm::vec3(0.0f, 1.0f, 0.0f);
+	default:
+		return glm::vec3(0.0f, 0.0f, 1.0f);
+	}
+}

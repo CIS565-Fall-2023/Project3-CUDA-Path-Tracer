@@ -29,6 +29,7 @@ Scene::Scene(const char* filename)
     }
 
     initTriangles();
+    initBSDFs();
 }
 
 void Scene::initTriangles()
@@ -42,6 +43,7 @@ void Scene::initTriangles()
 void Scene::initBSDFs() {
     for (const auto& material : model.materials)
     {
+        printf("material name: %s\n", material.name.c_str());
         //BSDF* bsdf = nullptr;
         BSDFStruct bsdfStruct;
         if (*std::max_element(material.emissiveFactor.begin(), material.emissiveFactor.end()) > DBL_EPSILON) {
@@ -51,7 +53,7 @@ void Scene::initBSDFs() {
                 auto strengthObject = ext->second.Get<tinygltf::Value::Object>().find("emissiveStrength");
                 if (strengthObject != ext->second.Get<tinygltf::Value::Object>().end()) {
                     float strength = static_cast<float>(strengthObject->second.Get<double>());
-                    bsdfStruct.reflectance = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
+                    bsdfStruct.emissiveFactor = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
                     bsdfStruct.strength = strength;
                     bsdfStruct.bsdfType = EMISSIVE;
                     bsdfStructs.push_back(bsdfStruct);
@@ -121,6 +123,11 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
 
         const size_t numIndices = indicesAccessor.count;
         glm::mat4x4 normalTransform = glm::transpose(glm::inverse(transform));
+
+        int materialID = primitive.material;
+        if (primitive.material < 0) {
+			materialID = 0;
+		}
         // Iterate through indices and create triangles
         //for (size_t i = 0; i < numIndices; i += 3) {
         for (size_t i = 0; i < numIndices; i += 3) {
@@ -147,6 +154,8 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
             //auto index0 = indexData[i];
             //auto index1 = indexData[i + 1];
             //auto index2 = indexData[i + 2];
+            triangle.materialID = materialID;
+
             triangles.push_back(triangle);
         }
     }
