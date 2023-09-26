@@ -87,7 +87,7 @@ static Primitive** dev_primitives = nullptr;
 static Triangle* dev_triangles= nullptr;
 static Sphere * dev_spheres= nullptr;
 static int primitve_size = 1;
-static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
+static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
 //static DeprecatedScene* testScene = new DeprecatedScene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
