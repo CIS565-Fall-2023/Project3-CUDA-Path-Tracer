@@ -17,9 +17,9 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
-#include "bxdf.h"
 #include "light.h"
 #include "scene.h"
+#include "bsdf.h"
 //#include "utilities.cuh"
 
 #define ERRORCHECK 1

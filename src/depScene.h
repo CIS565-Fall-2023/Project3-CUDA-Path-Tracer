@@ -10,8 +10,6 @@
 #include "sceneStructs.h"
 #include "light.h"
 #include <thrust/device_vector.h>
-#include "tinygltf/tiny_gltf.h"
-
 
 using namespace std;
 
@@ -33,13 +31,4 @@ public:
     RenderState state;
     int geoms_size;
 };
-
-//template<typename T>
-//void FreePtrVector(thrust::device_vector<T> v, int v_size) {
-//    for (size_t i = 0; i < v_size; i++)
-//    {
-//        cudaFree(v[i]);
-//    }
-//}
-
 

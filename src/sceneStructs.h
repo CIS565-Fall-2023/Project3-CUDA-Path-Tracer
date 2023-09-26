@@ -156,6 +156,7 @@ public:
     glm::vec2 uv3;
     BoundingBox bb;
     glm::vec3 N;
+    int materialID;
     __host__ __device__ Triangle() {}
     __host__ __device__ Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) : 
         p1(p1), p2(p2), p3(p3) {

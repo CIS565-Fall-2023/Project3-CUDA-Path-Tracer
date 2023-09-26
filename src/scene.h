@@ -1,11 +1,14 @@
 #pragma once
 #include <vector>
-#include "depScene.h"
-#include "sceneStructs.h"
 #include <cuda_runtime.h>
 #include <cuda.h>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
+#include "tinygltf/tiny_gltf.h"
+
+#include "sceneStructs.h"
+#include "bsdfStruct.h"
 
 class Scene {
     std::vector<Sphere> spheres;
@@ -18,6 +21,7 @@ class Scene {
 public:
     Scene(const char * filename);
     std::vector<Triangle> triangles;
+    std::vector<BSDFStruct> bsdfStructs;
     Triangle* dev_triangles;
     Sphere* dev_spheres;
     Primitive** dev_primitives;
@@ -25,4 +29,8 @@ public:
         return triangles.size() + spheres.size();
     }
     void initTriangles();
+    void initBSDFs();
 };
+
+
+
