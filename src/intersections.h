@@ -156,8 +156,6 @@ __host__ __device__ float intersectRayTriangle(const glm::vec3& orig, const glm:
         hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, normal);
         if (!hit)return -1;
     }
-    //normal = glm::normalize(normal);
-    //normal = glm::vec3(1,0,0);
     float t = normal.z;
     normal.z = 1 - normal.x - normal.y;
     return t;
