@@ -266,12 +266,9 @@ __device__ bool intersectCore(Triangle * triangles, int triangles_size, Ray & ra
 
 	for (int i = 0; i < triangles_size; i++)
 	{
-		if (triangles[i].intersect(ray, &intersection)) {
-			return true;
-		}
+		triangles[i].intersect(ray, &intersection);
 	}
-	intersection.t = -1.0f;
-	return false;
+	return intersection.t > EPSILON;
 }
 
 __global__ void intersect(
@@ -331,6 +328,8 @@ __global__ void shadeFakeMaterial(
 	, Geom * geoms
 	, int geoms_size
 	, BSDFStruct * bsdfStructs
+	, Triangle * triangles
+	, int triangles_size
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -346,18 +345,16 @@ __global__ void shadeFakeMaterial(
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
-			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
-			//pathSegment.color = get_debug_color(bsdfStruct);
-			pathSegment.color = intersection.surfaceNormal;
-			//pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
+			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
+			pathSegment.color = get_debug_color(bsdfStruct);
 			return;
+			////pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
 			glm::vec3 materialColor = material.color;
-
 			// If the material indicates that the object was a light, "light" the ray
-			if (material.emittance > 0.0f) {
+			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
 				//pathSegments[idx].color *= (materialColor * material.emittance);
-				pathSegment.color += (materialColor * material.emittance * pathSegment.constantTerm);
+				pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength * pathSegment.constantTerm);
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
 			// like what you would expect from shading in a rasterizer like OpenGL.
@@ -366,10 +363,12 @@ __global__ void shadeFakeMaterial(
 				glm::mat3x3 o2w;
 				make_coord_space(o2w, intersection.surfaceNormal);
 				glm::mat3x3 w2o(glm::transpose(o2w));
-				glm::vec3 intersect = pathSegments[idx].ray.at(intersection.t);
+				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
+				//printf("intersect: %f, %f, %f\n", intersect.x, intersect.y, intersect.z);
+				//return;
 				//glm::vec3 localNormal = w2o * intersection.surfaceNormal;
 				//pathSegments[idx].color = localNormal;
-				glm::vec3 bsdf = materialColor * INV_PI; // Hard coded for now
+				glm::vec3 bsdf = bsdfStruct.reflectance * INV_PI; // Hard coded for now
 				glm::vec3 L_direct;
 				float pdf;
 				/* Estimate one bounce direct lighting */
@@ -380,17 +379,19 @@ __global__ void shadeFakeMaterial(
 					glm::vec3 wo = hemiSphereRandomSample(rng, &pdf);
 					float cosineTerm = abs(wo.z);
 					Ray one_bounce_ray;
-				
 					one_bounce_ray.direction = o2w * wo;
 					one_bounce_ray.origin = intersect;
 					ShadeableIntersection oneBounceIntersection;
-					computeIntersectionsCore(geoms, geoms_size, one_bounce_ray, oneBounceIntersection);
-					if (oneBounceIntersection.t > EPSILON){
-						auto oneBounceMat = materials[oneBounceIntersection.materialId];
-						if (oneBounceMat.emittance > 0.0f) {
+					
+					//computeIntersectionsCore(geoms, geoms_size, one_bounce_ray, oneBounceIntersection);
+					//printf("oneBounceIntersection.t: %f\n", oneBounceIntersection.t);
+					if (intersectCore(triangles, triangles_size, one_bounce_ray, oneBounceIntersection)){
+						auto oneBounceBSDF = bsdfStructs[oneBounceIntersection.materialId];
+						return;
+						if (oneBounceBSDF.bsdfType == BSDFType::EMISSIVE) {
 							n_valid_sample++;
 							//pathSegments[idx].color = glm::vec3(1.0f);
-							auto Li = oneBounceMat.emittance * oneBounceMat.color;
+							auto Li = oneBounceBSDF.emissiveFactor * oneBounceBSDF.strength;
 
 							// TODO: Figure out why is it still not so similar to the reference rendered image?
 							//		May be checkout the light propogation chapter of pbrt to find out how we use direct light estimation?
@@ -561,9 +562,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			dev_geoms, 
 			hst_scene->geoms.size(),
-			dev_bsdfStructs
+			dev_bsdfStructs,
+			dev_triangles,
+			pa->triangles.size()
 			);
-		
+
+		checkCUDAError("shadeMaterial failed\n");
 		// Use dev_paths for compaction result
 		// check if compacted dev_intersections has zero element, if it is, then iteraionComplete should be true.
 		// If no, then we might be able to store the pixel that has not finished dev_intersection to largely decrease the number 
