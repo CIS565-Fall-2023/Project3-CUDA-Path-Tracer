@@ -9,12 +9,14 @@
  */
 __host__ __device__
 glm::vec3 calculateRandomDirectionInHemisphere(
-        glm::vec3 normal, thrust::default_random_engine &rng) {
+        glm::vec3 normal, thrust::default_random_engine &rng, float& pdf) {
     thrust::uniform_real_distribution<float> u01(0, 1);
 
     float up = sqrt(u01(rng)); // cos(theta)
     float over = sqrt(1 - up * up); // sin(theta)
     float around = u01(rng) * TWO_PI;
+
+    pdf = up / PI;
 
     // Find a direction that is not the normal based off of whether or not the
     // normal's components are all equal to sqrt(1/3) or whether or not at
@@ -40,6 +42,41 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + cos(around) * over * perpendicularDirection1
         + sin(around) * over * perpendicularDirection2;
 }
+
+__host__ __device__ float powerHeuristic(int nf, float fPdf, int ng, float gPdf) {
+    float f = nf * fPdf, g = ng * gPdf;
+    return (f * f) / (g * g + f * f);
+}
+
+__host__ __device__ glm::vec3 fresnelDielectricEval(float ni, const Material& m) {
+    float etai = 1.0f, etat = m.indexOfRefraction;
+
+    if (ni > 0.0f) {
+        float tmp = etai;
+        etai = etat;
+        etat = tmp;
+    }
+
+    float sint = etai / etat * sqrtf(fmaxf(0.0f, 1.0f - ni * ni));
+    if (sint > 1.0f) {
+        // total internal reflection
+        return m.specular.color * m.color;
+    }
+    
+    float cost = sqrtf(fmaxf(0.0f, 1.0f - sint * sint));
+    float cosi = fabs(cost);
+
+    float Rparl = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost));
+    float Rperp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
+    float Re = (Rparl * Rparl + Rperp * Rperp) / 2.0f;
+
+    return glm::vec3(Re);
+}
+
+
+
+
+
 
 /**
  * Scatter a ray with some probabilities according to the material properties.
@@ -71,6 +108,7 @@ void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
+        glm::vec3 tangent,
         const Material &m,
         thrust::default_random_engine &rng) {
     // TODO: implement this.
@@ -78,35 +116,85 @@ void scatterRay(
     // calculateRandomDirectionInHemisphere defined above.
 
     thrust::uniform_real_distribution<float> u01(0, 1);
+    float rand = u01(rng); // TODO: rand ratio between diffuse and specular
 
-    glm::vec3 color(0.0f);
-    glm::vec3 wi(0.0f);
-    //float pdf = 1.0;
+    float pdf = 1.0;
 
-    if (m.hasReflective == 1.0)
+    if (m.hasReflective > 0.0)
     {
         // perfect specular
-        wi = glm::reflect(pathSegment.ray.direction, normal);
-        color = m.specular.color * m.color;
+        pathSegment.ray.direction = glm::normalize(glm::reflect(pathSegment.ray.direction, normal));
+        pathSegment.color *= m.specular.color;
+
+        // imperfect
+        float x1 = u01(rng), x2 = u01(rng);
+        float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
+        float phi = 2 * PI * x2;
+
+        glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+
+        // sample direction must be transformed to world space
+        // tangent-space to world-space: local tangent, binormal, and normal at the surface point
+        glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
+        glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
+
+        glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
+
+        // specular-space to tangent-space
+        glm::mat3 sampleToTangent;
+        sampleToTangent[2] = r;
+        sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
+        sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
+
+        // specular-space to world-space
+        glm::mat3 mat = TBN * sampleToTangent;
+
+        //pathSegment.ray.direction = mat * s;
     }
-    //else if (m.hasRefractive == 1.0)
-    //{
-    //    // perfect refractive
-    //    wi = glm::refract(pathSegment.ray.direction, normal, m.indexOfRefraction);
-    //    color = m.specular.color;
-    //}
-    else
+    else if (m.hasRefractive > 0.0)
+    {
+        // perfect refractive
+        float etaA = 1.0f, etaB = m.indexOfRefraction;
+        float ni = dot(pathSegment.ray.direction, normal);
+        bool entering = ni < 0;
+        float etaI = entering ? etaA : etaB;
+        float etaT = entering ? etaB : etaA;
+
+        // total internal reflection
+        pathSegment.ray.direction = etaI / etaT * sqrtf(fmaxf(0.0f, 1.0f - ni * ni)) > 1.0f ?
+            glm::normalize(glm::reflect(pathSegment.ray.direction, normal)) : 
+            glm::normalize(glm::refract(pathSegment.ray.direction, normal, etaI / etaT));
+        pathSegment.color *= m.specular.color;
+    } else
     {
         // diffuse
-        wi = calculateRandomDirectionInHemisphere(normal, rng);
-        color = m.color; // *abs(glm::dot(glm::normalize(wi), normal)) / PI;
-        //pdf = abs(glm::dot(glm::normalize(wi), normal)) / PI;
+        pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));
+        pathSegment.color *= (m.color *abs(glm::dot(glm::normalize(pathSegment.ray.direction), normal)) / PI) / pdf;
     }
 
-    pathSegment.ray.direction = glm::normalize(wi);
-    pathSegment.ray.origin = intersect;
     --pathSegment.remainingBounces;
+    pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
+}
 
-    pathSegment.color *= color;
-    
+
+__host__ __device__
+glm::vec3 sampleLight(
+    glm::vec3 intersect,
+    glm::vec3 normal,
+    glm::vec3& wi,
+    int& chosenLightIndex,
+    thrust::default_random_engine& rng,
+    const Light* lights,
+    const int& num_lights) {
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    chosenLightIndex = (int)(u01(rng) * num_lights);
+
+    Light light = lights[chosenLightIndex];
+    switch (light.lightType)
+    {
+        
+    }
+
+    return glm::vec3(0.0f);
 }

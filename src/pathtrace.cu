@@ -18,7 +18,7 @@
 #define ERRORCHECK 1
 
 #define SORT_MATERIALS 0
-#define FIRST_BOUNCE_CACHE 1
+#define FIRST_BOUNCE_CACHE 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -234,12 +234,14 @@ __global__ void computeIntersections(
 		float t;
 		glm::vec3 intersect_point;
 		glm::vec3 normal;
+		glm::vec3 tangent;
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
 		bool outside = true;
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		glm::vec3 tmp_tangent;
 
 		// naive parse through global geoms
 
@@ -254,11 +256,11 @@ __global__ void computeIntersections(
 
 			if (geom.type == CUBE)
 			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
 			}
 			else if (geom.type == SPHERE)
 			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -270,6 +272,7 @@ __global__ void computeIntersections(
 				hit_geom_index = i;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
+				tangent = tmp_tangent;
 			}
 		}
 
@@ -283,6 +286,7 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].surfaceTangent = tangent;
 		}
 	}
 }
@@ -359,7 +363,6 @@ __global__ void shadeBSDFMaterial(
 			// LOOK: this is how you use thrust's RNG! Please look at
 			// makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
@@ -375,14 +378,52 @@ __global__ void shadeBSDFMaterial(
 			else {
 				scatterRay(cur,
 					getPointOnRay(cur.ray, intersection.t),
-					intersection.surfaceNormal, material, rng);
+					intersection.surfaceNormal, intersection.surfaceTangent, material, rng);
 			}
 			// If there was no intersection, color the ray black.
 			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
 			// used for opacity, in which case they can indicate "no opacity".
 			// This can be useful for post-processing and image compositing.
+		} else {
+			cur.color = glm::vec3(0.0f);
+			cur.remainingBounces = 0; // terminate path
 		}
-		else {
+	}
+}
+
+
+__global__ void shadeDirectMIS(
+	int iter
+	, int num_paths
+	, ShadeableIntersection* shadeableIntersections
+	, PathSegment* pathSegments
+	, Material* materials
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths)
+	{
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+		PathSegment& cur = pathSegments[idx];
+
+		if (intersection.t > 0.0) { // if the intersection exists...
+			// Set up the RNG
+			// LOOK: this is how you use thrust's RNG! Please look at
+			// makeSeededRandomEngine as well.
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+
+			Material material = materials[intersection.materialId];
+			glm::vec3 materialColor = material.color;
+
+			if (material.emittance > 0.0f) {
+				cur.color *= (materialColor * material.emittance);
+				cur.remainingBounces = 0; // terminate path
+			} else {
+
+
+
+			}
+		} else {
 			cur.color = glm::vec3(0.0f);
 			cur.remainingBounces = 0; // terminate path
 		}
@@ -489,7 +530,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #else
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
-			, cur_num_paths
+			, num_paths
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()

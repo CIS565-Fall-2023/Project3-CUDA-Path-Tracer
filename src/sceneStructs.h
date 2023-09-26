@@ -12,6 +12,13 @@ enum GeomType {
     CUBE,
 };
 
+enum LightType {
+    AREA,
+    POINT,
+    SPOT,
+    ENVIRONMENT
+};
+
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
@@ -30,6 +37,14 @@ struct Geom {
     // Bounding box
     glm::vec3 minPoint;
     glm::vec3 maxPoint;
+};
+
+struct Light {
+    enum GeomType type;
+    enum LightType lightType;
+    float emittance;
+    float innerAngle, outerAngle; // for spot light
+    glm::mat4 transform;
 };
 
 struct Material {
@@ -76,5 +91,6 @@ struct PathSegment {
 struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
+  glm::vec3 surfaceTangent;
   int materialId;
 };
