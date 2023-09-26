@@ -104,76 +104,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-// TODO:
-// computeIntersections handles generating ray intersections ONLY.
-// Generating new rays is handled in your shader(s).
-// Feel free to modify the code below.
-__global__ void computeIntersections(
-	int depth
-	, int num_paths
-	, PathSegment* pathSegments
-	, Geom* geoms
-	, int geoms_size
-	, ShadeableIntersection* intersections
-)
-{
-	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (path_index < num_paths)
-	{
-		PathSegment pathSegment = pathSegments[path_index];
-
-		float t;
-		glm::vec3 intersect_point;
-		glm::vec3 normal;
-		float t_min = FLT_MAX;
-		int hit_geom_index = -1;
-		bool outside = true;
-
-		glm::vec3 tmp_intersect;
-		glm::vec3 tmp_normal;
-
-		// naive parse through global geoms
-
-		for (int i = 0; i < geoms_size; i++)
-		{
-			Geom& geom = geoms[i];
-
-			if (geom.type == CUBE)
-			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-			}
-			else if (geom.type == SPHERE)
-			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
-
-			// Compute the minimum t from the intersection tests to determine what
-			// scene geometry object was hit first.
-			if (t > 0.0f && t_min > t)
-			{
-				t_min = t;
-				hit_geom_index = i;
-				intersect_point = tmp_intersect;
-				normal = tmp_normal;
-			}
-		}
-
-		if (hit_geom_index == -1)
-		{
-			intersections[path_index].t = -1.0f;
-		}
-		else
-		{
-			//The ray hits something
-			intersections[path_index].t = t_min;
-			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
-			intersections[path_index].surfaceNormal = normal;
-		}
-	}
-}
-
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -283,58 +213,6 @@ __device__ glm::vec3 getBSDF(
 	return material.color * INV_PI;
 }
 
-__global__ void processPBR(
-	int iter, int depth
-	, int num_paths
-	, ShadeableIntersection* intersections
-	, PathSegment* pathSegments
-	, Material* materials
-)
-{
-	int path_idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (path_idx >= num_paths)return; // no light
-	PathSegment& seg = pathSegments[path_idx];
-	ShadeableIntersection& intersect = intersections[path_idx];
-	if (seg.remainingBounces <= 0) // end bounce
-	{
-		return;
-	}
-	if (intersect.t <= 0.) // no intersection
-	{
-		seg.color = glm::vec3(0.f);
-		seg.remainingBounces = 0;
-		return;
-	}
-	Material material = materials[intersect.materialId];
-	if (material.emittance > 0) // hit light
-	{
-		seg.color *= (material.color * material.emittance);
-		seg.remainingBounces = 0;
-		return;
-	}
-	--seg.remainingBounces;
-	if (seg.remainingBounces <= 0) // end bounce and didn't hit light
-	{
-		seg.color = glm::vec3(0.);
-		return;
-	}
-
-	float pdf = 1.f;
-
-	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
-	
-	glm::vec3 wo = -seg.ray.direction;
-
-	seg.ray.direction = sampleRay(wo, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
-
-	//fix strange artifact
-	seg.ray.origin += 0.01f * seg.ray.direction;
-
-	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
-	//           albedo           absdot
-	seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction),0.f,1.f)/pdf);
-}
-
 struct is_black
 {
 	__host__ __device__
@@ -392,9 +270,144 @@ void PathTracer::pathtraceInit(Scene* scene)
 	checkCUDAError("pathtraceInit");
 }
 
+
+// TODO:
+// computeIntersections handles generating ray intersections ONLY.
+// Generating new rays is handled in your shader(s).
+// Feel free to modify the code below.
+__global__ void computeIntersections(
+	int depth
+	, int num_paths
+	, PathSegment* pathSegments
+	, Geom* geoms
+	, int geoms_size
+	, ShadeableIntersection* intersections
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths)
+	{
+		PathSegment pathSegment = pathSegments[path_index];
+
+		float t;
+		glm::vec3 intersect_point;
+		glm::vec3 normal;
+		float t_min = FLT_MAX;
+		int hit_geom_index = -1;
+		bool outside = true;
+
+		glm::vec3 tmp_intersect;
+		glm::vec3 tmp_normal;
+
+		// naive parse through global geoms
+
+		//for (int i = 0; i < geoms_size; i++)
+		//{
+		//	Geom& geom = geoms[i];
+
+		//	if (geom.type == CUBE)
+		//	{
+		//		t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+		//	}
+		//	else if (geom.type == SPHERE)
+		//	{
+		//		t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+		//	}
+		//	// TODO: add more intersection tests here... triangle? metaball? CSG?
+
+		//	// Compute the minimum t from the intersection tests to determine what
+		//	// scene geometry object was hit first.
+		//	if (t > 0.0f && t_min > t)
+		//	{
+		//		t_min = t;
+		//		hit_geom_index = i;
+		//		intersect_point = tmp_intersect;
+		//		normal = tmp_normal;
+		//	}
+		//}
+		;
+		t = intersectRayTriangle(pathSegment.ray.origin, pathSegment.ray.direction, glm::vec3(5, 1, 4), glm::vec3(-5, 1, 3), glm::vec3(0, 5, 3), tmp_normal);
+		if (t > 0.0f)
+		{
+			t_min = t;
+			hit_geom_index = 2;
+			intersect_point = tmp_intersect;
+			normal = tmp_normal;
+		}
+
+		if (hit_geom_index == -1)
+		{
+			intersections[path_index].t = -1.0f;
+		}
+		else
+		{
+			//The ray hits something
+			intersections[path_index].t = t_min;
+			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+			intersections[path_index].surfaceNormal = normal;
+		}
+	}
+}
+
+__global__ void processPBR(
+	int iter, int depth
+	, int num_paths
+	, ShadeableIntersection* intersections
+	, PathSegment* pathSegments
+	, Material* materials
+)
+{
+	int path_idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (path_idx >= num_paths)return; // no light
+	PathSegment& seg = pathSegments[path_idx];
+	ShadeableIntersection& intersect = intersections[path_idx];
+	if (seg.remainingBounces <= 0) // end bounce
+	{
+		return;
+	}
+	if (intersect.t <= 0.) // no intersection
+	{
+		seg.color = glm::vec3(0.f);
+		seg.remainingBounces = 0;
+		return;
+	}
+	Material material = materials[intersect.materialId];
+	if (material.emittance > 0) // hit light
+	{
+		seg.color *= (material.color * material.emittance);
+		seg.remainingBounces = 0;
+		return;
+	}
+	--seg.remainingBounces;
+	//if (seg.remainingBounces <= 0) // end bounce and didn't hit light
+	//{
+	//	seg.color = glm::vec3(0.);
+	//	return;
+	//}
+
+	//float pdf = 1.f;
+
+	//seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
+
+	//glm::vec3 wo = -seg.ray.direction;
+
+	//seg.ray.direction = sampleRay(wo, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
+
+	////fix strange artifact
+	//seg.ray.origin += 0.01f * seg.ray.direction;
+
+	//glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
+	////           albedo           absdot
+	//seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction), 0.f, 1.f) / pdf);
+	seg.color = intersect.surfaceNormal;
+}
+
+
 void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 {
-	const int traceDepth = hst_scene->state.traceDepth;
+	//const int traceDepth = hst_scene->state.traceDepth;
+	int traceDepth = 1;
 	const Camera& cam = hst_scene->state.camera;
 
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -404,6 +417,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	const dim3 blocksPerGrid2d(
 		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
+	
 
 	// 1D block for path tracing
 	const int blockSize1d = 128;

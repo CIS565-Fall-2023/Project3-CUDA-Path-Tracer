@@ -6,6 +6,11 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+class Hittable {
+public:
+    virtual bool intersectRay(const Ray& ray, glm::vec3& intersectPt, glm::vec3& out_norm);
+};
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -142,3 +147,36 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float intersectRayTriangle(const glm::vec3& orig, const glm::vec3& dir,
+    const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, glm::vec3 &normal) {
+    glm::vec3 b;
+    bool hit = glm::intersectRayTriangle(orig, dir, v1, v2, v3, normal);
+    if (!hit) {
+        hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, normal);
+        if (!hit)return -1;
+    }
+    //normal = glm::normalize(normal);
+    //normal = glm::vec3(1,0,0);
+    float t = normal.z;
+    normal.z = 1 - normal.x - normal.y;
+    return t;
+}
+
+//__host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
+//    glm::vec3& intersectionPoint, glm::vec3& normal, Vertex* vertexArray
+//) {
+//    int start = mesh.vertStartId;
+//    int end = mesh.vertEndId;
+//    float t;
+//    for (int i = start;i < end;i+=3) {
+//        Vertex v1 = vertexArray[i];
+//        Vertex v2 = vertexArray[i + 1];
+//        Vertex v3 = vertexArray[i + 2];
+//        glm::vec2 bary;
+//        if (glm::intersectRayTriangle(r.origin, r.direction, v1.pos, v2.pos, v3.pos, bary, t)) {
+//            glm::
+//            return glm::dot(r.direction, intersectionPoint - r.origin);
+//        }
+//    }
+//}
