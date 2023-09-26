@@ -48,7 +48,7 @@ SCALE       100 1 100
 OBJECT 1
 cube
 material 0
-TRANS       0 20.5 0
+TRANS       0 30.5 0
 ROTAT       0 0 0
 SCALE       100 1 100
 
