@@ -19,7 +19,7 @@
 #include "pathtrace.h"
 #include "utilities.h"
 #include "depScene.h"
-#include "assembler.h"
+#include "scene.h"
 
 using namespace std;
 

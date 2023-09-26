@@ -81,8 +81,8 @@ set(core
     src/image.cpp
     src/pathtrace.h
     src/pathtrace.cu
-    src/assembler.h
-    src/assembler.cu
+    src/scene.h
+    src/scene.cu
 )
 
 set(imgui
