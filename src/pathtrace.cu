@@ -88,6 +88,7 @@ static Triangle* dev_triangles= nullptr;
 static Sphere * dev_spheres= nullptr;
 static int primitve_size = 1;
 static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
+static BSDFStruct * dev_bsdfStructs = nullptr;
 //static DeprecatedScene* testScene = new DeprecatedScene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -150,6 +151,10 @@ void pathtraceInit(HostScene* scene) {
 	auto triangles = pa->triangles.data();
 	cudaMalloc(&dev_triangles, pa->triangles.size() * sizeof(Triangle));
 	cudaMemcpy(dev_triangles, triangles, pa->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
+	auto bsdfStructs = pa->bsdfStructs.data();
+	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
+	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
 	//pa->movePrimitivesToDevice();
 	cudaDeviceSynchronize();
 	checkCUDAError("Primitive Assmbler failed!");
@@ -168,6 +173,7 @@ void pathtraceFree() {
 	// TODO: clean up any extra device memory you created
 	//pa->freeBuffer();
 	cudaFree(dev_triangles);
+	cudaFree(dev_bsdfStructs);
 	checkCUDAError("pathtraceFree");
 }
 
