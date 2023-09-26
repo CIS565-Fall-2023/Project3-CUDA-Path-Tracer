@@ -28,4 +28,4 @@
 ### Attribution
 
 - BVH tutorial: https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
-- Freddy Fazbear 3D model: https://sketchfab.com/3d-models/freddy-fazbear-from-fnaf-help-wanted-49a202e262e74439aee67f8022ed6376
+- Freddy Fazbear 3D model: https://sketchfab.com/3d-models/fnaf-ar-freddy-fazbear-f6e019333d694cbfbb2f3fbc9e791763

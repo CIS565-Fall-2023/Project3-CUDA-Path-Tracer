@@ -71,8 +71,16 @@ SCALE       100 1 100
 
 OBJECT 2
 mesh
-gltf/freddy.gltf
+gltf/freddy/main.gltf
 material 2
 TRANS       0 0 -5
 ROTAT       0 0 0
-SCALE       0.08 0.08 0.08
+SCALE       10 10 10
+
+OBJECT 3
+mesh
+gltf/freddy/eyes.gltf
+material 2
+TRANS       0 0 -5
+ROTAT       0 0 0
+SCALE       10 10 10

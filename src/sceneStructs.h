@@ -52,6 +52,8 @@ struct Material
 struct Vertex
 {
     glm::vec3 pos;
+    glm::vec3 nor;
+    glm::vec2 uv;
 };
 
 struct Triangle

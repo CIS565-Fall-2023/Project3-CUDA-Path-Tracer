@@ -80,8 +80,25 @@ int Scene::loadMesh(string filePath)
                 const tinygltf::Accessor& positionAccessor = model.accessors[primitive.attributes.at("POSITION")];
                 const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
                 const tinygltf::Buffer& positionBuffer = model.buffers[positionBufferView.buffer];
-
                 const float* positionData = reinterpret_cast<const float*>(&positionBuffer.data[positionBufferView.byteOffset + positionAccessor.byteOffset]);
+
+                const float* normalData = nullptr;
+                if (primitive.attributes.find("NORMAL") != primitive.attributes.end())
+                {
+                    const tinygltf::Accessor& normalAccessor = model.accessors[primitive.attributes.at("NORMAL")];
+                    const tinygltf::BufferView& normalBufferView = model.bufferViews[normalAccessor.bufferView];
+                    const tinygltf::Buffer& normalBuffer = model.buffers[normalBufferView.buffer];
+                    normalData = reinterpret_cast<const float*>(&normalBuffer.data[normalBufferView.byteOffset + normalAccessor.byteOffset]);
+                }
+
+                const float* uvData = nullptr;
+                if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end())
+                {
+                    const tinygltf::Accessor& uvAccessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+                    const tinygltf::BufferView& uvBufferView = model.bufferViews[uvAccessor.bufferView];
+                    const tinygltf::Buffer& uvBuffer = model.buffers[uvBufferView.buffer];
+                    uvData = reinterpret_cast<const float*>(&uvBuffer.data[uvBufferView.byteOffset + uvAccessor.byteOffset]);
+                }
 
                 if (primitive.indices >= 0)
                 {
@@ -96,16 +113,19 @@ int Scene::loadMesh(string filePath)
                         Triangle triangle;
 
                         int vertexIndex = indexData[i];
-                        glm::vec3 pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                        triangle.v0 = { pos };
+                        triangle.v0.pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                        if (normalData) triangle.v0.nor = glm::vec3(normalData[vertexIndex * 3], normalData[vertexIndex * 3 + 1], normalData[vertexIndex * 3 + 2]);
+                        if (uvData) triangle.v0.uv = glm::vec2(uvData[vertexIndex * 2], uvData[vertexIndex * 2 + 1]);
 
                         vertexIndex = indexData[i + 1];
-                        pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                        triangle.v1 = { pos };
+                        triangle.v1.pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                        if (normalData) triangle.v1.nor = glm::vec3(normalData[vertexIndex * 3], normalData[vertexIndex * 3 + 1], normalData[vertexIndex * 3 + 2]);
+                        if (uvData) triangle.v1.uv = glm::vec2(uvData[vertexIndex * 2], uvData[vertexIndex * 2 + 1]);
 
                         vertexIndex = indexData[i + 2];
-                        pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                        triangle.v2 = { pos };
+                        triangle.v2.pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
+                        if (normalData) triangle.v2.nor = glm::vec3(normalData[vertexIndex * 3], normalData[vertexIndex * 3 + 1], normalData[vertexIndex * 3 + 2]);
+                        if (uvData) triangle.v2.uv = glm::vec2(uvData[vertexIndex * 2], uvData[vertexIndex * 2 + 1]);
 
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
@@ -119,15 +139,18 @@ int Scene::loadMesh(string filePath)
                     for (size_t i = 0; i < positionAccessor.count; i += 3)
                     {
                         Triangle triangle;
-                        
-                        glm::vec3 pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
-                        triangle.v0 = { pos };
 
-                        pos = glm::vec3(positionData[(i + 1) * 3], positionData[(i + 1) * 3 + 1], positionData[(i + 1) * 3 + 2]);
-                        triangle.v1 = { pos };
+                        triangle.v0.pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
+                        if (normalData) triangle.v0.nor = glm::vec3(normalData[i * 3], normalData[i * 3 + 1], normalData[i * 3 + 2]);
+                        if (uvData) triangle.v0.uv = glm::vec2(uvData[i * 2], uvData[i * 2 + 1]);
 
-                        pos = glm::vec3(positionData[(i + 2) * 3], positionData[(i + 2) * 3 + 1], positionData[(i + 2) * 3 + 2]);
-                        triangle.v2 = { pos };
+                        triangle.v1.pos = glm::vec3(positionData[(i + 1) * 3], positionData[(i + 1) * 3 + 1], positionData[(i + 1) * 3 + 2]);
+                        if (normalData) triangle.v1.nor = glm::vec3(normalData[(i + 1) * 3], normalData[(i + 1) * 3 + 1], normalData[(i + 1) * 3 + 2]);
+                        if (uvData) triangle.v1.uv = glm::vec2(uvData[(i + 1) * 2], uvData[(i + 1) * 2 + 1]);
+
+                        triangle.v2.pos = glm::vec3(positionData[(i + 2) * 3], positionData[(i + 2) * 3 + 1], positionData[(i + 2) * 3 + 2]);
+                        if (normalData) triangle.v2.nor = glm::vec3(normalData[(i + 2) * 3], normalData[(i + 2) * 3 + 1], normalData[(i + 2) * 3 + 2]);
+                        if (uvData) triangle.v2.uv = glm::vec2(uvData[(i + 2) * 2], uvData[(i + 2) * 2 + 1]);
 
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
@@ -461,6 +484,11 @@ int Scene::loadCamera() {
 
     cout << "Loaded camera!" << endl;
     return 1;
+}
+
+int Scene::loadTexture(string filePath)
+{
+    return -1; // TODO
 }
 
 int Scene::loadMaterial(string materialId) {

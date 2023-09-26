@@ -190,7 +190,8 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
                 const glm::vec3& v1 = tri.v1.pos;
                 const glm::vec3& v2 = tri.v2.pos;
 
-                glm::vec3 barycentricPos; // as I understand it, (x, y) are the first two barycentric coordinates and z is t
+                // I know barycentricPos.z == t but x and y are constantly giving me trouble, so I recalculate this at the end of meshIntersectionTest()
+                glm::vec3 barycentricPos;
                 if (!glm::intersectRayTriangle(ray.origin, ray.direction, v0, v1, v2, barycentricPos))
                 {
                     continue;
@@ -214,6 +215,27 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
     return triIdx != -1;
 }
 
+// https://gamedev.stackexchange.com/a/23745
+__host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 p)
+{
+    auto v0 = b - a;
+    auto v1 = c - a;
+    auto v2 = p - a;
+
+    float d00 = glm::dot(v0, v0);
+    float d01 = glm::dot(v0, v1);
+    float d11 = glm::dot(v1, v1);
+    float d20 = glm::dot(v2, v0);
+    float d21 = glm::dot(v2, v1);
+    float mult = 1.0f / (d00 * d11 - d01 * d01);
+
+    float v = (d11 * d20 - d01 * d21) * mult;
+    float w = (d00 * d21 - d01 * d20) * mult;
+    float u = 1.0f - v - w;
+
+    return glm::vec3(u, v, w);
+}
+
 __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
     Ray r, glm::vec3& intersectionPoint, glm::vec3& normal)
 {
@@ -235,7 +257,8 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     const glm::vec3& v2 = tri.v2.pos;
 
     glm::vec3 objSpaceIntersection = ro + rd * t;
-    glm::vec3 objSpaceNormal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+    glm::vec3 barycentricPos = barycentric(v0, v1, v2, objSpaceIntersection);
+    glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * tri.v0.nor + barycentricPos.y * tri.v1.nor + barycentricPos.z * tri.v2.nor); // TODO add a toggle for this (smooth shading)
 
     intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objSpaceNormal, 0.f)));

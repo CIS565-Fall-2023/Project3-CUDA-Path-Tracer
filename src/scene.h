@@ -27,7 +27,10 @@ private:
     float bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos);
     void bvhSubdivide(BvhNode& node);
 
+    int loadTexture(string filePath);
+
     unordered_map<string, int> bvhRootIndices;
+    unordered_map<string, int> textureIndices;
 
 public:
     Scene(string filename);
@@ -35,6 +38,7 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
+    std::vector<unsigned char*> texPtrs;
     std::vector<Triangle> tris;
     std::vector<BvhNode> bvhNodes;
     std::vector<int> bvhTriIdx;
