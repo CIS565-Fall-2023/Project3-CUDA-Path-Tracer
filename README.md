@@ -21,7 +21,6 @@
 
 ### Planned features
 
-- Faster BVH construction using bins (see tutorial in Attribution section)
 - Add slider for depth of field? (which should reset pathtracer state when changed)
 - Open Image Denoise
 - Direct/full lighting?
