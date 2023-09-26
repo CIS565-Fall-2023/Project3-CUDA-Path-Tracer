@@ -204,20 +204,67 @@ float Scene::bvhEvaluateSAH(BvhNode& node, int axis, float pos)
     return cost > 0 ? cost : FLT_MAX;
 }
 
+#define BVH_NUM_INTERVALS 8
+
+struct Bin
+{
+    AABB aabb;
+    int triCount = 0;
+};
+
 float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos)
 {
     float bestCost = FLT_MAX;
     for (int candidateAxis = 0; candidateAxis < 3; ++candidateAxis)
     {
+        float axisMin = FLT_MAX;
+        float axisMax = -FLT_MAX;
         for (int i = 0; i < node.triCount; ++i)
         {
             const Triangle& tri = tris[bvhTriIdx[node.leftFirst + i]];
-            float candidatePos = tri.centroid[candidateAxis];
-            float cost = bvhEvaluateSAH(node, candidateAxis, candidatePos);
+            axisMin = min(axisMin, tri.centroid[candidateAxis]);
+            axisMax = max(axisMax, tri.centroid[candidateAxis]);
+        }
+
+        if (axisMin == axisMax)
+        {
+            continue;
+        }
+
+        Bin bins[BVH_NUM_INTERVALS];
+        float scale = BVH_NUM_INTERVALS / (axisMax - axisMin);
+        for (int i = 0; i < node.triCount; ++i)
+        {
+            const Triangle& tri = tris[bvhTriIdx[node.leftFirst + i]];
+            int binIdx = min(BVH_NUM_INTERVALS - 1, (int)((tri.centroid[candidateAxis] - axisMin) * scale));
+            ++bins[binIdx].triCount;
+            bins[binIdx].aabb.grow(tri);
+        }
+
+        float leftArea[BVH_NUM_INTERVALS - 1], rightArea[BVH_NUM_INTERVALS - 1];
+        int leftCount[BVH_NUM_INTERVALS - 1], rightCount[BVH_NUM_INTERVALS - 1];
+        AABB leftBox, rightBox;
+        int leftSum = 0, rightSum = 0;
+        for (int i = 0; i < BVH_NUM_INTERVALS - 1; ++i)
+        {
+            leftSum += bins[i].triCount;
+            leftCount[i] = leftSum;
+            leftBox.grow(bins[i].aabb);
+            leftArea[i] = leftBox.surfaceArea();
+            rightSum += bins[BVH_NUM_INTERVALS - 1 - i].triCount;
+            rightCount[BVH_NUM_INTERVALS - 2 - i] = rightSum;
+            rightBox.grow(bins[BVH_NUM_INTERVALS - 1 - i].aabb);
+            rightArea[BVH_NUM_INTERVALS - 2 - i] = rightBox.surfaceArea();
+        }
+
+        scale = (axisMax - axisMin) / BVH_NUM_INTERVALS;
+        for (int i = 0; i < BVH_NUM_INTERVALS - 1; ++i)
+        {
+            float cost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
             if (cost < bestCost)
             {
-                splitPos = candidatePos;
                 axis = candidateAxis;
+                splitPos = axisMin + scale * (i + 1);
                 bestCost = cost;
             }
         }

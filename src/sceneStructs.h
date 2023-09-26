@@ -76,6 +76,11 @@ struct AABB
         grow(tri.v1.pos);
         grow(tri.v2.pos);
     }
+    __host__ __device__ void grow(const AABB& other)
+    {
+        grow(other.bMin);
+        grow(other.bMax);
+    }
     __host__ __device__ glm::vec3 extent() const
     {
         return bMax - bMin;
