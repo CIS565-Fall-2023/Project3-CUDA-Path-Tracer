@@ -80,6 +80,12 @@ __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
     return r * glm::vec2(cos(theta), sin(theta));
 }
 
+__device__ glm::vec3 tex2DCustom(cudaTextureObject_t tex, glm::vec2 uv)
+{
+    uchar4 texCol = tex2D<uchar4>(tex, uv.x, uv.y);
+    return glm::vec3(texCol.x, texCol.y, texCol.z) / 255.f;
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -105,17 +111,30 @@ __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
+__device__
 void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
+        glm::vec2 uv,
         const Material &m,
+        cudaTextureObject_t* textureObjects,
         thrust::default_random_engine &rng) 
 {
     Ray newRay;
 
-    float diffuseLuminance = Utils::luminance(m.diffuse.color);
+    glm::vec3 diffuseColor;
+
+    if (m.diffuse.textureIdx != -1)
+    {
+        diffuseColor = tex2DCustom(textureObjects[m.diffuse.textureIdx], uv);
+    }
+    else
+    {
+        diffuseColor = m.diffuse.color;
+    }
+
+    float diffuseLuminance = Utils::luminance(diffuseColor);
     float specularLuminance = Utils::luminance(m.specular.color);
     float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
 
@@ -124,7 +143,7 @@ void scatterRay(
     {
         // diffuse
         newRay.direction = calculateRandomDirectionInHemisphere(normal, rng); // XXX: make normal face same direction as ray? (e.g. for inside of sphere)
-        pathSegment.color *= m.diffuse.color / (diffuseChance);
+        pathSegment.color *= diffuseColor / (diffuseChance);
 
         /* 
         disabled because lambert term is canceled out by the PDF

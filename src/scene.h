@@ -38,7 +38,7 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
-    std::vector<unsigned char*> texPtrs;
+    std::vector<Texture> textures;
     std::vector<Triangle> tris;
     std::vector<BvhNode> bvhNodes;
     std::vector<int> bvhTriIdx;

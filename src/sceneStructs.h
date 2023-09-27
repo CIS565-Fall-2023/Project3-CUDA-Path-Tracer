@@ -118,6 +118,14 @@ struct BvhNode
 #endif
 };
 
+struct Texture
+{
+    unsigned char* host_dataPtr;
+    int width;
+    int height;
+    int channels;
+};
+
 struct Camera 
 {
     glm::ivec2 resolution;
@@ -157,6 +165,7 @@ struct ShadeableIntersection
 {
     float t;
     glm::vec3 surfaceNormal;
+    glm::vec2 uv;
     int materialId;
 
     __host__ __device__ bool operator<(const ShadeableIntersection& other) const {

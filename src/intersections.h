@@ -215,6 +215,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
     return triIdx != -1;
 }
 
+// from ChatGPT
 __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 p)
 {
     float denomReciprocal = 1.0f / ((a.x - c.x) * (b.y - c.y) - (b.x - c.x) * (a.y - c.y));
@@ -224,7 +225,7 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c,
 }
 
 __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
-    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal)
+    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -239,16 +240,18 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     }
 
     const Triangle& tri = tris[triIdx];
-    const glm::vec3& v0 = tri.v0.pos;
-    const glm::vec3& v1 = tri.v1.pos;
-    const glm::vec3& v2 = tri.v2.pos;
+    const Vertex& v0 = tri.v0;
+    const Vertex& v1 = tri.v1;
+    const Vertex& v2 = tri.v2;
 
     glm::vec3 objSpaceIntersection = ro + rd * t;
-    glm::vec3 barycentricPos = barycentric(v0, v1, v2, objSpaceIntersection);
-    glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * tri.v0.nor + barycentricPos.y * tri.v1.nor + barycentricPos.z * tri.v2.nor); // TODO add a toggle for this (smooth shading)
+    glm::vec3 barycentricPos = barycentric(v0.pos, v1.pos, v2.pos, objSpaceIntersection);
+    glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * v0.nor + barycentricPos.y * v1.nor + barycentricPos.z * v2.nor); // TODO add a toggle for this (smooth shading)
 
     intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objSpaceNormal, 0.f)));
+
+    uv = barycentricPos.x * v0.uv + barycentricPos.y * v1.uv + barycentricPos.z * v2.uv;
 
     return glm::length(r.origin - intersectionPoint);
 }

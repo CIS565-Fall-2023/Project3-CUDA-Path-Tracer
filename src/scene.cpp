@@ -38,12 +38,22 @@ Scene::Scene(string filename) {
     }
 }
 
+Scene::~Scene()
+{
+    for (const auto texture : textures)
+    {
+        delete[] texture.host_dataPtr;
+    }
+}
+
 int Scene::loadMesh(string filePath)
 {
     if (bvhRootIndices.find(filePath) != bvhRootIndices.end())
     {
         return bvhRootIndices[filePath];
     }
+
+    cout << "Loading mesh: " << filePath << endl;
 
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -371,7 +381,6 @@ int Scene::loadGeom(string objectid) {
                 string filePath;
                 Utils::safeGetline(fp_in, filePath);
                 string fullPath = basePath + filePath;
-                cout << "Creating new mesh from " << fullPath << "..." << endl;
                 newGeom.type = MESH;
 
                 auto time1 = Utils::timeSinceEpochMillisec();
@@ -487,7 +496,48 @@ int Scene::loadCamera() {
 
 int Scene::loadTexture(string filePath)
 {
-    return -1; // TODO
+    if (textureIndices.find(filePath) != textureIndices.end())
+    {
+        return textureIndices[filePath];
+    }
+
+    cout << "Loading texture: " << filePath << endl;
+
+    int textureIdx = textures.size();
+    textures.emplace_back();
+    Texture& texture = textures.back();
+
+    int channels;
+    unsigned char* textureData = stbi_load(filePath.c_str(), &texture.width, &texture.height, &channels, NULL);
+
+    texture.host_dataPtr = new unsigned char [texture.width * texture.height * 4];
+
+    // ensure all textures have 4 channels to simplify texture format logic
+    if (channels < 4)
+    {
+        for (int i = 0; i < texture.width * texture.height; ++i)
+        {
+            for (int j = 0; j < channels; ++j)
+            {
+                texture.host_dataPtr[4 * i + j] = textureData[channels * i + j];
+            }
+
+            for (int j = channels; j < 4; ++j)
+            {
+                texture.host_dataPtr[4 * i + j] = 255;
+            }
+        }
+    }
+    else
+    {
+        memcpy(texture.host_dataPtr, textureData, texture.width * texture.height * 4);
+    }
+
+    texture.channels = 4;
+
+    stbi_image_free(textureData);
+
+    return textureIdx;
 }
 
 int Scene::loadMaterial(string materialId) {
@@ -504,7 +554,14 @@ int Scene::loadMaterial(string materialId) {
         while (!line.empty()) {
             vector<string> tokens = Utils::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "DIFF_COL") == 0) {
-                newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                if (tokens.size() == 2)
+                {
+                    newMaterial.diffuse.textureIdx = loadTexture(basePath + tokens[1]);
+                }
+                else
+                {
+                    newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                }
             } else if (strcmp(tokens[0].c_str(), "SPEC_EX") == 0) {
                 newMaterial.specular.exponent = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "SPEC_COL") == 0) {

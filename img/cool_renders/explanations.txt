@@ -18,3 +18,4 @@
 018 - two monkeys (with BVH)
 019 - monkey BVH broke
 020 - freddy fazbear (with binned BVH construction)
+021 - freddy with diffuse textures

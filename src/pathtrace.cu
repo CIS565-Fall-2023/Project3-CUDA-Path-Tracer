@@ -93,6 +93,11 @@ static ShadeableIntersection* dev_intersections = NULL;
 static thrust::device_ptr<PathSegment> dev_thrust_paths = NULL;
 static thrust::device_ptr<ShadeableIntersection> dev_thrust_intersections = NULL;
 
+static int numTextures;
+static cudaTextureObject_t* host_textureObjects = NULL; // array owned by host
+static cudaTextureObject_t* dev_textureObjects = NULL; // array owned by device
+static cudaArray_t* host_textureArrayPtrs = NULL; // array owned by host
+
 #if FIRST_BOUNCE_CACHE
 static bool fbcNeedsRefresh = true;
 static ShadeableIntersection* dev_intersections_fbc = NULL;
@@ -133,12 +138,57 @@ void Pathtracer::init(Scene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
 
+	initTextures(scene);
+
 #if FIRST_BOUNCE_CACHE
 	cudaMalloc(&dev_intersections_fbc, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections_fbc = thrust::device_pointer_cast(dev_intersections_fbc);
 #endif
 
 	checkCUDAError("pathtraceInit");
+}
+
+void Pathtracer::initTextures(Scene* scene)
+{
+	numTextures = scene->textures.size();
+	if (numTextures == 0)
+	{
+		return;
+	}
+
+	host_textureObjects = new cudaTextureObject_t[numTextures];
+	host_textureArrayPtrs = new cudaArray_t[numTextures];
+
+	for (int i = 0; i < numTextures; ++i)
+	{
+		const Texture& texture = scene->textures[i];
+
+		auto texSizeBytes = texture.width * texture.height * texture.channels * sizeof(unsigned char);
+
+		// wasn't working with linear memory so changed to array
+		// https://stackoverflow.com/questions/63408787/texture-object-fetching-in-cuda
+		auto channelDesc = cudaCreateChannelDesc<uchar4>();
+		cudaMallocArray(&host_textureArrayPtrs[i], &channelDesc, texture.width, texture.height);
+		cudaMemcpy2DToArray(host_textureArrayPtrs[i], 0, 0, texture.host_dataPtr, texture.width * sizeof(uchar4), texture.width * sizeof(uchar4), texture.height, cudaMemcpyHostToDevice);
+
+		cudaResourceDesc resDesc;
+		memset(&resDesc, 0, sizeof(resDesc));
+		resDesc.resType = cudaResourceTypeArray;
+		resDesc.res.array.array = host_textureArrayPtrs[i];
+
+		cudaTextureDesc texDesc;
+		memset(&texDesc, 0, sizeof(texDesc));
+		texDesc.filterMode = cudaFilterModePoint;
+		texDesc.readMode = cudaReadModeElementType;
+		texDesc.addressMode[0] = cudaAddressModeWrap;
+		texDesc.addressMode[1] = cudaAddressModeWrap;
+		texDesc.normalizedCoords = 1;
+
+		cudaCreateTextureObject(&host_textureObjects[i], &resDesc, &texDesc, NULL);
+	}
+
+	cudaMalloc((void**)&dev_textureObjects, numTextures * sizeof(cudaTextureObject_t));
+	cudaMemcpy(dev_textureObjects, host_textureObjects, numTextures * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
 }
 
 void Pathtracer::free() {
@@ -155,11 +205,32 @@ void Pathtracer::free() {
 	cudaFree(dev_paths);
 	cudaFree(dev_intersections);
 
+	freeTextures();
+
 #if FIRST_BOUNCE_CACHE
 	cudaFree(dev_intersections_fbc);
 #endif
 
 	checkCUDAError("pathtraceFree");
+}
+
+void Pathtracer::freeTextures()
+{
+	if (numTextures == 0)
+	{
+		return;
+	}
+
+	cudaFree(dev_textureObjects);
+
+	for (int i = 0; i < numTextures; ++i)
+	{
+		cudaDestroyTextureObject(host_textureObjects[i]);
+		cudaFreeArray(host_textureArrayPtrs[i]);
+	}
+
+	delete[] host_textureObjects;
+	delete[] host_textureArrayPtrs;
 }
 
 /**
@@ -197,11 +268,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		float z = glm::length(glm::proj(noLensDirection, cam.view));
 		glm::vec3 pFocus = cam.position + (noLensDirection * cam.focalDistance / z);
 		glm::vec2 pLens = cam.lensRadius * ConcentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
-
-		//Ray newRay;
-		//newRay.origin = cam.position + (pLens.x * cam.right + pLens.y * cam.up);
-		//newRay.direction = noLensDirection;
-		//segment.ray = newRay;
 
 		Ray newRay;
 		newRay.origin = cam.position + (pLens.x * cam.right + pLens.y * cam.up);
@@ -242,11 +308,13 @@ __global__ void computeIntersections(
 	float t;
 	glm::vec3 intersect_point;
 	glm::vec3 normal;
+	glm::vec2 uv;
 	float t_min = FLT_MAX;
 	int hit_geom_index = -1;
 
 	glm::vec3 tmp_intersect;
 	glm::vec3 tmp_normal;
+	glm::vec2 tmp_uv;
 
 	// naive parse through global geoms
 
@@ -264,7 +332,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = meshIntersectionTest(geom, tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv);
 		}
 
 		if (t < 0 || t > t_min)
@@ -276,6 +344,7 @@ __global__ void computeIntersections(
 		hit_geom_index = i;
 		intersect_point = tmp_intersect;
 		normal = tmp_normal;
+		uv = tmp_uv;
 	}
 
 	if (hit_geom_index == -1)
@@ -288,6 +357,7 @@ __global__ void computeIntersections(
 		intersections[path_index].t = t_min;
 		intersections[path_index].materialId = geoms[hit_geom_index].materialId;
 		intersections[path_index].surfaceNormal = normal;
+		intersections[path_index].uv = uv;
 	}
 }
 
@@ -296,7 +366,7 @@ struct SegmentProcessingSettings
 	bool russianRoulette;
 };
 
-__device__ void processSegment(PathSegment& segment, ShadeableIntersection intersection, Material* materials, int iter, int idx, SegmentProcessingSettings settings)
+__device__ void processSegment(PathSegment& segment, ShadeableIntersection intersection, Material* materials, cudaTextureObject_t* textureObjects, int iter, int idx, SegmentProcessingSettings settings)
 {
 	if (intersection.t <= 0.0f)
 	{
@@ -327,7 +397,9 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 		segment,
 		getPointOnRay(segment.ray, intersection.t),
 		intersection.surfaceNormal,
+		intersection.uv,
 		material,
+		textureObjects,
 		rng
 	);
 
@@ -359,6 +431,7 @@ __global__ void shadeMaterial(
 	ShadeableIntersection* shadeableIntersections,
 	PathSegment* pathSegments, 
 	Material* materials,
+	cudaTextureObject_t* textureObjects,
 	SegmentProcessingSettings settings
 )
 {
@@ -370,7 +443,7 @@ __global__ void shadeMaterial(
 
 	PathSegment segment = pathSegments[idx];
 	ShadeableIntersection intersection = shadeableIntersections[idx];
-	processSegment(segment, intersection, materials, iter, idx, settings);
+	processSegment(segment, intersection, materials, textureObjects, iter, idx, settings);
 
 	pathSegments[idx] = segment;
 }
@@ -476,6 +549,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				dev_thrust_intersections + num_valid_paths,
 				dev_thrust_paths
 			);
+			checkCUDAError("sort by material");
 		}
 
 		SegmentProcessingSettings settings;
@@ -487,8 +561,10 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_intersections,
 			dev_paths,
 			dev_materials,
+			dev_textureObjects,
 			settings
 		);
+		checkCUDAError("shade material");
 
 #if FIRST_BOUNCE_CACHE
 		if (guiData->firstBounceCache && depth == 1 && fbcNeedsRefresh)
@@ -499,6 +575,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				dev_thrust_intersections + num_total_paths,
 				dev_thrust_intersections_fbc
 			);
+			checkCUDAError("first bounce cache");
 			fbcNeedsRefresh = false;
 		}
 #endif
@@ -509,6 +586,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_thrust_paths + num_valid_paths,
 			partition_predicate()
 		);
+		checkCUDAError("partition");
 
 		num_valid_paths = middle - dev_thrust_paths;
 
