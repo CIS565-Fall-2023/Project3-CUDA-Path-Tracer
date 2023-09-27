@@ -14,11 +14,12 @@ __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& w
     }
 }
 
-__device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, float* pdf) {
+__device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, float* pdf, thrust::default_random_engine & rng) {
     switch (bsdfStruct.bsdfType)
     {
     case DIFFUSE:
     {
+        wi = hemiSphereRandomSample(rng, pdf);
         // Encapsulate a sampler class
         return bsdfStruct.reflectance / PI;
     }

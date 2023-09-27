@@ -22,6 +22,8 @@
 #include "bsdf.h"
 //#include "utilities.cuh"
 
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
+
 #define ERRORCHECK 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -136,9 +138,7 @@ void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
 	cudaFree(dev_intersections);
-	//cudaFree(dev_lights);
 	// TODO: clean up any extra device memory you created
-	//pa->freeBuffer();
 	cudaFree(dev_triangles);
 	cudaFree(dev_bsdfStructs);
 	checkCUDAError("pathtraceFree");
@@ -241,7 +241,6 @@ __global__ void shadeBSDF(
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
-				//pathSegments[idx].color *= (materialColor * material.emittance);
 				pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength * pathSegment.constantTerm);
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
@@ -252,40 +251,35 @@ __global__ void shadeBSDF(
 				make_coord_space(o2w, intersection.surfaceNormal);
 				glm::mat3x3 w2o(glm::transpose(o2w));
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
-				//printf("intersect: %f, %f, %f\n", intersect.x, intersect.y, intersect.z);
-				//return;
-				//glm::vec3 localNormal = w2o * intersection.surfaceNormal;
-				//pathSegments[idx].color = localNormal;
 				glm::vec3 bsdf = bsdfStruct.reflectance * INV_PI; // Hard coded for now
 				glm::vec3 L_direct;
 				float pdf;
+				glm::vec3 wo = -pathSegment.ray.direction;
+				glm::vec3 wi;
+#if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Estimate one bounce direct lighting */
 				int n_sample = 10;
 				int n_valid_sample = 0;
 				for (size_t i = 0; i < n_sample; i++)
 				{
-					glm::vec3 wo = hemiSphereRandomSample(rng, &pdf);
-					float cosineTerm = abs(wo.z);
+					sample_f(bsdfStruct, wo, wi, &pdf, rng);
+					float cosineTerm = abs(wi.z);
 					Ray one_bounce_ray;
-					one_bounce_ray.direction = o2w * wo;
+					one_bounce_ray.direction = o2w * wi;
 					one_bounce_ray.origin = intersect;
 					one_bounce_ray.min_t = EPSILON;
 					one_bounce_ray.max_t = FLT_MAX;
 					ShadeableIntersection oneBounceIntersection;
 					oneBounceIntersection.t = -1.0f;
-					
-					//computeIntersectionsCore(geoms, geoms_size, one_bounce_ray, oneBounceIntersection);
-					//printf("oneBounceIntersection.t: %f\n", oneBounceIntersection.t);
+
 					if (intersectCore(triangles, triangles_size, one_bounce_ray, oneBounceIntersection)){
 						auto oneBounceBSDF = bsdfStructs[oneBounceIntersection.materialId];
 						if (oneBounceBSDF.bsdfType == BSDFType::EMISSIVE) {
 							n_valid_sample++;
-							//pathSegments[idx].color = glm::vec3(1.0f);
 							auto Li = oneBounceBSDF.emissiveFactor * oneBounceBSDF.strength;
 
 							// TODO: Figure out why is it still not so similar to the reference rendered image?
 							//		May be checkout the light propogation chapter of pbrt to find out how we use direct light estimation?
-							//L_direct += Li * bsdf * cosineTerm / pdf;
 							L_direct += Li * bsdf * cosineTerm;
 						}
 					}
@@ -293,13 +287,16 @@ __global__ void shadeBSDF(
 
 				float one_over_n = 1.0f / (n_valid_sample + 1);
 				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
-				
-				glm::vec3 wo = hemiSphereRandomSample(rng, &pdf);
-				float cosineTerm = abs(wo.z);
+#endif //  ONE_BOUNCE_DIRECT_LIGHTINIG
+				sample_f(bsdfStruct, wo, wi, &pdf, rng);
+				float cosineTerm = abs(wi.z);
+#if ONE_BOUNCE_DIRECT_LIGHTINIG
 				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
-				
+#else
+				pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
+#endif			
 				pathSegment.ray.origin = intersect;
-				pathSegment.ray.direction = o2w * wo;
+				pathSegment.ray.direction = o2w * wi;
 				pathSegment.remainingBounces--;
 
 				//scatterRay(pathSegments[idx], pathSegments[idx].ray.at(intersection.t), intersection.surfaceNormal, material, rng);
@@ -310,7 +307,6 @@ __global__ void shadeBSDF(
 			// This can be useful for post-processing and image compositing.
 		}
 		else {
-			//pathSegments[idx].color = glm::vec3(0.0f);
 			pathSegments[idx].remainingBounces = 0;
 		}
 	}
