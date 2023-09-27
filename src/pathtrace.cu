@@ -179,6 +179,23 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
 
+		// Physically-based depth-of-field
+		if (cam.lensRadius > 0.0f) {
+			// generate random point on lens
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+			glm::vec2 sample = glm::vec2(u01(rng), u01(rng));
+			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(sample);
+
+			// compute point on plane of focus
+			float ft = glm::abs(cam.focalDistance / segment.ray.direction.z);
+			glm::vec3 pFocus = segment.ray.origin + ft * segment.ray.direction;
+
+			// update ray for effect of lens
+			segment.ray.origin += cam.right * pLens.x + cam.up * pLens.y;
+			segment.ray.direction = glm::normalize(pFocus - segment.ray.origin);
+		}
+
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}

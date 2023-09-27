@@ -2,6 +2,23 @@
 
 #include "intersections.h"
 
+__host__ __device__
+glm::vec2 concentricSampleDisk(const glm::vec2& sample)
+{
+    glm::vec2 uOffset = 2.f * sample - glm::vec2(1.);
+    if (uOffset.x == 0 && uOffset.y == 0) return glm::vec2(0, 0);
+    float theta, r;
+    if (std::abs(uOffset.x) > std::abs(uOffset.y)) {
+        r = uOffset.x;
+        theta = (PI / 4.0) * (uOffset.y / uOffset.x);
+    }
+    else {
+        r = uOffset.y;
+        theta = (PI / 2.0) - (PI / 4.0) * (uOffset.x / uOffset.y);
+    }
+    return r * glm::vec2(std::cos(theta), std::sin(theta));
+}
+
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
