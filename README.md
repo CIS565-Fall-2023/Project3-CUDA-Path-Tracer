@@ -11,7 +11,7 @@ CUDA Path Tracer
 *DO NOT* leave the README to the last minute! It is a crucial part of the
 project, and we will not be able to grade you without a good README.
 
-### Third Party Libaray
+### Third Party Library
 - [Json File Reader](https://github.com/nlohmann/json)
 - [TinyObjLoader](https://github.com/tinyobjloader/tinyobjloader)
 

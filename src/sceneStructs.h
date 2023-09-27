@@ -143,3 +143,48 @@ struct ShadeableIntersection
         materialId = -1.f;
     }
 };
+
+struct AABB
+{
+    CPU_ONLY AABB(const glm::vec3& _min = glm::vec3(Float_MAX),
+                  const glm::vec3& _max = glm::vec3(Float_MIN))
+        : m_Min(_min), m_Max(_max)
+    {}
+    glm::vec3 m_Min;
+    glm::vec3 m_Max;
+    
+    glm::ivec3 m_Data; // leaf data or node data
+
+    inline CPU_ONLY void Merge(const AABB& other)
+    {
+        m_Min = glm::min(m_Min, other.m_Min);
+        m_Max = glm::max(m_Max, other.m_Max);
+    }
+    inline CPU_ONLY void Merge(const glm::vec3& p)
+    {
+        m_Min = glm::min(p, m_Min);
+        m_Max = glm::max(p, m_Max);
+    }
+    inline CPU_ONLY glm::vec3 GetDiagnol() const { return m_Max - m_Min; }
+    inline CPU_ONLY glm::vec3 GetCenter() const { return glm::vec3(0.5f) * (m_Min + m_Max);  }
+    inline CPU_ONLY int GetMaxAxis() const
+    {
+        glm::vec3 d = GetDiagnol();
+        return ((d.x > d.y && d.x > d.z) ? 0 : ((d.y > d.z) ? 1 : 2));
+    }
+
+    inline CPU_GPU bool Intersection(const Ray& ray, const glm::vec3& inv_dir, float& t) const 
+    {
+        glm::vec3 t_near = (m_Min - ray.origin) * inv_dir;
+        glm::vec3 t_far = (m_Max - ray.origin) * inv_dir;
+
+        glm::vec3 t_min = glm::min(t_near, t_far);
+        glm::vec3 t_max = glm::max(t_near, t_far);
+
+        t = glm::max(glm::max(t_min.x, t_min.y), t_min.z);
+
+        if (t > glm::min(glm::min(t_max.x, t_max.y), t_max.z)) return false;
+
+        return true;
+    }
+};

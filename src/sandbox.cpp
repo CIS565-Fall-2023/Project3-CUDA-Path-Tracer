@@ -9,10 +9,10 @@
 #include "utilities.h"
 #include "scene.h"
 #include "gpuScene.h"
+#include "bvh.h"
 #include "cameraController.h"
 
 #include "cudaUtilities.h"
-#include "common.h"
 
 #define JOIN(a, b) a##b
 #define JOIN2(a, b) JOIN(a, b)
@@ -87,7 +87,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/cornellBox.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/cornellMesh.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -97,13 +97,18 @@ SandBox::SandBox()
 	m_PathTracer->Init(m_Scene.get());
 
 	m_GPUScene = mkU<GPUScene>();
+	m_GPUScene->shape_count = m_Scene->m_vIds.size();
+	
+	BVH bvh;
+	bvh.Create(m_Scene->m_Vertices, m_Scene->m_vIds);
+	
+	m_GPUScene->bvh_count = bvh.m_AABBs.size();
 
+	MallocArrayOnCuda<AABB>(m_GPUScene->dev_BVH, bvh.m_AABBs);
 	MallocArrayOnCuda<glm::vec3>(m_GPUScene->dev_vertices, m_Scene->m_Vertices);
 	MallocArrayOnCuda<glm::ivec4>(m_GPUScene->dev_triangles, m_Scene->m_vIds);
-	
+	cudaMemcpy(bvh.m_AABBs.data(), m_GPUScene->dev_BVH, bvh.m_AABBs.size() * sizeof(AABB), cudaMemcpyDeviceToHost);
 	checkCUDAError("Copy array Error");
-
-	m_GPUScene->shape_count = m_Scene->m_vIds.size();
 }
 
 SandBox::~SandBox()
