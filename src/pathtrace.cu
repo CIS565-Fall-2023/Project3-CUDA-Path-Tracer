@@ -170,20 +170,22 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
 
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-		// TODO: implement antialiasing by jittering the ray
+		// anti-aliasing by jittering
+		// u01(rng) - 0.5f
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) - 0.5f - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + u01(rng) - 0.5f - (float)cam.resolution.y * 0.5f)
 		);
 
 		// Physically-based depth-of-field
 		if (cam.lensRadius > 0.0f) {
 			// generate random point on lens
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
 			glm::vec2 sample = glm::vec2(u01(rng), u01(rng));
 			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(sample);
 
