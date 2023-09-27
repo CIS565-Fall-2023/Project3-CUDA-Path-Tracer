@@ -163,8 +163,6 @@ void Pathtracer::initTextures(Scene* scene)
 	{
 		const Texture& texture = scene->textures[i];
 
-		auto texSizeBytes = texture.width * texture.height * texture.channels * sizeof(unsigned char);
-
 		// wasn't working with linear memory so changed to array
 		// https://stackoverflow.com/questions/63408787/texture-object-fetching-in-cuda
 		auto channelDesc = cudaCreateChannelDesc<uchar4>();
@@ -178,8 +176,8 @@ void Pathtracer::initTextures(Scene* scene)
 
 		cudaTextureDesc texDesc;
 		memset(&texDesc, 0, sizeof(texDesc));
-		texDesc.filterMode = cudaFilterModePoint;
-		texDesc.readMode = cudaReadModeElementType;
+		texDesc.filterMode = cudaFilterModeLinear;
+		texDesc.readMode = cudaReadModeNormalizedFloat;
 		texDesc.addressMode[0] = cudaAddressModeWrap;
 		texDesc.addressMode[1] = cudaAddressModeWrap;
 		texDesc.normalizedCoords = 1;
@@ -309,12 +307,14 @@ __global__ void computeIntersections(
 	glm::vec3 intersect_point;
 	glm::vec3 normal;
 	glm::vec2 uv;
+	int triIdx;
 	float t_min = FLT_MAX;
 	int hit_geom_index = -1;
 
 	glm::vec3 tmp_intersect;
 	glm::vec3 tmp_normal;
 	glm::vec2 tmp_uv;
+	int tmp_triIdx;
 
 	// naive parse through global geoms
 
@@ -332,7 +332,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv);
+			t = meshIntersectionTest(geom, tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, tmp_triIdx);
 		}
 
 		if (t < 0 || t > t_min)
@@ -345,6 +345,7 @@ __global__ void computeIntersections(
 		intersect_point = tmp_intersect;
 		normal = tmp_normal;
 		uv = tmp_uv;
+		triIdx = tmp_triIdx;
 	}
 
 	if (hit_geom_index == -1)
@@ -354,10 +355,13 @@ __global__ void computeIntersections(
 	else
 	{
 		//The ray hits something
-		intersections[path_index].t = t_min;
-		intersections[path_index].materialId = geoms[hit_geom_index].materialId;
-		intersections[path_index].surfaceNormal = normal;
-		intersections[path_index].uv = uv;
+		ShadeableIntersection& isect = intersections[path_index];
+		isect.hitGeomIdx = hit_geom_index;
+		isect.t = t_min;
+		isect.materialId = geoms[hit_geom_index].materialId;
+		isect.surfaceNormal = normal;
+		isect.uv = uv;
+		isect.triIdx = triIdx;
 	}
 }
 
@@ -366,7 +370,16 @@ struct SegmentProcessingSettings
 	bool russianRoulette;
 };
 
-__device__ void processSegment(PathSegment& segment, ShadeableIntersection intersection, Material* materials, cudaTextureObject_t* textureObjects, int iter, int idx, SegmentProcessingSettings settings)
+__device__ void processSegment(
+	PathSegment& segment, 
+	ShadeableIntersection& intersection,
+	Geom* geoms,
+	Triangle* tris,
+	Material* materials, 
+	cudaTextureObject_t* textureObjects, 
+	int iter, 
+	int idx, 
+	SegmentProcessingSettings settings)
 {
 	if (intersection.t <= 0.0f)
 	{
@@ -374,12 +387,6 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 		segment.remainingBounces = 0;
 		return;
 	}
-
-#if DEBUG_SHOW_NORMALS
-	segment.color = (intersection.surfaceNormal + 1.f) / 2.f;
-	segment.remainingBounces = 0;
-	return;
-#endif
 
 	thrust::uniform_real_distribution<float> u01(0, 1);
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.bouncesSoFar + 1);
@@ -395,13 +402,20 @@ __device__ void processSegment(PathSegment& segment, ShadeableIntersection inter
 	
 	scatterRay(
 		segment,
+		intersection,
 		getPointOnRay(segment.ray, intersection.t),
-		intersection.surfaceNormal,
-		intersection.uv,
+		geoms,
+		tris,
 		material,
 		textureObjects,
 		rng
 	);
+
+#if DEBUG_SHOW_NORMALS
+		segment.color = (intersection.surfaceNormal + 1.f) / 2.f;
+		segment.remainingBounces = 0;
+		return;
+#endif
 
 	++segment.bouncesSoFar;
 
@@ -429,7 +443,9 @@ __global__ void shadeMaterial(
 	int iter,
 	int num_paths,
 	ShadeableIntersection* shadeableIntersections,
-	PathSegment* pathSegments, 
+	PathSegment* pathSegments,
+	Geom* geoms,
+	Triangle* tris,
 	Material* materials,
 	cudaTextureObject_t* textureObjects,
 	SegmentProcessingSettings settings
@@ -442,8 +458,7 @@ __global__ void shadeMaterial(
 	}
 
 	PathSegment segment = pathSegments[idx];
-	ShadeableIntersection intersection = shadeableIntersections[idx];
-	processSegment(segment, intersection, materials, textureObjects, iter, idx, settings);
+	processSegment(segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, iter, idx, settings);
 
 	pathSegments[idx] = segment;
 }
@@ -560,6 +575,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			num_valid_paths,
 			dev_intersections,
 			dev_paths,
+			dev_geoms,
+			dev_tris,
 			dev_materials,
 			dev_textureObjects,
 			settings

@@ -567,15 +567,17 @@ int Scene::loadMaterial(string materialId) {
             } else if (strcmp(tokens[0].c_str(), "SPEC_COL") == 0) {
                 newMaterial.specular.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
-                newMaterial.hasReflective = atof(tokens[1].c_str());
+                newMaterial.specular.hasReflective = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
-                newMaterial.hasRefractive = atof(tokens[1].c_str());
+                newMaterial.specular.hasRefractive = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
-                newMaterial.indexOfRefraction = atof(tokens[1].c_str());
+                newMaterial.specular.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMIT_COL") == 0) {
                 newMaterial.emission.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "EMIT_STR") == 0) {
                 newMaterial.emission.strength = atof(tokens[1].c_str());
+            } else if (strcmp(tokens[0].c_str(), "NORM_MAP") == 0) {
+                newMaterial.normalMap.textureIdx = loadTexture(basePath + tokens[1]);
             }
 
             Utils::safeGetline(fp_in, line);

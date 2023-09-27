@@ -53,7 +53,8 @@ __host__ __device__
 void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m)
 {
     bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
-    newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction);
+    newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, 
+        entering ? 1.0f / m.specular.indexOfRefraction : m.specular.indexOfRefraction);
     pathSegment.color *= m.specular.color;
 }
 
@@ -82,8 +83,10 @@ __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
 
 __device__ glm::vec3 tex2DCustom(cudaTextureObject_t tex, glm::vec2 uv)
 {
-    uchar4 texCol = tex2D<uchar4>(tex, uv.x, uv.y);
-    return glm::vec3(texCol.x, texCol.y, texCol.z) / 255.f;
+    //uchar4 texCol = tex2D<uchar4>(tex, uv.x, uv.y);
+    //return glm::vec3(texCol.x, texCol.y, texCol.z) / 255.f;
+    float4 texCol = tex2D<float4>(tex, uv.x, uv.y);
+    return glm::vec3(texCol.x, texCol.y, texCol.z);
 }
 
 /**
@@ -113,32 +116,72 @@ __device__ glm::vec3 tex2DCustom(cudaTextureObject_t tex, glm::vec2 uv)
  */
 __device__
 void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        glm::vec2 uv,
-        const Material &m,
-        cudaTextureObject_t* textureObjects,
-        thrust::default_random_engine &rng) 
+    PathSegment& pathSegment,
+    ShadeableIntersection& isect,
+    const glm::vec3& isectPos,
+    const Geom* geoms,
+    const Triangle* tris,
+    const Material &m,
+    cudaTextureObject_t* textureObjects,
+    thrust::default_random_engine &rng) 
 {
-    Ray newRay;
-
     glm::vec3 diffuseColor;
-
     if (m.diffuse.textureIdx != -1)
     {
-        diffuseColor = tex2DCustom(textureObjects[m.diffuse.textureIdx], uv);
+        diffuseColor = tex2DCustom(textureObjects[m.diffuse.textureIdx], isect.uv);
     }
     else
     {
         diffuseColor = m.diffuse.color;
     }
 
+    glm::vec3 normal;
+    if (m.normalMap.textureIdx != -1)
+    {
+        // http://www.thetenthplanet.de/archives/1180
+        const Triangle& tri = tris[isect.triIdx];
+        const Vertex& v0 = tri.v0;
+        const Vertex& v1 = tri.v1;
+        const Vertex& v2 = tri.v2;
+
+        const glm::mat4 transform = geoms[isect.hitGeomIdx].transform;
+
+        glm::vec3 v0Pos = multiplyMV(transform, glm::vec4(v0.pos, 1));
+        glm::vec3 v1Pos = multiplyMV(transform, glm::vec4(v1.pos, 1));
+        glm::vec3 v2Pos = multiplyMV(transform, glm::vec4(v2.pos, 1));
+
+        glm::vec3 dp1 = v1Pos - v0Pos;
+        glm::vec3 dp2 = v2Pos - v0Pos;
+        glm::vec2 duv1 = v1.uv - v0.uv;
+        glm::vec2 duv2 = v2.uv - v0.uv;
+
+        const glm::vec3& N = isect.surfaceNormal;
+
+        glm::vec3 dp2perp = glm::cross(dp2, N);
+        glm::vec3 dp1perp = glm::cross(N, dp1);
+        glm::vec3 T = dp2perp * duv1.x + dp1perp * duv2.x; 
+        glm::vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+
+        float invmax = 1.f / sqrt(max(glm::dot(T, T), glm::dot(B, B)));
+        glm::mat3 TBN = glm::mat3(T * invmax, B * invmax, N);
+
+        glm::vec3 normalMapCol = tex2DCustom(textureObjects[m.normalMap.textureIdx], isect.uv);
+        glm::vec3 mappedNormal = glm::normalize(2.0f * normalMapCol - 1.0f);
+        normal = glm::normalize(TBN * mappedNormal);
+    }
+    else
+    {
+        normal = isect.surfaceNormal;
+    }
+    isect.surfaceNormal = normal;
+
     float diffuseLuminance = Utils::luminance(diffuseColor);
     float specularLuminance = Utils::luminance(m.specular.color);
     float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
 
     thrust::uniform_real_distribution<float> u01(0, 1);
+
+    Ray newRay;
     if (u01(rng) < diffuseChance)
     {
         // diffuse
@@ -153,10 +196,10 @@ void scatterRay(
     } 
     else
     {
-        if (m.hasReflective > 0 && m.hasRefractive > 0)
+        if (m.specular.hasReflective > 0 && m.specular.hasRefractive > 0)
         {
             float cosTheta = abs(glm::dot(pathSegment.ray.direction, normal));
-            float R0 = (1 - m.indexOfRefraction) / (1 + m.indexOfRefraction);
+            float R0 = (1 - m.specular.indexOfRefraction) / (1 + m.specular.indexOfRefraction);
             R0 = R0 * R0;
             float fresnel = R0 + (1 - R0) * pow(1.f - cosTheta, 5.f);
 
@@ -169,11 +212,11 @@ void scatterRay(
                 applyRefraction(pathSegment, newRay, normal, m);
             }
         } 
-        else if (m.hasReflective > 0)
+        else if (m.specular.hasReflective > 0)
         {
             applyReflection(pathSegment, newRay, normal, m);
         } 
-        else if (m.hasRefractive > 0)
+        else if (m.specular.hasRefractive > 0)
         {
             applyRefraction(pathSegment, newRay, normal, m);
         }
@@ -190,6 +233,6 @@ void scatterRay(
         }
     }
 
-    newRay.origin = intersect + 0.0001f * newRay.direction;
+    newRay.origin = isectPos + 0.0001f * newRay.direction;
     pathSegment.ray = newRay;
 }

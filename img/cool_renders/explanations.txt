@@ -19,3 +19,5 @@
 019 - monkey BVH broke
 020 - freddy fazbear (with binned BVH construction)
 021 - freddy with diffuse textures
+022 - freddy with normal map
+023 - strange interpolation artifacts

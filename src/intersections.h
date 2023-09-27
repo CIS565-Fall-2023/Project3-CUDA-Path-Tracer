@@ -225,7 +225,7 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c,
 }
 
 __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
-    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv)
+    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, int& triIdx)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -233,7 +233,6 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     Ray transformedRay = { ro, rd };
 
     float t;
-    int triIdx;
     if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, bvhTriIdx, t, triIdx))
     {
         return -1;

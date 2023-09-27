@@ -21,6 +21,7 @@
 
 ### Planned features
 
+- Option to toggle BVH (annoying but required)
 - Open Image Denoise
 
 ### Attribution
@@ -28,6 +29,7 @@
 #### Code
 
 - BVH tutorial: https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+- Normal map: http://www.thetenthplanet.de/archives/1180
 
 #### Models
 

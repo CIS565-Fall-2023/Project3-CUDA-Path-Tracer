@@ -45,14 +45,18 @@ struct Material
     struct {
         float exponent = 0;
         glm::vec3 color = glm::vec3(0);
+        float hasReflective = 0;
+        float hasRefractive = 0;
+        float indexOfRefraction = 1.45;
     } specular;
-    float hasReflective = 0;
-    float hasRefractive = 0;
-    float indexOfRefraction = 1.45;
     struct {
         glm::vec3 color = glm::vec3(0);
         float strength = 0;
     } emission;
+    struct
+    {
+        int textureIdx = -1;
+    } normalMap;
 };
 
 struct Vertex
@@ -163,10 +167,12 @@ struct PathSegment
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection 
 {
+    int hitGeomIdx;
     float t;
     glm::vec3 surfaceNormal;
     glm::vec2 uv;
     int materialId;
+    int triIdx;
 
     __host__ __device__ bool operator<(const ShadeableIntersection& other) const {
         return materialId < other.materialId;
