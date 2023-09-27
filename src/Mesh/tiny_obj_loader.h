@@ -64,6 +64,7 @@ THE SOFTWARE.
 #include <string>
 #include <vector>
 
+
 namespace tinyobj {
 
     // TODO(syoyo): Better C++11 detection for older compiler

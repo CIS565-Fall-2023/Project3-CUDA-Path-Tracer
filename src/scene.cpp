@@ -3,12 +3,23 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include "Mesh/objLoader.h"
 
 Scene::Scene(string filename) {
-    cout << "Reading scene from " << filename << " ..." << endl;
+    cout << "Reading scene from " << filename << "..." << endl;
     cout << " " << endl;
-    char* fname = (char*)filename.c_str();
-    fp_in.open(fname);
+    filename = (char*)filename.c_str();
+    
+    /*ObjLoader objLoader;
+
+    if (!objLoader.Load(filename)) {
+        cout << "Error reading from obj file - aborting\n" << endl;
+        throw;
+    }
+
+    convertFromObj(objLoader.attrib, objLoader.shapes, objLoader.materials);*/
+
+    fp_in.open(filename);
     if (!fp_in.is_open()) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
@@ -41,6 +52,7 @@ int Scene::loadGeom(string objectid) {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
+        std::vector<Geom> tempTriangles;
 
         //load object type
         utilityCore::safeGetline(fp_in, line);
@@ -51,6 +63,16 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
+            } else if (strcmp(line.c_str(), "obj") == 0) {
+                cout << "Creating new obj..." << endl;
+
+                ObjLoader objLoader;
+                
+                if (objLoader.Load("../scenes/bunny.obj")) {
+                    loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
+                    printf("Number of Shapes: %d\n", objLoader.attrib.vertices.size());
+                    printf("Triangle Size: %d\n", tempTriangles.size());
+                } 
             }
         }
 
@@ -84,7 +106,20 @@ int Scene::loadGeom(string objectid) {
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
-        geoms.push_back(newGeom);
+        for (auto& triangle : tempTriangles) {
+            triangle.type = TRIANGLE;
+            triangle.materialid = newGeom.materialid;
+            triangle.transform = newGeom.transform;
+            triangle.inverseTransform = newGeom.inverseTransform;
+            triangle.invTranspose = newGeom.invTranspose;
+
+            geoms.push_back(triangle);
+        }
+
+        if (newGeom.type == CUBE || newGeom.type == SPHERE) {
+            geoms.push_back(newGeom);
+        }
+        
         return 1;
     }
 }
@@ -150,6 +185,7 @@ int Scene::loadCamera() {
     return 1;
 }
 
+
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
@@ -186,3 +222,83 @@ int Scene::loadMaterial(string materialid) {
         return 1;
     }
 }
+
+
+void Scene::loadObjGeom(const tinyobj::attrib_t& attrib,
+    const std::vector<tinyobj::shape_t>& shapes, std::vector<Geom>& tempTriangles) {
+
+    // Loop over shapes
+    for (const auto& shape : shapes) {
+        cout << "Loading Obj Shape: " << shape.name << "\n" << endl;
+
+        size_t index_offset = 0;
+        // Loop over faces (polygons)
+        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
+            size_t fv = size_t(shape.mesh.num_face_vertices[f]);
+
+            // We need at least 3 vertices to form a triangle
+            if (fv < 3) {
+                index_offset += fv;
+                continue;
+            }
+
+            // Fetch the vertices of the polygon
+            std::vector<glm::vec3> vertices;
+            for (size_t v = 0; v < fv; v++) {
+                tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+                tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+                vertices.push_back(glm::vec3(vx, vy, vz));
+            }
+
+            // Triangulate the polygon using a fan triangulation
+            for (size_t v = 1; v < fv - 1; v++) {
+                Geom newGeom;
+                newGeom.type = TRIANGLE;
+                if (shape.mesh.material_ids.size() > 0) {
+                    newGeom.materialid = shape.mesh.material_ids[f];
+                }
+
+                newGeom.triangle.v0 = vertices[0];
+                newGeom.triangle.v1 = vertices[v];
+                newGeom.triangle.v2 = vertices[v + 1];
+
+                // geoms.push_back(newGeom);
+                tempTriangles.push_back(newGeom);
+            }
+
+            index_offset += fv;
+            cout << "Number of Triangles: " << tempTriangles.size() << endl;
+        }
+    }
+}
+
+
+void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials) {
+
+    for (const auto& mat : tinyobjMaterials) {
+        cout << "Loading Obj Material: " << mat.name << "...\n" << endl;
+        Material newMaterial;
+        
+        auto diffuse = mat.diffuse;
+        auto specular = mat.specular;
+        auto emission = mat.emission;
+
+        newMaterial.color = glm::vec3(diffuse[0], diffuse[1], diffuse[2]);
+        newMaterial.specular.color = glm::vec3(specular[0], specular[1], specular[2]);
+        newMaterial.specular.exponent = mat.shininess;
+        newMaterial.indexOfRefraction = mat.ior;
+
+        float reflectivity = glm::length(newMaterial.specular.color);
+        newMaterial.hasReflective = (reflectivity > 0.1f) ? 1 : 0;
+        newMaterial.hasRefractive = (mat.dissolve < 1.f) ? 1 : 0;
+
+        newMaterial.emittance = glm::length(glm::vec3(emission[0], emission[1], emission[2]));
+
+        materials.push_back(newMaterial);
+    }
+
+    cout << "Loaded Obj Material!" << endl;
+}
+

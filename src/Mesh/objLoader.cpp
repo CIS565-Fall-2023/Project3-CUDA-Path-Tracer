@@ -1,32 +1,52 @@
 #include "ObjLoader.h"
 #include <iostream>
 
-ObjLoader::ObjLoader() {}
 
-ObjLoader::~ObjLoader() {}
+bool ObjLoader::Load(const std::string filename) {
+    //tinyobj::ObjReaderConfig reader_config;
+    //// reader_config.mtl_search_path = ""; // Path to material files
 
-bool ObjLoader::Load(const std::string& filename) {
+    //tinyobj::ObjReader reader;
+
+    //if (!reader.ParseFromFile(filename, reader_config)) {
+    //    if (!reader.Error().empty()) {
+    //        std::cerr << "TinyObjReader: " << reader.Error();
+    //    }
+    //    return false;
+    //}
+
+    //if (!reader.Warning().empty()) {
+    //    std::cout << "TinyObjReader: " << reader.Warning();
+    //}
+
+    //auto& attrib = reader.GetAttrib();
+    //auto& shapes = reader.GetShapes();
+    //// auto& materials = reader.GetMaterials();
+
+    //return true;
+
+    std::string inputfile = "../scenes/bunny.obj";
+
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+
     std::string warn;
     std::string err;
-    std::string base_dir = filename.substr(0, filename.find_last_of("/\\") + 1); // Extract directory for .mtl files
 
-    bool ret = tinyobj::LoadObj(&attrib_, &shapes_, &materials_, &warn, &err, filename.c_str(), base_dir.c_str());
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filename.c_str());
 
     if (!warn.empty()) {
-        std::cout << "WARN: " << warn << std::endl;
+        std::cout << warn << std::endl;
     }
 
     if (!err.empty()) {
-        std::cerr << "ERROR: " << err << std::endl;
+        std::cerr << err << std::endl;
     }
 
-    return ret;
-}
+    if (!ret) {
+        exit(1);
+    }
 
-const std::vector<tinyobj::shape_t>& ObjLoader::GetShapes() const {
-    return shapes_;
-}
-
-const std::vector<tinyobj::material_t>& ObjLoader::GetMaterials() const {
-    return materials_;
+    return true;
 }

@@ -17,6 +17,7 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
+#define DEBUG_OBJ_LOADER 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -132,6 +133,7 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_first_bounce_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	cudaMalloc(&dev_stencil, pixelcount * sizeof(int));
+	cudaMemset(dev_stencil, 0, pixelcount * sizeof(int));
 
 	checkCUDAError("pathtraceInit");
 }
@@ -172,7 +174,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 #if CACHE_FIRST_BOUNCE
 		float jitterX = 0.0f, jitterY = 0.0f;
 #else
-		// TODO: implement antialiasing by jittering the ray
+		// antialiasing by jittering the ray
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
 		thrust::uniform_real_distribution<float> u01(0, 1);
 
@@ -231,7 +233,9 @@ __global__ void computeIntersections(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
+			//else if (geom.typr == TRIANGLE) {
+			//	// t = glm::intersectRayTriangle(geom, pa)
+			//}
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -276,7 +280,7 @@ __global__ void shadeFakeMaterial(
 	if (idx < num_paths)
 	{
 		ShadeableIntersection intersection = shadeableIntersections[idx];
-		if (intersection.t > 0.0f) { // if the intersection exists...
+		if (intersection.t >= 0.0f) { // if the intersection exists...
 		    // Set up the RNG
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			thrust::uniform_real_distribution<float> u01(0, 1);
@@ -417,7 +421,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		//}
 		
 		depth++;
-
+#if DEBUG_OBJ_LOADER
+		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter, num_paths, dev_intersections, dev_paths, dev_materials);
+		iterationComplete = true;
+#else
 		thrust::device_ptr<PathSegment> dev_thrust_paths = thrust::device_pointer_cast(dev_paths);
 #if SORT_RAY_BY_MATERIAL
 		// sort rays by material type 
@@ -447,7 +455,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		if (num_paths <= 0 || depth >= 2) {
 			iterationComplete = true;
 		}
-
+#endif
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;

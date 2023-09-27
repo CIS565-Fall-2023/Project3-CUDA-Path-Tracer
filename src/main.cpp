@@ -1,6 +1,7 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+#include <filesystem>
 
 static std::string startTimeString;
 
@@ -40,6 +41,8 @@ int main(int argc, char** argv) {
 	}
 
 	const char* sceneFile = argv[1];
+
+	printf("Scene File: %s\n", sceneFile);
 
 	// Load scene file
 	scene = new Scene(sceneFile);

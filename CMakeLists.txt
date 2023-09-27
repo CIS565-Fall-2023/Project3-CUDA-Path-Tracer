@@ -84,6 +84,8 @@ set(headers
      src/ImGui/imstb_rectpack.h 
      src/ImGui/imstb_textedit.h 
      src/ImGui/imstb_truetype.h 
+     src/Mesh/objLoader.h
+     src/Mesh/tiny_obj_loader.h
     )
 
 set(sources
@@ -103,6 +105,8 @@ set(sources
      src/ImGui/imgui_impl_opengl3.cpp 
      src/ImGui/imgui_tables.cpp 
      src/ImGui/imgui_widgets.cpp 
+     src/Mesh/objLoader.cpp
+     src/Mesh/tiny_obj_loader.cc
     )
 
 list(SORT headers)
@@ -113,6 +117,7 @@ source_group(Sources FILES ${sources})
 
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
+#add_subdirectory(src/Mesh)
 
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
