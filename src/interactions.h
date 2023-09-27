@@ -65,35 +65,72 @@ __host__ __device__ float powerHeuristic(int nf, float fPdf, int ng, float gPdf)
     return (f * f) / (g * g + f * f);
 }
 
-__host__ __device__ glm::vec3 fresnelDielectricEval(float ni, const Material& m) {
-    float etai = 1.0f, etat = m.indexOfRefraction;
-
-    if (ni > 0.0f) {
+__host__ __device__ float fresnelDielectricEval(float cosi, float etai, float etat) {
+    if (cosi > 0.0f) {
         float tmp = etai;
         etai = etat;
         etat = tmp;
     }
 
-    float sint = etai / etat * sqrtf(fmaxf(0.0f, 1.0f - ni * ni));
-    if (sint > 1.0f) {
+    cosi = abs(cosi);
+
+    float sint = (etai / etat) * sqrtf(fmaxf(0.0f, 1.0f - cosi * cosi));
+    if (sint >= 1.0f) {
         // total internal reflection
-        return m.specular.color * m.color;
+        return 1.0;
     }
     
     float cost = sqrtf(fmaxf(0.0f, 1.0f - sint * sint));
-    float cosi = fabs(cost);
 
     float Rparl = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost));
     float Rperp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
     float Re = (Rparl * Rparl + Rperp * Rperp) / 2.0f;
 
-    return glm::vec3(Re);
+    return Re;
 }
 
+/*Sample material color*/
+__host__ __device__ glm::vec3 sampleSpecularReflectMaterial(
+    const Material& m, const glm::vec3& normal, const glm::vec3& wo, glm::vec3& wi) {
+    wi = glm::normalize(glm::reflect(wo, normal));
+    return m.specular.color;
+}
 
+__host__ __device__ glm::vec3 sampleSpecularTransimissionMaterial(
+    const Material& m, const glm::vec3& normal, const glm::vec3& wo, glm::vec3& wi) {
+    float etaA = 1.0f, etaB = m.indexOfRefraction;
+    float ni = dot(wo, normal);
+    glm::vec3 nor = normal;
+    bool entering = ni < 0;
+    float etaI = entering ? etaA : etaB;
+    float etaT = entering ? etaB : etaA;
+    if (!entering) nor = -nor;
 
+    // total internal reflection
+    wi = etaI / etaT * sqrtf(fmaxf(0.0f, 1.0f - ni * ni)) > 1.0f ?
+        glm::normalize(glm::reflect(wo, nor)) :
+        glm::normalize(glm::refract(wo, nor, etaI / etaT));
+    return m.specular.color;
+}
 
+__host__ __device__ glm::vec3 sampleFresnelSpecularMaterial(
+    const Material& m, const glm::vec3& normal, 
+    const glm::vec3& wo, glm::vec3& wi, thrust::default_random_engine& rng) {
 
+    float cosThetaI = glm::abs(glm::dot(wo, normal));
+    float sinThetaI = std::sqrt(std::max(0.0f, 1.0f - cosThetaI * cosThetaI));
+    float F = fresnelDielectricEval(cosThetaI, 1.0f, m.indexOfRefraction);
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float u = u01(rng);
+    if (u < F) {
+        // reflect
+        return F * sampleSpecularReflectMaterial(m, normal, wo, wi);
+    } else {
+        // transmission
+        return (1.0f - F) * sampleSpecularTransimissionMaterial(m, normal, wo, wi);
+    }
+}
 
 /**
  * Scatter a ray with some probabilities according to the material properties.
@@ -136,53 +173,47 @@ void scatterRay(
     float rand = u01(rng); // TODO: rand ratio between diffuse and specular
 
     float pdf = 1.0;
+    glm::vec3 dir = pathSegment.ray.direction;
 
-    if (m.hasReflective > 0.0)
+    if (m.hasReflective > 0.0 && m.hasRefractive > 0.0) 
+    {
+        pathSegment.color *= sampleFresnelSpecularMaterial(m, normal, dir, pathSegment.ray.direction, rng);
+    } 
+    else if (m.hasReflective > 0.0) 
     {
         // perfect specular
-        pathSegment.ray.direction = glm::normalize(glm::reflect(pathSegment.ray.direction, normal));
-        pathSegment.color *= m.specular.color;
+        pathSegment.color *= sampleSpecularReflectMaterial(m, normal, dir, pathSegment.ray.direction);
 
         // imperfect
-        float x1 = u01(rng), x2 = u01(rng);
-        float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
-        float phi = 2 * PI * x2;
+        //float x1 = u01(rng), x2 = u01(rng);
+        //float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
+        //float phi = 2 * PI * x2;
 
-        glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+        //glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 
-        // sample direction must be transformed to world space
-        // tangent-space to world-space: local tangent, binormal, and normal at the surface point
-        glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
-        glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
+        //// sample direction must be transformed to world space
+        //// tangent-space to world-space: local tangent, binormal, and normal at the surface point
+        //glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
+        //glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
 
-        glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
+        //glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
 
-        // specular-space to tangent-space
-        glm::mat3 sampleToTangent;
-        sampleToTangent[2] = r;
-        sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
-        sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
+        //// specular-space to tangent-space
+        //glm::mat3 sampleToTangent;
+        //sampleToTangent[2] = r;
+        //sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
+        //sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
 
-        // specular-space to world-space
-        glm::mat3 mat = TBN * sampleToTangent;
+        //// specular-space to world-space
+        //glm::mat3 mat = TBN * sampleToTangent;
 
         //pathSegment.ray.direction = mat * s;
     }
     else if (m.hasRefractive > 0.0)
     {
-        // perfect refractive
-        float etaA = 1.0f, etaB = m.indexOfRefraction;
-        float ni = dot(pathSegment.ray.direction, normal);
-        bool entering = ni < 0;
-        float etaI = entering ? etaA : etaB;
-        float etaT = entering ? etaB : etaA;
-
-        // total internal reflection
-        pathSegment.ray.direction = etaI / etaT * sqrtf(fmaxf(0.0f, 1.0f - ni * ni)) > 1.0f ?
-            glm::normalize(glm::reflect(pathSegment.ray.direction, normal)) : 
-            glm::normalize(glm::refract(pathSegment.ray.direction, normal, etaI / etaT));
-        pathSegment.color *= m.specular.color;
-    } else
+        pathSegment.color *= sampleSpecularTransimissionMaterial(m, normal, dir, pathSegment.ray.direction);
+    } 
+    else
     {
         // diffuse
         pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));

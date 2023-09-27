@@ -44,7 +44,7 @@ RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
-REFR        0
+REFR        1
 REFRIOR     1.55
 EMITTANCE   0
 
@@ -114,6 +114,6 @@ SCALE       .01 10 10
 OBJECT 6
 sphere
 material 4
-TRANS       -1 4 -1
+TRANS       -2 4 -1
 ROTAT       0 0 0
 SCALE       3 3 3
