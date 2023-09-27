@@ -17,13 +17,13 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-#define DEBUG_OBJ_LOADER 1
+#define DEBUG_OBJ_LOADER 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
 #define CACHE_FIRST_BOUNCE 0
-#define SORT_RAY_BY_MATERIAL 1
+#define SORT_RAY_BY_MATERIAL 0
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #if ERRORCHECK
@@ -233,9 +233,9 @@ __global__ void computeIntersections(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-			//else if (geom.typr == TRIANGLE) {
-			//	// t = glm::intersectRayTriangle(geom, pa)
-			//}
+			else if (geom.type == TRIANGLE) {
+				t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			}
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -280,7 +280,7 @@ __global__ void shadeFakeMaterial(
 	if (idx < num_paths)
 	{
 		ShadeableIntersection intersection = shadeableIntersections[idx];
-		if (intersection.t >= 0.0f) { // if the intersection exists...
+		if (intersection.t > 0.0f) { // if the intersection exists...
 		    // Set up the RNG
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			thrust::uniform_real_distribution<float> u01(0, 1);
@@ -299,8 +299,7 @@ __global__ void shadeFakeMaterial(
 			}
 		}
 		else {
-			// If there was no intersection, color the ray black and terminate the ray.
-			pathSegments[idx].color = glm::vec3(0.0f);
+			pathSegments[idx].color = glm::vec3(0.5f);
 		}
 	}
 }
@@ -452,7 +451,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		printf("Depth: %d\n", depth);
 		printf("Num of Paths: %d\n", num_paths);
 
-		if (num_paths <= 0 || depth >= 2) {
+		if (num_paths <= 0 || depth >= traceDepth) {
 			iterationComplete = true;
 		}
 #endif

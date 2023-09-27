@@ -9,15 +9,6 @@ Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << "..." << endl;
     cout << " " << endl;
     filename = (char*)filename.c_str();
-    
-    /*ObjLoader objLoader;
-
-    if (!objLoader.Load(filename)) {
-        cout << "Error reading from obj file - aborting\n" << endl;
-        throw;
-    }
-
-    convertFromObj(objLoader.attrib, objLoader.shapes, objLoader.materials);*/
 
     fp_in.open(filename);
     if (!fp_in.is_open()) {
@@ -32,14 +23,20 @@ Scene::Scene(string filename) {
             if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
                 loadMaterial(tokens[1]);
                 cout << " " << endl;
-            } else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
                 loadGeom(tokens[1]);
                 cout << " " << endl;
-            } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
             }
         }
+    }
+
+    for (const auto& geom : geoms) {
+        cout << "Type: " << geom.type << ", Material ID: " << geom.materialid << endl;
     }
 }
 
@@ -48,7 +45,8 @@ int Scene::loadGeom(string objectid) {
     if (id != geoms.size()) {
         cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
         return -1;
-    } else {
+    }
+    else {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
@@ -60,19 +58,20 @@ int Scene::loadGeom(string objectid) {
             if (strcmp(line.c_str(), "sphere") == 0) {
                 cout << "Creating new sphere..." << endl;
                 newGeom.type = SPHERE;
-            } else if (strcmp(line.c_str(), "cube") == 0) {
+            }
+            else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
-            } else if (strcmp(line.c_str(), "obj") == 0) {
+            }
+            else if (strcmp(line.c_str(), "obj") == 0) {
                 cout << "Creating new obj..." << endl;
 
                 ObjLoader objLoader;
-                
-                if (objLoader.Load("../scenes/bunny.obj")) {
+
+                if (objLoader.Load("../scenes/cube.obj")) {
                     loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
-                    printf("Number of Shapes: %d\n", objLoader.attrib.vertices.size());
                     printf("Triangle Size: %d\n", tempTriangles.size());
-                } 
+                }
             }
         }
 
@@ -92,9 +91,11 @@ int Scene::loadGeom(string objectid) {
             //load tranformations
             if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
                 newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
 
@@ -102,7 +103,7 @@ int Scene::loadGeom(string objectid) {
         }
 
         newGeom.transform = utilityCore::buildTransformationMatrix(
-                newGeom.translation, newGeom.rotation, newGeom.scale);
+            newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
@@ -119,15 +120,15 @@ int Scene::loadGeom(string objectid) {
         if (newGeom.type == CUBE || newGeom.type == SPHERE) {
             geoms.push_back(newGeom);
         }
-        
+
         return 1;
     }
 }
 
 int Scene::loadCamera() {
     cout << "Loading Camera ..." << endl;
-    RenderState &state = this->state;
-    Camera &camera = state.camera;
+    RenderState& state = this->state;
+    Camera& camera = state.camera;
     float fovy;
 
     //load static properties
@@ -138,13 +139,17 @@ int Scene::loadCamera() {
         if (strcmp(tokens[0].c_str(), "RES") == 0) {
             camera.resolution.x = atoi(tokens[1].c_str());
             camera.resolution.y = atoi(tokens[2].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FOVY") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "FOVY") == 0) {
             fovy = atof(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "ITERATIONS") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "ITERATIONS") == 0) {
             state.iterations = atoi(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "DEPTH") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "DEPTH") == 0) {
             state.traceDepth = atoi(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
             state.imageName = tokens[1];
         }
     }
@@ -155,9 +160,11 @@ int Scene::loadCamera() {
         vector<string> tokens = utilityCore::tokenizeString(line);
         if (strcmp(tokens[0].c_str(), "EYE") == 0) {
             camera.position = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-        } else if (strcmp(tokens[0].c_str(), "LOOKAT") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "LOOKAT") == 0) {
             camera.lookAt = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-        } else if (strcmp(tokens[0].c_str(), "UP") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "UP") == 0) {
             camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
 
@@ -172,7 +179,7 @@ int Scene::loadCamera() {
 
     camera.right = glm::normalize(glm::cross(camera.view, camera.up));
     camera.pixelLength = glm::vec2(2 * xscaled / (float)camera.resolution.x,
-                                   2 * yscaled / (float)camera.resolution.y);
+        2 * yscaled / (float)camera.resolution.y);
 
     camera.view = glm::normalize(camera.lookAt - camera.position);
 
@@ -191,7 +198,8 @@ int Scene::loadMaterial(string materialid) {
     if (id != materials.size()) {
         cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
         return -1;
-    } else {
+    }
+    else {
         cout << "Loading Material " << id << "..." << endl;
         Material newMaterial;
 
@@ -201,20 +209,26 @@ int Scene::loadMaterial(string materialid) {
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "RGB") == 0) {
-                glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
+                glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
                 newMaterial.specular.exponent = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
                 glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 newMaterial.specular.color = specColor;
-            } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.hasReflective = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
                 newMaterial.hasRefractive = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
             }
         }
@@ -264,12 +278,10 @@ void Scene::loadObjGeom(const tinyobj::attrib_t& attrib,
                 newGeom.triangle.v1 = vertices[v];
                 newGeom.triangle.v2 = vertices[v + 1];
 
-                // geoms.push_back(newGeom);
                 tempTriangles.push_back(newGeom);
             }
 
             index_offset += fv;
-            cout << "Number of Triangles: " << tempTriangles.size() << endl;
         }
     }
 }
@@ -280,7 +292,7 @@ void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMater
     for (const auto& mat : tinyobjMaterials) {
         cout << "Loading Obj Material: " << mat.name << "...\n" << endl;
         Material newMaterial;
-        
+
         auto diffuse = mat.diffuse;
         auto specular = mat.specular;
         auto emission = mat.emission;
@@ -301,4 +313,3 @@ void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMater
 
     cout << "Loaded Obj Material!" << endl;
 }
-
