@@ -1,7 +1,8 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
-
+#include <chrono>
+#include <stb_image.h>
 static std::string startTimeString;
 
 // For camera controls
@@ -10,6 +11,8 @@ static bool rightMousePressed = false;
 static bool middleMousePressed = false;
 static double lastX;
 static double lastY;
+uint64_t sysTime;
+uint64_t delta_t;
 
 bool camchanged = true;
 static float dtheta = 0, dphi = 0;
@@ -41,6 +44,8 @@ int main(int argc, char** argv) {
 
 	const char* sceneFile = argv[1];
 
+	stbi_set_flip_vertically_on_load(1);
+
 	// Load scene file
 	scene = new Scene(sceneFile);
 	scene->buildBVH();
@@ -48,7 +53,7 @@ int main(int argc, char** argv) {
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
-
+	sysTime = time(nullptr);
 	// Set up camera stuff from loaded path tracer settings
 	iteration = 0;
 	renderState = &scene->state;
@@ -67,13 +72,15 @@ int main(int argc, char** argv) {
 	// so, (0 0 1) is forward, (0 1 0) is up
 	glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
 	glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
-	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
+	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, 1)));
 	theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
 	ogLookAt = cam.lookAt;
 	zoom = glm::length(cam.position - ogLookAt);
 
 	// Initialize CUDA and GL components
 	init();
+
+	scene->LoadAllTextures();
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
@@ -112,20 +119,17 @@ void runCuda() {
 	if (camchanged) {
 		iteration = 0;
 		Camera& cam = renderState->camera;
-		cameraPosition.x = zoom * sin(phi) * sin(theta);
-		cameraPosition.y = zoom * cos(theta);
-		cameraPosition.z = zoom * cos(phi) * sin(theta);
+		cam.view.x = sin(phi) * sin(theta);
+		cam.view.y = cos(theta);
+		cam.view.z = cos(phi) * sin(theta);
 
-		cam.view = -glm::normalize(cameraPosition);
 		glm::vec3 v = cam.view;
 		glm::vec3 u = glm::vec3(0, 1, 0);//glm::normalize(cam.up);
 		glm::vec3 r = glm::cross(v, u);
 		cam.up = glm::cross(r, v);
 		cam.right = r;
 
-		cam.position = cameraPosition;
-		cameraPosition += cam.lookAt;
-		cam.position = cameraPosition;
+		//cam.position = cameraPosition;
 		camchanged = false;
 	}
 
@@ -164,7 +168,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
-		case GLFW_KEY_S:
+		case GLFW_KEY_Q:
 			saveImage();
 			break;
 		case GLFW_KEY_SPACE:
@@ -174,6 +178,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			cam.lookAt = ogLookAt;
 			break;
 		}
+		
 	}
 }
 
@@ -192,7 +197,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (leftMousePressed) {
 		// compute new camera parameters
 		phi -= (xpos - lastX) / width;
-		theta -= (ypos - lastY) / height;
+		theta += (ypos - lastY) / height;
 		theta = std::fmax(0.001f, std::fmin(theta, PI));
 		camchanged = true;
 	}

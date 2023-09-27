@@ -11,7 +11,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
-    MODEL
+    TRIANGLE_MESH
 };
 
 struct Ray {
@@ -75,12 +75,12 @@ enum MaterialType {
 };
 
 struct Material {
-    glm::vec3 color;
-    float indexOfRefraction;
-    float emittance;
-    float roughness;
-    MaterialType type;
-    Material():color(glm::vec3(0)), indexOfRefraction(0), emittance(0), type(diffuse) {}//default diffuse
+    glm::vec3 color = glm::vec3(0);
+    float indexOfRefraction = 0;
+    float emittance = 0;
+    float roughness = -1.0;
+    cudaTextureObject_t diffuseMap = 0, normalMap = 0;
+    MaterialType type = diffuse;
 };
 
 struct Camera {
@@ -113,9 +113,10 @@ struct PathSegment {
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection {
-  float t;
-  glm::vec3 surfaceNormal;
-  glm::vec3 worldPos;
-  int materialId;
-  MaterialType type;
+    float t = -1.0;
+    glm::vec3 surfaceNormal = glm::vec3(0.0);
+    glm::vec3 worldPos = glm::vec3(0.0);
+    int materialId = -1;
+    glm::vec2 uv = glm::vec2(0.0);
+    MaterialType type = diffuse;
 };

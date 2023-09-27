@@ -6,7 +6,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 #include <unordered_map>
-
+#include <stb_image.h>
 
 
 Scene::Scene(string filename) {
@@ -33,56 +33,208 @@ Scene::Scene(string filename) {
                 loadCamera();
                 cout << " " << endl;
             }
+            else if (strcmp(tokens[0].c_str(), "SKYBOX") == 0) {
+                loadSkybox();
+                cout << " " << endl;
+            }
         }
+    }
+}
+
+void Scene::loadSkybox()
+{
+    std::string line;
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        std::cout << "Loading Skybox " << line << " ..." << endl;
+        textureLoadJobs.emplace_back(line, -1);
     }
 }
 
 namespace std {
     template <>
-    struct hash<glm::vec3> {
-        std::size_t operator()(const glm::vec3& vertex) const {
-            return ((hash<float>()(vertex.x) ^
-                (hash<float>()(vertex.y) << 1)) >> 1) ^
-                (hash<float>()(vertex.z) << 1);
+    struct hash<std::pair<glm::vec3, glm::vec2>> {
+        std::size_t operator()(const std::pair<glm::vec3, glm::vec2>& vertex) const {
+            return ((hash<float>()(vertex.first.x) ^
+                (hash<float>()(vertex.first.y) << 1)) >> 1) ^
+                (hash<float>()(vertex.first.z) << 1) ^ (hash<float>()(vertex.second.x) << 2) ^ ((hash<float>()(vertex.second.y) << 2) >> 2);
         }
     };
+
+}
+
+void Scene::LoadAllTextures()
+{
+    for (auto& p : textureLoadJobs)
+    {
+        cudaTextureObject_t* texObj = p.second == -1 ? &skyboxTextureObj : &materials[p.second].diffuseMap;
+        loadTexture(p.first, texObj, p.second != -1);
+    }
+}
+
+Scene::~Scene()
+{
+    for (auto& p : textureLoadJobs)
+    {
+        if (p.second!=-1)
+        {
+            cudaDestroyTextureObject(materials[p.second].diffuseMap);
+        }
+        else if(skyboxTextureObj)
+        {
+            cudaDestroyTextureObject(skyboxTextureObj);
+        }
+    }
+    for (auto& p : textureDataPtrs)
+    {
+        cudaFreeArray(p);
+    }
+}
+
+void Scene::loadTexture(const std::string& texturePath, cudaTextureObject_t* texObj, int type)
+{
+    int width, height, channels;
+    if (!type)
+    {
+        unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &channels, 4);
+        if (data) {
+            cudaError_t err;
+            size_t dataSize = width * height * 4 * sizeof(unsigned char);
+            cudaArray_t cuArray;
+            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(8, 8, 8, 8, cudaChannelFormatKindUnsigned);
+            cudaMallocArray(&cuArray, &channelDesc, width, height);
+
+            textureDataPtrs.emplace_back(cuArray);
+            cudaMemcpyToArray(cuArray, 0, 0, data, width * height * 4 * sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+            stbi_image_free(data);
+            cudaResourceDesc resDesc;
+            memset(&resDesc, 0, sizeof(resDesc));
+            resDesc.resType = cudaResourceTypeArray;
+            resDesc.res.array.array = cuArray;
+            resDesc.res.linear.desc = cudaCreateChannelDesc(8, 8, 8, 8, cudaChannelFormatKindUnsigned);
+            resDesc.res.linear.sizeInBytes = dataSize;
+
+            cudaTextureDesc texDesc;
+            memset(&texDesc, 0, sizeof(texDesc));
+            texDesc.addressMode[0] = cudaAddressModeWrap;
+            texDesc.addressMode[1] = cudaAddressModeWrap;
+            texDesc.filterMode = cudaFilterModeLinear;
+            texDesc.readMode = cudaReadModeNormalizedFloat;
+            texDesc.normalizedCoords = 1;
+            texDesc.sRGB = 1;
+            cudaCreateTextureObject(texObj, &resDesc, &texDesc, NULL);
+            err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                printf("CUDA error: %s\n", cudaGetErrorString(err));
+                exit(-1);
+            }
+
+        }
+        else {
+            printf("Failed to load image: %s\n", stbi_failure_reason());
+        }
+    }
+    else
+    {
+        float* data = stbi_loadf(texturePath.c_str(), &width, &height, &channels, 4);
+        if (data) {
+            cudaError_t err;
+            size_t dataSize = width * height * 4 * sizeof(float);
+            cudaArray_t cuArray;
+            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+            cudaMallocArray(&cuArray, &channelDesc, width, height);
+
+            textureDataPtrs.emplace_back(cuArray);
+            cudaMemcpyToArray(cuArray, 0, 0, data, width * height * 4 * sizeof(float), cudaMemcpyHostToDevice);
+
+            stbi_image_free(data);
+            cudaResourceDesc resDesc;
+            memset(&resDesc, 0, sizeof(resDesc));
+            resDesc.resType = cudaResourceTypeArray;
+            resDesc.res.array.array = cuArray;
+            resDesc.res.linear.desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+            resDesc.res.linear.sizeInBytes = dataSize;
+
+            cudaTextureDesc texDesc;
+            memset(&texDesc, 0, sizeof(texDesc));
+            texDesc.addressMode[0] = cudaAddressModeWrap;
+            texDesc.addressMode[1] = cudaAddressModeWrap;
+            texDesc.filterMode = cudaFilterModeLinear;
+            texDesc.readMode = cudaReadModeElementType;
+            texDesc.normalizedCoords = 1;
+            cudaCreateTextureObject(texObj, &resDesc, &texDesc, NULL);
+            err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                printf("CUDA error: %s\n", cudaGetErrorString(err));
+                exit(-1);
+            }
+
+        }
+        else {
+            printf("Failed to load image: %s\n", stbi_failure_reason());
+        }
+    }
 }
 
 bool Scene::loadModel(const string& modelPath, int objectid)
 {
     cout << "Loading Model " << modelPath << " ..." << endl;
     Object model;
-    model.type = MODEL;
+    model.type = TRIANGLE_MESH;
     tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
+    std::vector<tinyobj::shape_t> aShapes;
+    std::vector<tinyobj::material_t> aMaterials;
     std::string warn;
     std::string err;
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, modelPath.c_str());
+    std::string mtlPath = modelPath.substr(0, modelPath.find_last_of('/')+1);
+    bool ret = tinyobj::LoadObj(&attrib, &aShapes, &aMaterials, &warn, &err, modelPath.c_str(), mtlPath.c_str());
     if (!warn.empty()) std::cout << warn << std::endl;
 
     if (!err.empty()) std::cerr << err << std::endl;
 
     if (!ret)  return false;
 
-    std::unordered_map<glm::vec3, unsigned> vertex_set;
-    for (const auto& shape : shapes)
+    int matOffset = materials.size();
+    for (const auto& mat : aMaterials)
     {
+        Material newMat{};
+        newMat.color[0] = mat.diffuse[0];
+        newMat.color[1] = mat.diffuse[1];
+        newMat.color[2] = mat.diffuse[2];
+        if (!mat.diffuse_texname.empty())
+        {
+            textureLoadJobs.emplace_back(mtlPath + mat.diffuse_texname, materials.size());
+        }
+        materials.emplace_back(newMat);
+        
+    }
+
+
+    std::unordered_map<std::pair<glm::vec3,glm::vec2>, unsigned> vertex_set;
+    for (const auto& shape : aShapes)
+    {
+        model.materialid = shape.mesh.material_ids[0] + matOffset;
         for (const auto& index : shape.mesh.indices) 
         {
             glm::vec3 tmp;
             tmp.x = attrib.vertices[3 * index.vertex_index + 0];
             tmp.y = attrib.vertices[3 * index.vertex_index + 1];
             tmp.z = attrib.vertices[3 * index.vertex_index + 2];
-            if (!vertex_set.count(tmp))
+            glm::vec2 tmp_uv;
+            tmp_uv.x = index.texcoord_index >= 0 ? attrib.texcoords[2 * index.texcoord_index + 0] : 0;
+            tmp_uv.y = index.texcoord_index >= 0 ? attrib.texcoords[2 * index.texcoord_index + 1] : 0;
+            auto newVert = make_pair(tmp, tmp_uv);
+            if (!vertex_set.count(newVert))
             {
-                vertex_set[tmp] = verticies.size();
-                verticies.emplace_back(tmp);
+                vertex_set[newVert] = verticies.size();
+                verticies.emplace_back(newVert.first);
+                uvs.emplace_back(newVert.second);
             }
         }
     }
     model.triangleStart = triangles.size();
-    for (const auto& shape : shapes) {
+    for (const auto& shape : aShapes) {
         size_t index_offset = 0;
         for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
             int fv = shape.mesh.num_face_vertices[f];
@@ -94,7 +246,10 @@ bool Scene::loadModel(const string& modelPath, int objectid)
                 tmp.x = attrib.vertices[3 * idx.vertex_index + 0];
                 tmp.y = attrib.vertices[3 * idx.vertex_index + 1];
                 tmp.z = attrib.vertices[3 * idx.vertex_index + 2];
-                triangle[v] = vertex_set[tmp];
+                glm::vec2 tmp_uv;
+                tmp_uv.x = idx.texcoord_index >= 0 ? attrib.texcoords[2 * idx.texcoord_index + 0] : 0;
+                tmp_uv.y = idx.texcoord_index >= 0 ? attrib.texcoords[2 * idx.texcoord_index + 1] : 0;
+                triangle[v] = vertex_set[make_pair(tmp, tmp_uv)];
             }
             triangles.emplace_back(triangle);
             index_offset += fv;
@@ -107,8 +262,12 @@ bool Scene::loadModel(const string& modelPath, int objectid)
     utilityCore::safeGetline(fp_in, line);
     if (!line.empty() && fp_in.good()) {
         vector<string> tokens = utilityCore::tokenizeString(line);
-        model.materialid = atoi(tokens[1].c_str());
-        cout << "Connecting Geom " << objectid << " to Material " << model.materialid << "..." << endl;
+        int mID = atoi(tokens[1].c_str());
+        if (mID != -1)
+        {
+            model.materialid = mID;
+            cout << "Connecting Geom " << objectid << " to Material " << model.materialid << "..." << endl;
+        }
     }
 
     //load transformations
@@ -146,11 +305,11 @@ bool Scene::loadGeometry(const string& type, int objectid)
     Object newGeom;
     //load geometry type
     if (type == "sphere") {
-        cout << "Creating new sphere..." << endl;
+        std::cout << "Creating new sphere..." << endl;
         newGeom.type = SPHERE;
     }
     else if (type == "cube") {
-        cout << "Creating new cube..." << endl;
+        std::cout << "Creating new cube..." << endl;
         newGeom.type = CUBE;
     }
 
@@ -159,7 +318,7 @@ bool Scene::loadGeometry(const string& type, int objectid)
     if (!line.empty() && fp_in.good()) {
         vector<string> tokens = utilityCore::tokenizeString(line);
         newGeom.materialid = atoi(tokens[1].c_str());
-        cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
+        std::cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
     }
 
     //load transformations
@@ -193,10 +352,10 @@ bool Scene::loadGeometry(const string& type, int objectid)
 int Scene::loadObject(string objectid) {
     int id = atoi(objectid.c_str());
     if (id != objects.size()) {
-        cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
+        std::cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
         return -1;
     } else {
-        cout << "Loading Object " << id << "..." << endl;
+        std::cout << "Loading Object " << id << "..." << endl;
         string line;
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good())
@@ -218,7 +377,7 @@ int Scene::loadObject(string objectid) {
 
 
 int Scene::loadCamera() {
-    cout << "Loading Camera ..." << endl;
+    std::cout << "Loading Camera ..." << endl;
     RenderState &state = this->state;
     Camera &camera = state.camera;
     float fovy;
@@ -274,17 +433,17 @@ int Scene::loadCamera() {
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
 
-    cout << "Loaded camera!" << endl;
+    std::cout << "Loaded camera!" << endl;
     return 1;
 }
 
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
-        cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
+        std::cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
         return -1;
     } else {
-        cout << "Loading Material " << id << "..." << endl;
+        std::cout << "Loading Material " << id << "..." << endl;
         Material newMaterial;
 
         //load static properties
@@ -321,7 +480,7 @@ void Scene::buildBVH()
     for (int i=0;i<objects.size();i++)
     {
         const Object& obj = objects[i];
-        if (obj.type == MODEL)
+        if (obj.type == TRIANGLE_MESH)
         {
             for (int j = obj.triangleStart; j != obj.triangleEnd; j++)
             {

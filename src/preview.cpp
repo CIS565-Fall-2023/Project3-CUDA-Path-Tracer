@@ -9,6 +9,8 @@ GLuint positionLocation = 0;
 GLuint texcoordsLocation = 1;
 GLuint pbo;
 GLuint displayImage;
+extern uint64_t sysTime;
+extern uint64_t delta_t;
 
 GLFWwindow* window;
 GuiDataContainer* imguiData = NULL;
@@ -114,6 +116,11 @@ void cleanupCuda() {
 
 void initCuda() {
 	cudaGLSetGLDevice(0);
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("CUDA error: %s\n", cudaGetErrorString(err));
+		exit(-1);
+	}
 
 	// Clean up on program exit
 	atexit(cleanupCuda);
@@ -230,11 +237,11 @@ void RenderImGui()
 		camchanged = true;
 	if(ImGui::SliderFloat("Phi", &phi, 0.0f, TWO_PI))
 		camchanged = true;
-	if(ImGui::SliderFloat("Lookat x", &renderState->camera.lookAt.x, -10.0f, 10.0f))
+	if(ImGui::SliderFloat("Pos x", &renderState->camera.position.x, -10.0f, 10.0f))
 		camchanged = true;
-	if (ImGui::SliderFloat("Lookat y", &renderState->camera.lookAt.y, -10.0f, 10.0f))
+	if (ImGui::SliderFloat("Pos y", &renderState->camera.position.y, -10.0f, 10.0f))
 		camchanged = true;
-	if (ImGui::SliderFloat("Lookat z", &renderState->camera.lookAt.z, -10.0f, 10.0f))
+	if (ImGui::SliderFloat("Pos z", &renderState->camera.position.z, -10.0f, 10.0f))
 		camchanged = true;
 
 	ImGui::End();
@@ -254,8 +261,32 @@ void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		
 		glfwPollEvents();
-
+		uint64_t currTime = time(nullptr);
+		delta_t = currTime - sysTime;
+		sysTime = currTime;
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position += renderState->camera.view * 0.05f;
+		}
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position -= renderState->camera.view * 0.05f;
+		}
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position -= renderState->camera.right * 0.05f;
+		}
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position += renderState->camera.right * 0.05f;
+		}
+			
 		runCuda();
+		
 
 		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());

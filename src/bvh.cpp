@@ -39,7 +39,7 @@ Primitive::Primitive(const Object& obj, int objID, int triangleOffset, const glm
 			bbox = Union(bbox, tmp);
 		}
 	}
-	else if (obj.type == MODEL)
+	else if (obj.type == TRIANGLE_MESH)
 	{
 		const glm::ivec3& tri = triangles[offset];
 		for (int i = 0; i < 3; i++)

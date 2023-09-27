@@ -28,7 +28,7 @@ __device__ inline glm::vec3 util_sample_hemisphere_cosine(const glm::vec2& rando
 	return glm::vec3(t.x, t.y, sqrt(1 - t.x * t.x - t.y * t.y));
 }
 
-__device__ inline float util_math_abscos(const glm::vec3& w)
+__device__ inline float util_math_tangent_space_abscos(const glm::vec3& w)
 {
 	return abs(w.z);
 }
@@ -85,14 +85,14 @@ __device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float
 
 __device__ inline float util_math_smith_ggx_masking(const glm::vec3& wo, float a2)
 {
-	float NoV = util_math_abscos(wo);
+	float NoV = util_math_tangent_space_abscos(wo);
 	return 2 * NoV / (sqrt(NoV * NoV * (1 - a2) + a2) + NoV);
 }
 
 __device__ inline float util_math_smith_ggx_shadowing_masking(const glm::vec3& wi, const glm::vec3& wo, float a2)
 {
-	float NoL = util_math_abscos(wi);
-	float NoV = util_math_abscos(wo);
+	float NoL = util_math_tangent_space_abscos(wi);
+	float NoV = util_math_tangent_space_abscos(wo);
 	float denom = NoL * sqrt(NoV * NoV * (1 - a2) + a2) + NoV * sqrt(NoL * NoL * (1 - a2) + a2);
 	return 2.0 * NoL * NoV / denom;
 }
@@ -100,18 +100,18 @@ __device__ inline float util_math_smith_ggx_shadowing_masking(const glm::vec3& w
 __device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
 {
 	*wi = util_sample_hemisphere_cosine(random);
-	*pdf = wo.z > 0 ? util_math_abscos(*wi) * INV_PI : 0;
+	*pdf = wo.z > 0 ? util_math_tangent_space_abscos(*wi) * INV_PI : 0;
 	return diffuseAlbedo * INV_PI;
 }
 
 __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
 {
-	float frensel = util_math_frensel_dielectric(util_math_abscos(wo), refIdx.x, refIdx.y);
+	float frensel = util_math_frensel_dielectric(util_math_tangent_space_abscos(wo), refIdx.x, refIdx.y);
 	if (random.x < frensel)
 	{
 		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
 		*pdf = frensel;
-		return frensel * reflectionAlbedo / util_math_abscos(*wi);
+		return frensel * reflectionAlbedo / util_math_tangent_space_abscos(*wi);
 	}
 	else
 	{
@@ -121,7 +121,7 @@ __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::ve
 		*wi = refractedRay;
 		*pdf = 1 - frensel;
 		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y * refIdx.y);
-		return val / util_math_abscos(*wi);
+		return val / util_math_tangent_space_abscos(*wi);
 	}
 }
 

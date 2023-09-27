@@ -18,10 +18,12 @@ private:
     int loadCamera();
     bool loadModel(const string&, int);
     bool loadGeometry(const string&,int);
-    
+    void loadTexture(const std::string& texturePath, cudaTextureObject_t* texObj, int type);
+    void loadSkybox();
 public:
     void buildBVH();
     void buildStacklessBVH();
+    void LoadAllTextures();
     Scene(string filename);
     ~Scene();
 
@@ -29,8 +31,12 @@ public:
     std::vector<Material> materials;
     std::vector<glm::ivec3> triangles;
     std::vector<glm::vec3> verticies;
+    std::vector<glm::vec2> uvs;
     std::vector<Primitive> primitives;
     std::vector<BVHGPUNode> bvhArray;
     RenderState state;
     BVHNode* bvhroot = nullptr;
+    cudaTextureObject_t skyboxTextureObj = 0;
+    std::vector<cudaArray*> textureDataPtrs;
+    std::vector<std::pair<std::string, int> > textureLoadJobs;//texture path, materialID
 };
