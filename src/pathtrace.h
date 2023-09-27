@@ -9,12 +9,14 @@ private:
 	Scene* hst_scene;
 	GuiDataContainer* m_guiData;
 	CudaMemory<glm::vec3> dev_img;
-	CudaMemory<Geom> dev_geoms;
+	CudaMemory<Mesh> dev_geoms;
+	CudaMemory<Triangle> dev_trigs;
 	CudaMemory<Material> dev_mat;
 	CudaMemory<PathSegment> dev_path;
 	CudaMemory<ShadeableIntersection> dev_intersect;
 	PathTracer(const PathTracer& _pathtracer);
 	PathTracer& operator=(const PathTracer& _pathtracer);
+	void initMeshTransform();//update trigs based on mesh data
 public:
 	PathTracer():hst_scene(nullptr),m_guiData(nullptr){};
 	//~PathTracer();

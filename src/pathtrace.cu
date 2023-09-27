@@ -104,60 +104,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-// LOOK: "fake" shader demonstrating what you might do with the info in
-// a ShadeableIntersection, as well as how to use thrust's random number
-// generator. Observe that since the thrust random number generator basically
-// adds "noise" to the iteration, the image should start off noisy and get
-// cleaner as more iterations are computed.
-//
-// Note that this shader does NOT do a BSDF evaluation!
-// Your shaders should handle that - this can allow techniques such as
-// bump mapping.
-__global__ void shadeFakeMaterial(
-	int iter
-	, int num_paths
-	, ShadeableIntersection* shadeableIntersections
-	, PathSegment* pathSegments
-	, Material* materials
-)
-{
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_paths)
-	{
-		ShadeableIntersection intersection = shadeableIntersections[idx];
-		if (intersection.t > 0.0f) { // if the intersection exists...
-		  // Set up the RNG
-		  // LOOK: this is how you use thrust's RNG! Please look at
-		  // makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
-
-			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
-
-			// If the material indicates that the object was a light, "light" the ray
-			if (material.emittance > 0.0f) {
-				pathSegments[idx].color *= (materialColor * material.emittance);
-			}
-			// Otherwise, do some pseudo-lighting computation. This is actually more
-			// like what you would expect from shading in a rasterizer like OpenGL.
-			// TODO: replace this! you should be able to start with basically a one-liner
-			else {
-				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-				pathSegments[idx].color *= u01(rng); // apply some noise because why not
-			}
-			// If there was no intersection, color the ray black.
-			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-			// used for opacity, in which case they can indicate "no opacity".
-			// This can be useful for post-processing and image compositing.
-		}
-		else {
-			pathSegments[idx].color = glm::vec3(0.0f);
-		}
-	}
-}
-
 __device__ glm::vec3 sampleHemisphereCosine(glm::vec2 i, float& pdf) {
 	float sinTheta = sqrt(1.0 - i.x);
 	float cosTheta = sqrt(i.x);
@@ -235,6 +181,32 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	}
 }
 
+
+__global__ void transformTriangles(int num_trigs, Mesh* in_meshs, Triangle* out_trigs) {
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx >= num_trigs)return;
+	Triangle& trig = out_trigs[idx];
+	Mesh& mesh = in_meshs[trig.meshId];
+	
+	trig.v1.pos = glm::vec3(mesh.transform * glm::vec4(trig.v1.pos,1));
+	trig.v1.normal = glm::normalize(glm::mat3(mesh.invTranspose) * trig.v1.normal);
+
+	trig.v2.pos = glm::vec3(mesh.transform * glm::vec4(trig.v2.pos, 1));
+	trig.v2.normal = glm::normalize(glm::mat3(mesh.invTranspose) * trig.v2.normal);
+
+	trig.v3.pos = glm::vec3(mesh.transform * glm::vec4(trig.v3.pos, 1));
+	trig.v3.normal = glm::normalize(glm::mat3(mesh.invTranspose) * trig.v3.normal);
+}
+
+void PathTracer::initMeshTransform()
+{
+	cout << "Transform triangles based on transformation matrix" << endl;
+	int blockSize1d = 128;
+	int N = dev_trigs.size();
+	dim3 numblocksTransformTrigs = (N + blockSize1d - 1) / blockSize1d;
+	transformTriangles<<<numblocksTransformTrigs,blockSize1d>>>(N, dev_geoms.get(), dev_trigs.get());
+}
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -256,16 +228,19 @@ void PathTracer::pathtraceInit(Scene* scene)
 	
 	this->dev_path.malloc(pixelcount, "Malloc dev_path error");
 
-	this->dev_geoms.malloc(scene->geoms.size());
-	cudaMemcpy(this->dev_geoms.get(), scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+	this->dev_geoms.malloc(scene->meshs.size(), "Malloc dev_mesh error");
+	cudaMemcpy(this->dev_geoms.get(), scene->meshs.data(), scene->meshs.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
+
+	this->dev_trigs.malloc(scene->trigs.size(), "Malloc dev_trigs error");
+	cudaMemcpy(this->dev_trigs.get(), scene->trigs.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
 	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
-	this->dev_intersect.malloc(pixelcount);
+	this->dev_intersect.malloc(pixelcount, "Malloc dev_intersect error");
 	cudaMemset(dev_intersect.get(), 0, pixelcount * sizeof(ShadeableIntersection));
 
-	// TODO: initialize any extra device memeory you need
+	initMeshTransform();
 
 	checkCUDAError("pathtraceInit");
 }
@@ -278,74 +253,55 @@ void PathTracer::pathtraceInit(Scene* scene)
 __global__ void computeIntersections(
 	int depth
 	, int num_paths
-	, PathSegment* pathSegments
-	, Geom* geoms
-	, int geoms_size
-	, ShadeableIntersection* intersections
+	, PathSegment* in_paths
+	, Triangle* in_trigs
+	, Mesh* in_meshs
+	, int num_trigs
+	, ShadeableIntersection* out_intersects
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (path_index < num_paths)
 	{
-		PathSegment pathSegment = pathSegments[path_index];
+		PathSegment seg = in_paths[path_index];
 
 		float t;
-		glm::vec3 intersect_point;
-		glm::vec3 normal;
-		float t_min = FLT_MAX;
+		float t_min = 10000;
+		
+		glm::vec3 bary; // for interpolation
+		glm::vec3 tmp_bary;
+		
 		int hit_geom_index = -1;
-		bool outside = true;
-
-		glm::vec3 tmp_intersect;
-		glm::vec3 tmp_normal;
+		Triangle hit_trig;
 
 		// naive parse through global geoms
-
-		//for (int i = 0; i < geoms_size; i++)
-		//{
-		//	Geom& geom = geoms[i];
-
-		//	if (geom.type == CUBE)
-		//	{
-		//		t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-		//	}
-		//	else if (geom.type == SPHERE)
-		//	{
-		//		t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-		//	}
-		//	// TODO: add more intersection tests here... triangle? metaball? CSG?
-
-		//	// Compute the minimum t from the intersection tests to determine what
-		//	// scene geometry object was hit first.
-		//	if (t > 0.0f && t_min > t)
-		//	{
-		//		t_min = t;
-		//		hit_geom_index = i;
-		//		intersect_point = tmp_intersect;
-		//		normal = tmp_normal;
-		//	}
-		//}
-		;
-		t = intersectRayTriangle(pathSegment.ray.origin, pathSegment.ray.direction, glm::vec3(5, 1, 4), glm::vec3(-5, 1, 3), glm::vec3(0, 5, 3), tmp_normal);
-		if (t > 0.0f)
+		for (int i = 0; i < num_trigs; i++)
 		{
-			t_min = t;
-			hit_geom_index = 2;
-			intersect_point = tmp_intersect;
-			normal = tmp_normal;
-		}
+			Triangle trig = in_trigs[i];
 
+			t = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary);
+			// Compute the minimum t from the intersection tests to determine what
+			// scene geometry object was hit first.
+			if (t > 0.0f && t_min > t)
+			{
+				t_min = t;
+				hit_geom_index = trig.meshId;
+				bary = tmp_bary;
+				hit_trig = trig;
+			}
+		}
 		if (hit_geom_index == -1)
 		{
-			intersections[path_index].t = -1.0f;
+			out_intersects[path_index].t = -1.0f;
 		}
 		else
 		{
 			//The ray hits something
-			intersections[path_index].t = t_min;
-			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
-			intersections[path_index].surfaceNormal = normal;
+			out_intersects[path_index].t = t_min;
+			out_intersects[path_index].bary = bary;
+			out_intersects[path_index].materialId = in_meshs[hit_geom_index].materialId;
+			out_intersects[path_index].surfaceNormal = glm::normalize(bary.x * hit_trig.v1.normal + bary.y * hit_trig.v2.normal + bary.z * hit_trig.v3.normal);
 		}
 	}
 }
@@ -453,8 +409,9 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	// TODO: perform one iteration of path tracing
 	PathSegment* dev_paths = this->dev_path.get();
 	ShadeableIntersection* dev_intersections = this->dev_intersect.get();
-	Geom* dev_geoms = this->dev_geoms.get();
-	Scene* hst_scene = this->hst_scene;
+	Mesh* dev_meshs = this->dev_geoms.get();
+	Triangle* dev_trigs = this->dev_trigs.get();
+	int num_trigs = hst_scene->trigs.size();
 	Material* dev_materials = this->dev_mat.get();
 	GuiDataContainer* guiData = this->m_guiData;
 	glm::vec3* dev_image = this->dev_img.get();
@@ -478,12 +435,20 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+		//int depth
+		//	, int num_paths
+		//	, PathSegment* in_paths
+		//	, Triangle* in_trigs
+		//	, Mesh* in_meshs
+		//	, int num_trigs
+		//	, ShadeableIntersection* out_intersects
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
 			, dev_paths
-			, dev_geoms
-			, hst_scene->geoms.size()
+			, dev_trigs
+			, dev_meshs
+			, num_trigs
 			, dev_intersections
 			);
 		checkCUDAError("trace one bounce");

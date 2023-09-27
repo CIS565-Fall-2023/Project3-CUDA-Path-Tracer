@@ -78,11 +78,16 @@ file(GLOB SRC_FILES
 
 file(GLOB H_FILES 
 	"${PROJECT_SOURCE_DIR}/src/ImGui/*.h"
+    "${PROJECT_SOURCE_DIR}/src/tinyobj/*.h"
     "${PROJECT_SOURCE_DIR}/src/*.h"
     "${PROJECT_SOURCE_DIR}/src/*.hpp"
 )
 list(SORT SRC_FILES)
 list(SORT H_FILES)
+
+#set(SRC_INCLUDE
+#	${PROJECT_SOURCE_DIR}
+#)
 
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${SRC_FILES} ${H_FILES})
 
