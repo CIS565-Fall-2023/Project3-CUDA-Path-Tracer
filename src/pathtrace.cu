@@ -78,18 +78,11 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 static HostScene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
-static Geom* dev_geoms = NULL;
-static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
-static Light** dev_lights = nullptr;
-static Primitive** dev_primitives = nullptr;
 static Triangle* dev_triangles= nullptr;
-static Sphere * dev_spheres= nullptr;
-static int primitve_size = 1;
 static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
-//static DeprecatedScene* testScene = new DeprecatedScene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\monkey_icosphere.glb");
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -112,16 +105,6 @@ __global__ void initAreaLightFromObject(HostScene * scene, Light** lights, Geom*
 	}
 }
 
-//__global__ void initTestTriangleScenePrimitives(Primitive** primitves) {
-//	primitves[0] = new Triangle(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, -1.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f),
-//		glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-//}
-//
-//void initTestTriangleScene() {
-//	cudaMalloc(&dev_primitives, primitve_size * sizeof(Primitive*));
-//	initTestTriangleScenePrimitives<<<1,1>>>(dev_primitives);
-//}
-
 void pathtraceInit(HostScene* scene) {
 	
 	hst_scene = scene;
@@ -134,19 +117,9 @@ void pathtraceInit(HostScene* scene) {
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
 
-	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
-	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
-	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
-
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light*));
-	//int size = scene->lights.size();
-	//initAreaLightFromObject<<<1,1>>>(scene, dev_lights, dev_geoms, dev_materials, scene->geoms.size());
-	//initTestTriangleScene();
 	// TODO: initialize any extra device memeory you need
 	auto triangles = pa->triangles.data();
 	cudaMalloc(&dev_triangles, pa->triangles.size() * sizeof(Triangle));
@@ -155,10 +128,6 @@ void pathtraceInit(HostScene* scene) {
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
 	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
-	//pa->movePrimitivesToDevice();
-	cudaDeviceSynchronize();
-	checkCUDAError("Primitive Assmbler failed!");
-
 
 	checkCUDAError("pathtraceInit");
 }
@@ -166,8 +135,6 @@ void pathtraceInit(HostScene* scene) {
 void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
-	cudaFree(dev_geoms);
-	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	//cudaFree(dev_lights);
 	// TODO: clean up any extra device memory you created
@@ -209,58 +176,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-__device__ void computeIntersectionsCore(Geom* geoms, int geoms_size, Ray ray, ShadeableIntersection& intersection) {
-	float t;
-	glm::vec3 intersect_point;
-	glm::vec3 normal;
-	float t_min = FLT_MAX;
-	int hit_geom_index = -1;
-	bool outside = true;
-
-	glm::vec3 tmp_intersect;
-	glm::vec3 tmp_normal;
-
-	// naive parse through global geoms
-
-	for (int i = 0; i < geoms_size; i++)
-	{
-		Geom& geom = geoms[i];
-
-		if (geom.type == CUBE)
-		{
-			t = boxIntersectionTest(geom, ray, tmp_intersect, tmp_normal, outside);
-		}
-		else if (geom.type == SPHERE)
-		{
-			t = sphereIntersectionTest(geom, ray, tmp_intersect, tmp_normal, outside);
-		}
-		// TODO: add more intersection tests here... triangle? metaball? CSG?
-
-		// Compute the minimum t from the intersection tests to determine what
-		// scene geometry object was hit first.
-		if (t > EPSILON && t_min > t)
-		{
-			t_min = t;
-			hit_geom_index = i;
-			intersect_point = tmp_intersect;
-			normal = tmp_normal;
-		}
-	}
-
-
-	if (hit_geom_index == -1)
-	{
-		intersection.t = -1.0f;
-	}
-	else
-	{
-		//The ray hits something
-		intersection.t = t_min;
-		intersection.materialId = geoms[hit_geom_index].materialid;
-		intersection.surfaceNormal = normal;
-	}
-}
-
 //TODO: Change to BVH in future!
 __device__ bool intersectCore(Triangle * triangles, int triangles_size, Ray & ray, ShadeableIntersection& intersection) {
 
@@ -291,26 +206,6 @@ __global__ void intersect(
 	}
 }
 
-// TODO:
-// computeIntersections handles generating ray intersections ONLY.
-// Generating new rays is handled in your shader(s).
-// Feel free to modify the code below.
-__global__ void computeIntersections(
-	int depth
-	, int num_paths
-	, PathSegment* pathSegments
-	, Geom* geoms
-	, int geoms_size
-	, ShadeableIntersection* intersections
-)
-{
-	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (path_index < num_paths)
-	{
-		computeIntersectionsCore(geoms, geoms_size, pathSegments[path_index].ray, intersections[path_index]);
-	}
-}
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -320,14 +215,11 @@ __global__ void computeIntersections(
 // Note that this shader does NOT do a BSDF evaluation!
 // Your shaders should handle that - this can allow techniques such as
 // bump mapping.
-__global__ void shadeFakeMaterial(
+__global__ void shadeBSDF(
 	int iter
 	, int num_paths
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
-	, Material* materials
-	, Geom * geoms
-	, int geoms_size
 	, BSDFStruct * bsdfStructs
 	, Triangle * triangles
 	, int triangles_size
@@ -345,12 +237,7 @@ __global__ void shadeFakeMaterial(
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
-			Material material = materials[intersection.materialId];
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
-			//pathSegment.color = get_debug_color(bsdfStruct);
-			//return;
-			////pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
-			glm::vec3 materialColor = material.color;
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
@@ -515,7 +402,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	int constDepth = 3;
 	while (!iterationComplete) {
 
 		// clean shading chunks
@@ -523,14 +409,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-		//computeIntersections <<<numblocksPathSegmentTracing, blockSize1d >>> (
-		//	depth
-		//	, num_paths
-		//	, dev_paths
-		//	, dev_geoms
-		//	, hst_scene->geoms.size()
-		//	, dev_intersections
-		//	);
 
 		int primitiveSize = pa->getPrimitiveSize();
 		checkCUDAError("getPrimitiveSize");
@@ -557,14 +435,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
 
-		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+		shadeBSDF << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials,
-			dev_geoms, 
-			hst_scene->geoms.size(),
 			dev_bsdfStructs,
 			dev_triangles,
 			pa->triangles.size()
@@ -577,8 +452,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// of pixels that are required to continue raytracing.
 		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, HasHit());
 		num_paths = dev_path_end - dev_paths;
-		
-		//iterationComplete = (--constDepth == 0); // TODO: should be based off stream compaction results.
+
 		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
 		// iterationComplete = (true);
 		if (guiData != NULL)

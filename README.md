@@ -23,6 +23,10 @@ project, and we will not be able to grade you without a good README.
         > Can't tell how excited I am! Now my raytracer is open to most of the scenes!
         - Scene with parenting relationship
             ![with_parenting](img/scene_with_parenting.png)
+
+- [ ] Core
+    - [ ] Russian Roulette
+
 - [ ] More BSDF
     - [x] Diffuse
     - [x] Emissive
@@ -35,6 +39,13 @@ project, and we will not be able to grade you without a good README.
     - [ ] Construct BVH
     - [ ] Traverse BVH
     - [ ] Better Heuristics
+
+- [ ] Better sampler
+    - [ ] Encapsulate a sampler class
+        - Gotta deal with cmake issue
+    - [ ] Monte carlo sampling
+    - [ ] Importance sampling
+
 
 - [ ] Light (probably not gonna do a lot about it because gltf has a poor support over area light)
 
