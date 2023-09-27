@@ -171,24 +171,111 @@ void runCuda(bool reset, GuiDataContainer* guiData) {
 	}
 }
 
+static glm::ivec3 camMovement = glm::ivec3(0);
+static int speed = 0;
+static const float baseSpeed = 0.3f;
+
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (action == GLFW_PRESS) {
-		switch (key) {
+		Camera& cam = renderState->camera;
+
+		switch (key)
+		{
 		case GLFW_KEY_ESCAPE:
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
-		case GLFW_KEY_S:
+		case GLFW_KEY_F:
 			saveImage();
 			break;
 		case GLFW_KEY_SPACE:
 			camchanged = true;
 			renderState = &scene->state;
-			Camera& cam = renderState->camera;
 			cam.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_W:
+			++camMovement.z;
+			break;
+		case GLFW_KEY_S:
+			--camMovement.z;
+			break;
+		case GLFW_KEY_D:
+			++camMovement.x;
+			break;
+		case GLFW_KEY_A:
+			--camMovement.x;
+			break;
+		case GLFW_KEY_E:
+			++camMovement.y;
+			break;
+		case GLFW_KEY_Q:
+			--camMovement.y;
+			break;
+		case GLFW_KEY_LEFT_SHIFT:
+			++speed;
+			break;
+		case GLFW_KEY_LEFT_ALT:
+			--speed;
 			break;
 		}
 	}
+
+	if (action == GLFW_RELEASE)
+	{
+		switch (key)
+		{
+		case GLFW_KEY_W:
+			--camMovement.z;
+			break;
+		case GLFW_KEY_S:
+			++camMovement.z;
+			break;
+		case GLFW_KEY_D:
+			--camMovement.x;
+			break;
+		case GLFW_KEY_A:
+			++camMovement.x;
+			break;
+		case GLFW_KEY_E:
+			--camMovement.y;
+			break;
+		case GLFW_KEY_Q:
+			++camMovement.y;
+			break;
+		case GLFW_KEY_LEFT_SHIFT:
+			--speed;
+			break;
+		case GLFW_KEY_LEFT_ALT:
+			++speed;
+			break;
+		}
+	}
+}
+
+void moveCam()
+{
+	if (camMovement.x == 0 && camMovement.y == 0 && camMovement.z == 0)
+	{
+		return;
+	}
+
+	Camera& cam = renderState->camera;
+
+	glm::vec3 moveSpeed = glm::vec3(camMovement) * baseSpeed;
+	if (speed == -1)
+	{
+		moveSpeed *= 0.1f;
+	}
+	else if (speed == 1)
+	{
+		moveSpeed *= 10.f;
+	}
+
+	cam.lookAt += moveSpeed.x * cam.right 
+		+ moveSpeed.y * glm::vec3(0, 1, 0)
+		+ moveSpeed.z * cam.view;
+
+	camchanged = true;
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
@@ -205,13 +292,14 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (xpos == lastX || ypos == lastY) return; // otherwise, clicking back into window causes re-start
 	if (leftMousePressed) {
 		// compute new camera parameters
-		phi -= (xpos - lastX) / width;
-		theta -= (ypos - lastY) / height;
+		float sensitivity = 1.5f;
+		phi -= (xpos - lastX) * sensitivity / width;
+		theta -= (ypos - lastY) * sensitivity / height;
 		theta = std::fmax(0.001f, std::fmin(theta, PI));
 		camchanged = true;
 	}
 	else if (rightMousePressed) {
-		zoom += (ypos - lastY) / height;
+		zoom += (ypos - lastY) * 10.f / height;
 		zoom = std::fmax(0.1f, zoom);
 		camchanged = true;
 	}

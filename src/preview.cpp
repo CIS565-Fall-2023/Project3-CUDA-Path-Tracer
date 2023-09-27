@@ -250,8 +250,9 @@ static bool shouldReset = false;
 
 void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
-		
 		glfwPollEvents();
+
+		moveCam();
 
 		runCuda(shouldReset, imguiData);
 
