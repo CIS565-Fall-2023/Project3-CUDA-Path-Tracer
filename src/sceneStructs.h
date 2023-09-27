@@ -28,6 +28,14 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
+enum class MaterialType : uint8_t
+{
+    Emissive,
+    Diffuse,
+    Metal,
+    Glass
+};
+
 struct Material {
     glm::vec3 color;
     struct {
@@ -38,6 +46,7 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    MaterialType type;
 };
 
 struct Camera {
@@ -73,4 +82,6 @@ struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;
+  bool frontFace;
+  glm::vec3 point;
 };
