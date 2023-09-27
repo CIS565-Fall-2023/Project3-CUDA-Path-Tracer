@@ -286,6 +286,7 @@ __global__ void intersect(
 		Ray & ray = pathSegments[path_index].ray;
 		ray.min_t = 0.0;
 		ray.max_t = FLT_MAX;
+		intersections[path_index].t = -1;
 		intersectCore(triangles, triangles_size, pathSegments[path_index].ray, intersections[path_index]);
 	}
 }
@@ -346,8 +347,8 @@ __global__ void shadeFakeMaterial(
 
 			Material material = materials[intersection.materialId];
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
-			pathSegment.color = get_debug_color(bsdfStruct);
-			return;
+			//pathSegment.color = get_debug_color(bsdfStruct);
+			//return;
 			////pathSegment.color = glm::vec3(1.0, 1.0, 1.0);
 			glm::vec3 materialColor = material.color;
 			// If the material indicates that the object was a light, "light" the ray
@@ -381,13 +382,15 @@ __global__ void shadeFakeMaterial(
 					Ray one_bounce_ray;
 					one_bounce_ray.direction = o2w * wo;
 					one_bounce_ray.origin = intersect;
+					one_bounce_ray.min_t = EPSILON;
+					one_bounce_ray.max_t = FLT_MAX;
 					ShadeableIntersection oneBounceIntersection;
+					oneBounceIntersection.t = -1.0f;
 					
 					//computeIntersectionsCore(geoms, geoms_size, one_bounce_ray, oneBounceIntersection);
 					//printf("oneBounceIntersection.t: %f\n", oneBounceIntersection.t);
 					if (intersectCore(triangles, triangles_size, one_bounce_ray, oneBounceIntersection)){
 						auto oneBounceBSDF = bsdfStructs[oneBounceIntersection.materialId];
-						return;
 						if (oneBounceBSDF.bsdfType == BSDFType::EMISSIVE) {
 							n_valid_sample++;
 							//pathSegments[idx].color = glm::vec3(1.0f);
@@ -576,8 +579,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		num_paths = dev_path_end - dev_paths;
 		
 		//iterationComplete = (--constDepth == 0); // TODO: should be based off stream compaction results.
-		//iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
-		 iterationComplete = (true);
+		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
+		// iterationComplete = (true);
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;

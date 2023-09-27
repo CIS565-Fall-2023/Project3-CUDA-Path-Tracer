@@ -71,3 +71,7 @@ project, and we will not be able to grade you without a good README.
                 Can't tell how excited I am! Now my raytracer is open to most of the scenes!
                 - Scene with parenting relationship
                 ![with_parenting](img/scene_with_parenting.png)
+
+- A brief trial
+    - Note that this difference might be due to different bsdf we are using right now. For convenience, we are using the most naive Diffuse BSDF, while Blender use a standard BSDF by default.
+![Alt text](img/first_trial_glb_scene.png)

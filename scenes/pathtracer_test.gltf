@@ -4,6 +4,8 @@
 		"version":"2.0"
 	},
 	"extensionsUsed":[
+		"KHR_materials_specular",
+		"KHR_materials_ior",
 		"KHR_materials_emissive_strength"
 	],
 	"scene":0,
@@ -97,13 +99,13 @@
 			"mesh":4,
 			"name":"Plane",
 			"scale":[
-				-9.953104972839355,
-				-9.953104972839355,
-				-9.953104972839355
+				12.303321838378906,
+				12.303321838378906,
+				12.303321838378906
 			],
 			"translation":[
 				0,
-				-1.9600805044174194,
+				-3.73272967338562,
 				0
 			]
 		}
@@ -111,6 +113,44 @@
 	"materials":[
 		{
 			"doubleSided":true,
+			"extensions":{
+				"KHR_materials_specular":{
+					"specularColorFactor":[
+						0,
+						0,
+						0
+					]
+				},
+				"KHR_materials_ior":{
+					"ior":1.4500000476837158
+				}
+			},
+			"name":"Material.005",
+			"pbrMetallicRoughness":{
+				"baseColorFactor":[
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929,
+					1
+				],
+				"metallicFactor":0,
+				"roughnessFactor":0.5
+			}
+		},
+		{
+			"doubleSided":true,
+			"extensions":{
+				"KHR_materials_specular":{
+					"specularColorFactor":[
+						0,
+						0,
+						0
+					]
+				},
+				"KHR_materials_ior":{
+					"ior":1.4500000476837158
+				}
+			},
 			"name":"Material.002",
 			"pbrMetallicRoughness":{
 				"baseColorFactor":[
@@ -143,6 +183,46 @@
 					1
 				]
 			}
+		},
+		{
+			"doubleSided":true,
+			"name":"Material.004",
+			"pbrMetallicRoughness":{
+				"baseColorFactor":[
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929,
+					1
+				],
+				"metallicFactor":0,
+				"roughnessFactor":0.5
+			}
+		},
+		{
+			"doubleSided":true,
+			"extensions":{
+				"KHR_materials_specular":{
+					"specularColorFactor":[
+						0,
+						0,
+						0
+					]
+				},
+				"KHR_materials_ior":{
+					"ior":1.4500000476837158
+				}
+			},
+			"name":"Material.006",
+			"pbrMetallicRoughness":{
+				"baseColorFactor":[
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929,
+					1
+				],
+				"metallicFactor":0,
+				"roughnessFactor":0.5
+			}
 		}
 	],
 	"meshes":[
@@ -155,7 +235,8 @@
 						"NORMAL":1,
 						"TEXCOORD_0":2
 					},
-					"indices":3
+					"indices":3,
+					"material":0
 				}
 			]
 		},
@@ -169,7 +250,7 @@
 						"TEXCOORD_0":6
 					},
 					"indices":7,
-					"material":0
+					"material":1
 				}
 			]
 		},
@@ -183,7 +264,7 @@
 						"TEXCOORD_0":10
 					},
 					"indices":11,
-					"material":1
+					"material":2
 				}
 			]
 		},
@@ -196,12 +277,13 @@
 						"NORMAL":13,
 						"TEXCOORD_0":14
 					},
-					"indices":15
+					"indices":15,
+					"material":3
 				}
 			]
 		},
 		{
-			"name":"Plane.003",
+			"name":"Plane.004",
 			"primitives":[
 				{
 					"attributes":{
@@ -209,7 +291,8 @@
 						"NORMAL":17,
 						"TEXCOORD_0":18
 					},
-					"indices":19
+					"indices":19,
+					"material":4
 				}
 			]
 		}
