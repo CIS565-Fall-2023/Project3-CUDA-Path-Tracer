@@ -74,6 +74,8 @@ set(scene
     src/scene.cpp
     src/bsdf.h
     src/bsdfStruct.h
+    src/bvh.h
+    src/bvh.cpp
 )
 
 set(core

@@ -20,6 +20,7 @@
 #include "light.h"
 #include "scene.h"
 #include "bsdf.h"
+#include "bvh.h"
 //#include "utilities.cuh"
 
 #define ONE_BOUNCE_DIRECT_LIGHTINIG 1
@@ -85,6 +86,7 @@ static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
 static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
+static BVHAccel * bvh = nullptr;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -123,9 +125,14 @@ void pathtraceInit(HostScene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
+	bvh = new BVHAccel();
+	bvh->buildBVH(pa->triangles);
+	bvh->traverseBVHNonSerialized();
+	system("pause");
 	auto triangles = pa->triangles.data();
 	cudaMalloc(&dev_triangles, pa->triangles.size() * sizeof(Triangle));
 	cudaMemcpy(dev_triangles, triangles, pa->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
 
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
