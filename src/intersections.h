@@ -143,20 +143,28 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-// By default, make the triangle default
+// inspired by glm::intersectRayTriangle
+/**
+ * Test intersection between a ray and a triangle. 
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @param outside            Output param for whether the ray came from outside.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
 __host__ __device__ float triangleIntersectionTest(Triangle tri, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
 
     outside = true;
-    glm::vec3 v01 = tri.vertices[1] - tri.vertices[0];
-    glm::vec3 v02 = tri.vertices[2] - tri.vertices[0];
+    glm::vec3 v01 = tri.pos[1] - tri.pos[0];
+    glm::vec3 v02 = tri.pos[2] - tri.pos[0];
     glm::vec3 dx02 = glm::cross(r.direction, v02);
 
     float d0 = glm::dot(v01, dx02);
     if (d0 < 0.000001f){ return -1.0f; }
 
     float d = 1.0f / d0;
-    glm::vec3 v0o = r.origin - tri.vertices[0];
+    glm::vec3 v0o = r.origin - tri.pos[0];
     float b1 = d * glm::dot(v0o, dx02);
     if (b1 < 0.0f || b1 > 1.0f) { return -1.0f; }
 
@@ -168,10 +176,7 @@ __host__ __device__ float triangleIntersectionTest(Triangle tri, Ray r,
     if (t < 0.0f) { return -1.0f;}
 
     intersectionPoint = t * r.direction + r.origin;
-
     normal = normalize(glm::cross(v01, v02));
-    // normal *= (dot(normal, r.direction) > 0 ? -1 : 1);
 
     return t;
-    
 }

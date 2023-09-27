@@ -17,7 +17,7 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-#define MATERIAL_SORT
+// #define MATERIAL_SORT
 #define CACHE_FIRST_BOUNCE
 // #define DEBUG_OUTPUT
 

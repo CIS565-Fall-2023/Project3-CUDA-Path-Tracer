@@ -59,6 +59,7 @@ EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
 
+
 // Ceiling light
 OBJECT 0
 cube
@@ -138,3 +139,12 @@ material 1
 VERTEX 5 10 -5
 VERTEX -5 0 -5
 VERTEX 5 0 -5
+
+// Mesh
+OBJECT 10
+mesh
+material 1
+MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\dodecahedron.obj
+TRANS       0 2 1.5
+ROTAT       0 90 0
+SCALE       1.5 1.5 1.5
