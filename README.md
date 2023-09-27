@@ -21,9 +21,7 @@
 
 ### Planned features
 
-- Add slider for depth of field? (which should reset pathtracer state when changed)
 - Open Image Denoise
-- Direct/full lighting?
 
 ### Attribution
 

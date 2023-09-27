@@ -54,6 +54,9 @@ int main(int argc, char** argv) {
 	width = cam.resolution.x;
 	height = cam.resolution.y;
 
+	guiData->lensRadius = cam.lensRadius;
+	guiData->focusDistance = cam.focusDistance;
+
 	glm::vec3 view = cam.view;
 	glm::vec3 up = cam.up;
 	glm::vec3 right = glm::cross(view, up);
@@ -106,9 +109,10 @@ void saveImage() {
 	//img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
-void runCuda() {
+void runCuda(bool reset, GuiDataContainer* guiData) {
 	if (camchanged) {
 		iteration = 0;
+
 		Camera& cam = renderState->camera;
 		cameraPosition.x = zoom * sin(phi) * sin(theta);
 		cameraPosition.y = zoom * cos(theta);
@@ -128,6 +132,15 @@ void runCuda() {
 		Pathtracer::onCamChanged();
 
 		camchanged = false;
+	}
+
+	if (reset)
+	{
+		iteration = 0;
+
+		Camera& cam = renderState->camera;
+		cam.lensRadius = guiData->lensRadius;
+		cam.focusDistance = guiData->focusDistance;
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU

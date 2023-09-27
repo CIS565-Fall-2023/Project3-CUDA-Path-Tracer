@@ -191,7 +191,7 @@ void InitImguiData(GuiDataContainer* guiData)
 }
 
 // LOOK: Un-Comment to check ImGui Usage
-void RenderImGui()
+bool RenderImGui()
 {
 	mouseOverImGuiWinow = io->WantCaptureMouse;
 
@@ -204,6 +204,8 @@ void RenderImGui()
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.0f);
 	static float f = 0.0f;
 	static int counter = 0;
+
+	bool shouldReset = false;
 
 	ImGui::Begin("Path Tracer Analytics", 0, ImGuiWindowFlags_AlwaysAutoResize);
 	
@@ -227,12 +229,16 @@ void RenderImGui()
 	ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
 #endif
 	ImGui::Checkbox("russian roulette", &imguiData->russianRoulette);
+	shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
+	shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
 
 	ImGui::End();
 
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	return shouldReset;
 }
 
 bool MouseOverImGuiWindow()
@@ -240,12 +246,14 @@ bool MouseOverImGuiWindow()
 	return mouseOverImGuiWinow;
 }
 
+static bool shouldReset = false;
+
 void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		
 		glfwPollEvents();
 
-		runCuda();
+		runCuda(shouldReset, imguiData);
 
 		string title = "CIS565 Path Tracer | " + Utils::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());
@@ -261,7 +269,7 @@ void mainLoop() {
 		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
 
 		// Render ImGui Stuff
-		RenderImGui();
+		shouldReset = RenderImGui();
 
 		glfwSwapBuffers(window);
 	}

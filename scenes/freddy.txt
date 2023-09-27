@@ -34,7 +34,7 @@ EYE          0 10 10
 LOOKAT       0 10 0
 UP           0 1 0
 LENS_RADIUS  0
-FOCAL_DIST   8
+FOCUS_DIST   8
 
 // ==================================================
 // OBJECTS

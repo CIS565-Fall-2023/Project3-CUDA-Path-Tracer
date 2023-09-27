@@ -266,7 +266,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	if (cam.lensRadius > 0)
 	{
 		float z = glm::length(glm::proj(noLensDirection, cam.view));
-		glm::vec3 pFocus = cam.position + (noLensDirection * cam.focalDistance / z);
+		glm::vec3 pFocus = cam.position + (noLensDirection * cam.focusDistance / z);
 		glm::vec2 pLens = cam.lensRadius * ConcentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
 
 		Ray newRay;

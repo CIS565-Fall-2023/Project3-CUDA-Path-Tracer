@@ -466,8 +466,8 @@ int Scene::loadCamera() {
             camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         } else if (strcmp(tokens[0].c_str(), "LENS_RADIUS") == 0) {
             camera.lensRadius = atof(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FOCAL_DIST") == 0) {
-            camera.focalDistance = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "FOCUS_DIST") == 0) {
+            camera.focusDistance = atof(tokens[1].c_str());
         }
 
         Utils::safeGetline(fp_in, line);
