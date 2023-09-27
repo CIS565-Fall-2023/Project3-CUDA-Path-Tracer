@@ -73,8 +73,7 @@ float schlickFresnel(float cosTheta, float eta1, float eta2) {
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
-void scatterRay(PathSegment& pathSegment, glm::vec3 intersect,
+__host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersect,
     glm::vec3 normal, const Material& m, thrust::default_random_engine& rng) {
 
     thrust::uniform_real_distribution<float> u01(0, 1);
