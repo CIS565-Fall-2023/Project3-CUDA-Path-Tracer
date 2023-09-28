@@ -42,6 +42,8 @@ int Scene::loadGeom(string objectid) {
         Geom newGeom;
         string line;
 
+        LightType lightType = LightType::NONE;
+
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -74,6 +76,8 @@ int Scene::loadGeom(string objectid) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "LIGHTTYPE") == 0) {
+                lightType = (LightType)atoi(tokens[1].c_str());
             }
 
             utilityCore::safeGetline(fp_in, line);
@@ -94,6 +98,17 @@ int Scene::loadGeom(string objectid) {
         }
 
         geoms.push_back(newGeom);
+
+        // light
+        if (lightType != LightType::NONE) {
+            cout << "Loading Geom " << id << " as Light." << endl;
+            Light light;
+            light.geom = newGeom;
+            light.lightType = lightType;
+            // TODO: spot light
+            lights.push_back(light);
+        }
+
         return 1;
     }
 }

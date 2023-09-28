@@ -2,6 +2,62 @@
 
 #include "intersections.h"
 
+__host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray ray,
+    ShadeableIntersection& intersection) {
+    float t;
+    glm::vec3 intersect_point;
+    glm::vec3 normal;
+    glm::vec3 tangent;
+    float t_min = FLT_MAX;
+    int hit_geom_index = -1;
+    bool outside = true;
+
+    glm::vec3 tmp_intersect;
+    glm::vec3 tmp_normal;
+    glm::vec3 tmp_tangent;
+
+    // naive parse through global geoms
+
+    for (int i = 0; i < geoms_size; i++)
+    {
+        Geom& geom = geoms[i];
+
+        if (geom.type == CUBE)
+        {
+            t = boxIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
+        }
+        else if (geom.type == SPHERE)
+        {
+            t = sphereIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
+        }
+        // TODO: add more intersection tests here... triangle? metaball? CSG?
+
+        // Compute the minimum t from the intersection tests to determine what
+        // scene geometry object was hit first.
+        if (t > 0.0f && t_min > t)
+        {
+            t_min = t;
+            hit_geom_index = i;
+            intersect_point = tmp_intersect;
+            normal = tmp_normal;
+            tangent = tmp_tangent;
+        }
+    }
+
+    if (hit_geom_index == -1)
+    {
+        intersection.t = -1.0f;
+    }
+    else
+    {
+        //The ray hits something
+        intersection.t = t_min;
+        intersection.materialId = geoms[hit_geom_index].materialid;
+        intersection.surfaceNormal = normal;
+        intersection.surfaceTangent = tangent;
+    }
+}
+
 __host__ __device__
 glm::vec2 concentricSampleDisk(const glm::vec2& sample)
 {
@@ -93,7 +149,7 @@ __host__ __device__ float fresnelDielectricEval(float cosi, float etai, float et
 __host__ __device__ glm::vec3 sampleSpecularReflectMaterial(
     const Material& m, const glm::vec3& normal, const glm::vec3& wo, glm::vec3& wi) {
     wi = glm::normalize(glm::reflect(wo, normal));
-    return m.specular.color;
+    return m.specular.color / abs(glm::dot(glm::normalize(wi), normal));
 }
 
 __host__ __device__ glm::vec3 sampleSpecularTransimissionMaterial(
@@ -110,7 +166,7 @@ __host__ __device__ glm::vec3 sampleSpecularTransimissionMaterial(
     wi = etaI / etaT * sqrtf(fmaxf(0.0f, 1.0f - ni * ni)) > 1.0f ?
         glm::normalize(glm::reflect(wo, nor)) :
         glm::normalize(glm::refract(wo, nor, etaI / etaT));
-    return m.specular.color;
+    return m.specular.color / abs(glm::dot(glm::normalize(wi), normal));
 }
 
 __host__ __device__ glm::vec3 sampleFresnelSpecularMaterial(
@@ -129,6 +185,62 @@ __host__ __device__ glm::vec3 sampleFresnelSpecularMaterial(
     } else {
         // transmission
         return (1.0f - F) * sampleSpecularTransimissionMaterial(m, normal, wo, wi);
+    }
+}
+
+__host__ __device__ glm::vec3 sampleMaterial(glm::vec3 intersect,
+    glm::vec3 normal,
+    glm::vec3 tangent,
+    const Material& m,
+    const glm::vec3& wo,
+    glm::vec3& wi,
+    float& pdf,
+    thrust::default_random_engine& rng) {
+
+    pdf = 1.0;
+    if (m.hasReflective > 0.0 && m.hasRefractive > 0.0)
+    {
+        return sampleFresnelSpecularMaterial(m, normal, wo, wi, rng);
+    }
+    else if (m.hasReflective > 0.0)
+    {
+        // perfect specular
+        return sampleSpecularReflectMaterial(m, normal, wo, wi);
+
+        // imperfect
+        //float x1 = u01(rng), x2 = u01(rng);
+        //float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
+        //float phi = 2 * PI * x2;
+
+        //glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+
+        //// sample direction must be transformed to world space
+        //// tangent-space to world-space: local tangent, binormal, and normal at the surface point
+        //glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
+        //glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
+
+        //glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
+
+        //// specular-space to tangent-space
+        //glm::mat3 sampleToTangent;
+        //sampleToTangent[2] = r;
+        //sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
+        //sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
+
+        //// specular-space to world-space
+        //glm::mat3 mat = TBN * sampleToTangent;
+
+        //pathSegment.ray.direction = mat * s;
+    }
+    else if (m.hasRefractive > 0.0)
+    {
+        return sampleSpecularTransimissionMaterial(m, normal, wo, wi);
+    }
+    else
+    {
+        // diffuse
+        wi = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));
+        return (m.color / PI);
     }
 }
 
@@ -169,78 +281,83 @@ void scatterRay(
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
 
-    thrust::uniform_real_distribution<float> u01(0, 1);
-    float rand = u01(rng); // TODO: rand ratio between diffuse and specular
-
     float pdf = 1.0;
     glm::vec3 dir = pathSegment.ray.direction;
 
-    if (m.hasReflective > 0.0 && m.hasRefractive > 0.0) 
-    {
-        pathSegment.color *= sampleFresnelSpecularMaterial(m, normal, dir, pathSegment.ray.direction, rng);
-    } 
-    else if (m.hasReflective > 0.0) 
-    {
-        // perfect specular
-        pathSegment.color *= sampleSpecularReflectMaterial(m, normal, dir, pathSegment.ray.direction);
-
-        // imperfect
-        //float x1 = u01(rng), x2 = u01(rng);
-        //float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
-        //float phi = 2 * PI * x2;
-
-        //glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-
-        //// sample direction must be transformed to world space
-        //// tangent-space to world-space: local tangent, binormal, and normal at the surface point
-        //glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
-        //glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
-
-        //glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
-
-        //// specular-space to tangent-space
-        //glm::mat3 sampleToTangent;
-        //sampleToTangent[2] = r;
-        //sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
-        //sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
-
-        //// specular-space to world-space
-        //glm::mat3 mat = TBN * sampleToTangent;
-
-        //pathSegment.ray.direction = mat * s;
-    }
-    else if (m.hasRefractive > 0.0)
-    {
-        pathSegment.color *= sampleSpecularTransimissionMaterial(m, normal, dir, pathSegment.ray.direction);
-    } 
-    else
-    {
-        // diffuse
-        pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));
-        pathSegment.color *= (m.color *abs(glm::dot(glm::normalize(pathSegment.ray.direction), normal)) / PI) / pdf;
-    }
+    pathSegment.color *= sampleMaterial(intersect, normal, tangent, m, dir, pathSegment.ray.direction, pdf, rng);
+    pathSegment.color *= abs(glm::dot(glm::normalize(pathSegment.ray.direction), normal)) / pdf;
 
     --pathSegment.remainingBounces;
     pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
 }
 
+// sample lights
+__host__ __device__ glm::vec3 sampleAreaLight(const Light& light, glm::vec3& view_point, glm::vec3& view_nor,
+    int num_lights, glm::vec3& wiW, float& pdf, Geom* geoms, int geom_size, Material* materials, thrust::default_random_engine& rng) {
 
-__host__ __device__
-glm::vec3 sampleLight(
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    switch (light.geom.type)
+    {
+        case CUBE:
+            glm::mat4 t = light.geom.transform;
+            glm::vec4 light_point_W = t * glm::vec4(u01(rng) - 0.5f, 0.0f, u01(rng) - 0.5f, 1.0f);
+            glm::vec4 light_nor_W_h = light.geom.invTranspose * glm::vec4(0, 1, 0, 1);
+            glm::vec3 light_nor_W = glm::normalize(glm::vec3(light_nor_W_h) / light_nor_W_h.w);
+
+            // Compute and Convert Pdf
+            glm::vec3 dis = glm::vec3(light_point_W) - view_point;
+            float r = length(dis);
+            float costheta = abs(dot(-normalize(dis), light_nor_W));
+            pdf = r * r / (costheta * light.geom.scale.x * light.geom.scale.z);
+
+            // Set ¦Øi to the normalized vector from the reference point
+            // to the generated light source point
+            wiW = normalize(dis);
+
+            // Check to see if ¦Øi reaches the light source
+
+            Ray shadowRay;
+            shadowRay.origin = view_point + 0.001f * wiW;
+            shadowRay.direction = wiW;
+
+            ShadeableIntersection intersection;
+
+            computeRayIntersection(geoms, geom_size, shadowRay, intersection);
+
+            if (intersection.t >= r - 0.001) {
+                return materials[intersection.materialId].color * 
+                    materials[intersection.materialId].emittance / (float)num_lights;
+            }
+    }
+
+    return glm::vec3(0.);
+}
+
+__host__ __device__ glm::vec3 sampleLight(
     glm::vec3 intersect,
     glm::vec3 normal,
     glm::vec3& wi,
-    int& chosenLightIndex,
+    LightType& chosenLightType,
     thrust::default_random_engine& rng,
+    float& lightPDF,
+    Geom* geoms,
+    int num_geoms,
+    Material* materials,
     const Light* lights,
     const int& num_lights) {
 
     thrust::uniform_real_distribution<float> u01(0, 1);
-    chosenLightIndex = (int)(u01(rng) * num_lights);
+    int chosenLightIndex = (int)(u01(rng) * num_lights);
 
     Light light = lights[chosenLightIndex];
-    switch (light.lightType)
+    chosenLightType = light.lightType;
+
+    switch (chosenLightType)
     {
+        case LightType::AREA:
+		{
+			return sampleAreaLight(light, intersect, normal, num_lights, wi, lightPDF, geoms, num_geoms, materials, rng);
+		}
         
     }
 

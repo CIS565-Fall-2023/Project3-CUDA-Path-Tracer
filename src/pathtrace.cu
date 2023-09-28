@@ -20,6 +20,9 @@
 #define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 0
 
+#define NAIVE 0
+#define DIRECT_MIS 1
+
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -91,6 +94,7 @@ static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
+static Light* dev_lights = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
@@ -132,8 +136,11 @@ void pathtraceInit(Scene* scene) {
 #if FIRST_BOUNCE_CACHE
 	cudaMalloc(&dev_first_bounce_cache, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_first_bounce_cache, 0, pixelcount * sizeof(ShadeableIntersection));
-#endif // FIRST_
+#endif
 
+	// lights
+	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
+	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
 	checkCUDAError("pathtraceInit");
 }
@@ -149,6 +156,8 @@ void pathtraceFree() {
 #if FIRST_BOUNCE_CACHE
 	cudaFree(dev_first_bounce_cache);
 #endif
+
+	cudaFree(dev_lights);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -231,6 +240,7 @@ __device__ bool boundingBoxTest(const Ray* ray, const Geom* geom) {
 	return true;
 }
 
+
 // TODO:
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
@@ -249,64 +259,7 @@ __global__ void computeIntersections(
 	if (path_index < num_paths)
 	{
 		PathSegment pathSegment = pathSegments[path_index];
-
-		float t;
-		glm::vec3 intersect_point;
-		glm::vec3 normal;
-		glm::vec3 tangent;
-		float t_min = FLT_MAX;
-		int hit_geom_index = -1;
-		bool outside = true;
-
-		glm::vec3 tmp_intersect;
-		glm::vec3 tmp_normal;
-		glm::vec3 tmp_tangent;
-
-		// naive parse through global geoms
-
-		for (int i = 0; i < geoms_size; i++)
-		{
-			Geom& geom = geoms[i];
-
-			// test bounding box
-			if (!boundingBoxTest(&pathSegment.ray, &geom)) {
-				continue;
-			}
-
-			if (geom.type == CUBE)
-			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
-			}
-			else if (geom.type == SPHERE)
-			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
-			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
-
-			// Compute the minimum t from the intersection tests to determine what
-			// scene geometry object was hit first.
-			if (t > 0.0f && t_min > t)
-			{
-				t_min = t;
-				hit_geom_index = i;
-				intersect_point = tmp_intersect;
-				normal = tmp_normal;
-				tangent = tmp_tangent;
-			}
-		}
-
-		if (hit_geom_index == -1)
-		{
-			intersections[path_index].t = -1.0f;
-		}
-		else
-		{
-			//The ray hits something
-			intersections[path_index].t = t_min;
-			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
-			intersections[path_index].surfaceNormal = normal;
-			intersections[path_index].surfaceTangent = tangent;
-		}
+		computeRayIntersection(geoms, geoms_size, pathSegment.ray, intersections[path_index]);
 	}
 }
 
@@ -364,7 +317,9 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
-__global__ void shadeBSDFMaterial(
+
+// naive path tracing
+__global__ void shadeNaive(
 	int iter
 	, int num_paths
 	, ShadeableIntersection* shadeableIntersections
@@ -410,13 +365,16 @@ __global__ void shadeBSDFMaterial(
 	}
 }
 
-
 __global__ void shadeDirectMIS(
 	int iter
 	, int num_paths
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, Material* materials
+	, Geom* geoms
+	, int numGeoms
+	, Light* lights
+	, int numLights
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -433,14 +391,37 @@ __global__ void shadeDirectMIS(
 
 			Material material = materials[intersection.materialId];
 			glm::vec3 materialColor = material.color;
+			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
 
 			if (material.emittance > 0.0f) {
 				cur.color *= (materialColor * material.emittance);
 				cur.remainingBounces = 0; // terminate path
 			} else {
+				glm::vec3 Ld(0.0f);
+				// sample light source
+				glm::vec3 wiW;
+				float lightPdf = 0.0f, scatterPdf = 0.0f;
+				LightType chosenLightType;
+				glm::vec3 lightColor = sampleLight(point, intersection.surfaceNormal, 
+					wiW, chosenLightType, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
 
+				if (lightPdf > 0.0f) {
+					glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent, 
+						material, cur.ray.direction, wiW, scatterPdf, rng);
+					f *= abs(dot(wiW, intersection.surfaceNormal));
 
+					if (length(f) > 0.0f) {
+						float weight = powerHeuristic(1, lightPdf, 1, scatterPdf);
+						Ld += (f * lightColor * weight) / lightPdf;
+					} else {
+						Ld += (f * lightColor) / lightPdf;
+					}
+				}
 
+				// sample BSDF
+
+				cur.color = Ld;
+				cur.remainingBounces = 0; // terminate path
 			}
 		} else {
 			cur.color = glm::vec3(0.0f);
@@ -572,13 +553,28 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
 
-		shadeBSDFMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+#if NAIVE
+		shadeNaive << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
 			dev_intersections,
 			dev_paths,
 			dev_materials
 			);
+#endif
+#if DIRECT_MIS
+		shadeDirectMIS << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter,
+			num_paths,
+			dev_intersections,
+			dev_paths,
+			dev_materials,
+			dev_geoms,
+			hst_scene->geoms.size(),
+			dev_lights,
+			hst_scene->lights.size()
+			);
+#endif
 
 		// remove rays with zero remaining bounces
 		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, isPathValid());

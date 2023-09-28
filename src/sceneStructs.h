@@ -13,10 +13,11 @@ enum GeomType {
 };
 
 enum LightType {
-    AREA,
-    POINT,
-    SPOT,
-    ENVIRONMENT
+    NONE = -1,
+    AREA = 0,
+    POINT = 1,
+    SPOT = 2,
+    ENVIRONMENT = 3
 };
 
 struct Ray {
@@ -40,11 +41,9 @@ struct Geom {
 };
 
 struct Light {
-    enum GeomType type;
+    Geom geom;
     enum LightType lightType;
-    float emittance;
     float innerAngle, outerAngle; // for spot light
-    glm::mat4 transform;
 };
 
 struct Material {
