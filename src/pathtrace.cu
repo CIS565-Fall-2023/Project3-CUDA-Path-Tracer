@@ -23,6 +23,7 @@
 #include "bvh.h"
 //#include "utilities.cuh"
 
+#define USE_FIRST_BOUNCE_CACHE 1
 #define ONE_BOUNCE_DIRECT_LIGHTINIG 0
 #define USE_BVH 1
 
@@ -89,26 +90,13 @@ static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
+static ShadeableIntersection * dev_first_iteration_first_bounce_cache_intersections = nullptr;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
-}
-
-__global__ void initAreaLightFromObject(HostScene * scene, Light** lights, Geom* geoms, Material * mats, int geoms_size) {
-	//lights[0] = new AreaLight(glm::vec3(1.0f, 1.0f, 1.0f), 5.0f);
-	int light_index = 0;
-	for (size_t i = 0; i < geoms_size; i++)
-	{
-		auto geom = geoms[i];
-		auto mat = mats[geom.materialid];
-		if (mat.emittance > EPSILON) {
-			lights[light_index] = new AreaLight(mat.color, mat.emittance);
-			light_index++;
-		}
-	}
 }
 
 void pathtraceInit(HostScene* scene) {
@@ -125,6 +113,9 @@ void pathtraceInit(HostScene* scene) {
 
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+
+	cudaMalloc(&dev_first_iteration_first_bounce_cache_intersections, pixelcount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_first_iteration_first_bounce_cache_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
 	bvh = new BVHAccel();
@@ -150,6 +141,7 @@ void pathtraceFree() {
 	// TODO: clean up any extra device memory you created
 	cudaFree(dev_triangles);
 	cudaFree(dev_bsdfStructs);
+	cudaFree(dev_first_iteration_first_bounce_cache_intersections);
 	delete bvh;
 	checkCUDAError("pathtraceFree");
 }
@@ -191,6 +183,8 @@ __device__ bool intersectAABB(const Ray& ray, const AABB& aabb)
 	glm::vec3 invDirection = 1.0f / ray.direction;
 	float tmin = -FLT_MAX;
 	float tmax = FLT_MAX;
+	/* Unrolling the loop seems not affecting the FPS a lot? */
+	#pragma unroll
 	for (int axis = 0; axis < 3; axis++)
 	{
 		float t1 = (aabb.pmin[axis] - ray.origin[axis]) * invDirection[axis];
@@ -486,9 +480,18 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// TODO: perform one iteration of path tracing
 
+//#if USE_FIRST_BOUNCE_CACHE
+//	if (iter == 1) {
+//		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+//		checkCUDAError("generate camera ray");
+//	}
+//#else
+//	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+//	checkCUDAError("generate camera ray");
+//#endif
+
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
-
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
 	int num_paths = dev_path_end - dev_paths;
@@ -499,14 +502,51 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete) {
 
-		// clean shading chunks
-		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+#if USE_FIRST_BOUNCE_CACHE
+		if (iter == 1) {
+			// clean shading chunks
+			cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-		int primitiveSize = pa->getPrimitiveSize();
-		checkCUDAError("getPrimitiveSize");
+
+			intersect << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, num_paths
+				, dev_paths
+				, dev_triangles
+				, pa->triangles.size()
+				, dev_intersections
+				, dev_bvhNodes
+				, bvh->nodes.size()
+				);
+			if (depth == 0) {
+				cudaMemcpy(dev_first_iteration_first_bounce_cache_intersections, dev_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+			}
+			//hasFirstBounceCache = true;
+		}
+		else {
+			if (depth == 0) {
+				cudaMemcpy(dev_intersections, dev_first_iteration_first_bounce_cache_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+			}
+			else {
+				intersect << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth
+					, num_paths
+					, dev_paths
+					, dev_triangles
+					, pa->triangles.size()
+					, dev_intersections
+					, dev_bvhNodes
+					, bvh->nodes.size()
+					);
+			}
+		}
+#else
+		// clean shading chunks
+		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+
 
 		intersect << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
@@ -518,7 +558,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_bvhNodes
 			, bvh->nodes.size()
 			);
-
+#endif
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
 		depth++;
