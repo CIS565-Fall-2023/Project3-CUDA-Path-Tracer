@@ -399,24 +399,35 @@ int Scene::loadGeom(string objectid) {
             cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialId << "..." << endl;
         }
 
+        glm::vec3 translation = glm::vec3(0);
+        glm::vec3 rotation = glm::vec3(0);
+        glm::vec3 scale = glm::vec3(1);
+        int parentIdx = -1;
+
         //load transformations
         Utils::safeGetline(fp_in, line);
         while (!line.empty() && fp_in.good()) {
             vector<string> tokens = Utils::tokenizeString(line);
 
             if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-                newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-                newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "CHILD_OF") == 0) {
+                parentIdx = atoi(tokens[1].c_str());
             }
 
             Utils::safeGetline(fp_in, line);
         }
 
-        newGeom.transform = Utils::buildTransformationMatrix(
-                newGeom.translation, newGeom.rotation, newGeom.scale);
+        glm::mat4 thisGeomTransformMat = Utils::buildTransformationMatrix(translation, rotation, scale);
+        if (parentIdx != -1)
+        {
+            thisGeomTransformMat = geoms[parentIdx].transform * thisGeomTransformMat;
+        }
+        newGeom.transform = thisGeomTransformMat;
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
