@@ -1,6 +1,7 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+#include <unistd.h>
 
 static std::string startTimeString;
 
@@ -32,6 +33,9 @@ int height;
 //-------------------------------
 
 int main(int argc, char** argv) {
+	std::cout << "sleeping..." << std::endl;
+    sleep(5);
+    std::cout << "awake!" << std::endl;
 	startTimeString = currentTimeString();
 
 	if (argc < 2) {
