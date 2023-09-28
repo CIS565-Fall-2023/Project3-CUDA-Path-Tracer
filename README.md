@@ -22,7 +22,6 @@
 ### Planned features
 
 - Option to toggle BVH (annoying but required)
-- Open Image Denoise
 
 ### Attribution
 
