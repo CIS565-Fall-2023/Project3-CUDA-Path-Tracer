@@ -20,8 +20,8 @@
 #define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 0
 
-#define NAIVE 0
-#define DIRECT_MIS 1
+#define NAIVE 1
+#define DIRECT_MIS 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -401,24 +401,31 @@ __global__ void shadeDirectMIS(
 				// sample light source
 				glm::vec3 wiW;
 				float lightPdf = 0.0f, scatterPdf = 0.0f;
+				bool specular = false;
 				LightType chosenLightType;
 				glm::vec3 lightColor = sampleLight(point, intersection.surfaceNormal, 
 					wiW, chosenLightType, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
 
-				if (lightPdf > 0.0f) {
-					glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent, 
-						material, cur.ray.direction, wiW, scatterPdf, rng);
-					f *= abs(dot(wiW, intersection.surfaceNormal));
+				glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent,
+					material, cur.ray.direction, wiW, scatterPdf, specular, rng);
+				f *= abs(dot(wiW, intersection.surfaceNormal));
 
-					if (length(f) > 0.0f) {
-						float weight = powerHeuristic(1, lightPdf, 1, scatterPdf);
-						Ld += (f * lightColor * weight) / lightPdf;
-					} else {
-						Ld += (f * lightColor) / lightPdf;
-					}
-				}
+				Ld = (f * lightColor) / lightPdf;
 
-				// sample BSDF
+				//if (lightPdf > 0.0f) {
+				//	if (length(f) > 0.0f) {
+				//		Ld += (f * lightColor * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf;
+				//	} else {
+				//		Ld += (f * lightColor) / lightPdf;
+				//	}
+				//}
+
+				//// sample BSDF
+				//if (chosenLightType == LightType::AREA) {
+				//	if (scatterPdf > 0.0f && !specular) {
+				//		Ld += f * lightColor * powerHeuristic(1, scatterPdf, 1, lightPdf) / scatterPdf;
+				//	}
+				//}
 
 				cur.color = Ld;
 				cur.remainingBounces = 0; // terminate path
