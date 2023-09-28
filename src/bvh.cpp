@@ -1,21 +1,5 @@
 #include "bvh.h"
 
-void BVHAccel::initNodes(const std::vector<Triangle>& prims)
-{
-	/*for (size_t i = 0; i < prims.size(); i++)
-	{
-		BVHNodeInfo node;
-		AABB aabb;
-		aabb.pmax = std::max(std::max(prims[i].p1, prims[i].p2), prims[i].p3);
-		aabb.pmin = std::min(std::min(prims[i].p1, prims[i].p2), prims[i].p3);
-		node.aabb = aabb;
-
-		node.startPrim = -1;
-		node.endPrim = -1;
-		nodes.push_back(node);
-	}*/
-}
-
 void BVHAccel::buildBVH(std::vector<Triangle> prims)
 {
 	std::stack<BVHNodeInfo *> nodeStack;
@@ -23,6 +7,7 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 	root = new BVHNodeInfo();
 	root->startPrim = 0;
 	root->endPrim = prims.size();	
+	root->isLeft = false;
 	nodeStack.push(root);
 	BVHNodeInfo * currNodeInfo;
 	int index = 0;
@@ -30,14 +15,16 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 		// Pop the current node
 		currNodeInfo = nodeStack.top();
 		nodeStack.pop();
-		currNodeInfo->index = index++;
+		currNodeInfo->index = index;
 		AABB aabb;
 		printf("index: %d startPrim: %d endPrim: %d\n", index, currNodeInfo->startPrim, currNodeInfo->endPrim);
+		printf("isLeft: %d\n", currNodeInfo->isLeft);
 		for (size_t i = currNodeInfo->startPrim; i < currNodeInfo->endPrim; i++)
 		{
 			aabb = unionAABB(aabb, getAABB(orderedPrims[i]));
 		}
-		if (currNodeInfo->endPrim - currNodeInfo->startPrim == 1) {
+		if (currNodeInfo->endPrim - currNodeInfo->startPrim < 4) {
+			currNodeInfo->isLeaf = true;
 			currNodeInfo->aabb = aabb;
 		}
 		else {
@@ -65,15 +52,17 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 			leftNode->parent = currNodeInfo;
 			leftNode->startPrim = currNodeInfo->startPrim;
 			leftNode->endPrim = mid;
+			leftNode->isLeft = true;
 
 
 			BVHNodeInfo * rightNode = new BVHNodeInfo();
 			rightNode->parent = currNodeInfo;
 			rightNode->startPrim = mid;
 			rightNode->endPrim = currNodeInfo->endPrim;
-
+			rightNode->isLeft = false;
 			currNodeInfo->left = leftNode;
 			currNodeInfo->right = rightNode;
+			currNodeInfo->isLeaf = false;
 			
 			printf("leftNode: %d %d\n", leftNode->startPrim, leftNode->endPrim);
 			printf("rightNode: %d %d\n", rightNode->startPrim, rightNode->endPrim);
@@ -81,8 +70,9 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 			nodeStack.push(rightNode);
 			nodeStack.push(leftNode);
 		}
+		index++;
 	}
-	nodeCount = index + 1;
+	nodeCount = index;
 	serializeBVH();
 }
 
@@ -112,8 +102,23 @@ void BVHAccel::serializeBVH()
 		node.right = currNodeInfo->right ? currNodeInfo->right->index : -1;
 		node.parent	= currNodeInfo->parent ? currNodeInfo->parent->index : -1;
 		node.hit = currNodeInfo->index + 1;
-		node.miss = currNodeInfo->index + getSubTreeSize(currNodeInfo);
+		if (currNodeInfo->isLeaf) {
+			node.miss = node.hit;
+		}
+		else if (currNodeInfo->isLeft && currNodeInfo->parent) {
+			node.miss = currNodeInfo->parent->right->index;
+		}
+		else {
+			node.miss = currNodeInfo->index + getSubTreeSize(currNodeInfo);
+		}
 		serializedNodeInfos[currNodeInfo->index] = currNodeInfo;
+		printf("\n");
+		printf("node.index: %d\n", currNodeInfo->index);
+		printf("node.hit: %d\n", node.hit);
+		printf("node.miss: %d\n", node.miss);
+		printf("node.left: %d\n", node.left);
+		printf("node.right: %d\n", node.right);
+		printf("node.parent: %d\n", node.parent);
 		nodeStack.pop();
 		if (currNodeInfo->right) nodeStack.push(currNodeInfo->right);
 		if (currNodeInfo->left)  nodeStack.push(currNodeInfo->left);

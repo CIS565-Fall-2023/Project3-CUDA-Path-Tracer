@@ -128,10 +128,9 @@ void pathtraceInit(HostScene* scene) {
 	bvh = new BVHAccel();
 	bvh->buildBVH(pa->triangles);
 	bvh->traverseBVHNonSerialized();
-	system("pause");
-	auto triangles = pa->triangles.data();
-	cudaMalloc(&dev_triangles, pa->triangles.size() * sizeof(Triangle));
-	cudaMemcpy(dev_triangles, triangles, pa->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	auto triangles = bvh->orderedPrims.data();
+	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
+	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 
 	auto bsdfStructs = pa->bsdfStructs.data();

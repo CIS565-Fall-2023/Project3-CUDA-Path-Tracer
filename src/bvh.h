@@ -29,6 +29,8 @@ struct BVHNodeInfo {
 	int startPrim;
 	int endPrim;
 	int axis;
+	bool isLeft = false;
+	bool isLeaf = false;
 };
 
 int getSubTreeSize(BVHNodeInfo* node);
@@ -45,13 +47,12 @@ struct BVHNode {
 };
 
 class BVHAccel {
-	std::vector<Triangle> orderedPrims;
 	BVHNodeInfo* root;
 	std::vector<BVHNodeInfo*> serializedNodeInfos;
-	std::vector<BVHNode> nodes;
 	int nodeCount = 0;
 public:
-	void initNodes(const std::vector<Triangle> &prims);
+	std::vector<Triangle> orderedPrims;
+	std::vector<BVHNode> nodes;
 	void buildBVH(std::vector<Triangle> prims);
 
 	void traverseBVHNonSerialized();
