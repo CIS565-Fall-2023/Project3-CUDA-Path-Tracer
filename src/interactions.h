@@ -66,6 +66,8 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
+
+//TODO refactor for combinational materials if chosen
 __host__ __device__
 void scatterRay(
         PathSegment & pathSegment,
@@ -73,7 +75,19 @@ void scatterRay(
         glm::vec3 normal,
         const Material &m,
         thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+    glm::vec3 ray;
+    // perfect specular
+    if (m.hasReflective) {
+        ray = glm::reflect(pathSegment.ray.direction, normal);
+    }
+    //refractive
+    else if (m.hasRefractive) {
+
+    }
+    //diffuse
+    else {
+        ray = calculateRandomDirectionInHemisphere(normal, rng);
+    }
+    pathSegment.ray.direction = glm::normalize(ray);
+    pathSegment.ray.origin = intersect;
 }
