@@ -14,6 +14,8 @@
 
 #include "cudaUtilities.h"
 
+#include "ImGui/imgui.h"
+
 #define JOIN(a, b) a##b
 #define JOIN2(a, b) JOIN(a, b)
 #define STR(a) #a
@@ -87,7 +89,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/cornellMesh.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -97,16 +99,20 @@ SandBox::SandBox()
 	m_PathTracer->Init(m_Scene.get());
 
 	m_GPUScene = mkU<GPUScene>();
-	m_GPUScene->shape_count = m_Scene->m_vIds.size();
+	m_GPUScene->shape_count = m_Scene->m_TriangleIdxs.size();
 	
 	BVH bvh;
-	bvh.Create(m_Scene->m_Vertices, m_Scene->m_vIds);
+	bvh.Create(m_Scene->m_Vertices, m_Scene->m_TriangleIdxs);
 	
 	m_GPUScene->bvh_count = bvh.m_AABBs.size();
 
 	MallocArrayOnCuda<AABB>(m_GPUScene->dev_BVH, bvh.m_AABBs);
+	
 	MallocArrayOnCuda<glm::vec3>(m_GPUScene->dev_vertices, m_Scene->m_Vertices);
-	MallocArrayOnCuda<glm::ivec4>(m_GPUScene->dev_triangles, m_Scene->m_vIds);
+	MallocArrayOnCuda<glm::vec3>(m_GPUScene->dev_normals, m_Scene->m_Normals);
+	MallocArrayOnCuda<glm::vec2>(m_GPUScene->dev_uvs, m_Scene->m_UVs);
+
+	MallocArrayOnCuda<TriangleIdx>(m_GPUScene->dev_triangles, m_Scene->m_TriangleIdxs);
 	cudaMemcpy(bvh.m_AABBs.data(), m_GPUScene->dev_BVH, bvh.m_AABBs.size() * sizeof(AABB), cudaMemcpyDeviceToHost);
 	checkCUDAError("Copy array Error");
 }
@@ -139,20 +145,21 @@ void SandBox::OnMousePosition(double x, double y)
 
 void SandBox::DrawImGui()
 {
+	{
+		ImGui::Begin("Path Tracer Analytics"); // Create a window called "Path Tracer Analytics" and append into it.
+		ImGui::Text("Traced Depth %d", m_Scene->state.traceDepth);
+		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+		ImGui::End();
+	}
 }
 
 void SandBox::Run()
 {
-	if (m_PathTracer->m_Iteration < m_Scene->state.iterations) 
-	{
-		m_PathTracer->Render(*m_GPUScene, m_Scene->state.camera);
-	}
-	else 
+	if (m_PathTracer->m_Iteration == m_Scene->state.iterations) 
 	{
 		SaveImage(m_Scene->state.imageName.c_str());
-		cudaDeviceReset();
-		exit(EXIT_SUCCESS);
 	}
+	m_PathTracer->Render(*m_GPUScene, m_Scene->state.camera);
 }
 
 void SandBox::SaveImage(const char* name)

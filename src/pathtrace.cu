@@ -142,19 +142,22 @@ __global__ void computeIntersections(int num_paths, PathSegment* pathSegments, S
 	Intersection intersection = scene.SceneIntersection(segment.ray);
 	if (intersection.shapeId >= 0)
 	{
-		// TODO: compute normal and uv
-		glm::vec3 normal;
-		glm::vec2 uv;
-
 		ShadeableIntersection shadeable;
 		shadeable.t = intersection.t;
 		shadeable.position = segment.ray * intersection.t;
-		glm::ivec4 idx = scene.dev_triangles[intersection.shapeId];
+		glm::ivec3 n_id = scene.dev_triangles[intersection.shapeId].n_id;
+		glm::ivec3 uv_id = scene.dev_triangles[intersection.shapeId].uv_id;
 
-		glm::vec3 v[3]{ scene.dev_vertices[idx.x], scene.dev_vertices[idx.y], scene.dev_vertices[idx.z] };
-		shadeable.normal = glm::normalize(glm::cross(v[1] - v[0], v[2] - v[0]));
-		shadeable.uv = uv;
-		shadeable.materialId = intersection.materialId; // TODO: change to materialId
+		//glm::vec3 v[3]{ scene.dev_vertices[idx.x], scene.dev_vertices[idx.y], scene.dev_vertices[idx.z] };
+		//shadeable.normal = glm::normalize(glm::cross(v[1] - v[0], v[2] - v[0]));
+		shadeable.normal = BarycentricInterpolation<glm::vec3>(scene.dev_normals[n_id.x],
+															   scene.dev_normals[n_id.y],
+															   scene.dev_normals[n_id.z], intersection.uv);;
+
+		shadeable.uv = BarycentricInterpolation<glm::vec2>(scene.dev_uvs[uv_id.x], 
+														   scene.dev_uvs[uv_id.y], 
+														   scene.dev_uvs[uv_id.z], intersection.uv);;
+		shadeable.materialId = intersection.materialId;
 
 		shadeable_intersection = shadeable;
 	}

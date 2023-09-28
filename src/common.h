@@ -14,6 +14,9 @@
 #define CPU_GPU __device__ __host__
 #define INILNE __forceinline
 
+#define ERRORCHECK 1
+#define SAH_BVH 1
+
 GPU_ONLY static constexpr float Pi				= 3.1415927f;
 GPU_ONLY static constexpr float TWO_Pi			= 6.2831853f;
 GPU_ONLY static constexpr float InvPi			= 0.3183099f;
@@ -30,10 +33,12 @@ GPU_ONLY static constexpr float Float_MIN		= -1000000.f;
 #define SafeCudaFree(ptr) if(ptr) cudaFree(ptr); ptr = nullptr;
 #define SafeCudaFreeArray(arr_ptr) if(arr_ptr) cudaFreeArray(arr_ptr); arr_ptr = nullptr;
 
-#define ERRORCHECK 1
-
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#if ERRORCHECK
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
+#else 
+#define checkCUDAError(msg)
+#endif
 void checkCUDAErrorFn(const char* msg, const char* file, int line);
 
 #define uPtr std::unique_ptr

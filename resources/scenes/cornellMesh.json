@@ -88,12 +88,12 @@
     },
     {
       "type": "obj",
-      "path": "meshes/cow.obj",
+      "path": "meshes/mc_castle.obj",
       "name": "bunny",
       "material": "MatteWhite",
       "translation": [ 0, 2, 0 ],
       "rotation": [ 0, 180, 0 ],
-      "scale": [ 1, 1, 1 ]
+      "scale": [ 1.5, 1.5, 1.5 ]
     }
   ]
 }

@@ -172,7 +172,11 @@ struct AABB
         glm::vec3 d = GetDiagnol();
         return ((d.x > d.y && d.x > d.z) ? 0 : ((d.y > d.z) ? 1 : 2));
     }
-
+    inline CPU_ONLY float GetCost() const
+    {
+        glm::vec3 d = GetDiagnol();
+        return 2.0f * (d.x * d.y + d.x * d.z + d.y * d.z);
+    }
     inline CPU_GPU bool Intersection(const Ray& ray, const glm::vec3& inv_dir, float& t) const 
     {
         glm::vec3 t_near = (m_Min - ray.origin) * inv_dir;
@@ -187,4 +191,18 @@ struct AABB
 
         return true;
     }
+};
+
+struct TriangleIdx
+{
+    TriangleIdx(const glm::ivec3 v, 
+                const glm::ivec3& n, 
+                const glm::ivec3& uv, 
+                const unsigned int& material)
+        :v_id(v), n_id(n), uv_id(uv), material(material)
+    {}
+    glm::ivec3 v_id;
+    unsigned int material;
+    glm::ivec3 n_id;
+    glm::ivec3 uv_id;
 };

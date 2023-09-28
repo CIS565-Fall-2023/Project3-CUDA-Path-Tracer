@@ -82,8 +82,8 @@ void AddCude_Triangles(int start_id, std::vector<glm::vec3>& vertices, std::vect
     triangles.emplace_back(glm::ivec4(start_id, start_id, start_id, 0) + glm::ivec4(2, 5, 6, material_id)); // bottom
 }
 
-void ApplyTransform(int start_id, std::vector<glm::vec3>& vertices,
-    const glm::vec3& translate, const glm::vec3& rotate, const glm::vec3& scale)
+void ApplyTransform(int start_id, std::vector<glm::vec3>& vertices, int n_start_id, std::vector<glm::vec3>& normals,
+                    const glm::vec3& translate, const glm::vec3& rotate, const glm::vec3& scale)
 {
     glm::mat4 transform;
     glm::mat3 inv_transpose;
@@ -147,14 +147,14 @@ void Scene::LoadGeoms(const Json& geometry_json, const std::filesystem::path& re
         if (type == "plane")
         {
             int start_id = m_Vertices.size();
-            AddPlane_Triangles(start_id, m_Vertices, m_vIds, material_id);
-            ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
+            //AddPlane_Triangles(start_id, m_Vertices, m_TriangleIdxs, material_id);
+            //ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
         }
         else if (type == "cube")
         {
             int start_id = m_Vertices.size();
-            AddCude_Triangles(start_id, m_Vertices, m_vIds, material_id);
-            ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
+            //AddCude_Triangles(start_id, m_Vertices, m_TriangleIdxs, material_id);
+            //ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
         }
         else if (type == "obj")
         {
@@ -165,9 +165,12 @@ void Scene::LoadGeoms(const Json& geometry_json, const std::filesystem::path& re
             obj_path.append(obj_path_str);
             if (std::filesystem::directory_entry(obj_path).exists())
             {
-                int start_id = m_Vertices.size();
+                int v_start_id = m_Vertices.size();
+                int n_start_id = m_Normals.size();
+                std::cout << "Loading object: " << obj_path.string() << std::endl;
                 ReadObj(obj_path.string(), material_id);
-                ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
+                ApplyTransform(v_start_id, m_Vertices, n_start_id, m_Normals, translate, rotate, scale);
+                std::cout << "Finish loading object: " << obj_path.string() << std::endl;
             }
             else
             {
@@ -235,23 +238,48 @@ void Scene::ReadObj(const std::string& obj_file_path,
     auto& attribs = reader.GetAttrib();
     auto& shapes = reader.GetShapes();
     
-    unsigned int start_id = m_Vertices.size();
+    unsigned int v_start_id = m_Vertices.size();
+    unsigned int n_start_id = m_Normals.size();
+    unsigned int uv_start_id = m_UVs.size();
 
     m_Vertices.resize(m_Vertices.size() + attribs.vertices.size() / 3);
+    m_Normals.resize(m_Normals.size() + attribs.normals.size() / 3);
+    m_UVs.resize(m_UVs.size() + attribs.texcoords.size() / 2);
 
-    std::memcpy(&m_Vertices[start_id],
+    std::memcpy(&m_Vertices[v_start_id],
                 attribs.vertices.data(), 
                 attribs.vertices.size() * sizeof(float));
 
+    std::memcpy(&m_Normals[n_start_id],
+                attribs.normals.data(),
+                attribs.normals.size() * sizeof(float));
+
+    std::memcpy(&m_UVs[uv_start_id],
+                attribs.texcoords.data(),
+                attribs.texcoords.size() * sizeof(float));
+
     for (auto& shape : shapes)
     {
-        m_vIds.reserve(m_vIds.size() + shape.mesh.indices.size() / 3);
+        m_TriangleIdxs.reserve(m_TriangleIdxs.size() + shape.mesh.indices.size() / 3);
         for (int i = 0; i < shape.mesh.indices.size(); i += 3)
         {
-            m_vIds.emplace_back(start_id + shape.mesh.indices[i].vertex_index,
-                                   start_id + shape.mesh.indices[i + 1].vertex_index,
-                                   start_id + shape.mesh.indices[i + 2].vertex_index,
-                                   matrial_id);
+            glm::ivec3 v_id{
+                v_start_id + shape.mesh.indices[i].vertex_index,
+                v_start_id + shape.mesh.indices[i + 1].vertex_index,
+                v_start_id + shape.mesh.indices[i + 2].vertex_index
+            };
+            glm::ivec3 n_id{
+                n_start_id + shape.mesh.indices[i].normal_index,
+                n_start_id + shape.mesh.indices[i + 1].normal_index,
+                n_start_id + shape.mesh.indices[i + 2].normal_index
+            };
+            glm::ivec3 uv_id{
+                uv_start_id + shape.mesh.indices[i].texcoord_index,
+                uv_start_id + shape.mesh.indices[i + 1].texcoord_index,
+                uv_start_id + shape.mesh.indices[i + 2].texcoord_index
+            };
+
+            m_TriangleIdxs.emplace_back(v_id, n_id, uv_id, matrial_id);
         }
     }
 }

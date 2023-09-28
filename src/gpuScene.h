@@ -43,7 +43,8 @@ protected:
 
 		for (int i = 0; i < shape_count; ++i)
 		{
-			glm::ivec4 idx = dev_triangles[i];
+			const glm::ivec3 idx = dev_triangles[i].v_id;
+			const int material_id = dev_triangles[i].material;
 			glm::vec3 vertices[3]{ dev_vertices[idx.x], dev_vertices[idx.y], dev_vertices[idx.z] };
 			
 			if (Triangle::Intersection(ray, vertices, temp_intersection) &&
@@ -51,7 +52,7 @@ protected:
 			{
 				min_intersection = temp_intersection;
 				min_intersection.shapeId = i;
-				min_intersection.materialId = idx.a;
+				min_intersection.materialId = material_id;
 			}
 		}
 
@@ -68,33 +69,10 @@ protected:
 		min_intersection.t = 10000.f;
 		min_intersection.shapeId = -1;
 
-		/*for (int i = 0; i < bvh_count; ++i)
-		{
-			AABB current = dev_BVH[i];
-			float k = 2000.f;
-			if ((current.Intersection(ray, inv_dir, k) && k < min_intersection.t))
-			{
-				if (current.m_Data.z > 0)
-				{
-					for (int i = 0; i < current.m_Data.y; ++i)
-					{
-						glm::ivec4 idx = dev_triangles[current.m_Data.x + i];
-						glm::vec3 vertices[3]{ dev_vertices[idx.x], dev_vertices[idx.y], dev_vertices[idx.z] };
-						if (Triangle::Intersection(ray,vertices, temp_intersection) &&
-							temp_intersection.t < min_intersection.t)
-						{
-							min_intersection = temp_intersection;
-							min_intersection.shapeId = current.m_Data.x + i;
-							min_intersection.materialId = idx.a;
-						}
-					}
-				}
-			}
-		}*/
-
+		//__shared__ int stack[128][20];
 		AABB current = dev_BVH[0];
 		// stack
-		int next_arr[64];
+		int next_arr[10];
 		int next = 0;
 		
 		while (true)
@@ -102,20 +80,20 @@ protected:
 			float k = 20000.f;
 			if(current.Intersection(ray, inv_dir, k))
 			{
-				//current.Intersection(ray, inv_dir, k);
-				//if(k < 20000.f) printf("%f!\n", k);
 				if (current.m_Data.z > 0)
 				{
 					for (int i = 0; i < current.m_Data.y; ++i)
 					{
-						glm::ivec4 idx = dev_triangles[current.m_Data.x + i];
-						glm::vec3 vertices[3]{ dev_vertices[idx.x], dev_vertices[idx.y], dev_vertices[idx.z] };
+						const glm::ivec3 idx = dev_triangles[current.m_Data.x + i].v_id;
+						const int material_id = dev_triangles[current.m_Data.x + i].material;
+
+						const glm::vec3 vertices[3]{ dev_vertices[idx.x], dev_vertices[idx.y], dev_vertices[idx.z] };
 						if (Triangle::Intersection(ray, vertices, temp_intersection) &&
 							temp_intersection.t < min_intersection.t)
 						{
 							min_intersection = temp_intersection;
 							min_intersection.shapeId = current.m_Data.x + i;
-							min_intersection.materialId = idx.a;
+							min_intersection.materialId = material_id;
 						}
 					}
 					if (next == 0) break;
@@ -124,7 +102,7 @@ protected:
 				else
 				{
 					next_arr[next++] = (dir_neg[current.m_Data.x] ? (current.m_Data.y + 1) : current.m_Data.y);
-					current = dev_BVH[(dir_neg[current.m_Data.x] ? current.m_Data.y : (current.m_Data.y + 1))];
+					current = dev_BVH[(dir_neg[current.m_Data.x] ?  current.m_Data.y : (current.m_Data.y + 1))];
 				}
 			}
 			else
@@ -138,7 +116,7 @@ protected:
 	}
 
 public:
-	glm::ivec4* dev_triangles;
+	TriangleIdx* dev_triangles;
 	glm::vec3* dev_vertices;
 	glm::vec3* dev_normals;
 	glm::vec2* dev_uvs;

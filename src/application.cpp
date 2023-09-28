@@ -234,8 +234,15 @@ bool Application::Run()
 		// VAO, shader program, and texture already bound
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
 		// Render ImGui Stuff
-		//m_SandBox->DrawImGui();
+		m_SandBox->DrawImGui();
+
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(m_GLFWwindow);
 	}

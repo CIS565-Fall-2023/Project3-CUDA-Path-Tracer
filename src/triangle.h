@@ -19,8 +19,8 @@ public:
      * @return                   true or false, indicate whether intersect with triangle
      */
     CPU_GPU static bool Intersection(const Ray& ray,
-                                        const glm::vec3* v,
-                                        Intersection& intersection)
+                                     const glm::vec3* v,
+                                     Intersection& intersection)
     {
         // Moller¡§CTrumbore intersection methods
 

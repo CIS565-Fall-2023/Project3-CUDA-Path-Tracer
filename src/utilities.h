@@ -46,3 +46,9 @@ INILNE CPU_GPU glm::mat3 WorldToLocal(const::glm::vec3& nor)
 {
 	return glm::transpose(LocalToWorld(nor));
 }
+
+template<typename T>
+CPU_GPU T BarycentricInterpolation(const T& c0, const T& c1, const T& c2, const glm::vec2& uv)
+{
+	return (1.f - uv.x - uv.y) * c0 + uv.x * c1 + uv.y * c2;
+}

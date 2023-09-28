@@ -28,16 +28,29 @@ inline AABB TriangleAABB(const glm::vec3& v0, const glm::vec3& v1, const glm::ve
 	return { glm::min(glm::min(v0, v1), v2), glm::max(glm::max(v0, v1), v2) };
 }
 
-CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<glm::ivec4>& v_ids)
+CPU_ONLY void BVH::MiddleSplit(const int& start_id,
+								const int& end_id,
+								int& middle_id,
+								const int& max_axis,
+								std::vector<std::pair<int, AABB>>& temp_aabbs)
+{
+	middle_id = (start_id + end_id) / 2;
+	std::nth_element(&temp_aabbs[start_id], &temp_aabbs[middle_id], &temp_aabbs[end_id - 1] + 1, 
+		[max_axis](const std::pair<int, AABB>& pa, const std::pair<int, AABB>& pb) {
+			return pa.second.GetCenter()[max_axis] < pb.second.GetCenter()[max_axis];
+	});
+}
+
+CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<TriangleIdx>& v_ids)
 {
 	std::queue<std::pair<int, int>> remains;
 	
 	std::vector<std::pair<int, AABB>> temp_aabbs;
-	std::vector<glm::ivec4> triangle_idx_ordered;
+	std::vector<TriangleIdx> triangle_idx_ordered;
 
 	for (int i = 0; i < v_ids.size(); ++i)
 	{
-		const glm::ivec4& idx = v_ids[i];
+		const glm::ivec3& idx = v_ids[i].v_id;
 		AABB aabb = TriangleAABB(vertices[idx.x],
 								 vertices[idx.y],
 								 vertices[idx.z]);
@@ -50,14 +63,16 @@ CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<glm::ive
 	{
 		auto [start_id, end_id] = remains.front();
 		remains.pop();
+		int triangle_count = end_id - start_id;
+		assert(triangle_count >= 0);
 
-		if (start_id == end_id)
+		if (triangle_count == 0)
 		{
 			continue;
 		}
 
 		// leaf
-		if (end_id - start_id == 1)
+		if (triangle_count == 1)
 		{
 			temp_aabbs[start_id].second.m_Data = glm::ivec3(triangle_idx_ordered.size(), 1, 1);
 			m_AABBs.push_back(temp_aabbs[start_id].second);
@@ -77,7 +92,7 @@ CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<glm::ive
 		// if the centroid bounds have zero volume, no need split
 		if (center_aabb.m_Max[max_axis] == center_aabb.m_Min[max_axis])
 		{
-			total_aabb.m_Data = glm::ivec3(triangle_idx_ordered.size(), end_id - start_id, 1);
+			total_aabb.m_Data = glm::ivec3(triangle_idx_ordered.size(), triangle_count, 1);
 			m_AABBs.push_back(total_aabb);
 			for (int i = start_id; i < end_id; ++i)
 			{
@@ -85,9 +100,44 @@ CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<glm::ive
 			}
 			continue;
 		}
-		total_aabb.m_Data = glm::ivec3(max_axis, m_AABBs.size() + remains.size() + 1, 0);
-		m_AABBs.push_back(total_aabb);
 
+#if SAH_BVH
+		int middle_id;
+		if (triangle_count <= 4)
+		{
+			MiddleSplit(start_id, end_id, middle_id, max_axis, temp_aabbs);
+		}
+		else
+		{
+			// compute cost for each splitting position 
+			// to get the best splitting position		
+			glm::vec2 center(center_aabb.m_Min[max_axis], center_aabb.m_Max[max_axis]);
+			SAH_Bucket min_bucket = SAH_Bucket::ComputeBestSplit(&temp_aabbs[start_id], triangle_count, center, max_axis);
+			min_bucket.m_Cost = 0.125 * min_bucket.m_Cost / total_aabb.GetCost();
+			const int& best_pos = min_bucket.m_BucketId;
+			if (triangle_count <= 255 && triangle_count <= min_bucket.m_Cost)
+			{
+				// create a leaf node
+				total_aabb.m_Data = glm::ivec3(triangle_idx_ordered.size(), triangle_count, 1);
+				m_AABBs.push_back(total_aabb);
+
+				for (int i = start_id; i < end_id; ++i)
+				{
+					triangle_idx_ordered.emplace_back(v_ids[temp_aabbs[i].first]);
+				}
+				continue;
+			}
+
+			auto partition_func = [max_axis, center, best_pos](const std::pair<int, AABB>& pair) {
+				int pos = SAH_Bucket::Positions * (pair.second.GetCenter()[max_axis] - center.x) / (center.y - center.x);
+				return pos <= best_pos;
+			};
+
+			// partition
+			auto* midPtr = std::partition(&temp_aabbs[start_id], &temp_aabbs[end_id - 1] + 1, partition_func);
+			middle_id = midPtr - temp_aabbs.data();
+		}
+#else
 		// middle split
 		float center = 0.5f * (center_aabb.m_Max[max_axis] + center_aabb.m_Min[max_axis]);;
 
@@ -97,16 +147,15 @@ CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<glm::ive
 
 		auto* midPtr = std::partition(&temp_aabbs[start_id], &temp_aabbs[end_id - 1] + 1, partition_func);
 
-		int middle_id = midPtr - &temp_aabbs[0];
+		int middle_id = midPtr - temp_aabbs.data();
 		if (middle_id == start_id || middle_id == end_id)
 		{
-			middle_id = (start_id + end_id) / 2;
-			auto nth_function = [max_axis](const std::pair<int, AABB>& pa, const std::pair<int, AABB>& pb) { 
-				return pa.second.GetCenter()[max_axis] < pb.second.GetCenter()[max_axis]; 
-			};
-			std::nth_element(&temp_aabbs[start_id], &temp_aabbs[middle_id], &temp_aabbs[end_id - 1] + 1, nth_function);
+			MiddleSplit(start_id, end_id, middle_id, max_axis, temp_aabbs);
 		}
-		
+#endif
+		total_aabb.m_Data = glm::ivec3(max_axis, m_AABBs.size() + remains.size() + 1, 0);
+		m_AABBs.push_back(total_aabb);
+
 		remains.push({ start_id, middle_id });
 		remains.push({ middle_id, end_id});
 	}
@@ -140,4 +189,50 @@ CPU_ONLY void BVH::Create(std::vector<glm::vec3>& vertices, std::vector<glm::ive
 	//		current = m_AABBs[current.m_Data.y];
 	//	}
 	//}
+}
+
+CPU_ONLY SAH_Bucket SAH_Bucket::ComputeBestSplit(const std::pair<int, AABB>* start,
+												 const int& count,
+												 const glm::vec2& center,
+												 const int& max_axis)
+{
+	SAH_Bucket buckets[SAH_Bucket::Positions];
+	for (int i = 0; i < count; ++i)
+	{
+		const AABB& aabb = (start + i)->second;
+
+		int pos = SAH_Bucket::Positions * (aabb.GetCenter()[max_axis] - center.x) / (center.y - center.x);
+		pos = std::clamp(pos, 0, SAH_Bucket::Positions - 1);
+		++buckets[pos].m_Count;
+		buckets[pos].m_AABB.Merge(aabb);
+	}
+
+	const SAH_Bucket* min_bucket = &buckets[0];
+
+	for (int i = 0; i < SAH_Bucket::Positions; ++i)
+	{
+		AABB left, right;
+		int l_count = 0, r_count = 0;
+
+		for (int j = 0; j <= i; ++j)
+		{
+			left.Merge(buckets[j].m_AABB);
+			l_count += buckets[j].m_Count;
+		}
+
+		for (int j = i + 1; j < SAH_Bucket::Positions; ++j)
+		{
+			right.Merge(buckets[j].m_AABB);
+			r_count += buckets[j].m_Count;
+		}
+
+		buckets[i].m_BucketId = i;
+		buckets[i].m_Cost = l_count * left.GetCost() + r_count * right.GetCost();
+		if (buckets[i].m_Cost < min_bucket->m_Cost)
+		{
+			min_bucket = &buckets[i];
+		}
+	}
+
+	return *min_bucket;
 }

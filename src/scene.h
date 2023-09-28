@@ -37,7 +37,9 @@ public:
     std::vector<Material> materials;
 
     std::vector<glm::vec3> m_Vertices;
-    std::vector<glm::ivec4> m_vIds;
+    std::vector<glm::vec3> m_Normals;
+    std::vector<glm::vec2> m_UVs;
+    std::vector<TriangleIdx> m_TriangleIdxs;
 
     std::unordered_map<std::string, unsigned int> m_MaterialMap;
 
