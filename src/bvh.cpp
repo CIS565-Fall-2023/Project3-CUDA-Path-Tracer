@@ -1,5 +1,6 @@
 #include "bvh.h"
 #include <algorithm>
+#include <iostream>
 BoundingBox BoundingBox::unionBound(const BoundingBox& b1, const BoundingBox& b2)
 {
 	return BoundingBox(
@@ -49,7 +50,10 @@ void BVHNode::initInterior(PARTITION_AXIS _axis, BVHNode* c0, BVHNode* c1)
 	primNum = 0;
 }
 
-BVHNode::BVHNode(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo, std::vector<int>& ordered_primId)
+BVHNode::BVHNode(int start, int end, 
+	const std::vector<BVHPrimitiveInfo>& primInfo, 
+	std::vector<int>& ordered_primId,
+	std::vector<std::unique_ptr<BVHNode>>& node_holder)
 	:primNum(end - start)
 {
 	//for (int i = start; i < end; ++i) {
@@ -115,8 +119,36 @@ BVHNode::BVHNode(int start, int end, const std::vector<BVHPrimitiveInfo>& primIn
 	//}
 }
 
-BVHNode::~BVHNode()
+std::vector<BVHPrimitiveInfo> BVHTree::initPrimitiveInfo(const std::vector<Triangle>& trigs)
 {
-	delete children[0];
-	delete children[1];
+	std::vector<BVHPrimitiveInfo> ans;
+	int n = trigs.size();
+	for (int i = 0;i < n;++i) {
+		auto& trig = trigs[i];
+		float minX = std::min(std::min(trig.v1.pos.x, trig.v2.pos.x), trig.v3.pos.x);
+		float maxX = std::max(std::max(trig.v1.pos.x, trig.v2.pos.x), trig.v3.pos.x);
+		float minY = std::min(std::min(trig.v1.pos.y, trig.v2.pos.y), trig.v3.pos.y);
+		float maxY = std::max(std::max(trig.v1.pos.y, trig.v2.pos.y), trig.v3.pos.y);
+		float minZ = std::min(std::min(trig.v1.pos.z, trig.v2.pos.z), trig.v3.pos.z);
+		float maxZ = std::max(std::max(trig.v1.pos.z, trig.v2.pos.z), trig.v3.pos.z);
+		ans.push_back(BVHPrimitiveInfo(i, BoundingBox(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ))));
+	}
+	return ans;
+}
+
+void BVHTree::buildTree(const std::vector<BVHPrimitiveInfo>& primInfo)
+{
+	int n = primInfo.size();
+	std::vector<int> trig_ids(n,0);
+	for (int i = 0;i < n;++i) {
+		trig_ids[i] = i;
+	}
+	//m_nodes.push_back(std::make_unique<BVHNode>(0, primInfo.size(), trig_ids, m_nodes));
+}
+
+BVHTree::BVHTree(const std::vector<Triangle>& trigs)
+{
+	auto prims = initPrimitiveInfo(trigs);
+	buildTree(prims);
+	std::cout << "BVH build" << std::endl;
 }

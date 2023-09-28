@@ -94,17 +94,53 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
 //    return glm::length(r.origin - intersectionPoint);
 //}
 
+//__host__ __device__ float triangleIntersectionTest(
+//    const glm::vec3& orig, const glm::vec3& dir,
+//    const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, 
+//    glm::vec3 &bary) {
+//    glm::vec3 b;
+//    bool hit = glm::intersectRayTriangle(orig, dir, v1, v2, v3, bary);
+//    if (!hit) {
+//        return -1;
+//        //backface
+//        //hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, bary);
+//        //if (!hit)return -1;
+//        //bary.x = 1 - bary.x - bary.y;
+//    }
+//    float t = bary.z;
+//    bary.z = 1 - bary.x - bary.y;
+//    return t;
+//}
 __host__ __device__ float triangleIntersectionTest(
-    const glm::vec3& orig, const glm::vec3& dir,
-    const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, 
-    glm::vec3 &bary) {
-    glm::vec3 b;
-    bool hit = glm::intersectRayTriangle(orig, dir, v1, v2, v3, bary);
-    if (!hit) {
-        hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, bary);
-        if (!hit)return -1;
-    }
-    float t = bary.z;
+    const glm::vec3& orig,const glm::vec3& dir,
+    const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
+    glm::vec3& bary) {
+    //glm::vec3 b;
+    //bool hit = glm::intersectRayTriangle(orig, dir, v1, v2, v3, bary);
+    //if (!hit) {
+    //    return -1;
+    //    //backface
+    //    //hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, bary);
+    //    //if (!hit)return -1;
+    //    //bary.x = 1 - bary.x - bary.y;
+    //}
+    //float t = bary.z;
+    //bary.z = 1 - bary.x - bary.y;
+
+    glm::vec3 e1 = v1 - v0;
+    glm::vec3 e2 = v2 - v0;
+
+    glm::vec3 p = glm::cross(dir, e2);
+    float det = glm::dot(e1, p);
+    if (det < EPSILON && det > -EPSILON)
+        return -1;
+    float inv_det = 1.0f / det;
+    glm::vec3 s = orig - v0;
+    bary.x = glm::dot(s, p) * inv_det;
+    if (bary.x < 0.f || bary.x > 1.f)return -1;
+    glm::vec3 q = glm::cross(s, e1);
+    bary.y = glm::dot(dir, q) * inv_det;
+    if (bary.y < 0.f || (bary.x + bary.y) > 1.f)return -1;
     bary.z = 1 - bary.x - bary.y;
-    return t;
+    return  inv_det * glm::dot(e2, q);
 }

@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <memory>
+#include "sceneStructs.h"
 struct BoundingBox {
 	glm::vec3 minBound;
 	glm::vec3 maxBound;
@@ -35,11 +36,23 @@ private:
 	void initLeaf(int first, int n, const BoundingBox& b);
 	void initInterior(PARTITION_AXIS _axis, BVHNode* c0, BVHNode* c1);
 	//PARTITION_AXIS getPartitionAxis(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo);
-public:
 	BVHNode(
 		int start, int end,
 		const std::vector<BVHPrimitiveInfo>& primInfo,
-		std::vector<int>& ordered_primId
+		std::vector<int>& ordered_primId,
+		std::vector<std::unique_ptr<BVHNode>>& node_holder
 	);
-	~BVHNode();
+public:
+	friend class BVHTree;
 };
+
+class BVHTree {
+	std::vector<std::unique_ptr<BVHNode>> m_nodes;
+	std::vector<BVHPrimitiveInfo> initPrimitiveInfo(const std::vector<Triangle>& trigs);
+	void buildTree(const std::vector<BVHPrimitiveInfo>& primInfo);
+public:
+	BVHTree(const std::vector<Triangle>& trigs);
+};
+
+
+

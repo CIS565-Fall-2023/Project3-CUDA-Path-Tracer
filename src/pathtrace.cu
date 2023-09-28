@@ -17,6 +17,7 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
+#define DEBUG 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -267,14 +268,12 @@ __global__ void computeIntersections(
 		PathSegment seg = in_paths[path_index];
 
 		float t;
-		float t_min = 10000;
+		float t_min = FLT_MAX;
 		
 		glm::vec3 bary; // for interpolation
 		glm::vec3 tmp_bary;
-		
 		int hit_geom_index = -1;
 		Triangle hit_trig;
-
 		// naive parse through global geoms
 		for (int i = 0; i < num_trigs; i++)
 		{
@@ -301,7 +300,7 @@ __global__ void computeIntersections(
 			out_intersects[path_index].t = t_min;
 			out_intersects[path_index].bary = bary;
 			out_intersects[path_index].materialId = in_meshs[hit_geom_index].materialId;
-			out_intersects[path_index].surfaceNormal = glm::normalize(bary.x * hit_trig.v1.normal + bary.y * hit_trig.v2.normal + bary.z * hit_trig.v3.normal);
+			out_intersects[path_index].surfaceNormal = glm::normalize(hit_trig.v1.normal * bary.x + hit_trig.v2.normal * bary.y + hit_trig.v3.normal * bary.z);
 		}
 	}
 }
@@ -329,6 +328,11 @@ __global__ void processPBR(
 		return;
 	}
 	Material material = materials[intersect.materialId];
+#if DEBUG
+	seg.color = intersect.surfaceNormal * 0.5f + glm::vec3(0.5);
+	return;
+#else
+
 	if (material.emittance > 0) // hit light
 	{
 		seg.color *= (material.color * material.emittance);
@@ -336,34 +340,43 @@ __global__ void processPBR(
 		return;
 	}
 	--seg.remainingBounces;
-	//if (seg.remainingBounces <= 0) // end bounce and didn't hit light
-	//{
-	//	seg.color = glm::vec3(0.);
-	//	return;
-	//}
+	if (seg.remainingBounces <= 0) // end bounce and didn't hit light
+	{
+		seg.color = glm::vec3(0.);
+		return;
+	}
 
-	//float pdf = 1.f;
+	float pdf = 1.f;
 
-	//seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
+	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
 
-	//glm::vec3 wo = -seg.ray.direction;
+	glm::vec3 wo = -seg.ray.direction;
 
-	//seg.ray.direction = sampleRay(wo, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
+	seg.ray.direction = sampleRay(wo, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
 
-	////fix strange artifact
-	//seg.ray.origin += 0.01f * seg.ray.direction;
+	//fix strange artifact
+	seg.ray.origin += 0.01f * seg.ray.direction;
 
-	//glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
-	////           albedo           absdot
-	//seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction), 0.f, 1.f) / pdf);
-	seg.color = intersect.surfaceNormal;
+	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
+	//           albedo           absdot
+	seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction), 0.f, 1.f) / pdf);
+	
+#endif
 }
 
 
 void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 {
-	//const int traceDepth = hst_scene->state.traceDepth;
-	int traceDepth = 1;
+#if DEBUG
+	const int traceDepth = 1;
+#else
+	const int traceDepth = hst_scene->state.traceDepth;
+#endif // DEBUG
+
+	
+
+
+	//int traceDepth = 1;
 	const Camera& cam = hst_scene->state.camera;
 
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -475,9 +488,11 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		// cousins.
 		// * Note that you can't really use a 2D kernel launch any more - switch
 		// to 1D.
+#if DEBUG
+#else
 		thrust_paths_end = thrust::remove_if(thrust_paths, thrust_paths_end, is_black());
 		num_paths = thrust_paths_end - thrust_paths;
-
+#endif
 		depth++;
 		iterationComplete = depth >= (traceDepth);
 		if (guiData != NULL)
