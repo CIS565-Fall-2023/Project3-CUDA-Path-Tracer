@@ -35,9 +35,9 @@ project, and we will not be able to grade you without a good README.
     - [ ] Microfacet
 
 - [ ] BVH
-    - [ ] BoundingBox Array
-    - [ ] Construct BVH
-    - [ ] Traverse BVH
+    - [x] BoundingBox Array
+    - [x] Construct BVH
+    - [x] Traverse BVH
     - [ ] Better Heuristics
 
 - [ ] Better sampler
@@ -58,3 +58,21 @@ Finally, finish gltf loading and basic bsdf.
 - A brief trial
     - Note that this difference might be due to different bsdf we are using right now. For convenience, we are using the most naive Diffuse BSDF, while Blender use a standard BSDF by default.
 ![Alt text](img/first_trial_glb_scene.png)
+
+
+09.27
+
+Naive BVH (probably done...)
+Scene with 1k faces
+- One bounce, normal shading
+    - Without BVH: FPS 10.9
+    ![Alt text](img/normal_shading_without_bvh.png)
+
+    - With BVH: FPS 53.4
+    ![Alt text](img/normal_shading_with_bvh.png)
+    - 5 times faster
+- Multiple bounces
+    - Without BVH: FPS 7.6
+        ![Alt text](img/multiple_bounces_without_bvh.png)
+    - With BVH: FPS 22.8
+        ![Alt text](img/multiple_bounces_with_bvh.png)

@@ -5,6 +5,8 @@
 #include <algorithm>
 #include "sceneStructs.h"
 
+#define BVH_LOG 0
+
 struct AABB {
 	glm::vec3 pmax;
 	glm::vec3 pmin;
@@ -15,8 +17,6 @@ AABB unionAABB(const AABB &box1, const AABB &box2);
 AABB getAABB(const Triangle &tri);
 int getLongestAxis(const AABB &box);
 float getArea(const AABB &box);
-
-bool intersectAABB(const Ray &ray, const AABB &box);
 
 struct BVHNodeInfo {
 	AABB aabb;
@@ -44,20 +44,23 @@ struct BVHNode {
 	int endPrim;
 	int hit;
 	int miss;
+	bool isLeaf;
 };
 
 class BVHAccel {
 	BVHNodeInfo* root;
 	std::vector<BVHNodeInfo*> serializedNodeInfos;
 	int nodeCount = 0;
+	void buildBVH();
+	void serializeBVH();
+	//void traverseBVHNonSerialized();
 public:
 	std::vector<Triangle> orderedPrims;
 	std::vector<BVHNode> nodes;
-	void buildBVH(std::vector<Triangle> prims);
-
-	void traverseBVHNonSerialized();
+	void initBVH(std::vector<Triangle> prims);
 	/* Transforming BVH from tree to array */
-	void serializeBVH();
 };
+
+__device__ bool intersectBVH(const BVHNode *nodes, int nodeCount, const Triangle * tris, Ray & ray, ShadeableIntersection * intersection);
 
 

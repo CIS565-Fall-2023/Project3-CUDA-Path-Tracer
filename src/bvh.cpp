@@ -1,12 +1,20 @@
 #include "bvh.h"
 
-void BVHAccel::buildBVH(std::vector<Triangle> prims)
+
+void BVHAccel::initBVH(std::vector<Triangle> prims)
+{
+	orderedPrims = prims;
+	buildBVH();
+	serializeBVH();
+}
+
+
+void BVHAccel::buildBVH()
 {
 	std::stack<BVHNodeInfo *> nodeStack;
-	orderedPrims = prims;
 	root = new BVHNodeInfo();
 	root->startPrim = 0;
-	root->endPrim = prims.size();	
+	root->endPrim = orderedPrims.size();
 	root->isLeft = false;
 	nodeStack.push(root);
 	BVHNodeInfo * currNodeInfo;
@@ -17,8 +25,10 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 		nodeStack.pop();
 		currNodeInfo->index = index;
 		AABB aabb;
+#if BVH_LOG
 		printf("index: %d startPrim: %d endPrim: %d\n", index, currNodeInfo->startPrim, currNodeInfo->endPrim);
 		printf("isLeft: %d\n", currNodeInfo->isLeft);
+#endif
 		for (size_t i = currNodeInfo->startPrim; i < currNodeInfo->endPrim; i++)
 		{
 			aabb = unionAABB(aabb, getAABB(orderedPrims[i]));
@@ -32,18 +42,19 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 			// Split the bounding box
 		
 			int dim = getLongestAxis(aabb);
-			printf("dim: %d\n", dim);
-			printf("aabb: %f %f %f %f %f %f\n", aabb.pmin.x, aabb.pmin.y, aabb.pmin.z, aabb.pmax.x, aabb.pmax.y, aabb.pmax.z);
 			std::sort(orderedPrims.begin() + currNodeInfo->startPrim, orderedPrims.begin() + currNodeInfo->endPrim, [dim](const Triangle& a, const Triangle& b) {
 				return getAABB(a).centroid[dim] < getAABB(b).centroid[dim];
 			});
+#if BVH_LOG
+			printf("dim: %d\n", dim);
+			printf("aabb: %f %f %f %f %f %f\n", aabb.pmin.x, aabb.pmin.y, aabb.pmin.z, aabb.pmax.x, aabb.pmax.y, aabb.pmax.z);
 			for (size_t i = currNodeInfo->startPrim; i < currNodeInfo->endPrim; i++)
 			{
 				auto aabb = getAABB(orderedPrims[i]);
 				printf("i : %d\n", i);
 				printf("prim: %f %f %f\n", aabb.centroid[0], aabb.centroid[1], aabb.centroid[2]);
 			}
-
+#endif
 			/* Use binary split for now */
 			int mid = (currNodeInfo->startPrim + currNodeInfo->endPrim) / 2;
 			// TODO: More heuristics!
@@ -63,10 +74,11 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 			currNodeInfo->left = leftNode;
 			currNodeInfo->right = rightNode;
 			currNodeInfo->isLeaf = false;
-			
+			currNodeInfo->aabb = aabb;
+#if BVH_LOG
 			printf("leftNode: %d %d\n", leftNode->startPrim, leftNode->endPrim);
 			printf("rightNode: %d %d\n", rightNode->startPrim, rightNode->endPrim);
-			
+#endif
 			nodeStack.push(rightNode);
 			nodeStack.push(leftNode);
 		}
@@ -76,24 +88,11 @@ void BVHAccel::buildBVH(std::vector<Triangle> prims)
 	serializeBVH();
 }
 
-void BVHAccel::traverseBVHNonSerialized()
-{
-	std::stack<BVHNodeInfo *> nodeStack;
-	nodeStack.push(root);
-	while (nodeStack.size() != 0) {
-		BVHNodeInfo * currNodeInfo = nodeStack.top();
-		nodeStack.pop();
-		if (currNodeInfo->right) nodeStack.push(currNodeInfo->right);
-		if (currNodeInfo->left)  nodeStack.push(currNodeInfo->left);
-
-	}
-}
-
 void BVHAccel::serializeBVH()
 {
 	std::stack<BVHNodeInfo*> nodeStack;
 	nodeStack.push(root);
-	serializedNodeInfos.resize(nodeCount);
+	nodes.resize(nodeCount);
 	while (nodeStack.size() != 0) {
 		BVHNodeInfo* currNodeInfo = nodeStack.top();
 		BVHNode node;
@@ -102,6 +101,8 @@ void BVHAccel::serializeBVH()
 		node.right = currNodeInfo->right ? currNodeInfo->right->index : -1;
 		node.parent	= currNodeInfo->parent ? currNodeInfo->parent->index : -1;
 		node.hit = currNodeInfo->index + 1;
+		node.startPrim = currNodeInfo->startPrim;
+		node.endPrim = currNodeInfo->endPrim;
 		if (currNodeInfo->isLeaf) {
 			node.miss = node.hit;
 		}
@@ -111,7 +112,9 @@ void BVHAccel::serializeBVH()
 		else {
 			node.miss = currNodeInfo->index + getSubTreeSize(currNodeInfo);
 		}
-		serializedNodeInfos[currNodeInfo->index] = currNodeInfo;
+		node.isLeaf = currNodeInfo->isLeaf;
+		nodes[currNodeInfo->index] = node;
+#if BVH_LOG
 		printf("\n");
 		printf("node.index: %d\n", currNodeInfo->index);
 		printf("node.hit: %d\n", node.hit);
@@ -119,6 +122,7 @@ void BVHAccel::serializeBVH()
 		printf("node.left: %d\n", node.left);
 		printf("node.right: %d\n", node.right);
 		printf("node.parent: %d\n", node.parent);
+#endif
 		nodeStack.pop();
 		if (currNodeInfo->right) nodeStack.push(currNodeInfo->right);
 		if (currNodeInfo->left)  nodeStack.push(currNodeInfo->left);
@@ -162,23 +166,6 @@ int getLongestAxis(const AABB& box)
 float getArea(const AABB& box)
 {
 	return (box.pmax.x - box.pmin.x) * (box.pmax.y - box.pmin.y) * (box.pmax.z - box.pmin.z);
-}
-
-bool intersectAABB(const Ray& ray, const AABB& aabb)
-{
-	glm::vec3 invDirection = 1.0f / ray.direction;
-
-	float t1 = (aabb.pmin.x - ray.origin.x) * invDirection.x;
-	float t2 = (aabb.pmax.x - ray.origin.x) * invDirection.x;
-	float t3 = (aabb.pmin.y - ray.origin.y) * invDirection.y;
-	float t4 = (aabb.pmax.y - ray.origin.y) * invDirection.y;
-	float t5 = (aabb.pmin.z - ray.origin.z) * invDirection.z;
-	float t6 = (aabb.pmax.z - ray.origin.z) * invDirection.z;
-
-	float tmin = glm::max(glm::max(glm::min(t1, t2), glm::min(t3, t4)), glm::min(t5, t6));
-	float tmax = glm::min(glm::min(glm::max(t1, t2), glm::max(t3, t4)), glm::max(t5, t6));
-
-	return tmax >= tmin && tmax >= 0;
 }
 
 int getSubTreeSize(BVHNodeInfo* node)

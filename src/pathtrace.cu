@@ -23,7 +23,8 @@
 #include "bvh.h"
 //#include "utilities.cuh"
 
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 0
+#define USE_BVH 1
 
 #define ERRORCHECK 1
 
@@ -87,6 +88,7 @@ static Triangle* dev_triangles= nullptr;
 static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
+static BVHNode* dev_bvhNodes = nullptr;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -126,12 +128,13 @@ void pathtraceInit(HostScene* scene) {
 
 	// TODO: initialize any extra device memeory you need
 	bvh = new BVHAccel();
-	bvh->buildBVH(pa->triangles);
-	bvh->traverseBVHNonSerialized();
+	bvh->initBVH(pa->triangles);
 	auto triangles = bvh->orderedPrims.data();
 	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
 	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-
+	
+	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
 
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
@@ -147,6 +150,7 @@ void pathtraceFree() {
 	// TODO: clean up any extra device memory you created
 	cudaFree(dev_triangles);
 	cudaFree(dev_bsdfStructs);
+	delete bvh;
 	checkCUDAError("pathtraceFree");
 }
 
@@ -182,12 +186,94 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-//TODO: Change to BVH in future!
-__device__ bool intersectCore(Triangle * triangles, int triangles_size, Ray & ray, ShadeableIntersection& intersection) {
+__device__ bool intersectAABB(const Ray& ray, const AABB& aabb)
+{
+	glm::vec3 invDirection = 1.0f / ray.direction;
+	float tmin = -FLT_MAX;
+	float tmax = FLT_MAX;
+	for (int axis = 0; axis < 3; axis++)
+	{
+		float t1 = (aabb.pmin[axis] - ray.origin[axis]) * invDirection[axis];
+		float t2 = (aabb.pmax[axis] - ray.origin[axis]) * invDirection[axis];
+		if (t1 > t2) {
+			float temp = t1;
+			t1 = t2;
+			t2 = temp;
+		}
+		tmin = glm::max(tmin, t1);
+		tmax = glm::min(tmax, t2);
+		if (tmin > tmax) return false;
+	}
+	return true;
+}
 
+//TODO: Change to BVH in future!
+__device__ bool intersectCore(BVHNode * nodes, int bvhNodes_size, Triangle * triangles, int triangles_size, Ray & ray, ShadeableIntersection& intersection) {
+#if USE_BVH
+	int nodeIndex = 0;
+	//const BVHNode & root = nodes[nodeIndex];
+	//const BVHNode& left = nodes[root.left];
+	//const BVHNode & right = nodes[root.right];
+	//if (intersectAABB(ray, right.aabb)) {
+	//	for (size_t i = right.startPrim; i < right.endPrim; i++)
+	//	{
+	//		tris[i].intersect(ray, &intersection);
+	//	}
+	//}
+	//
+	//return intersection.t > EPSILON;
+	while (nodeIndex < bvhNodes_size) {
+		const BVHNode& node = nodes[nodeIndex];
+		if (intersectAABB(ray, node.aabb)) {
+			if (node.isLeaf) {
+				for (size_t i = node.startPrim; i < node.endPrim; i++)
+				{
+					triangles[i].intersect(ray, &intersection);
+				}
+			}
+			nodeIndex = node.hit;
+		}
+		else {
+			nodeIndex = node.miss;
+		}
+	}
+#else
 	for (int i = 0; i < triangles_size; i++)
 	{
 		triangles[i].intersect(ray, &intersection);
+	}
+#endif
+	return intersection.t > EPSILON;
+}
+
+__device__ bool intersectBVH(const BVHNode* nodes, int nodeCount, const Triangle* tris, Ray& ray, ShadeableIntersection& intersection)
+{
+	int nodeIndex = 0;
+	//const BVHNode & root = nodes[nodeIndex];
+	//const BVHNode& left = nodes[root.left];
+	//const BVHNode & right = nodes[root.right];
+	//if (intersectAABB(ray, right.aabb)) {
+	//	for (size_t i = right.startPrim; i < right.endPrim; i++)
+	//	{
+	//		tris[i].intersect(ray, &intersection);
+	//	}
+	//}
+	//
+	//return intersection.t > EPSILON;
+	while (nodeIndex < nodeCount) {
+		const BVHNode& node = nodes[nodeIndex];
+		if (intersectAABB(ray, node.aabb)) {
+			if (node.isLeaf) {
+				for (size_t i = node.startPrim; i < node.endPrim; i++)
+				{
+					tris[i].intersect(ray, &intersection);
+				}
+			}
+			nodeIndex = node.hit;
+		}
+		else {
+			nodeIndex = node.miss;
+		}
 	}
 	return intersection.t > EPSILON;
 }
@@ -199,6 +285,8 @@ __global__ void intersect(
 	, Triangle* triangles
 	, int triangles_size
 	, ShadeableIntersection* intersections
+	, BVHNode * bvhNodes
+	, int bvhNodes_size
 ) {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -208,7 +296,8 @@ __global__ void intersect(
 		ray.min_t = 0.0;
 		ray.max_t = FLT_MAX;
 		intersections[path_index].t = -1;
-		intersectCore(triangles, triangles_size, pathSegments[path_index].ray, intersections[path_index]);
+		//intersectBVH(bvhNodes, bvhNodes_size, triangles, ray, intersections[path_index]);
+		intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, pathSegments[path_index].ray, intersections[path_index]);
 	}
 }
 
@@ -229,6 +318,8 @@ __global__ void shadeBSDF(
 	, BSDFStruct * bsdfStructs
 	, Triangle * triangles
 	, int triangles_size
+	, BVHNode * bvhNodes
+	, int bvhNodes_size
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -242,7 +333,9 @@ __global__ void shadeBSDF(
 		  // makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			thrust::uniform_real_distribution<float> u01(0, 1);
-
+			//pathSegment.color = intersection.surfaceNormal;
+			//pathSegment.color = glm::vec3(1.0f);
+			//return;
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
@@ -278,7 +371,7 @@ __global__ void shadeBSDF(
 					ShadeableIntersection oneBounceIntersection;
 					oneBounceIntersection.t = -1.0f;
 
-					if (intersectCore(triangles, triangles_size, one_bounce_ray, oneBounceIntersection)){
+					if (intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, one_bounce_ray, oneBounceIntersection)){
 						auto oneBounceBSDF = bsdfStructs[oneBounceIntersection.materialId];
 						if (oneBounceBSDF.bsdfType == BSDFType::EMISSIVE) {
 							n_valid_sample++;
@@ -422,6 +515,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_triangles
 			, pa->triangles.size()
 			, dev_intersections
+			, dev_bvhNodes
+			, bvh->nodes.size()
 			);
 
 		checkCUDAError("trace one bounce");
@@ -444,7 +539,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_bsdfStructs,
 			dev_triangles,
-			pa->triangles.size()
+			pa->triangles.size(),
+			dev_bvhNodes,
+			bvh->nodes.size()
 			);
 
 		checkCUDAError("shadeMaterial failed\n");
@@ -456,7 +553,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		num_paths = dev_path_end - dev_paths;
 
 		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
-		// iterationComplete = (true);
+		 //iterationComplete = (true);
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;
