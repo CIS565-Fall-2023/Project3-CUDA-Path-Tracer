@@ -5,7 +5,9 @@
 #include <algorithm>
 #include "sceneStructs.h"
 
-#define BVH_LOG 0
+#define BVH_LOG 1
+#define BVH_NAIVE 1
+#define BVH_SAH 1
 
 struct AABB {
 	glm::vec3 pmax;
@@ -51,6 +53,7 @@ class BVHAccel {
 	BVHNodeInfo* root;
 	std::vector<BVHNodeInfo*> serializedNodeInfos;
 	int nodeCount = 0;
+	const int maxPrimitivesInNode = 4;
 	void buildBVH();
 	void serializeBVH();
 	//void traverseBVHNonSerialized();
@@ -61,6 +64,5 @@ public:
 	/* Transforming BVH from tree to array */
 };
 
-__device__ bool intersectBVH(const BVHNode *nodes, int nodeCount, const Triangle * tris, Ray & ray, ShadeableIntersection * intersection);
 
 

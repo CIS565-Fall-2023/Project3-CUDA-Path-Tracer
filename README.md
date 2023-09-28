@@ -49,6 +49,9 @@ project, and we will not be able to grade you without a good README.
 
 - [ ] Light (probably not gonna do a lot about it because gltf has a poor support over area light)
 
+- [ ] Denoiser 
+    - [ ] Use Intel OpenImage Denoiser for now
+
 
 ### Log
 

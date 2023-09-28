@@ -86,7 +86,7 @@ static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
-static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
+static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test_box.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -178,99 +178,19 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-__device__ bool intersectAABB(const Ray& ray, const AABB& aabb)
-{
-	glm::vec3 invDirection = 1.0f / ray.direction;
-	float tmin = -FLT_MAX;
-	float tmax = FLT_MAX;
-	/* Unrolling the loop seems not affecting the FPS a lot? */
-	#pragma unroll
-	for (int axis = 0; axis < 3; axis++)
-	{
-		float t1 = (aabb.pmin[axis] - ray.origin[axis]) * invDirection[axis];
-		float t2 = (aabb.pmax[axis] - ray.origin[axis]) * invDirection[axis];
-		if (t1 > t2) {
-			float temp = t1;
-			t1 = t2;
-			t2 = temp;
-		}
-		tmin = glm::max(tmin, t1);
-		tmax = glm::min(tmax, t2);
-		if (tmin > tmax) return false;
-	}
-	return true;
-}
-
 //TODO: Change to BVH in future!
 __device__ bool intersectCore(BVHNode * nodes, int bvhNodes_size, Triangle * triangles, int triangles_size, Ray & ray, ShadeableIntersection& intersection) {
 #if USE_BVH
-	int nodeIndex = 0;
-	//const BVHNode & root = nodes[nodeIndex];
-	//const BVHNode& left = nodes[root.left];
-	//const BVHNode & right = nodes[root.right];
-	//if (intersectAABB(ray, right.aabb)) {
-	//	for (size_t i = right.startPrim; i < right.endPrim; i++)
-	//	{
-	//		tris[i].intersect(ray, &intersection);
-	//	}
-	//}
-	//
-	//return intersection.t > EPSILON;
-	while (nodeIndex < bvhNodes_size) {
-		const BVHNode& node = nodes[nodeIndex];
-		if (intersectAABB(ray, node.aabb)) {
-			if (node.isLeaf) {
-				for (size_t i = node.startPrim; i < node.endPrim; i++)
-				{
-					triangles[i].intersect(ray, &intersection);
-				}
-			}
-			nodeIndex = node.hit;
-		}
-		else {
-			nodeIndex = node.miss;
-		}
-	}
+	intersectBVH(nodes, bvhNodes_size, triangles, ray, intersection);
 #else
 	for (int i = 0; i < triangles_size; i++)
 	{
-		triangles[i].intersect(ray, &intersection);
+		intersectTriangle(triangles[i], ray, &intersection);
 	}
 #endif
 	return intersection.t > EPSILON;
 }
 
-__device__ bool intersectBVH(const BVHNode* nodes, int nodeCount, const Triangle* tris, Ray& ray, ShadeableIntersection& intersection)
-{
-	int nodeIndex = 0;
-	//const BVHNode & root = nodes[nodeIndex];
-	//const BVHNode& left = nodes[root.left];
-	//const BVHNode & right = nodes[root.right];
-	//if (intersectAABB(ray, right.aabb)) {
-	//	for (size_t i = right.startPrim; i < right.endPrim; i++)
-	//	{
-	//		tris[i].intersect(ray, &intersection);
-	//	}
-	//}
-	//
-	//return intersection.t > EPSILON;
-	while (nodeIndex < nodeCount) {
-		const BVHNode& node = nodes[nodeIndex];
-		if (intersectAABB(ray, node.aabb)) {
-			if (node.isLeaf) {
-				for (size_t i = node.startPrim; i < node.endPrim; i++)
-				{
-					tris[i].intersect(ray, &intersection);
-				}
-			}
-			nodeIndex = node.hit;
-		}
-		else {
-			nodeIndex = node.miss;
-		}
-	}
-	return intersection.t > EPSILON;
-}
 
 __global__ void intersect(
 	int depth
@@ -326,10 +246,6 @@ __global__ void shadeBSDF(
 		  // LOOK: this is how you use thrust's RNG! Please look at
 		  // makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
-			//pathSegment.color = intersection.surfaceNormal;
-			//pathSegment.color = glm::vec3(1.0f);
-			//return;
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
@@ -391,8 +307,6 @@ __global__ void shadeBSDF(
 				pathSegment.ray.origin = intersect;
 				pathSegment.ray.direction = o2w * wi;
 				pathSegment.remainingBounces--;
-
-				//scatterRay(pathSegments[idx], pathSegments[idx].ray.at(intersection.t), intersection.surfaceNormal, material, rng);
 			}
 			// If there was no intersection, color the ray black.
 			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -421,12 +335,6 @@ struct HasHit{
     __host__ __device__ bool operator()(const PathSegment & path) const {
         return path.remainingBounces != 0;
     }
-};
-
-struct NoHit {
-	__host__ __device__ bool operator()(const PathSegment& path) const {
-		return path.remainingBounces == 0;
-	}
 };
 
 /**
@@ -479,16 +387,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//   for you.
 
 	// TODO: perform one iteration of path tracing
-
-//#if USE_FIRST_BOUNCE_CACHE
-//	if (iter == 1) {
-//		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
-//		checkCUDAError("generate camera ray");
-//	}
-//#else
-//	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
-//	checkCUDAError("generate camera ray");
-//#endif
 
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");

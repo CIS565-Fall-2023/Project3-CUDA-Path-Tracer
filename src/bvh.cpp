@@ -25,6 +25,8 @@ void BVHAccel::buildBVH()
 		nodeStack.pop();
 		currNodeInfo->index = index;
 		AABB aabb;
+		aabb.pmax = glm::vec3(-FLT_MAX);
+		aabb.pmin = glm::vec3(FLT_MAX);
 #if BVH_LOG
 		printf("index: %d startPrim: %d endPrim: %d\n", index, currNodeInfo->startPrim, currNodeInfo->endPrim);
 		printf("isLeft: %d\n", currNodeInfo->isLeft);
@@ -33,7 +35,7 @@ void BVHAccel::buildBVH()
 		{
 			aabb = unionAABB(aabb, getAABB(orderedPrims[i]));
 		}
-		if (currNodeInfo->endPrim - currNodeInfo->startPrim < 4) {
+		if (currNodeInfo->endPrim - currNodeInfo->startPrim <= maxPrimitivesInNode) {
 			currNodeInfo->isLeaf = true;
 			currNodeInfo->aabb = aabb;
 		}
@@ -55,10 +57,114 @@ void BVHAccel::buildBVH()
 				printf("prim: %f %f %f\n", aabb.centroid[0], aabb.centroid[1], aabb.centroid[2]);
 			}
 #endif
+
+#if BVH_SAH
+			constexpr int nBuckets = 12;
+			struct BucketInfo {
+				int count = 0;
+				AABB aabb;
+			};
+			BucketInfo buckest[nBuckets];
+
+			/* Initialize buckets */
+			for (size_t i = currNodeInfo->startPrim; i < currNodeInfo->endPrim; i++)
+			{
+				auto primAABB = getAABB(orderedPrims[i]);
+				printf("index: %d\n", i);
+				printf("primAABB PMin: %f %f %f\n", primAABB.pmin[0], primAABB.pmin[1], primAABB.pmin[2]);
+				printf("primAABB PMax: %f %f %f\n", primAABB.pmax[0], primAABB.pmax[1], primAABB.pmax[2]);
+				printf("prim order basis: %f\n", primAABB.centroid[dim]);
+				glm::vec3 primCentroid = primAABB.centroid;
+				int b = nBuckets * ((primCentroid[dim] - aabb.pmin[dim]) / (aabb.pmax[dim] - aabb.pmin[dim]));
+				if (b == nBuckets) b = nBuckets - 1;
+				buckest[b].count++;
+				buckest[b].aabb = unionAABB(buckest[b].aabb, primAABB);
+			}
+
+			float cost[nBuckets - 1];
+			for (size_t i = 0; i < nBuckets - 1; i++)
+			{
+				AABB b0, b1;
+				int count0 = 0, count1 = 0;
+				for (size_t j = 0; j <= i; j++)
+				{
+					b0 = unionAABB(b0, buckest[j].aabb);
+					count0 += buckest[j].count;
+				}
+				for (size_t j = i + 1; j < nBuckets; j++)
+				{
+					b1 = unionAABB(b1, buckest[j].aabb);
+					count1 += buckest[j].count;
+				}
+				cost[i] = 0.125f + (count0 * getArea(b0) + count1 * getArea(b1)) / getArea(aabb);
+			}
+
+			float minCost = cost[0];
+			int minCostSplitBucket = 0;
+			int leftSize = buckest[0].count;
+			int minCostSplitLeftSize = leftSize;
+			for (size_t i = 1; i < nBuckets - 1; i++)
+			{
+				leftSize += buckest[i].count;
+				if (cost[i] < minCost) {
+					minCost = cost[i];
+					minCostSplitBucket = i;
+					minCostSplitLeftSize = leftSize;
+				}
+			}
+			int mid = currNodeInfo->startPrim + minCostSplitLeftSize;
+
+			int zeroCount = 0;
+			for (size_t i = 0; i < nBuckets; i++)
+			{
+				if (buckest[i].count == 0) zeroCount++;
+			}
+			if (zeroCount == nBuckets-1) {
+				mid = (currNodeInfo->startPrim + currNodeInfo->endPrim) / 2;
+			}
+			/* Create leaf node if minCost is lower than cost of spliting at this node */
+			float leafCost = currNodeInfo->endPrim - currNodeInfo->startPrim;
+			if (currNodeInfo->endPrim - currNodeInfo->startPrim > maxPrimitivesInNode || minCost < leafCost) {
+				//int mid = std::partition(orderedPrims.begin() + currNodeInfo->startPrim, orderedPrims.begin() + currNodeInfo->endPrim, [=](const Triangle& tri) {
+				//	int b = nBuckets * ((getAABB(tri).centroid[dim] - aabb.pmin[dim]) / (aabb.pmax[dim] - aabb.pmin[dim]));
+				//	if (b == nBuckets) b = nBuckets - 1;
+				//	return b <= minCostSplitBucket;
+				//}) - orderedPrims.begin();
+
+				BVHNodeInfo* leftNode = new BVHNodeInfo();
+				leftNode->parent = currNodeInfo;
+				leftNode->startPrim = currNodeInfo->startPrim;
+				leftNode->endPrim = mid;
+				leftNode->isLeft = true;
+
+
+				BVHNodeInfo* rightNode = new BVHNodeInfo();
+				rightNode->parent = currNodeInfo;
+				rightNode->startPrim = mid;
+				rightNode->endPrim = currNodeInfo->endPrim;
+				rightNode->isLeft = false;
+
+				currNodeInfo->left = leftNode;
+				currNodeInfo->right = rightNode;
+				currNodeInfo->isLeaf = false;
+				currNodeInfo->aabb = aabb;
+#if BVH_LOG
+				printf("leftNode: %d %d\n", leftNode->startPrim, leftNode->endPrim);
+				printf("rightNode: %d %d\n", rightNode->startPrim, rightNode->endPrim);
+#endif
+				nodeStack.push(rightNode);
+				nodeStack.push(leftNode);
+			}
+			else {
+				currNodeInfo->isLeaf = true;
+				currNodeInfo->aabb = aabb;
+			}
+
+
+#else
 			/* Use binary split for now */
 			int mid = (currNodeInfo->startPrim + currNodeInfo->endPrim) / 2;
 			// TODO: More heuristics!
-
 			BVHNodeInfo * leftNode  = new BVHNodeInfo();
 			leftNode->parent = currNodeInfo;
 			leftNode->startPrim = currNodeInfo->startPrim;
@@ -81,6 +187,7 @@ void BVHAccel::buildBVH()
 #endif
 			nodeStack.push(rightNode);
 			nodeStack.push(leftNode);
+#endif
 		}
 		index++;
 	}
@@ -165,7 +272,10 @@ int getLongestAxis(const AABB& box)
 
 float getArea(const AABB& box)
 {
-	return (box.pmax.x - box.pmin.x) * (box.pmax.y - box.pmin.y) * (box.pmax.z - box.pmin.z);
+	float x = box.pmax.x - box.pmin.x;
+	float y = box.pmax.y - box.pmin.y;
+	float z = box.pmax.z - box.pmin.z;
+	return 2.0f * (x * y + y * z + z * x);
 }
 
 int getSubTreeSize(BVHNodeInfo* node)
