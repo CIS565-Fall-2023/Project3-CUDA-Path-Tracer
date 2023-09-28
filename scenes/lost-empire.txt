@@ -1,10 +1,16 @@
+MATERIAL 0
+RGB         .98 .98 .98
+ROUGHNESS   -1.0
+REFRIOR     0
+EMITTANCE   0
+
 // Camera
 CAMERA
 RES         1000 1000
 FOVY        45
 ITERATIONS  10000
 DEPTH       8
-FILE        vase-skybox
+FILE        lost-empire
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
@@ -13,11 +19,11 @@ UP          0 1 0
 OBJECT 0
 model ../scenes/models/lost-empire/lost_empire.obj
 material -1
-TRANS       0 0.0 0
+TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       0.012 0.012 0.012
+SCALE       0.1 0.1 0.1
 
 
 SKYBOX
-../scenes/environment/Newport_Loft_Ref.hdr
+../scenes/environment/GravelPlaza_REF.hdr
 

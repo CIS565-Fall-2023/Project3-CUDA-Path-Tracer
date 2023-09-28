@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
@@ -38,5 +39,6 @@ public:
     BVHNode* bvhroot = nullptr;
     cudaTextureObject_t skyboxTextureObj = 0;
     std::vector<cudaArray*> textureDataPtrs;
+    std::unordered_map< std::string, cudaTextureObject_t> strToTextureObj;
     std::vector<std::pair<std::string, int> > textureLoadJobs;//texture path, materialID
 };

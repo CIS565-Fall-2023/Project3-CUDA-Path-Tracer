@@ -12,6 +12,8 @@ GLuint displayImage;
 extern uint64_t sysTime;
 extern uint64_t delta_t;
 
+#define CAM_SPEED 0.1f;
+
 GLFWwindow* window;
 GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
@@ -267,22 +269,22 @@ void mainLoop() {
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		{
 			camchanged = true;
-			renderState->camera.position += renderState->camera.view * 0.05f;
+			renderState->camera.position += renderState->camera.view * CAM_SPEED;
 		}
 		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 		{
 			camchanged = true;
-			renderState->camera.position -= renderState->camera.view * 0.05f;
+			renderState->camera.position -= renderState->camera.view * CAM_SPEED;
 		}
 		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 		{
 			camchanged = true;
-			renderState->camera.position -= renderState->camera.right * 0.05f;
+			renderState->camera.position -= renderState->camera.right * CAM_SPEED;
 		}
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		{
 			camchanged = true;
-			renderState->camera.position += renderState->camera.right * 0.05f;
+			renderState->camera.position += renderState->camera.right * CAM_SPEED;
 		}
 			
 		runCuda();

@@ -18,7 +18,7 @@
 
 #define ERRORCHECK 1
 #define VIS_NORMAL 0
-#define SCATTER_ORIGIN_OFFSETMULT 0.1f
+#define SCATTER_ORIGIN_OFFSETMULT 0.01f
 #define STOCHASTIC_SAMPLING 1
 
 #define MAX_ITER 8
@@ -230,6 +230,7 @@ __global__ void compute_intersection(
 	, glm::ivec3* modelTriangles
 	, glm::vec3* modelVertices
 	, const glm::vec2* modelUVs
+	, cudaTextureObject_t skyboxTex
 	, ShadeableIntersection* intersections
 	, int* rayValid
 	, glm::vec3* image
@@ -299,6 +300,13 @@ __global__ void compute_intersection(
 		if (t_min == FLT_MAX)//hits nothing
 		{
 			rayValid[path_index] = 0;
+			if (skyboxTex)
+			{
+				glm::vec2 uv = util_sample_spherical_map(glm::normalize(pathSegment.ray.direction));
+				float4 skyColorRGBA = tex2D<float4>(skyboxTex, uv.x, uv.y);
+				glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
+				image[pathSegment.pixelIndex] += pathSegment.color * skyColor;
+			}
 		}
 		else
 		{
@@ -412,7 +420,7 @@ __global__ void compute_intersection_bvh_stackless(
 	int curr = util_bvh_get_near_child(bvhArray, 0, rayOri);
 	bvh_traverse_state state = fromParent;
 	ShadeableIntersection tmpIntersection;
-	tmpIntersection.t = 1e20f;
+	tmpIntersection.t = 1e38f;
 	bool intersected = false;
 	while (curr >= 0 && curr < bvhArraySize)
 	{
@@ -487,7 +495,7 @@ __global__ void compute_intersection_bvh_stackless(
 		glm::vec2 uv = util_sample_spherical_map(glm::normalize(rayDir));
 		float4 skyColorRGBA = tex2D<float4>(skyboxTex, uv.x, uv.y);
 		glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
-		image[pathSegment.pixelIndex] += pathSegment.color * skyColor;
+		image[pathSegment.pixelIndex] += pathSegment.color * skyColor * BACKGROUND_COLOR_MULT;
 	}
 }
 
@@ -720,11 +728,13 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_triangles
 			, dev_vertices
 			, dev_uvs
+			, hst_scene->skyboxTextureObj
 			, dev_intersections1
 			, rayValid
 			, dev_image
 			);
 #endif
+		cudaDeviceSynchronize();
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
 		depth++;

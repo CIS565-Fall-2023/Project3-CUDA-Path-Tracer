@@ -41,7 +41,7 @@ Primitive::Primitive(const Object& obj, int objID, int triangleOffset, const glm
 	}
 	else if (obj.type == TRIANGLE_MESH)
 	{
-		const glm::ivec3& tri = triangles[offset];
+		const glm::ivec3& tri = triangles[obj.triangleStart+offset];
 		for (int i = 0; i < 3; i++)
 		{
 			const glm::vec3& vert = vertices[tri[i]];
@@ -49,6 +49,8 @@ Primitive::Primitive(const Object& obj, int objID, int triangleOffset, const glm
 			bbox = Union(bbox, tmp);
 		}
 	}
+	bbox.pMin -= glm::vec3(0.02f);
+	bbox.pMax += glm::vec3(0.02f);
 	assert(bbox.pMin.x < bbox.pMax.x && bbox.pMin.y < bbox.pMax.y && bbox.pMin.z < bbox.pMax.z);
 }
 
@@ -92,7 +94,7 @@ BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start,
 			buckets[bidx].bbox = Union(buckets[bidx].bbox, primitives[i].bbox);
 		}
 		float splitCost[SAH_BUCKET_SIZE - 1];
-		for (int i = 1; i < SAH_BUCKET_SIZE - 1; i++)
+		for (int i = 0; i < SAH_BUCKET_SIZE - 1; i++)
 		{
 			BoundingBox b0, b1;
 			int cnt0 = 0, cnt1 = 0;

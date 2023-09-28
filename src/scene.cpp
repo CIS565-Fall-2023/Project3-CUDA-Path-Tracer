@@ -68,22 +68,23 @@ void Scene::LoadAllTextures()
     for (auto& p : textureLoadJobs)
     {
         cudaTextureObject_t* texObj = p.second == -1 ? &skyboxTextureObj : &materials[p.second].diffuseMap;
-        loadTexture(p.first, texObj, p.second != -1);
+        if (!strToTextureObj.count(p.first))
+        {
+            loadTexture(p.first, texObj, p.second != -1);
+            strToTextureObj[p.first] = *texObj;
+        }
+        else
+        {
+            *texObj = strToTextureObj[p.first];
+        }
     }
 }
 
 Scene::~Scene()
 {
-    for (auto& p : textureLoadJobs)
+    for (auto& p : strToTextureObj)
     {
-        if (p.second!=-1)
-        {
-            cudaDestroyTextureObject(materials[p.second].diffuseMap);
-        }
-        else if(skyboxTextureObj)
-        {
-            cudaDestroyTextureObject(skyboxTextureObj);
-        }
+        cudaDestroyTextureObject(materials[p.second].diffuseMap);
     }
     for (auto& p : textureDataPtrs)
     {
@@ -177,11 +178,12 @@ void Scene::loadTexture(const std::string& texturePath, cudaTextureObject_t* tex
     }
 }
 
+
+//load obj using tinyobjloader
 bool Scene::loadModel(const string& modelPath, int objectid)
 {
     cout << "Loading Model " << modelPath << " ..." << endl;
-    Object model;
-    model.type = TRIANGLE_MESH;
+    
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> aShapes;
     std::vector<tinyobj::material_t> aMaterials;
@@ -214,7 +216,6 @@ bool Scene::loadModel(const string& modelPath, int objectid)
     std::unordered_map<std::pair<glm::vec3,glm::vec2>, unsigned> vertex_set;
     for (const auto& shape : aShapes)
     {
-        model.materialid = shape.mesh.material_ids[0] + matOffset;
         for (const auto& index : shape.mesh.indices) 
         {
             glm::vec3 tmp;
@@ -222,8 +223,8 @@ bool Scene::loadModel(const string& modelPath, int objectid)
             tmp.y = attrib.vertices[3 * index.vertex_index + 1];
             tmp.z = attrib.vertices[3 * index.vertex_index + 2];
             glm::vec2 tmp_uv;
-            tmp_uv.x = index.texcoord_index >= 0 ? attrib.texcoords[2 * index.texcoord_index + 0] : 0;
-            tmp_uv.y = index.texcoord_index >= 0 ? attrib.texcoords[2 * index.texcoord_index + 1] : 0;
+            tmp_uv.x = index.texcoord_index >= 0 ? attrib.texcoords[2 * index.texcoord_index + 0] : -1.0;
+            tmp_uv.y = index.texcoord_index >= 0 ? attrib.texcoords[2 * index.texcoord_index + 1] : -1.0;
             auto newVert = make_pair(tmp, tmp_uv);
             if (!vertex_set.count(newVert))
             {
@@ -233,8 +234,14 @@ bool Scene::loadModel(const string& modelPath, int objectid)
             }
         }
     }
-    model.triangleStart = triangles.size();
+
+    int modelStartIdx = objects.size();
+    
     for (const auto& shape : aShapes) {
+        Object model;
+        model.type = TRIANGLE_MESH;
+        model.triangleStart = triangles.size();
+        model.materialid = shape.mesh.material_ids[0] + matOffset;//Assume per mesh material
         size_t index_offset = 0;
         for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
             int fv = shape.mesh.num_face_vertices[f];
@@ -247,15 +254,19 @@ bool Scene::loadModel(const string& modelPath, int objectid)
                 tmp.y = attrib.vertices[3 * idx.vertex_index + 1];
                 tmp.z = attrib.vertices[3 * idx.vertex_index + 2];
                 glm::vec2 tmp_uv;
-                tmp_uv.x = idx.texcoord_index >= 0 ? attrib.texcoords[2 * idx.texcoord_index + 0] : 0;
-                tmp_uv.y = idx.texcoord_index >= 0 ? attrib.texcoords[2 * idx.texcoord_index + 1] : 0;
-                triangle[v] = vertex_set[make_pair(tmp, tmp_uv)];
+                tmp_uv.x = idx.texcoord_index >= 0 ? attrib.texcoords[2 * idx.texcoord_index + 0] : -1.0;
+                tmp_uv.y = idx.texcoord_index >= 0 ? attrib.texcoords[2 * idx.texcoord_index + 1] : -1.0;
+                int vIdx = vertex_set[make_pair(tmp, tmp_uv)];
+                assert(vIdx >= 0 && vIdx < verticies.size());
+                triangle[v] = vIdx;
             }
             triangles.emplace_back(triangle);
             index_offset += fv;
         }
+        model.triangleEnd = triangles.size();
+        objects.emplace_back(model);
     }
-    model.triangleEnd = triangles.size();
+    int modelEndIdx = objects.size();;
 
     std::string line;
     //link material
@@ -265,11 +276,15 @@ bool Scene::loadModel(const string& modelPath, int objectid)
         int mID = atoi(tokens[1].c_str());
         if (mID != -1)
         {
-            model.materialid = mID;
-            cout << "Connecting Geom " << objectid << " to Material " << model.materialid << "..." << endl;
+            for (int i = modelStartIdx; i != modelEndIdx; i++)
+            {
+                objects[i].materialid = mID;
+            }
+            cout << "Connecting Geom " << objectid << " to Material " << mID << "..." << endl;
         }
     }
 
+    ObjectTransform modelTrans;
     //load transformations
     utilityCore::safeGetline(fp_in, line);
     while (!line.empty() && fp_in.good()) {
@@ -277,24 +292,29 @@ bool Scene::loadModel(const string& modelPath, int objectid)
 
         //load tranformations
         if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-            model.Transform.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            modelTrans.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
         else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-            model.Transform.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            modelTrans.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
         else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-            model.Transform.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            modelTrans.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
 
         utilityCore::safeGetline(fp_in, line);
     }
 
-    model.Transform.transform = utilityCore::buildTransformationMatrix(
-    model.Transform.translation, model.Transform.rotation, model.Transform.scale);
-    model.Transform.inverseTransform = glm::inverse(model.Transform.transform);
-    model.Transform.invTranspose = glm::inverseTranspose(model.Transform.transform);
+    modelTrans.transform = utilityCore::buildTransformationMatrix(
+        modelTrans.translation, modelTrans.rotation, modelTrans.scale);
+    modelTrans.inverseTransform = glm::inverse(modelTrans.transform);
+    modelTrans.invTranspose = glm::inverseTranspose(modelTrans.transform);
+
+    for (int i = modelStartIdx; i != modelEndIdx; i++)
+    {
+        objects[i].Transform = modelTrans;
+    }
     
-    objects.emplace_back(model);
+    
 
     return true;
 }
@@ -351,27 +371,23 @@ bool Scene::loadGeometry(const string& type, int objectid)
 
 int Scene::loadObject(string objectid) {
     int id = atoi(objectid.c_str());
-    if (id != objects.size()) {
-        std::cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-        return -1;
-    } else {
-        std::cout << "Loading Object " << id << "..." << endl;
-        string line;
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good())
+    std::cout << "Loading Object " << id << "..." << endl;
+    string line;
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good())
+    {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        if (tokens[0] == "geometry")//load geometry
         {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            if (tokens[0] == "geometry")//load geometry
-            {
-                loadGeometry(tokens[1], id);
-            }
-            else//load model
-            {
-                loadModel(tokens[1], id);
-            }
+            loadGeometry(tokens[1], id);
         }
-        return 1;
+        else//load model
+        {
+            loadModel(tokens[1], id);
+        }
     }
+    return 1;
+    
 }
 
 
@@ -484,8 +500,9 @@ void Scene::buildBVH()
         {
             for (int j = obj.triangleStart; j != obj.triangleEnd; j++)
             {
-                primitives.emplace_back(obj, i, j, &triangles[0], &verticies[0]);
+                primitives.emplace_back(obj, i, j - obj.triangleStart, &triangles[0], &verticies[0]);
             }
+            
         }
         else
         {
