@@ -24,7 +24,7 @@ private:
     int buildBvh(int startTri, int numTris);
     void bvhUpdateNodeBounds(BvhNode& node);
     float bvhEvaluateSAH(BvhNode& node, int axis, float pos);
-    float bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos);
+    float bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos, AABB& leftChildBox, AABB& rightChildBox);
     void bvhSubdivide(BvhNode& node);
 
     int loadTexture(string filePath);

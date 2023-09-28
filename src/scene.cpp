@@ -245,7 +245,7 @@ struct Bin
     int triCount = 0;
 };
 
-float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos)
+float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos, AABB& leftChildBox, AABB& rightChildBox)
 {
     float bestCost = FLT_MAX;
     for (int candidateAxis = 0; candidateAxis < 3; ++candidateAxis)
@@ -274,7 +274,7 @@ float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos)
             bins[binIdx].aabb.grow(tri);
         }
 
-        float leftArea[BVH_NUM_INTERVALS - 1], rightArea[BVH_NUM_INTERVALS - 1];
+        AABB leftBoxes[BVH_NUM_INTERVALS - 1], rightBoxes[BVH_NUM_INTERVALS - 1];
         int leftCount[BVH_NUM_INTERVALS - 1], rightCount[BVH_NUM_INTERVALS - 1];
         AABB leftBox, rightBox;
         int leftSum = 0, rightSum = 0;
@@ -283,21 +283,23 @@ float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos)
             leftSum += bins[i].triCount;
             leftCount[i] = leftSum;
             leftBox.grow(bins[i].aabb);
-            leftArea[i] = leftBox.surfaceArea();
+            leftBoxes[i] = leftBox;
             rightSum += bins[BVH_NUM_INTERVALS - 1 - i].triCount;
             rightCount[BVH_NUM_INTERVALS - 2 - i] = rightSum;
             rightBox.grow(bins[BVH_NUM_INTERVALS - 1 - i].aabb);
-            rightArea[BVH_NUM_INTERVALS - 2 - i] = rightBox.surfaceArea();
+            rightBoxes[BVH_NUM_INTERVALS - 2 - i] = rightBox;
         }
 
         scale = (axisMax - axisMin) / BVH_NUM_INTERVALS;
         for (int i = 0; i < BVH_NUM_INTERVALS - 1; ++i)
         {
-            float cost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+            float cost = leftCount[i] * leftBoxes[i].surfaceArea() + rightCount[i] * rightBoxes[i].surfaceArea();
             if (cost < bestCost)
             {
                 axis = candidateAxis;
                 splitPos = axisMin + scale * (i + 1);
+                leftChildBox = leftBoxes[i];
+                rightChildBox = rightBoxes[i];
                 bestCost = cost;
             }
         }
@@ -309,7 +311,9 @@ void Scene::bvhSubdivide(BvhNode& node)
 {
     int axis;
     float splitPos;
-    float bestCost = bvhFindBestSplitPlane(node, axis, splitPos);
+    AABB leftChildBox;
+    AABB rightChildBox;
+    float bestCost = bvhFindBestSplitPlane(node, axis, splitPos, leftChildBox, rightChildBox);
 
     if (bestCost >= node.cost())
     {
@@ -342,17 +346,16 @@ void Scene::bvhSubdivide(BvhNode& node)
     BvhNode& leftChild = bvhNodes.back();
     leftChild.leftFirst = node.leftFirst;
     leftChild.triCount = leftCount;
+    leftChild.aabb = leftChildBox;
 
     bvhNodes.emplace_back();
     BvhNode& rightChild = bvhNodes.back();
     rightChild.leftFirst = i;
     rightChild.triCount = node.triCount - leftCount;
+    rightChild.aabb = rightChildBox;
 
     node.leftFirst = leftChildIdx;
     node.triCount = 0;
-
-    bvhUpdateNodeBounds(leftChild);
-    bvhUpdateNodeBounds(rightChild);
 
     bvhSubdivide(leftChild);
     bvhSubdivide(rightChild);
