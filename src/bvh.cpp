@@ -65,15 +65,22 @@ void BVHAccel::buildBVH()
 				AABB aabb;
 			};
 			BucketInfo buckest[nBuckets];
+			for (size_t i = 0; i < nBuckets; i++)
+			{
+				buckest[i].aabb.pmax = glm::vec3(-FLT_MAX);
+				buckest[i].aabb.pmin = glm::vec3(FLT_MAX);
+			}
 
 			/* Initialize buckets */
 			for (size_t i = currNodeInfo->startPrim; i < currNodeInfo->endPrim; i++)
 			{
 				auto primAABB = getAABB(orderedPrims[i]);
+#if BVH_LOG
 				printf("index: %d\n", i);
 				printf("primAABB PMin: %f %f %f\n", primAABB.pmin[0], primAABB.pmin[1], primAABB.pmin[2]);
 				printf("primAABB PMax: %f %f %f\n", primAABB.pmax[0], primAABB.pmax[1], primAABB.pmax[2]);
 				printf("prim order basis: %f\n", primAABB.centroid[dim]);
+#endif
 				glm::vec3 primCentroid = primAABB.centroid;
 				int b = nBuckets * ((primCentroid[dim] - aabb.pmin[dim]) / (aabb.pmax[dim] - aabb.pmin[dim]));
 				if (b == nBuckets) b = nBuckets - 1;
@@ -85,6 +92,10 @@ void BVHAccel::buildBVH()
 			for (size_t i = 0; i < nBuckets - 1; i++)
 			{
 				AABB b0, b1;
+				b0.pmax = glm::vec3(-FLT_MAX);
+				b0.pmin = glm::vec3(FLT_MAX);
+				b1.pmax = glm::vec3(-FLT_MAX);
+				b1.pmin = glm::vec3(FLT_MAX);
 				int count0 = 0, count1 = 0;
 				for (size_t j = 0; j <= i; j++)
 				{
@@ -275,7 +286,8 @@ float getArea(const AABB& box)
 	float x = box.pmax.x - box.pmin.x;
 	float y = box.pmax.y - box.pmin.y;
 	float z = box.pmax.z - box.pmin.z;
-	return 2.0f * (x * y + y * z + z * x);
+	if (x < 0 || y < 0 || z < 0) return 0.0f;
+	else return 2.0f * (x * y + y * z + z * x);
 }
 
 int getSubTreeSize(BVHNodeInfo* node)

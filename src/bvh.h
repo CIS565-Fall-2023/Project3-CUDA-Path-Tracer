@@ -5,7 +5,7 @@
 #include <algorithm>
 #include "sceneStructs.h"
 
-#define BVH_LOG 1
+#define BVH_LOG 0
 #define BVH_NAIVE 1
 #define BVH_SAH 1
 
