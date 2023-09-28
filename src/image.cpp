@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 #include <stb_image_write.h>
-
+#include <stb_image.h>
 #include "image.h"
 
 image::image(int x, int y) :

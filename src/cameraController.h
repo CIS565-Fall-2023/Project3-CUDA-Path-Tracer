@@ -9,10 +9,12 @@ class CameraController
 public:
 	CameraController(Camera& camera, 
 						float pan_speed = 0.05f, 
-						float zoom_speed = 0.02f, 
+						float zoom_speed = 0.5f, 
 						float rotate_speed = 0.02f);
 
 	bool OnMouseMoved(double x, double y);
+	bool OnScroll(double x, double y);
+
 	void RecomputeCamera();
 private:
 	void RotateRef(const float& degree, const glm::vec3& axis);

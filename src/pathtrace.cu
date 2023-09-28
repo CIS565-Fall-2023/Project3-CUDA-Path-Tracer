@@ -84,8 +84,8 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 	int index = x + (y * resolution.x);
 	glm::vec3 pix = image[index];
 
-	int write_index = (resolution.x - x - 1) + (y * resolution.x);
-	writePixel(pix, pbo[write_index]);
+	//int write_index = (resolution.x - x - 1) + (y * resolution.x);
+	writePixel(pix, pbo[index]);
 }
 
 static GuiDataContainer* guiData = nullptr;
@@ -245,8 +245,8 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 	
 	if (intersection.materialId >= 0)
 	{
-		pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
-		return;
+		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
+		//return;
 		PathSegment segment = pathSegments[idx];
 		
 		Material material = materials[intersection.materialId];
@@ -358,7 +358,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 2 && num_paths > 0) 
+	while (depth < 5 && num_paths > 0) 
 	{
 		depth++;
 

@@ -43,6 +43,11 @@ void MousePositionCallback(GLFWwindow* window, double x, double y)
 	Application::GetApplication()->OnMousePosition(window, x, y);
 }
 
+void ScrollCallback(GLFWwindow* window, double x, double y)
+{
+	Application::GetApplication()->OnScroll(window, x, y);
+}
+
 void ErrorCallback(int error, const char* description) 
 {
 	fprintf(stderr, "%s\n", description);
@@ -160,6 +165,7 @@ bool Application::Init()
 	glfwSetKeyCallback(m_GLFWwindow, KeyCallback);
 	glfwSetCursorPosCallback(m_GLFWwindow, MousePositionCallback);
 	glfwSetMouseButtonCallback(m_GLFWwindow, MouseButtonCallback);
+	glfwSetScrollCallback(m_GLFWwindow, ScrollCallback);
 
 	// Set up GL context
 	glewExperimental = GL_TRUE;
@@ -211,6 +217,11 @@ void Application::OnKey(GLFWwindow* window, int key, int scancode, int action, i
 void Application::OnMousePosition(GLFWwindow* window, double x, double y)
 {
 	m_SandBox->OnMousePosition(x, y);
+}
+
+void Application::OnScroll(GLFWwindow* window, double x, double y)
+{
+	m_SandBox->OnScroll(x, y);
 }
 
 bool Application::Run()

@@ -47,6 +47,13 @@ bool CameraController::OnMouseMoved(double x, double y)
 	return false;
 }
 
+bool CameraController::OnScroll(double x, double y)
+{
+	TranslatePositionAlong(m_ZoomSpeed * y, m_Camera.forward);
+	RecomputeCamera();
+	return true;
+}
+
 void CameraController::RecomputeCamera()
 {
 	m_Camera.Recompute();

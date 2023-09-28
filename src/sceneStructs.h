@@ -66,7 +66,7 @@ struct Camera {
     CPU_GPU Ray CastRay(const glm::vec2& p)
     {
         glm::vec2 ndc = 2.f * p / glm::vec2(resolution); 
-        ndc.x = ndc.x - 1.f;
+        ndc.x = 1.f - ndc.x;
         ndc.y = 1.f - ndc.y;
 
         float aspect = static_cast<float>(resolution.x) / static_cast<float>(resolution.y);

@@ -18,6 +18,7 @@ public:
 	void OnMouseButton(int button, int action, int mods);
 	void OnKey(int key, int scancode, int action, int mods);
 	void OnMousePosition(double x, double y);
+	void OnScroll(double x, double y);
 
 	void DrawImGui();
 	void Run();

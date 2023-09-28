@@ -22,6 +22,7 @@ public:
 	void OnMouseButton(GLFWwindow* window, int button, int action, int mods);
 	void OnKey(GLFWwindow* window, int key, int scancode, int action, int mods);
 	void OnMousePosition(GLFWwindow* window, double x, double y);
+	void OnScroll(GLFWwindow* window, double x, double y);
 
 	void SetSandBox(SandBox* sandbox) { m_SandBox = sandbox; }
 

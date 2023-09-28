@@ -92,6 +92,10 @@ void ApplyTransform(int start_id, std::vector<glm::vec3>& vertices, int n_start_
     {
         vertices[i] = glm::vec3(transform * glm::vec4(vertices[i], 1.f));
     }
+    for (int i = n_start_id; i < normals.size(); ++i)
+    {
+        normals[i] = inv_transpose * normals[i];
+    }
 }
 
 Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_filename) 

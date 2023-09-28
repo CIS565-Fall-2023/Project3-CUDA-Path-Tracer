@@ -89,7 +89,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/cornellBox.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -138,6 +138,14 @@ void SandBox::OnKey(int key, int scancode, int action, int mods)
 void SandBox::OnMousePosition(double x, double y)
 {
 	if (m_CameraController->OnMouseMoved(x, y))
+	{
+		m_PathTracer->Reset();
+	}
+}
+
+void SandBox::OnScroll(double x, double y)
+{
+	if (m_CameraController->OnScroll(x, y))
 	{
 		m_PathTracer->Reset();
 	}
