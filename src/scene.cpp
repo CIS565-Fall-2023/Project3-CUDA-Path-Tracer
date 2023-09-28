@@ -414,7 +414,14 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
                 rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                if (tokens.size() == 2)
+                {
+                    scale = glm::vec3(atof(tokens[1].c_str()));
+                }
+                else
+                {
+                    scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                }
             } else if (strcmp(tokens[0].c_str(), "CHILD_OF") == 0) {
                 parentIdx = atoi(tokens[1].c_str());
             }

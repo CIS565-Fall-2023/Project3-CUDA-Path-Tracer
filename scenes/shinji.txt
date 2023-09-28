@@ -5,7 +5,7 @@
 // warm light
 MATERIAL 0
 EMIT_COL    1 0.945 0.878
-EMIT_STR    5
+EMIT_STR    1.5
 
 // diffuse gray
 MATERIAL 1
@@ -20,6 +20,20 @@ NORM_MAP gltf/freddy/textures/Freddy_Body_normal.png
 MATERIAL 3
 DIFF_COL gltf/freddy/textures/Freddy_Eyes_baseColor.png
 
+// chair
+MATERIAL 4
+DIFF_COL gltf/shinji/textures/lambert2_baseColor.png
+NORM_MAP gltf/shinji/textures/lambert2_normal.png
+
+// hair
+MATERIAL 5
+DIFF_COL gltf/shinji/textures/shinji_hair.png
+
+// shinji
+MATERIAL 6
+DIFF_COL gltf/shinji/textures/Ch01_1001_Diffuse.png
+NORM_MAP gltf/shinji/textures/Ch01_1001_Normal.png
+
 // ==================================================
 // CAMERA
 // ==================================================
@@ -29,8 +43,8 @@ CAMERA
 RES          800 800
 FOVY         45
 ITERATIONS   5000
-DEPTH        2
-FILE         freddy
+DEPTH        8
+FILE         shinji
 EYE          0 10 10
 LOOKAT       0 10 0
 UP           0 1 0
@@ -61,12 +75,32 @@ OBJECT 2
 mesh
 gltf/freddy/main.gltf
 material 2
-TRANS       0 0 -5
-ROTAT       0 0 0
-SCALE       10 10 10
+TRANS       6 0 -10
+ROTAT       0 -90 0
+SCALE       10
 
 OBJECT 3
 mesh
 gltf/freddy/eyes.gltf
 material 3
 CHILD_OF 2
+
+OBJECT 4
+mesh
+gltf/shinji/chair.gltf
+material 4
+TRANS -7 0 -10
+ROTAT 0 90 0
+SCALE 1.6
+
+OBJECT 5
+mesh
+gltf/shinji/hair.gltf
+material 5
+CHILD_OF 4
+
+OBJECT 6
+mesh
+gltf/shinji/shinji.gltf
+material 6
+CHILD_OF 4
