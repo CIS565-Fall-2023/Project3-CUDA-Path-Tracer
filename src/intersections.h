@@ -5,6 +5,7 @@
 
 #include "sceneStructs.h"
 #include "utilities.h"
+#include "bvh.h"
 
 class Hittable {
 public:
@@ -143,4 +144,26 @@ __host__ __device__ float triangleIntersectionTest(
     if (bary.y < 0.f || (bary.x + bary.y) > 1.f)return -1;
     bary.z = 1 - bary.x - bary.y;
     return  inv_det * glm::dot(e2, q);
+}
+
+__host__ __device__ float AABBIntersectionTest(
+    const glm::vec3& orig
+    , const glm::vec3& dir
+    , const BoundingBox& b
+) {
+    glm::vec3 inv_dir = glm::vec3(1.f) / dir;
+
+    glm::vec3 t_min = (b.minBound - orig) * inv_dir;
+    glm::vec3 t_max = (b.maxBound - orig) * inv_dir;
+
+    float t = 10000.f;
+    if (t_min.x > 0)t = min(t, t_min.x);
+    if (t_min.y > 0)t = min(t, t_min.y);
+    if (t_min.z > 0)t = min(t, t_min.z);
+    if (t_max.x > 0)t = min(t, t_max.x);
+    if (t_max.y > 0)t = min(t, t_max.y);
+    if (t_max.z > 0)t = min(t, t_max.z);
+
+    if (t > 0.0001 && t <10000.f)return t;
+    return -1.f;
 }

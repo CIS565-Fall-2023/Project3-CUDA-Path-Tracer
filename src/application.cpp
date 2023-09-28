@@ -9,6 +9,7 @@ static glm::vec3 ogLookAt;
 Application::Application(){
 	m_guiData = make_unique<GuiDataContainer>();
 	m_tracer = make_unique<PathTracer>();
+	//init();
 }
 
 bool Application::init()
@@ -316,14 +317,13 @@ glm::vec3 Application::getPixelColor(int x, int y)
 
 void Application::saveImage(const char* filename)
 {
-	float samples = m_iteration;
 	// output image file
 	Image img(m_width, m_height);
 
 	for (int x = 0; x < m_width; x++) {
 		for (int y = 0; y < m_height; y++) {
 			glm::vec3 pix = getPixelColor(x, y);
-			img.setPixel(m_width - 1 - x, y, glm::vec3(pix) / samples);
+			img.setPixel(m_width - 1 - x, y, glm::vec3(pix));
 		}
 	}
 	// CHECKITOUT
@@ -408,6 +408,7 @@ void Application::loadScene(const char* path)
 	m_width = cam.resolution.x;
 	m_height = cam.resolution.y;
 	init();
+	
 }
 
 void Application::run()

@@ -15,9 +15,12 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
+#include "bvh.h"
 
 #define ERRORCHECK 1
-#define DEBUG 0
+#define DEBUG 1
+#define GATHER 0
+#define BVH 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -49,8 +52,7 @@ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int de
 }
 
 //Kernel that writes the image to the OpenGL PBO directly.
-__global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-	int iter, glm::vec3* image) {
+__global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* image ,int iter) {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
@@ -59,10 +61,15 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		glm::vec3 pix = image[index];
 
 		glm::ivec3 color;
-		color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
-		color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
-		color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
-
+#if GATHER
+		color.x = glm::clamp((int)(pix.x * 255.0),0,255);
+		color.y = glm::clamp((int)(pix.y * 255.0),0,255);
+		color.z = glm::clamp((int)(pix.z * 255.0),0,255);
+#else
+		color.x = glm::clamp((int)(pix.x * 255.0 / iter), 0, 255);
+		color.y = glm::clamp((int)(pix.y * 255.0 / iter), 0, 255);
+		color.z = glm::clamp((int)(pix.z * 255.0 / iter), 0, 255);
+#endif
 		// Each thread writes one pixel location in the texture (textel)
 		pbo[index].w = 0;
 		pbo[index].x = color.x;
@@ -171,14 +178,18 @@ struct is_black
 
 
 // Add the current iteration's output to the overall image
-__global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
+__global__ void finalGather(int nPaths, float iter, glm::vec3* image, PathSegment* iterationPaths)
 {
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.color;
+#if GATHER
+		image[iterationPath.pixelIndex] = glm::mix(image[iterationPath.pixelIndex],iterationPath.color,1.f/iter);
+#else
+		image[iterationPath.pixelIndex] = image[iterationPath.pixelIndex] + iterationPath.color;
+#endif
 	}
 }
 
@@ -234,14 +245,28 @@ void PathTracer::pathtraceInit(Scene* scene)
 
 	this->dev_trigs.malloc(scene->trigs.size(), "Malloc dev_trigs error");
 	cudaMemcpy(this->dev_trigs.get(), scene->trigs.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	initMeshTransform();
+	//get transformed triangles to CPU to build BVH tree, triangles will be reordered based on tree
+	std::vector<Triangle> tmp_trig(scene->trigs.size());
+	cudaMemcpy(tmp_trig.data(), this->dev_trigs.get(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyDeviceToHost);
+	BVHTreeBuilder builder;
+	auto bvh = builder.buildBVHTree(tmp_trig);
+	//sent ordered triangle back to GPU
+	cudaMemcpy(this->dev_trigs.get(), tmp_trig.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	this->dev_bvh.malloc(bvh.size(), "Malloc dev_bvh error");
+	cudaMemcpy(this->dev_bvh.get(), bvh.data(), bvh.size() * sizeof(LinearBVHNode), cudaMemcpyHostToDevice);
+	
+	//auto b = bvh[0].boundingBox;
+	//cout << b.maxBound.x << ", " << b.maxBound.y << ", " << b.maxBound.z << ", " << endl;
+	//cout << b.minBound.x << ", " << b.minBound.y << ", " << b.minBound.z << ", " << endl;
+	//cout << AABBIntersectionTest(glm::vec3(0, 2.5, -5), glm::vec3(0, 0, 1), b) << endl;
+
 
 	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
 	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
 	this->dev_intersect.malloc(pixelcount, "Malloc dev_intersect error");
 	cudaMemset(dev_intersect.get(), 0, pixelcount * sizeof(ShadeableIntersection));
-
-	initMeshTransform();
 
 	checkCUDAError("pathtraceInit");
 }
@@ -272,12 +297,12 @@ __global__ void computeIntersections(
 		
 		glm::vec3 bary; // for interpolation
 		glm::vec3 tmp_bary;
-		int hit_geom_index = -1;
-		Triangle hit_trig;
+		int hit_trig_index = -1;
+		//Triangle hit_trig;
 		// naive parse through global geoms
 		for (int i = 0; i < num_trigs; i++)
 		{
-			Triangle trig = in_trigs[i];
+			const Triangle& trig = in_trigs[i];
 
 			t = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary);
 			// Compute the minimum t from the intersection tests to determine what
@@ -285,25 +310,99 @@ __global__ void computeIntersections(
 			if (t > 0.0f && t_min > t)
 			{
 				t_min = t;
-				hit_geom_index = trig.meshId;
 				bary = tmp_bary;
-				hit_trig = trig;
+				hit_trig_index = i;
 			}
 		}
-		if (hit_geom_index == -1)
+		if (hit_trig_index == -1)
 		{
 			out_intersects[path_index].t = -1.0f;
 		}
 		else
 		{
 			//The ray hits something
+			const Triangle& trig = in_trigs[hit_trig_index];
 			out_intersects[path_index].t = t_min;
 			out_intersects[path_index].bary = bary;
-			out_intersects[path_index].materialId = in_meshs[hit_geom_index].materialId;
-			out_intersects[path_index].surfaceNormal = glm::normalize(hit_trig.v1.normal * bary.x + hit_trig.v2.normal * bary.y + hit_trig.v3.normal * bary.z);
+			out_intersects[path_index].materialId = in_meshs[trig.meshId].materialId;
+			out_intersects[path_index].surfaceNormal = glm::normalize(trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z);
 		}
 	}
 }
+
+__global__ void computeIntersections(
+	int depth
+	, int num_paths
+	, PathSegment* in_paths
+	, Triangle* in_trigs
+	, Mesh* in_meshs
+	, int num_trigs
+	, LinearBVHNode* in_bvh
+	, int num_bvh
+	, ShadeableIntersection* out_intersects
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths)
+	{
+		PathSegment seg = in_paths[path_index];
+
+		float t;
+		float t_min = FLT_MAX;
+
+		glm::vec3 bary; // for interpolation
+		glm::vec3 tmp_bary;
+		int hit_trig_index = -1;
+		//Triangle hit_trig;
+		int needToVisit[33];
+		int stackTop = 0;
+		needToVisit[0] = 0;
+		while (stackTop >= 0 && stackTop < 33) {
+			int idxToVis = needToVisit[stackTop--];
+			LinearBVHNode node = in_bvh[idxToVis];
+			t = AABBIntersectionTest(seg.ray.origin, seg.ray.direction, node.boundingBox);
+			//if (t > 0.f && t_min > t) { won't work, don't know why yet
+			if (t > 0.f) {
+				if (node.primNum == 0) {
+					//first child
+					needToVisit[++stackTop] = idxToVis + 1;
+					//second child
+					if (node.secondChildOffset != -1) {
+						needToVisit[++stackTop] = idxToVis + node.secondChildOffset;
+					}
+				}else if (t_min > t) { //every thing in bounding box will have larger t
+					for (int i = 0;i < node.primNum;++i) {
+						const Triangle& trig = in_trigs[node.firstPrimId + i];
+						t = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary);
+						if (t > 0.0f && t_min > t)
+						{
+							t_min = t;
+							bary = tmp_bary;
+							hit_trig_index = node.firstPrimId + i;
+						}
+					}
+				}
+				
+			}
+		}
+		if (hit_trig_index == -1)
+		{
+			out_intersects[path_index].t = -1.0f;
+		}
+		else
+		{
+			//The ray hits something
+			const Triangle& trig = in_trigs[hit_trig_index];
+			out_intersects[path_index].t = t_min;
+			out_intersects[path_index].bary = bary;
+			out_intersects[path_index].materialId = in_meshs[trig.meshId].materialId;
+			out_intersects[path_index].surfaceNormal = glm::normalize(trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z);
+		}
+	}
+}
+
+
 
 __global__ void processPBR(
 	int iter, int depth
@@ -371,12 +470,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	const int traceDepth = 1;
 #else
 	const int traceDepth = hst_scene->state.traceDepth;
-#endif // DEBUG
+#endif
 
-	
-
-
-	//int traceDepth = 1;
 	const Camera& cam = hst_scene->state.camera;
 
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -428,6 +523,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	Material* dev_materials = this->dev_mat.get();
 	GuiDataContainer* guiData = this->m_guiData;
 	glm::vec3* dev_image = this->dev_img.get();
+	LinearBVHNode* dev_bvh = this->dev_bvh.get();
+	int num_bvh = this->dev_bvh.size();
 	
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
@@ -448,6 +545,29 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+#if BVH
+		//int depth
+		//	, int num_paths
+		//	, PathSegment* in_paths
+		//	, Triangle* in_trigs
+		//	, Mesh* in_meshs
+		//	, int num_trigs
+		//	, LinearBVHNode* in_bvh
+		//	, int num_bvh
+		//	, ShadeableIntersection* out_intersects
+		//	)
+		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+			depth
+			, num_paths
+			, dev_paths
+			, dev_trigs
+			, dev_meshs
+			, num_trigs
+			, dev_bvh
+			, num_bvh
+			, dev_intersections
+			);
+#else
 		//int depth
 		//	, int num_paths
 		//	, PathSegment* in_paths
@@ -464,7 +584,11 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, num_trigs
 			, dev_intersections
 			);
+#endif
 		checkCUDAError("trace one bounce");
+
+
+
 		cudaDeviceSynchronize();
 		
 		//TODO:
@@ -503,12 +627,12 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, iter, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
+	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, dev_image, iter);
 
 	// Retrieve image from GPU
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,
