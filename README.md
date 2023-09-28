@@ -25,6 +25,7 @@ project, and we will not be able to grade you without a good README.
             ![with_parenting](img/scene_with_parenting.png)
 
 - [ ] Core
+    - [x] G Buffer
     - [ ] Russian Roulette
 
 - [ ] More BSDF
@@ -35,10 +36,17 @@ project, and we will not be able to grade you without a good README.
     - [ ] Microfacet
 
 - [ ] BVH
-    - [x] BoundingBox Array
-    - [x] Construct BVH
-    - [x] Traverse BVH
+    - [x] Basic BVH
+        - [x] BoundingBox Array
+        - [x] Construct BVH
+        - [x] Traverse BVH
     - [ ] Better Heuristics
+        - [x] SAH 
+
+- [ ] Texture
+    - [ ] Naive texture sampling
+        - [ ] A Resource Mananger to help get the handle to texture?
+    - [ ] Deal with antialiasing
 
 - [ ] Better sampler
     - [ ] Encapsulate a sampler class
@@ -79,3 +87,12 @@ Scene with 1k faces
         ![Alt text](img/multiple_bounces_without_bvh.png)
     - With BVH: FPS 22.8
         ![Alt text](img/multiple_bounces_with_bvh.png)
+
+
+09.28
+
+- [x] SAH BVH(probably done...)
+
+- [ ] More BSDFs
+
+- [ ] 
