@@ -34,10 +34,17 @@ Scene::Scene(string filename) {
             }
         }
     }
-
-    for (const auto& geom : geoms) {
-        cout << "Type: " << geom.type << ", Material ID: " << geom.materialid << endl;
-    }
+    
+    /*for (const auto& geom : geoms) {
+        if (geom.type == TRIANGLE) {
+            printf("V0: (%f, %f, %f)\n", geom.triangle.v0[0], geom.triangle.v0[1], geom.triangle.v0[2]);
+            printf("V1: (%f, %f, %f)\n", geom.triangle.v1[0], geom.triangle.v1[1], geom.triangle.v1[2]);
+            printf("V2: (%f, %f, %f)\n", geom.triangle.v2[0], geom.triangle.v2[1], geom.triangle.v2[2]);
+            printf("\n");
+        }
+    }*/
+    printf("Number of Geoms: %d\n", geoms.size());
+    printf("\n");
 }
 
 int Scene::loadGeom(string objectid) {
@@ -312,4 +319,156 @@ void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMater
     }
 
     cout << "Loaded Obj Material!" << endl;
+}
+
+int Scene::getLongestAxis(const glm::vec3& minBounds, const glm::vec3& maxBounds) {
+    glm::vec3 diff = maxBounds - minBounds;
+
+    if (diff.x > diff.y && diff.x > diff.z) {
+        return 0;
+    }
+    else if (diff.y > diff.z) {
+        return 1;
+    }
+    else {
+        return 2;
+    }
+}
+
+float Scene::computeBoxSurfaceArea(const glm::vec3& min, const glm::vec3& max) {
+    glm::vec3 diff = max - min;
+    return 2.0f * (diff.x * diff.y + diff.x * diff.z + diff.y * diff.z);
+}
+
+int Scene::getBestSplit(std::vector<Geom> geoms, int start, int end) {
+    // for prefix sums
+    std::vector<glm::vec3> leftMins(end - start, glm::vec3(FLT_MAX));
+    std::vector<glm::vec3> leftMaxs(end - start, glm::vec3(-FLT_MAX));
+    std::vector<glm::vec3> rightMins(end - start, glm::vec3(FLT_MAX));
+    std::vector<glm::vec3> rightMaxs(end - start, glm::vec3(-FLT_MAX));
+
+    // Compute prefix sums for left splits
+    for (int i = start; i < end - 1; i++) {
+        glm::vec3 geomMin, geomMax;
+        geoms[i].getBounds(geomMin, geomMax);
+        if (i > start) {
+            leftMins[i - start] = glm::min(leftMins[i - start - 1], geomMin);
+            leftMaxs[i - start] = glm::max(leftMaxs[i - start - 1], geomMax);
+        }
+        else {
+            leftMins[i - start] = geomMin;
+            leftMaxs[i - start] = geomMax;
+        }
+    }
+
+    // Compute prefix sums for right splits
+    for (int i = end - 1; i > start; i--) {
+        glm::vec3 geomMin, geomMax;
+        geoms[i].getBounds(geomMin, geomMax);
+        if (i < end - 1) {
+            rightMins[i - start] = glm::min(rightMins[i - start + 1], geomMin);
+            rightMaxs[i - start] = glm::max(rightMaxs[i - start + 1], geomMax);
+        }
+        else {
+            rightMins[i - start] = geomMin;
+            rightMaxs[i - start] = geomMax;
+        }
+    }
+
+    float bestCost = FLT_MAX;
+    int bestSplit = -1;
+
+    for (int i = start; i < end - 1; i++) {
+        float leftArea = computeBoxSurfaceArea(leftMins[i - start], leftMaxs[i - start]);
+        float rightArea = computeBoxSurfaceArea(rightMins[i - start + 1], rightMaxs[i - start + 1]);
+        float cost = leftArea * (i - start + 1) + rightArea * (end - i - 1);
+        if (cost < bestCost) {
+            bestCost = cost;
+            bestSplit = i;
+        }
+    }
+
+    return bestSplit;
+
+}
+
+BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end) {
+    BVHNode* node = new BVHNode();
+
+    // compute bounding box for all geoms from start to end
+    glm::vec3 minBounds(FLT_MAX);
+    glm::vec3 maxBounds(FLT_MIN);
+
+    // printf("Start: %d; End: %d: \n", start, end);
+    for (unsigned int i = start; i < end; ++i) {
+        glm::vec3 geomMin, geomMax;
+        geoms[i].getBounds(geomMin, geomMax);
+
+        /*printf("Geom Type: %d\n", geoms[i].type);
+        printf("Min Bounds: (%f, %f, %f)\n", geomMin[0], geomMin[1], geomMin[2]);
+        printf("Max Bounds: (%f, %f, %f)\n", geomMax[0], geomMax[1], geomMax[2]);
+        printf("\n");*/
+
+        minBounds = glm::min(minBounds, geomMin);
+        maxBounds = glm::max(maxBounds, geomMax);
+    }
+
+    node->minBounds = minBounds;
+    node->maxBounds = maxBounds;
+
+
+    if (end - start <= 1) {
+        // leaf node
+        node->isLeafNode = true;
+        node->geomIndex = start;
+        return node;
+    }
+
+    // choose the longest axis to split
+    int axis = getLongestAxis(minBounds, maxBounds);
+
+    // sort geoms by their centroids along the chosen axis
+    std::sort(geoms.begin() + start, geoms.begin() + end, [axis](const Geom& a, const Geom& b) {
+        glm::vec3 aMin, aMax, bMin, bMax;
+        a.getBounds(aMin, aMax);
+        b.getBounds(bMin, bMax);
+
+        return 0.5f * (aMin[axis] + aMax[axis]) < 0.5f * (bMin[axis] + bMax[axis]);
+        });
+
+    // compute the best split with SAH cost
+    int bestSplit = getBestSplit(geoms, start, end);
+    // Recursively construct child nodes
+    if (bestSplit == -1) {
+        node->isLeafNode = true;
+        node->geomIndex = start;
+    }
+    else {
+        node->left = constructBVH(geoms, start, bestSplit + 1);
+        node->right = constructBVH(geoms, bestSplit + 1, end);
+    }
+
+    return node;
+}
+
+int Scene::flattenBVHTree(BVHNode* node, int& offset) {
+    CompactBVH compactNode;
+    compactNode.minBounds = node->minBounds;
+    compactNode.maxBounds = node->maxBounds;
+   
+    int currOffset = offset;
+    offset++;
+
+    if (node->isLeafNode) {
+        compactNode.geomCount = 1;
+        compactNode.geomIndex = node->geomIndex;
+    }
+    else {
+        compactNode.geomCount = 0;
+        flattenBVHTree(node->left, offset);
+        compactNode.rightChildOffset = flattenBVHTree(node->right, offset);
+    }
+
+    bvh.push_back(compactNode);
+    return currOffset;
 }

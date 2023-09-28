@@ -26,7 +26,7 @@
 #define CACHE_FIRST_BOUNCE 1
 #define SORT_RAY_BY_MATERIAL 1
 
-#define USE_SHARED_MEMORY 0
+#define USE_BVH 1
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #if ERRORCHECK
@@ -108,6 +108,11 @@ static PathSegment* dev_cache_paths = NULL;
 static ShadeableIntersection* dev_first_bounce_intersections = NULL;
 static int* dev_stencil = NULL;
 
+// for bvh 
+#if USE_BVH 1
+static CompactBVH* dev_bvh = NULL;
+#endif
+
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
@@ -138,8 +143,24 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_stencil, pixelcount * sizeof(int));
 
-	
+#if USE_BVH
+	cout << "Constructing BVH..." << endl;
+	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size());
+	int offset = 0;
+	scene->flattenBVHTree(scene->root, offset);
+	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
 
+	/*for (const auto& node : scene->bvh) {
+		printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
+		printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
+		printf("Geom count: %d\n", node.geomCount);
+		cout << "" << endl;
+	}*/
+
+	cudaMalloc(&dev_bvh, scene->bvh.size() * sizeof(CompactBVH));
+	cudaMemcpy(dev_bvh, scene->bvh.data(), scene->bvh.size() * sizeof(CompactBVH), cudaMemcpyHostToDevice);
+#endif 
+		
 	checkCUDAError("pathtraceInit");
 }
 
@@ -307,7 +328,7 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
-__global__ void shadeBDFSMaterial(
+__global__ void shadeBSDFMaterial(
 	int iter, int num_paths, ShadeableIntersection* shadeableIntersections,
 	PathSegment* pathSegments, Material* materials){
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -337,58 +358,6 @@ __global__ void shadeBDFSMaterial(
 			pathSegments[idx].color = glm::vec3(0.0f);
 			pathSegments[idx].remainingBounces = 0;
 		}
-	}
-}
-
-
-// applying shared memory
-__global__ void shadeBDFSMaterialShared(
-	int iter, int num_paths, ShadeableIntersection* shadeableIntersections,
-	PathSegment* pathSegments, Material* materials) {
-
-	int thid = threadIdx.x;
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-	extern __shared__ char sharedMemory[];
-	ShadeableIntersection* sharedIntersection = (ShadeableIntersection*)sharedMemory;
-	PathSegment* sharedPathSegments = (PathSegment*)sharedMemory;
-
-	// load data into shared memory
-	if (idx < num_paths) {
-		sharedIntersection[thid] = shadeableIntersections[idx];
-		sharedPathSegments[thid] = pathSegments[idx];
-	}
-
-	__syncthreads();
-
-	if (idx < num_paths) {
-		ShadeableIntersection intersection = sharedIntersection[thid];
-
-		if (intersection.t > 0.0f) { // if the intersection exists...
-			// Set up the RNG
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-
-			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
-
-			// If the material indicates that the object was a light, "light" the ray
-			if (material.emittance > 0.0f) {
-				sharedPathSegments[thid].color *= (materialColor * material.emittance);
-				sharedPathSegments[thid].remainingBounces = 0;
-			}
-			else {
-				glm::vec3 intersectPoint = getPointOnRay(sharedPathSegments[thid].ray, intersection.t);
-				scatterRay(sharedPathSegments[thid], intersectPoint, intersection.surfaceNormal,
-					material, rng);
-			}
-		}
-		else {
-			sharedPathSegments[thid].color = glm::vec3(0.0f);
-			sharedPathSegments[thid].remainingBounces = 0;
-		}
-
-		// store results back to global memory
-		pathSegments[idx] = sharedPathSegments[thid];
 	}
 }
 
@@ -489,13 +458,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, materialSort());
 #endif 
 
-#if USE_SHARED_MEMORY
-		shadeBDFSMaterialShared << <numblocksPathSegmentTracing, blockSize1d, blockSize1d >> > (
+		// shade
+		shadeBSDFMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter, num_paths, dev_intersections, dev_paths, dev_materials);
-#else
-		shadeBDFSMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
-			iter, num_paths, dev_intersections, dev_paths, dev_materials);
-#endif
 		checkCUDAError("shade BDFS material failed!");
 
 		computeStencil << <numblocksPathSegmentTracing, blockSize1d >> > (num_paths, dev_paths, dev_stencil);

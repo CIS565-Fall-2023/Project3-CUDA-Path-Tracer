@@ -32,6 +32,42 @@ struct Geom {
         glm::vec3 v1;
         glm::vec3 v2;
     } triangle;
+
+    void Geom::getBounds(glm::vec3& minBounds, glm::vec3& maxBounds) const {
+        switch (type) {
+            case TRIANGLE:
+                minBounds = glm::min(triangle.v0, glm::min(triangle.v1, triangle.v2));
+                maxBounds = glm::max(triangle.v0, glm::max(triangle.v1, triangle.v2));
+                break;
+
+            default:
+                minBounds = glm::vec3(0);
+                maxBounds = glm::vec3(0);
+                break;
+            }
+    }
+};
+
+struct BVHNode {
+    glm::vec3 minBounds; // minimun bounding box corner
+    glm::vec3 maxBounds; // maximun bounding box corner
+    BVHNode* left;       // left child 
+    BVHNode* right;      // right child
+    int geomIndex;       // index of the geom for leaf node
+    bool isLeafNode;     // flag for leaf node 
+    
+    BVHNode() :
+        left(nullptr), right(nullptr), geomIndex(-1), isLeafNode(false) {}
+};
+
+struct CompactBVH {
+    glm::vec3 minBounds;
+    glm::vec3 maxBounds;
+    union {
+        int geomIndex;        // offset to the geometry for leaf nodes;
+        int rightChildOffset; // offset to the right child 
+    };
+    uint16_t geomCount;       // number of geometries for leaf node
 };
 
 struct Material {

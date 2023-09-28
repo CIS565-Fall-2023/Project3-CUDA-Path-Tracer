@@ -22,6 +22,12 @@ private:
     void loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials);
 
     char* filename;
+    
+
+    int getLongestAxis(const glm::vec3& minBounds, const glm::vec3& maxBounds);
+    float computeBoxSurfaceArea(const glm::vec3& min, const glm::vec3& max);
+    int getBestSplit(std::vector<Geom> geoms, int start, int end);
+    
 
 public:
     Scene(string filename);
@@ -30,4 +36,10 @@ public:
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     RenderState state;
+
+    BVHNode* root;
+    std::vector<CompactBVH> bvh;
+
+    BVHNode* constructBVH(std::vector<Geom> geoms, int start, int end);
+    int flattenBVHTree(BVHNode* node, int& offset);
 };
