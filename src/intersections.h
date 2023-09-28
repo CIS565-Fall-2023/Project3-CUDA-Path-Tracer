@@ -179,3 +179,41 @@ __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
 
     return -1;  // No intersection
 }
+
+__host__ __device__ void swap(float& a, float& b) {
+    float temp = a;
+    a = b;
+    b = temp;
+}
+
+__host__ __device__ bool intersectBVHNode(const Ray& ray, const CompactBVH& node) {
+    float txmin = (node.minBounds.x - ray.origin.x) / ray.direction.x;
+    float txmax = (node.maxBounds.x - ray.origin.x) / ray.direction.x;
+
+    if (txmin > txmax) swap(txmin, txmax);
+
+    float tymin = (node.minBounds.y - ray.origin.y) / ray.direction.y;
+    float tymax = (node.maxBounds.y - ray.origin.y) / ray.direction.y;
+
+    if (tymin > tymax) swap(tymin, tymax);
+
+    if ((txmin > tymax) || (tymin > txmax))
+        return false;
+
+    if (tymin > txmin)
+        txmin = tymin;
+
+    if (tymax < txmax)
+        txmax = tymax;
+
+    float tzmin = (node.minBounds.z - ray.origin.z) / ray.direction.z;
+    float tzmax = (node.maxBounds.z - ray.origin.z) / ray.direction.z;
+
+    if (tzmin > tzmax) swap(tzmin, tzmax);
+
+    if ((txmin > tzmax) || (tzmin > txmax))
+        return false;
+
+    return true;
+}
+

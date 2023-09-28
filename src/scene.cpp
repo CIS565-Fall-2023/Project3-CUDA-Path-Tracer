@@ -451,24 +451,30 @@ BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end) {
     return node;
 }
 
-int Scene::flattenBVHTree(BVHNode* node, int& offset) {
+int Scene::flattenBVHTree(BVHNode* node) {
+    if (!node) return 0;
+
     CompactBVH compactNode;
     compactNode.minBounds = node->minBounds;
     compactNode.maxBounds = node->maxBounds;
-   
-    int currOffset = offset;
-    offset++;
-
-    if (node->isLeafNode) {
-        compactNode.geomCount = 1;
-        compactNode.geomIndex = node->geomIndex;
-    }
-    else {
-        compactNode.geomCount = 0;
-        flattenBVHTree(node->left, offset);
-        compactNode.rightChildOffset = flattenBVHTree(node->right, offset);
-    }
+    compactNode.geomCount = 0;
+    compactNode.rightChildOffset = 0;
 
     bvh.push_back(compactNode);
-    return currOffset;
+    CompactBVH& storedNode = bvh.back();
+
+    if (node->isLeafNode) {
+        storedNode.geomCount = 1;
+        storedNode.geomIndex = node->geomIndex;
+    }
+    else {
+        int leftSize = flattenBVHTree(node->left);
+        compactNode.rightChildOffset = leftSize + 1; 
+        int rightSize = flattenBVHTree(node->right);
+    }
+
+    // Total size of the flattened subtree
+    printf("Total Size: %d\n", compactNode.rightChildOffset + compactNode.rightChildOffset);
+    return 1 + (node->left ? compactNode.rightChildOffset + (node->right ? compactNode.rightChildOffset : 0) : 0);  
 }
+

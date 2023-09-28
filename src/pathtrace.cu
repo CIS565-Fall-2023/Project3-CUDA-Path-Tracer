@@ -147,15 +147,35 @@ void pathtraceInit(Scene* scene) {
 	cout << "Constructing BVH..." << endl;
 	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size());
 	int offset = 0;
-	scene->flattenBVHTree(scene->root, offset);
+	scene->flattenBVHTree(scene->root);
 	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
 
-	/*for (const auto& node : scene->bvh) {
+	for (const auto& node : scene->bvh) {
 		printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
 		printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
-		printf("Geom count: %d\n", node.geomCount);
+		// printf("Geom count: %d\n", node.geomCount);
+		if (node.geomCount == 1) {
+			printf("Geom Index: %d\n", node.geomIndex);
+		}
+		else {
+			printf("Right Child Index: %d\n", node.rightChildOffset);
+		}
 		cout << "" << endl;
-	}*/
+	}
+
+	/*auto root = scene->root;
+	printf("Root\n");
+	printf("Min Bounds: (%f, %f, %f)\n", root->minBounds[0], root->minBounds[1], root->minBounds[2]);
+	printf("Max Bounds: (%f, %f, %f)\n", root->maxBounds[0], root->maxBounds[1], root->maxBounds[2]);
+	printf("Geom count: %d\n", root->isLeafNode);
+	cout << "" << endl;
+
+	auto node = scene->bvh[0];
+	printf("Flatten\n");
+	printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
+	printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
+	printf("Geom count: %d\n", node.geomCount);
+	cout << "" << endl;*/
 
 	cudaMalloc(&dev_bvh, scene->bvh.size() * sizeof(CompactBVH));
 	cudaMemcpy(dev_bvh, scene->bvh.data(), scene->bvh.size() * sizeof(CompactBVH), cudaMemcpyHostToDevice);
@@ -288,6 +308,93 @@ __global__ void computeIntersections(
 	}
 }
 
+__global__ void computeIntersectionsBVH(
+	int depth, int num_paths, PathSegment* pathSegments, Geom* geoms, 
+	int geoms_size, ShadeableIntersection* intersections, CompactBVH* bvh, int bvh_size) {
+
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths) {
+
+		PathSegment pathSegment = pathSegments[path_index];
+
+		float t;
+		glm::vec3 intersect_point;
+		glm::vec3 normal;
+		float t_min = FLT_MAX;
+		int hit_geom_index = -1;
+		bool outside = true;
+
+		glm::vec3 tmp_intersect;
+		glm::vec3 tmp_normal;
+
+		// BVH traversal
+		int stack[64];
+		int stack_ptr = 0;
+		stack[stack_ptr++] = 0;
+
+		// bfs
+		while (stack_ptr > 0) {
+			int node_index = stack[--stack_ptr];
+
+			if (node_index < bvh_size) {
+				auto boundingVol = bvh[node_index];
+
+				if (intersectBVHNode(pathSegment.ray, boundingVol)) {
+					if (boundingVol.geomCount > 0) {   // hit the leaf node
+						Geom& geom = geoms[boundingVol.geomIndex];
+
+						if (geom.type == CUBE)
+						{
+							t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+						}
+						else if (geom.type == SPHERE)
+						{
+							t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+						}
+						else if (geom.type == TRIANGLE) {
+							t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+						}
+
+						// Compute the minimum t from the intersection tests to determine what
+						// scene geometry object was hit first.
+						if (t > 0.0f && t_min > t)
+						{
+							t_min = t;
+							hit_geom_index = boundingVol.geomIndex;
+							intersect_point = tmp_intersect;
+							normal = tmp_normal;
+						}
+					}	
+					else {
+						// internal node, append children
+						if (pathSegment.ray.direction.x < 0.0f) {
+							stack[stack_ptr++] = boundingVol.rightChildOffset;
+							stack[stack_ptr++] = node_index + 1;
+						}
+						else {
+							stack[stack_ptr++] = node_index + 1;
+							stack[stack_ptr++] = boundingVol.rightChildOffset;
+						}
+					}
+				}
+			}
+		}
+
+		if (hit_geom_index == -1)
+		{
+			intersections[path_index].t = -1.0f;
+		}
+		else
+		{
+			//The ray hits something
+			intersections[path_index].t = t_min;
+			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+			intersections[path_index].surfaceNormal = normal;
+		}
+	}
+}
+
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -387,7 +494,7 @@ __global__ void computeStencil(int num_paths, PathSegment* paths, int* stencil) 
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
-	// er printf("Iter: %d\n", iter);
+	printf("Iter: %d\n", iter);
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -419,13 +526,22 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete) {
 		// clean shading chunks
-		cudaMemset(dev_intersections, 0, num_paths * sizeof(ShadeableIntersection));
+		// cudaMemset(dev_intersections, 0, num_paths * sizeof(ShadeableIntersection));
 
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 		if (CACHE_FIRST_BOUNCE && depth == 0) {
 			if (iter == 1) {
+#if USE_BVH
+				computeIntersectionsBVH << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections,
+					dev_bvh, hst_scene->bvh.size());
+				checkCUDAError("BVH computer intersection failed!");
+#else
 				computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 					depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections);
+				checkCUDAError("computer intersection failed!");
+
+#endif
 				// cache the first bounce
 				cudaMemcpy(dev_first_bounce_intersections, dev_intersections,
 					pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
@@ -437,8 +553,16 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			}
 		}
 		else {
+#if USE_BVH
+			computeIntersectionsBVH << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections,
+				dev_bvh, hst_scene->bvh.size());
+			checkCUDAError("BVH computer intersection failed!");
+#else
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections);
+			checkCUDAError("computer intersection failed!");
+#endif
 		}
 
 		cudaDeviceSynchronize();

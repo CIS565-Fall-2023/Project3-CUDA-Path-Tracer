@@ -34,18 +34,51 @@ struct Geom {
     } triangle;
 
     void Geom::getBounds(glm::vec3& minBounds, glm::vec3& maxBounds) const {
-        switch (type) {
-            case TRIANGLE:
-                minBounds = glm::min(triangle.v0, glm::min(triangle.v1, triangle.v2));
-                maxBounds = glm::max(triangle.v0, glm::max(triangle.v1, triangle.v2));
-                break;
+        glm::vec3 objectSpaceMin;
+        glm::vec3 objectSpaceMax;
 
-            default:
-                minBounds = glm::vec3(0);
-                maxBounds = glm::vec3(0);
-                break;
-            }
+        // Get the object-space bounding box
+        switch (type) {
+        case TRIANGLE:
+            objectSpaceMin = glm::min(triangle.v0, glm::min(triangle.v1, triangle.v2));
+            objectSpaceMax = glm::max(triangle.v0, glm::max(triangle.v1, triangle.v2));
+            break;
+        case SPHERE:
+            objectSpaceMin = glm::vec3(-scale.x);
+            objectSpaceMax = glm::vec3(scale.x);
+            break;
+        case CUBE:
+            objectSpaceMin = -0.5f * scale;
+            objectSpaceMax = 0.5f * scale;
+            break;
+        default:
+            objectSpaceMin = glm::vec3(0);
+            objectSpaceMax = glm::vec3(0);
+            break;
+        }
+
+        // Transform object-space bounding box corners to world space
+        glm::vec3 corners[8] = {
+            objectSpaceMin,
+            glm::vec3(objectSpaceMax.x, objectSpaceMin.y, objectSpaceMin.z),
+            glm::vec3(objectSpaceMin.x, objectSpaceMax.y, objectSpaceMin.z),
+            glm::vec3(objectSpaceMin.x, objectSpaceMin.y, objectSpaceMax.z),
+            glm::vec3(objectSpaceMax.x, objectSpaceMax.y, objectSpaceMin.z),
+            glm::vec3(objectSpaceMax.x, objectSpaceMin.y, objectSpaceMax.z),
+            glm::vec3(objectSpaceMin.x, objectSpaceMax.y, objectSpaceMax.z),
+            objectSpaceMax
+        };
+
+        minBounds = glm::vec3(FLT_MAX);
+        maxBounds = glm::vec3(-FLT_MAX);
+
+        for (int i = 0; i < 8; i++) {
+            glm::vec3 worldCorner = glm::vec3(transform * glm::vec4(corners[i], 1.0f));
+            minBounds = glm::min(minBounds, worldCorner);
+            maxBounds = glm::max(maxBounds, worldCorner);
+        }
     }
+
 };
 
 struct BVHNode {

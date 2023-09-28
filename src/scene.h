@@ -41,5 +41,5 @@ public:
     std::vector<CompactBVH> bvh;
 
     BVHNode* constructBVH(std::vector<Geom> geoms, int start, int end);
-    int flattenBVHTree(BVHNode* node, int& offset);
+    int flattenBVHTree(BVHNode* node);
 };
