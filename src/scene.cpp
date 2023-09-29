@@ -62,11 +62,7 @@ int Scene::loadGeom(string objectid) {
 				cout << "Creating new mesh..." << endl;
 				newGeom.type = MESH;
 				utilityCore::safeGetline(fp_in, line);
-
-				if (loadGLTF(line, triangleList))
-				{
-					Geom geom;
-				}
+                loadGLTF(line, triangleList);
 
                 isMesh = true;
 			}
