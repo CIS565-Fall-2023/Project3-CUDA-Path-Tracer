@@ -20,8 +20,9 @@
 #define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 0
 
-#define NAIVE 1
-#define DIRECT_MIS 0
+#define NAIVE 0
+#define DIRECT_MIS 1
+#define FULL 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -402,30 +403,47 @@ __global__ void shadeDirectMIS(
 				glm::vec3 wiW;
 				float lightPdf = 0.0f, scatterPdf = 0.0f;
 				bool specular = false;
-				LightType chosenLightType;
+				Light chosenLight;
 				glm::vec3 lightColor = sampleLight(point, intersection.surfaceNormal, 
-					wiW, chosenLightType, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
+					wiW, chosenLight, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
 
-				glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent,
-					material, cur.ray.direction, wiW, scatterPdf, specular, rng);
-				f *= abs(dot(wiW, intersection.surfaceNormal));
+				if (length(lightColor) > 0.0f) {
+					glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent,
+						material, cur.ray.direction, wiW, scatterPdf, specular, rng);
+					f *= abs(dot(wiW, intersection.surfaceNormal));
 
-				Ld = (f * lightColor) / lightPdf;
+					if (specular) {
+						f = glm::vec3(0.0f); // specular not considered in direct lighting
+					}
 
-				//if (lightPdf > 0.0f) {
-				//	if (length(f) > 0.0f) {
-				//		Ld += (f * lightColor * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf;
-				//	} else {
-				//		Ld += (f * lightColor) / lightPdf;
-				//	}
-				//}
+					if (lightPdf > 0.0f && length(f) > 0.0f) {
+						Ld += chosenLight.lightType == LightType::AREA ? 
+							(f * lightColor * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf :
+							f * lightColor / lightPdf;
+					}
+				}
 
-				//// sample BSDF
-				//if (chosenLightType == LightType::AREA) {
-				//	if (scatterPdf > 0.0f && !specular) {
-				//		Ld += f * lightColor * powerHeuristic(1, scatterPdf, 1, lightPdf) / scatterPdf;
-				//	}
-				//}
+				// sample BSDF
+				if (chosenLight.lightType == LightType::AREA) {
+					glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent,
+						material, cur.ray.direction, wiW, scatterPdf, specular, rng);
+					f *= abs(dot(wiW, intersection.surfaceNormal));
+
+					float weight = specular ? 1.0f : powerHeuristic(1, scatterPdf, 1, lightPdf);
+
+					if (scatterPdf > 0.0f && length(f) > 0.0f) {
+						// check visibility
+						Ray shadowRay;
+						shadowRay.origin = point;
+						shadowRay.direction = wiW;
+						ShadeableIntersection shadowIntersection;
+						computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
+
+						if (shadowIntersection.t > 0.0f && shadowIntersection.materialId == chosenLight.geom.materialid) {
+							Ld += f * lightColor * weight / scatterPdf;
+						}
+					}
+				}
 
 				cur.color = Ld;
 				cur.remainingBounces = 0; // terminate path

@@ -40,6 +40,8 @@ int Scene::loadGeom(string objectid) {
     } else {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
+        newGeom.geomId = id;
+
         string line;
 
         LightType lightType = LightType::NONE;

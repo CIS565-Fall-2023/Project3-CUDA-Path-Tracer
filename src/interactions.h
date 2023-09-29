@@ -53,6 +53,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray
         //The ray hits something
         intersection.t = t_min;
         intersection.materialId = geoms[hit_geom_index].materialid;
+        intersection.geomId = hit_geom_index;
         intersection.surfaceNormal = normal;
         intersection.surfaceTangent = tangent;
     }
@@ -315,7 +316,7 @@ __host__ __device__ glm::vec3 sampleAreaLight(const Light& light, glm::vec3& vie
             glm::vec3 dis = glm::vec3(light_point_W) - view_point;
             float r = length(dis);
             float costheta = abs(dot(-normalize(dis), light_nor_W));
-            pdf = r * r / (costheta * light.geom.scale.x * light.geom.scale.z);
+            pdf = r * r / (costheta * light.geom.scale.x * light.geom.scale.z * (float)num_lights);
 
             // Set ¦Øi to the normalized vector from the reference point
             // to the generated light source point
@@ -330,8 +331,8 @@ __host__ __device__ glm::vec3 sampleAreaLight(const Light& light, glm::vec3& vie
 
             computeRayIntersection(geoms, geom_size, shadowRay, intersection);
 
-            if (intersection.t >= 0.0f) {
-                return materials[intersection.materialId].color * materials[intersection.materialId].emittance / (float)num_lights;
+            if (intersection.t >= 0.0f && intersection.geomId == light.geom.geomId) {
+                return materials[intersection.materialId].color * materials[intersection.materialId].emittance;
             }
     }
 
@@ -342,7 +343,7 @@ __host__ __device__ glm::vec3 sampleLight(
     glm::vec3 intersect,
     glm::vec3 normal,
     glm::vec3& wi,
-    LightType& chosenLightType,
+    Light& chosenLight,
     thrust::default_random_engine& rng,
     float& lightPDF,
     Geom* geoms,
@@ -354,14 +355,13 @@ __host__ __device__ glm::vec3 sampleLight(
     thrust::uniform_real_distribution<float> u01(0, 1);
     int chosenLightIndex = (int)(u01(rng) * num_lights);
 
-    Light light = lights[chosenLightIndex];
-    chosenLightType = light.lightType;
+    chosenLight = lights[chosenLightIndex];
 
-    switch (chosenLightType)
+    switch (chosenLight.lightType)
     {
         case LightType::AREA:
 		{
-			return sampleAreaLight(light, intersect, normal, num_lights, wi, lightPDF, geoms, num_geoms, materials, rng);
+			return sampleAreaLight(chosenLight, intersect, normal, num_lights, wi, lightPDF, geoms, num_geoms, materials, rng);
 		}
         
     }
