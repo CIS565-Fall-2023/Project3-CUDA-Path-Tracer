@@ -10,11 +10,18 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    MESH
 };
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+};
+
+struct Triangle {
+    glm::vec3 v0;
+	glm::vec3 v1;
+	glm::vec3 v2;
 };
 
 struct Geom {
@@ -26,6 +33,7 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+    Triangle triangle;
 };
 
 enum class MaterialType : uint8_t
@@ -33,7 +41,8 @@ enum class MaterialType : uint8_t
     Emissive,
     Diffuse,
     Metal,
-    Glass
+    Glass,
+    Image
 };
 
 struct Material {
@@ -47,6 +56,7 @@ struct Material {
     float indexOfRefraction;
     float emittance;
     MaterialType type;
+    cudaTextureObject_t albedo = 0;
 };
 
 struct Camera {
@@ -73,6 +83,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    int refractionCount = 0;
 };
 
 // Use with a corresponding PathSegment to do:
@@ -84,4 +95,26 @@ struct ShadeableIntersection {
   int materialId;
   bool frontFace;
   glm::vec3 point;
+  float u;
+  float v;
 };
+
+struct SortIntersection
+{
+	__host__ __device__
+		bool operator()(const ShadeableIntersection& a, const ShadeableIntersection& b)
+	{
+		return a.materialId < b.materialId;
+	}
+};
+
+struct returnRemainBounce
+{
+    __host__ __device__
+        bool operator()(const PathSegment& a)
+    {
+        return a.remainingBounces > 0;
+    }
+};
+
+

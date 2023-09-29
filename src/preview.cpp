@@ -237,6 +237,8 @@ void mainLoop() {
 		
 		glfwPollEvents();
 
+		//processInput(window);
+
 		runCuda();
 
 		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";

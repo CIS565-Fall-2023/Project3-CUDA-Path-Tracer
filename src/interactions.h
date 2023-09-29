@@ -79,6 +79,7 @@ __host__ __device__ bool refract(const glm::vec3& v, const glm::vec3& n, float n
 __host__ __device__ glm::vec3 refract(const glm::vec3& uv, const glm::vec3& n, float etai_over_etat) 
 {
 	auto cos_theta = std::fminf(glm::dot(-uv, n), 1.0f);
+
     glm::vec3 r_out_perp = etai_over_etat * (uv + cos_theta * n);
     glm::vec3 r_out_parallel = -std::sqrtf(fabs(1.0 - glm::dot(r_out_perp, r_out_perp))) * n;
 	return r_out_perp + r_out_parallel;
@@ -109,9 +110,10 @@ __host__ __device__ glm::vec3 refract(const glm::vec3& uv, const glm::vec3& n, f
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
+__device__
 void scatterRay(
-        PathSegment & pathSegment,
+        PathSegment& pathSegment,
+		ShadeableIntersection intersection,
         glm::vec3 intersect,
         glm::vec3 normal,
         bool frontFace,
@@ -120,60 +122,85 @@ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
-	pathSegment.ray.origin = intersect;
 
 	thrust::uniform_real_distribution<float> u01(0.0f, 1.0f);
 
     switch (material.type)
     {
     case MaterialType::Emissive:
+		pathSegment.ray.origin = intersect + normal * 0.001f;
 		pathSegment.color *= (material.color * material.emittance);
+		pathSegment.remainingBounces = 0;
         break;
     case MaterialType::Diffuse:
+	{
+		pathSegment.ray.origin = intersect + normal * 0.001f;
+
+		glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
+		pathSegment.ray.direction = target - intersect;
+		pathSegment.color *= material.color;
+
+		if (pathSegment.pixelIndex == 477208)
 		{
-			glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
-			pathSegment.ray.direction = target - intersect;
-			pathSegment.color *= material.color;
+			//printf("**************\n");
 		}
-        break;
+		pathSegment.remainingBounces--;
+	}
+    break;
     case MaterialType::Metal:
-        {
-		    float fuzz = 0.0f;
-		    glm::vec3 reflected = glm::reflect(glm::normalize(pathSegment.ray.direction), normal);
-		    pathSegment.ray.direction = reflected + fuzz * random_in_unit_sphere(rng);
-		    pathSegment.color *= material.color;
-        }
+	{
+		pathSegment.ray.origin = intersect + normal * 0.001f;
 
-        break;
+		float fuzz = 0.0f;
+		glm::vec3 reflected = glm::reflect(glm::normalize(pathSegment.ray.direction), normal);
+		pathSegment.ray.direction = reflected + fuzz * random_in_unit_sphere(rng);
+		pathSegment.color *= material.color;
+		pathSegment.remainingBounces--;
+	}
+	break;
     case MaterialType::Glass:
-        {
-		    float refractionIndex = frontFace ? (1.0f / material.indexOfRefraction) : material.indexOfRefraction;
+    {
+		pathSegment.ray.origin = intersect;
 
-			glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
+		float refractionIndex = frontFace ? (1.0f / material.indexOfRefraction) : material.indexOfRefraction;
 
-			glm::vec3 refracted = refract(unitDirection, normal, refractionIndex);
+		//glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
 
-		    //glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
-		    //float costTheta = std::fminf(glm::dot(-unitDirection, normal), 1.0f);
-		    //float sinTheta = std::sqrtf(1.0f - costTheta * costTheta);
+		//glm::vec3 refracted = refract(unitDirection, normal, refractionIndex);
 
-		    //bool cannotRefract = refractionIndex * sinTheta > 1.0f;
+		//pathSegment.ray.direction = refracted;
+		//pathSegment.color = glm::vec3(1.0f);
+		//pathSegment.refractionCount++;
 
-		    //glm::vec3 direction;
+		////pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
 
-		    //if (cannotRefract || schlick(costTheta, refractionIndex) > u01(rng))
-		    //{
-			   // //direction = reflect(unitDirection, normal);
-		    //}
-		    //else
-		    //{
-			   // direction = refract(unitDirection, normal, refractionIndex);
-		    //}
+		glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
+		float costTheta = std::fminf(glm::dot(-unitDirection, normal), 1.0f);
+		float sinTheta = std::sqrtf(1.0f - costTheta * costTheta);
 
-		    //pathSegment.ray.direction = direction;
-			pathSegment.color = glm::vec3(1.0f, 0.0f, 0.0f);
-        }
-        break;
+		bool cannotRefract = refractionIndex * sinTheta > 1.0f;
+
+		glm::vec3 direction;
+
+		if (cannotRefract || schlick(costTheta, refractionIndex) > u01(rng))
+		{
+			direction = glm::reflect(unitDirection, normal);
+		}
+		else
+		{
+			direction = glm::refract(unitDirection, normal, refractionIndex);
+		}
+
+		pathSegment.ray.direction = direction;
+		pathSegment.remainingBounces--;
+    }
+    break;
+	case MaterialType::Image:
+	{
+		float4 color = tex2D<float4>(material.albedo, intersection.u, intersection.v);
+		pathSegment.color = { color.x, color.y, color.z };
+	}
+	break;
     default:
         break;
     }

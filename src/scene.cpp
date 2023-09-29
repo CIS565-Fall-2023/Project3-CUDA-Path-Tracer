@@ -3,6 +3,9 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <stb_image.h>
+
+#include "gltfLoader.h"
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -42,6 +45,10 @@ int Scene::loadGeom(string objectid) {
         Geom newGeom;
         string line;
 
+        bool isMesh = false;
+
+        std::vector<Triangle> triangleList;
+
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -51,7 +58,18 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
-            }
+			} else if (strcmp(line.c_str(), "mesh") == 0) {
+				cout << "Creating new mesh..." << endl;
+				newGeom.type = MESH;
+				utilityCore::safeGetline(fp_in, line);
+
+				if (loadGLTF(line, triangleList))
+				{
+					Geom geom;
+				}
+
+                isMesh = true;
+			}
         }
 
         //link material
@@ -85,6 +103,20 @@ int Scene::loadGeom(string objectid) {
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
         geoms.push_back(newGeom);
+
+        for (const auto& triangle : triangleList)
+        {
+            Geom geom;
+            geom.materialid = newGeom.materialid;
+            geom.type = MESH;
+            geom.transform = newGeom.transform;
+            geom.inverseTransform = newGeom.inverseTransform; 
+            geom.invTranspose = newGeom.invTranspose;
+            geom.triangle = triangle;
+
+            geoms.push_back(geom);
+        }
+
         return 1;
     }
 }
@@ -150,6 +182,109 @@ int Scene::loadCamera() {
     return 1;
 }
 
+void Scene::loadTexture(const std::string& path, cudaTextureObject_t* cudaTextureObject, int type)
+{
+	int width, height, channels;
+	if (!type)
+	{
+		unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+		if (data) {
+			cudaError_t err;
+			size_t dataSize = width * height * 4 * sizeof(unsigned char);
+			cudaArray_t cuArray;
+			cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(8, 8, 8, 8, cudaChannelFormatKindUnsigned);
+			cudaMallocArray(&cuArray, &channelDesc, width, height);
+
+            textureData.emplace_back(cuArray);
+			cudaMemcpyToArray(cuArray, 0, 0, data, width * height * 4 * sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+            cudaDeviceSynchronize();
+
+			stbi_image_free(data);
+			cudaResourceDesc resDesc;
+			memset(&resDesc, 0, sizeof(resDesc));
+			resDesc.resType = cudaResourceTypeArray;
+			resDesc.res.array.array = cuArray;
+			resDesc.res.linear.desc = cudaCreateChannelDesc(8, 8, 8, 8, cudaChannelFormatKindUnsigned);
+			resDesc.res.linear.sizeInBytes = dataSize;
+
+			cudaTextureDesc texDesc;
+			memset(&texDesc, 0, sizeof(texDesc));
+			texDesc.addressMode[0] = cudaAddressModeWrap;
+			texDesc.addressMode[1] = cudaAddressModeWrap;
+			texDesc.filterMode = cudaFilterModeLinear;
+			texDesc.readMode = cudaReadModeNormalizedFloat;
+			texDesc.normalizedCoords = 1;
+			texDesc.sRGB = 1;
+			cudaCreateTextureObject(cudaTextureObject, &resDesc, &texDesc, NULL);
+
+            cudaDeviceSynchronize();
+
+			err = cudaGetLastError();
+			if (err != cudaSuccess) {
+				printf("CUDA error: %s\n", cudaGetErrorString(err));
+				exit(-1);
+			}
+
+		}
+		else {
+			printf("Failed to load image: %s\n", stbi_failure_reason());
+		}
+	}
+	else
+	{
+		float* data = stbi_loadf(path.c_str(), &width, &height, &channels, 4);
+		if (data) {
+			cudaError_t err;
+			size_t dataSize = width * height * 4 * sizeof(float);
+			cudaArray_t cuArray;
+			cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+			cudaMallocArray(&cuArray, &channelDesc, width, height);
+
+            textureData.emplace_back(cuArray);
+			cudaMemcpyToArray(cuArray, 0, 0, data, width * height * 4 * sizeof(float), cudaMemcpyHostToDevice);
+
+			stbi_image_free(data);
+			cudaResourceDesc resDesc;
+			memset(&resDesc, 0, sizeof(resDesc));
+			resDesc.resType = cudaResourceTypeArray;
+			resDesc.res.array.array = cuArray;
+			resDesc.res.linear.desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+			resDesc.res.linear.sizeInBytes = dataSize;
+
+			cudaTextureDesc texDesc;
+			memset(&texDesc, 0, sizeof(texDesc));
+			texDesc.addressMode[0] = cudaAddressModeWrap;
+			texDesc.addressMode[1] = cudaAddressModeWrap;
+			texDesc.filterMode = cudaFilterModeLinear;
+			texDesc.readMode = cudaReadModeElementType;
+			texDesc.normalizedCoords = 1;
+			cudaCreateTextureObject(cudaTextureObject, &resDesc, &texDesc, NULL);
+			err = cudaGetLastError();
+			if (err != cudaSuccess) {
+				printf("CUDA error: %s\n", cudaGetErrorString(err));
+				exit(-1);
+			}
+
+		}
+		else {
+			printf("Failed to load image: %s\n", stbi_failure_reason());
+		}
+	}
+}
+
+void Scene::loadTextures()
+{
+    for (auto& material : materials)
+    {
+        if (material.type == MaterialType::Image)
+        {
+			loadTexture("scenes/textures/2k_moon.jpg", &material.albedo, 1);
+            loadTexture("scenes/textures/Newport_Loft_Ref.hdr", &skyboxTextureObject, 0);
+        }
+    }
+}
+
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
@@ -184,6 +319,12 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.type = static_cast<MaterialType>(atoi(tokens[1].c_str()));
             }
         }
+
+        if (newMaterial.type == MaterialType::Image)
+        {
+            texturesMap.emplace_back("scenes/textures/2k_moon.jpg", materials.size());
+        }
+
         materials.push_back(newMaterial);
         return 1;
     }

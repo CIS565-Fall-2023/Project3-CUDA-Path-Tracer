@@ -11,6 +11,8 @@ static bool middleMousePressed = false;
 static double lastX;
 static double lastY;
 
+const float CameraSpeed = 0.1f;
+
 static bool camchanged = true;
 static float dtheta = 0, dphi = 0;
 static glm::vec3 cammove;
@@ -73,6 +75,8 @@ int main(int argc, char** argv) {
 	// Initialize CUDA and GL components
 	init();
 
+	scene->loadTextures();
+
 	// Initialize ImGui Data
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
@@ -103,7 +107,7 @@ void saveImage() {
 
 	// CHECKITOUT
 	img.savePNG(filename);
-	//img.saveHDR(filename);  // Save a Radiance HDR file
+	img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
 void runCuda() {
@@ -148,10 +152,10 @@ void runCuda() {
 		cudaGLUnmapBufferObject(pbo);
 	}
 	else {
-		saveImage();
+		/*saveImage();
 		pathtraceFree();
 		cudaDeviceReset();
-		exit(EXIT_SUCCESS);
+		exit(EXIT_SUCCESS);*/
 	}
 }
 
@@ -159,7 +163,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	if (action == GLFW_PRESS) {
 		switch (key) {
 		case GLFW_KEY_ESCAPE:
-			saveImage();
+			//saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
 		case GLFW_KEY_S:
@@ -215,4 +219,53 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	}
 	lastX = xpos;
 	lastY = ypos;
+}
+
+void processInput(GLFWwindow* window)
+{
+	auto renderState = &scene->state;
+	Camera& cam = renderState->camera;
+	glm::vec3 forward = cam.view;
+	forward.y = 0.0f;
+	forward = glm::normalize(forward);
+	glm::vec3 right = cam.right;
+	right.y = 0.0f;
+	right = glm::normalize(right);
+	glm::vec3 up = cam.up;
+
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	{
+		cam.lookAt += forward * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	{
+		cam.lookAt -= forward * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	{
+		cam.lookAt -= right * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	{
+		cam.lookAt += right * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+	{
+		cam.lookAt -= up * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+	{
+		cam.lookAt += up * CameraSpeed;
+		camchanged = true;
+	}
 }

@@ -16,11 +16,17 @@ private:
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
     int loadCamera();
+	void loadTexture(const std::string& path, cudaTextureObject_t* cudaTextureObject, int type);
 public:
     Scene(string filename);
     ~Scene();
 
+    void loadTextures();
+
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     RenderState state;
+	std::vector<cudaArray*> textureData;
+    std::vector<std::pair<std::string, int> > texturesMap;
+    cudaTextureObject_t skyboxTextureObject = 0;
 };

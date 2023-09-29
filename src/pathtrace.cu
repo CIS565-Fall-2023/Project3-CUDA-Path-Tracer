@@ -6,6 +6,11 @@
 #include <thrust/remove.h>
 #include <curand_kernel.h>
 
+#include <thrust/sort.h>
+#include <thrust/partition.h>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include<thrust/scan.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -80,6 +85,7 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
+static ShadeableIntersection* dev_cache = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -107,7 +113,8 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
-
+	cudaMalloc(&dev_cache, pixelcount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_cache, 0, pixelcount * sizeof(ShadeableIntersection));
 	checkCUDAError("pathtraceInit");
 }
 
@@ -118,7 +125,7 @@ void pathtraceFree() {
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
-
+	cudaFree(dev_cache);
 	checkCUDAError("pathtraceFree");
 }
 
@@ -143,9 +150,12 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
 		// TODO: implement antialiasing by jittering the ray
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + u01(rng) - (float)cam.resolution.y * 0.5f)
 		);
 
 		segment.pixelIndex = index;
@@ -164,6 +174,8 @@ __global__ void computeIntersections(
 	, Geom* geoms
 	, int geoms_size
 	, ShadeableIntersection* intersections
+	, glm::vec3* image
+	, cudaTextureObject_t skyboxTex
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -181,6 +193,8 @@ __global__ void computeIntersections(
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		float u;
+		float v;
 
 		// naive parse through global geoms
 
@@ -194,7 +208,11 @@ __global__ void computeIntersections(
 			}
 			else if (geom.type == SPHERE)
 			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside, u, v);
+			}
+			else if (geom.type == MESH)
+			{
+				t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -209,9 +227,12 @@ __global__ void computeIntersections(
 			}
 		}
 
+		
+
 		if (hit_geom_index == -1)
 		{
 			intersections[path_index].t = -1.0f;
+			pathSegment.remainingBounces = 0;
 		}
 		else
 		{
@@ -221,6 +242,8 @@ __global__ void computeIntersections(
 			intersections[path_index].surfaceNormal = normal;
 			intersections[path_index].frontFace = outside;
 			intersections[path_index].point = intersect_point;
+			intersections[path_index].u = u;
+			intersections[path_index].v = v;
 		}
 	}
 }
@@ -253,7 +276,16 @@ __global__ void shadeFakeMaterial(
 
 	if (intersection.t <= 0.0f)
 	{
+		glm::vec3 unitDirection = glm::normalize(pathSegments[idx].ray.direction);
+		float t = 0.5f * (unitDirection.y + 1.0f);
+		glm::vec3 color = (1.0f - t) * glm::vec3(1.0, 1.0, 1.0) + t * glm::vec3(0.5, 0.7, 1.0);
+		//pathSegments[idx].color *= color;
 		//pathSegments[idx].color = glm::vec3(0.0f);
+
+		if (pathSegments[idx].pixelIndex == 477208)
+		{
+			
+		}
 		pathSegments[idx].remainingBounces = 0;
 		return;
 	}
@@ -267,7 +299,9 @@ __global__ void shadeFakeMaterial(
 
 		Material material = materials[intersection.materialId];
 
-		scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t), intersection.surfaceNormal, intersection.frontFace, material, rng);
+		// getPointOnRay(pathSegments[idx].ray, intersection.t)
+
+		scatterRay(pathSegments[idx], intersection, intersection.point, intersection.surfaceNormal, intersection.frontFace, material, rng);
 
 		//// If the material indicates that the object was a light, "light" the ray
 		//if (material.emittance > 0.0f) {
@@ -306,6 +340,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 		image[iterationPath.pixelIndex] += iterationPath.color;
 	}
 }
+
 
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
@@ -368,8 +403,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	bool iterationComplete = false;
 
-	bool cachedFirstBounce = false;
-
 	while (!iterationComplete) {
 
 		// clean shading chunks
@@ -377,9 +410,30 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
-		//if (!cachedFirstBounce)
+		if (depth == 0)
 		{
-			// tracing
+			if (iter == 1) {
+				// tracing
+				computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth
+					, num_paths
+					, dev_paths
+					, dev_geoms
+					, hst_scene->geoms.size()
+					, dev_intersections
+					, dev_image
+					, hst_scene->skyboxTextureObject
+					);
+				checkCUDAError("trace one bounce");
+				cudaDeviceSynchronize();
+				cudaMemcpy(dev_cache, dev_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+			}
+			else {
+				cudaMemcpy(dev_intersections, dev_cache, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+			}
+
+		}
+		else {
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
 				, num_paths
@@ -387,10 +441,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_geoms
 				, hst_scene->geoms.size()
 				, dev_intersections
+				, dev_image
+				, hst_scene->skyboxTextureObject
 				);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
-			cachedFirstBounce = true;
 		}
 		depth++;
 
@@ -402,6 +457,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// materials you have in the scenefile.
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
+
+		//thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, SortIntersection());
+
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
@@ -409,6 +467,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials
 			);
+
+		//dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_path_end, returnRemainBounce());
+		//int current_num_paths = dev_path_end - dev_paths;
+		//
+		//iterationComplete = (depth >= traceDepth || current_num_paths <= 0);
 
 		if (depth == 10)
 		{

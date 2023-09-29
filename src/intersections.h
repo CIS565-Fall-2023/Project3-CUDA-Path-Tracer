@@ -89,6 +89,21 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
     return -1;
 }
 
+__host__ __device__ void get_sphere_uv(const glm::vec3& p, float& u, float& v) {
+	// p: a given point on the sphere of radius one, centered at the origin.
+	// u: returned value [0,1] of angle around the Y axis from X=-1.
+	// v: returned value [0,1] of angle from Y=-1 to Y=+1.
+	//     <1 0 0> yields <0.50 0.50>       <-1  0  0> yields <0.00 0.50>
+	//     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
+	//     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
+
+	auto theta = std::acos(-p.y);
+	auto phi = atan2(-p.z, p.x) + glm::pi<float>();
+
+	u = phi / (2 * glm::pi<float>());
+	v = theta / glm::pi<float>();
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed sphere. Untransformed,
@@ -100,8 +115,8 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
-    float radius = .5;
+        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside, float& u, float& v) {
+    float radius = 0.5f;
 
     glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(sphere.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -110,35 +125,157 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     rt.origin = ro;
     rt.direction = rd;
 
-    float vDotDirection = glm::dot(rt.origin, rt.direction);
-    float radicand = vDotDirection * vDotDirection - (glm::dot(rt.origin, rt.origin) - powf(radius, 2));
-    if (radicand < 0) {
-        return -1;
-    }
+    //float vDotDirection = glm::dot(rt.origin, rt.direction);
+    //float radicand = vDotDirection * vDotDirection - (glm::dot(rt.origin, rt.origin) - powf(radius, 2.0f));
+    //if (radicand < 0) {
+    //    return -1.0f;
+    //}
 
-    float squareRoot = sqrt(radicand);
-    float firstTerm = -vDotDirection;
-    float t1 = firstTerm + squareRoot;
-    float t2 = firstTerm - squareRoot;
+    //float squareRoot = std::sqrtf(radicand);
+    //float firstTerm = -vDotDirection;
+    //float t1 = firstTerm + squareRoot;
+    //float t2 = firstTerm - squareRoot;
 
-    float t = 0;
-    if (t1 < 0 && t2 < 0) {
-        return -1;
-    } else if (t1 > 0 && t2 > 0) {
-        t = min(t1, t2);
-        outside = true;
-    } else {
-        t = max(t1, t2);
-        outside = false;
-    }
+    //float t = 0;
+    //if (t1 < 0 && t2 < 0) {
+    //    return -1;
+    //} else if (t1 > 0 && t2 > 0) {
+    //    t = min(t1, t2);
+    //    outside = true;
+    //} else {
+    //    t = max(t1, t2);
+    //    outside = false;
+    //}
+
+	glm::vec3 oc = ro;
+	float a = glm::dot(rd, rd);
+	float halfB = glm::dot(oc, rd);
+	float c = glm::dot(oc, oc) - radius * radius;
+
+	float discriminant = halfB * halfB - a * c;
+
+	if (discriminant < 0.0f)
+	{
+		return -1;
+	}
+
+	float sqrtd = std::sqrtf(discriminant);
+	float root = (-halfB - sqrtd) / a;
+
+	if (root < 0.001f || 10000.0f < root)
+	{
+		root = (-halfB + sqrtd) / a;
+		if (root < 0.001f || 10000.0f < root)
+		{
+			return -1;
+		}
+	}
+
+    float t = root;
 
     glm::vec3 objspaceIntersection = getPointOnRay(rt, t);
 
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
-    if (!outside) {
-        normal = -normal;
-    }
+
+	outside = glm::dot(rd, normal) < 0.0f;
+
+	normal = outside ? normal : -normal;
+
+    get_sphere_uv(normal, u, v);
+
+	//if (!outside) {
+	//	normal = -normal;
+	//}
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+	glm::vec3 ro = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+	glm::vec3 rd = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+	Ray rt;
+	rt.origin = ro;
+	rt.direction = rd;
+
+	//mesh.triangle.v0 = { -1.0f, 0.0f, 0.0f };
+	//mesh.triangle.v1 = {  1.0f, 0.0f, 0.0f };
+	//mesh.triangle.v2 = {  0.0f, 1.0f, 0.0f };
+
+    // E1
+    glm::vec3 E1 = mesh.triangle.v1 - mesh.triangle.v0;
+
+    // E2
+    glm::vec3 E2 = mesh.triangle.v2 - mesh.triangle.v0;
+
+    // P
+    glm::vec3 P = glm::cross(rt.direction, E2);
+
+    // determinant
+    float det = dot(E1, P);
+
+    // keep det > 0, modify T accordingly
+    glm::vec3 T;
+    if (det > 0)
+    {
+        T = rt.origin - mesh.triangle.v0;
+    }
+    else
+    {
+        T = mesh.triangle.v0 - rt.origin;
+        det = -det;
+    }
+
+    // If determinant is near zero, ray lies in plane of triangle
+    if (det < 0.0001f)
+    {
+        return -1.0f;
+    }
+
+    // Calculate u and make sure u <= 1
+    float u = dot(T, P);
+
+    if (u < 0.0f || u > det)
+    {
+        return -1.0f;
+    }
+
+    // Q
+    glm::vec3 Q = glm::cross(T, E1);
+
+    // Calculate v and make sure u + v <= 1
+    float v = glm::dot(rt.direction, Q);
+
+    if (v < 0.0f || u + v > det)
+    {
+        return -1.0f;
+    }
+
+    // Calculate t, scale parameters, ray intersects triangle
+    float t = dot(E2, Q);
+
+    float fInvDet = 1.0f / det;
+
+    t *= fInvDet;
+    u *= fInvDet;
+    v *= fInvDet;
+
+    glm::vec3 objspaceIntersection = (1.0f - u - v) * mesh.triangle.v0 + u * mesh.triangle.v1 + v * mesh.triangle.v2;
+
+	intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objspaceIntersection, 1.f));
+	normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normalize(cross(E1, E2)), 0.0f)));
+
+	return glm::length(r.origin - intersectionPoint);
+}
+
+__device__ inline glm::vec2 sampleHDRMap(glm::vec3 v)
+{
+	const glm::vec2 invAtan = glm::vec2(0.1591f, 0.3183f);
+	glm::vec2 uv = glm::vec2(atan2(v.z, v.x), asin(v.y));
+	uv *= invAtan;
+	uv += 0.5f;
+	return uv;
+}
+
