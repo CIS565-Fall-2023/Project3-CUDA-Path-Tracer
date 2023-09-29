@@ -155,4 +155,5 @@ struct Triangle{
     glm::vec2 uv3;
     glm::vec3 N;
     int materialID;
+    int normalTextureID;
 };

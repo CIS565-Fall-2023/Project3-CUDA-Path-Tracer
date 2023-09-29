@@ -21,6 +21,8 @@
 #include "scene.h"
 #include "bsdf.h"
 #include "bvh.h"
+#include "texture.h"
+
 //#include "utilities.cuh"
 
 #define USE_FIRST_BOUNCE_CACHE 1
@@ -72,6 +74,10 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
 		color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
 
+		//color.x = glm::clamp((int)pix.x, 0, 255);
+		//color.y = glm::clamp((int)pix.y, 0, 255);
+		//color.z = glm::clamp((int)pix.z, 0, 255);
+
 		// Each thread writes one pixel location in the texture (textel)
 		pbo[index].w = 0;
 		pbo[index].x = color.x;
@@ -86,17 +92,32 @@ static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
-static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
+static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test_texture.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
 static ShadeableIntersection * dev_first_iteration_first_bounce_cache_intersections = nullptr;
+static Texture * dev_textures = nullptr;
+static TextureInfo * dev_textureInfos = nullptr;
+int textureSize = 0;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
+}
+
+__global__ void initDeviceTextures(Texture & dev_texture, const TextureInfo & dev_textureInfo, unsigned char * data) {
+	dev_texture.width = dev_textureInfo.width;
+	dev_texture.height = dev_textureInfo.height;
+	dev_texture.nrChannels = dev_textureInfo.nrChannels;
+	printf("dev_texture.width: %d, dev_texture.height: %d, dev_texture.nrChannels: %d\n", dev_texture.width, dev_texture.height, dev_texture.nrChannels);
+	dev_texture.data = data;
+	printf("dev_texture.data[0]: %d\n", dev_texture.data[0]);
+
+	auto test_sample = sampleTextureRGBA(dev_texture, 0.0f, 0.0f);
+	printf("test_sample: %f, %f, %f, %f\n", test_sample.x, test_sample.y, test_sample.z, test_sample.w);
 }
 
 void pathtraceInit(HostScene* scene) {
@@ -130,6 +151,21 @@ void pathtraceInit(HostScene* scene) {
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
 	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
+
+	textureSize = pa->textures.size();
+	auto textureInfos = pa->textures.data();
+	cudaMalloc(&dev_textureInfos, textureSize * sizeof(TextureInfo));
+	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
+	unsigned char* dev_texture_data = nullptr;
+	for (int i =0;i<textureSize;i++)
+	{
+		cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
+		cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+		initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
+	}
+	checkCUDAError("initDeviceTextures");
 
 	checkCUDAError("pathtraceInit");
 }
@@ -331,6 +367,17 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	}
 }
 
+__global__ void sampleScreen(glm::vec3 * dev_image, Texture & texture, int imageWidth, int imageHeight) {
+	for (size_t x = 0; x < imageWidth; x++)
+	{
+		for (size_t y = 0; y < imageHeight; y++)
+		{
+			auto sampleResult = sampleTextureRGBA(texture, float(x) / imageWidth, float(y) / imageHeight);
+			dev_image[x + y * imageWidth] = glm::vec3(sampleResult.x, sampleResult.y, sampleResult.z);
+		}
+	}
+}
+
 struct HasHit{
     __host__ __device__ bool operator()(const PathSegment & path) const {
         return path.remainingBounces != 0;
@@ -504,9 +551,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
+	//int imageWidth = hst_scene->state.camera.resolution.x;
+	//int imageHeight = hst_scene->state.camera.resolution.y;
+	//sampleScreen << <1, 1 >> > (dev_image, dev_textures[0], imageWidth, imageHeight);
 
+	// Test texture sampling
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
+
+
 
 	// Retrieve image from GPU
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,

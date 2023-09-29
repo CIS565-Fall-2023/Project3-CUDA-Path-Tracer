@@ -9,6 +9,16 @@
 
 #include "sceneStructs.h"
 #include "bsdfStruct.h"
+#include "textureStruct.h"
+
+enum GLTFDataType {
+	GLTF_DATA_TYPE_SIGNED_BYTE = 5120,
+    GLTF_DATA_TYPE_UNSIGNED_BYTE = 5121,
+    GLTF_DATA_TYPE_SHORT = 5122,
+    GLTF_DATA_TYPE_UNSIGNED_SHORT = 5123,
+    GLTF_DATA_TYPE_UNSIGNED_INT = 5125,
+    GLTF_DATA_TYPE_FLOAT = 5126
+};
 
 class Scene {
     std::vector<Sphere> spheres;
@@ -22,6 +32,7 @@ public:
     Scene(const char * filename);
     std::vector<Triangle> triangles;
     std::vector<BSDFStruct> bsdfStructs;
+    std::vector<TextureInfo> textures;
     Triangle* dev_triangles;
     Sphere* dev_spheres;
     Primitive** dev_primitives;
@@ -30,6 +41,7 @@ public:
     }
     void initTriangles();
     void initBSDFs();
+    void initTextures();
 };
 
 

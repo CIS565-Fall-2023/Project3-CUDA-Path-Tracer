@@ -29,6 +29,7 @@ Scene::Scene(const char* filename)
     }
 
     initTriangles();
+    initTextures();
     initBSDFs();
 }
 
@@ -70,6 +71,44 @@ void Scene::initBSDFs() {
         }
         //bsdfs.push_back(bsdf);
 
+    }
+}
+
+void Scene::initTextures()
+{
+    for (const auto & texture: model.textures)
+    {
+        auto name = texture.name;
+        auto image = model.images[texture.source];
+        auto uri = image.uri;
+        auto width = image.width;
+        auto height = image.height;
+        auto component = image.component;
+        auto data = image.image.data();
+        auto size = image.image.size();
+        auto type = image.pixel_type;
+        auto format = image.pixel_type;
+
+        printf("Loading Texture size: %d data: %d\n", size, data);
+        std::vector<unsigned char> textureData;
+        // TODO: Resize texture.data to unsigned char based on texture.type
+        // To save bandwith, we only support unsigned char for now
+        switch (type)
+        {
+        case GLTFDataType::GLTF_DATA_TYPE_UNSIGNED_BYTE:
+            textureData = image.image;
+            break;
+        default:
+            /* Unsupported data type! */
+            assert(0);
+            break;
+        }
+        TextureInfo texture;
+        texture.width = width;
+        texture.height = height;
+        texture.data = textureData;
+        texture.nrChannels = component;
+        textures.push_back(texture);
     }
 }
 

@@ -19,4 +19,6 @@ public:
     glm::vec3 emissiveFactor;
     float strength;
     BSDFType bsdfType;
+    int diffuseTextureID;
+    int roughtnessTextureID;
 };

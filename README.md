@@ -93,6 +93,9 @@ Scene with 1k faces
 
 - [x] SAH BVH(probably done...)
 
-- [ ] More BSDFs
-
+- [ ] Texture sampling
+    - [x] Try billboarding
+    ![Alt text](img/billboarding.png)
+    - [ ] Texture mapping
+    
 - [ ] 

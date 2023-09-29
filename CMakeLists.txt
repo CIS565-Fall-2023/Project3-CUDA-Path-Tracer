@@ -62,18 +62,23 @@ set(GLM_ROOT_DIR "external")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
+set(material
+    src/bsdf.h
+    src/bsdfStruct.h
+    src/texture.h
+    src/textureStruct.h
+)
+
 set(scene
     src/depScene.h
     src/sceneStructs.h
     src/interactions.h
     src/intersections.h
     src/light.h
-    src/depScene.cpp
     src/light.cpp
+    src/depScene.cpp
     src/scene.h
     src/scene.cpp
-    src/bsdf.h
-    src/bsdfStruct.h
     src/bvh.h
     src/bvh.cpp
 )
@@ -132,17 +137,19 @@ list(SORT core)
 list(SORT imgui)
 list(SORT tinygltf)
 list(SORT common)
+list(SORT material)
 
 source_group(Scene FILES ${scene})
 source_group(ImGUI FILES ${imgui})
 source_group(Core FILES ${core})
 source_group(Common FILES ${common})
 source_group(Tinygltf FILES ${tinygltf})
+source_group(Material FILES ${material})
 
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
-cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${tinygltf} ${scene} ${core}  ${common})
+cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${tinygltf} ${scene} ${core}  ${common} ${material})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction
