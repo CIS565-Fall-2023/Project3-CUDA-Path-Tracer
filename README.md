@@ -1,13 +1,18 @@
-CUDA Path Tracer
-================
+======================
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
+**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2**
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Ruijun(Daniel) Zhong
+    * [LinkedIn](https://www.linkedin.com/in/daniel-z-73158b152/)    
+    * [Personal Website](https://www.danielzhongportfolio.com/)
+* Tested on: Windows 11 pro, 12th Gen Intel(R) Core(TM) i7-12700K 3.61 GHz 32.0 GB, NVIDIA GeForce RTX 3070 Ti (personal computer)
 
-### (TODO: Your README)
+# Cited
+Some ideas were inspired by:  
+ [_Ray Tracing in One Weekend_](https://raytracing.github.io/books/RayTracingInOneWeekend.html) including:
+ * Diffuse, Metal, Glass Material
+ * Sphere Intersection Test
+ * Camera Multisampleing Antialiasing with random ray
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
-
+ [Ray-Tracing: Rendering a Triangle](https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html) including:
+  * Triangle Intersection Test(Moller-Trumbore algorithm)
