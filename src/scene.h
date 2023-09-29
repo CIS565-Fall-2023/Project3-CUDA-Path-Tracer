@@ -40,6 +40,6 @@ public:
     BVHNode* root;
     std::vector<CompactBVH> bvh;
 
-    BVHNode* constructBVH(std::vector<Geom> geoms, int start, int end);
+    BVHNode* constructBVH(std::vector<Geom> geoms, int start, int end, const int numLeaves);
     int flattenBVHTree(BVHNode* node);
 };

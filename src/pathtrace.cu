@@ -27,6 +27,9 @@
 #define SORT_RAY_BY_MATERIAL 1
 
 #define USE_BVH 1
+#if USE_BVH
+const int LEAF_THRESHOLD = 2;
+#endif
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #if ERRORCHECK
@@ -145,7 +148,7 @@ void pathtraceInit(Scene* scene) {
 
 #if USE_BVH
 	cout << "Constructing BVH..." << endl;
-	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size());
+	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size(), LEAF_THRESHOLD);
 	int offset = 0;
 	scene->flattenBVHTree(scene->root);
 	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
@@ -154,8 +157,9 @@ void pathtraceInit(Scene* scene) {
 		printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
 		printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
 		// printf("Geom count: %d\n", node.geomCount);
-		if (node.geomCount == 1) {
-			printf("Geom Index: %d\n", node.geomIndex);
+		if (node.geomStartIndex != -1) {
+			printf("Geom Start Index: %d\n", node.geomStartIndex);
+			printf("Geom End Index: %d\n", node.geomEndIndex);
 		}
 		else {
 			printf("Right Child Index: %d\n", node.rightChildOffset);
@@ -236,10 +240,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-// TODO:
-// computeIntersections handles generating ray intersections ONLY.
-// Generating new rays is handled in your shader(s).
-// Feel free to modify the code below.
 __global__ void computeIntersections(
 	int depth
 	, int num_paths
@@ -341,40 +341,40 @@ __global__ void computeIntersectionsBVH(
 				auto boundingVol = bvh[node_index];
 
 				if (intersectBVHNode(pathSegment.ray, boundingVol)) {
-					if (boundingVol.geomCount > 0) {   // hit the leaf node
-						Geom& geom = geoms[boundingVol.geomIndex];
+					if (boundingVol.geomStartIndex != -1) {   // hit the leaf node
+						int start = boundingVol.geomStartIndex, end = boundingVol.geomEndIndex;
 
-						if (geom.type == CUBE)
-						{
-							t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-						}
-						else if (geom.type == SPHERE)
-						{
-							t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-						}
-						else if (geom.type == TRIANGLE) {
-							t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-						}
+						for (int i = start; i < end; ++i) {
+							auto& geom = geoms[i];
 
-						// Compute the minimum t from the intersection tests to determine what
-						// scene geometry object was hit first.
-						if (t > 0.0f && t_min > t)
-						{
-							t_min = t;
-							hit_geom_index = boundingVol.geomIndex;
-							intersect_point = tmp_intersect;
-							normal = tmp_normal;
-						}
+							if (geom.type == CUBE)
+							{
+								t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+							}
+							else if (geom.type == SPHERE)
+							{
+								t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+							}
+							else if (geom.type == TRIANGLE) {
+								t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+							}
+
+							// Compute the minimum t from the intersection tests to determine what
+							// scene geometry object was hit first.
+							if (t > 0.0f && t_min > t)
+							{
+								t_min = t;
+								hit_geom_index = i;
+								intersect_point = tmp_intersect;
+								normal = tmp_normal;
+							}
+						}	
 					}	
 					else {
-						// internal node, append children
-						if (pathSegment.ray.direction.x < 0.0f) {
-							stack[stack_ptr++] = boundingVol.rightChildOffset;
-							stack[stack_ptr++] = node_index + 1;
-						}
-						else {
-							stack[stack_ptr++] = node_index + 1;
-							stack[stack_ptr++] = boundingVol.rightChildOffset;
+						// internal node
+						stack[stack_ptr++] = node_index + 1;
+						if (boundingVol.rightChildOffset > 0) {
+							stack[stack_ptr++] = node_index + boundingVol.rightChildOffset;
 						}
 					}
 				}

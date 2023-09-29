@@ -87,10 +87,11 @@ struct BVHNode {
     BVHNode* left;       // left child 
     BVHNode* right;      // right child
     int geomIndex;       // index of the geom for leaf node
+    int numGeoms;        // number of geoms in this node
     bool isLeafNode;     // flag for leaf node 
     
     BVHNode() :
-        left(nullptr), right(nullptr), geomIndex(-1), isLeafNode(false) {}
+        left(nullptr), right(nullptr), geomIndex(-1), isLeafNode(false) {};
 };
 
 struct CompactBVH {
@@ -100,7 +101,11 @@ struct CompactBVH {
         int geomIndex;        // offset to the geometry for leaf nodes;
         int rightChildOffset; // offset to the right child 
     };
-    uint16_t geomCount;       // number of geometries for leaf node
+    int geomStartIndex;     
+    int geomEndIndex;
+
+    CompactBVH() :
+        geomStartIndex(-1), geomEndIndex(-1) {};
 };
 
 struct Material {

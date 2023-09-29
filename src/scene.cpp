@@ -5,6 +5,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include "Mesh/objLoader.h"
 
+
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << "..." << endl;
     cout << " " << endl;
@@ -392,22 +393,17 @@ int Scene::getBestSplit(std::vector<Geom> geoms, int start, int end) {
 
 }
 
-BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end) {
-    BVHNode* node = new BVHNode();
+BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end, 
+    const int numLeaves) {
+    std::unique_ptr<BVHNode> node = std::make_unique<BVHNode>();
 
     // compute bounding box for all geoms from start to end
     glm::vec3 minBounds(FLT_MAX);
-    glm::vec3 maxBounds(FLT_MIN);
+    glm::vec3 maxBounds(FLT_MIN);  
 
-    // printf("Start: %d; End: %d: \n", start, end);
     for (unsigned int i = start; i < end; ++i) {
         glm::vec3 geomMin, geomMax;
         geoms[i].getBounds(geomMin, geomMax);
-
-        /*printf("Geom Type: %d\n", geoms[i].type);
-        printf("Min Bounds: (%f, %f, %f)\n", geomMin[0], geomMin[1], geomMin[2]);
-        printf("Max Bounds: (%f, %f, %f)\n", geomMax[0], geomMax[1], geomMax[2]);
-        printf("\n");*/
 
         minBounds = glm::min(minBounds, geomMin);
         maxBounds = glm::max(maxBounds, geomMax);
@@ -416,12 +412,13 @@ BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end) {
     node->minBounds = minBounds;
     node->maxBounds = maxBounds;
 
-
-    if (end - start <= 1) {
+    // leaf nodes
+    if (end - start <= numLeaves) { 
         // leaf node
         node->isLeafNode = true;
         node->geomIndex = start;
-        return node;
+        node->numGeoms = end - start; 
+        return node.release();
     }
 
     // choose the longest axis to split
@@ -434,47 +431,47 @@ BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end) {
         b.getBounds(bMin, bMax);
 
         return 0.5f * (aMin[axis] + aMax[axis]) < 0.5f * (bMin[axis] + bMax[axis]);
-        });
+    });
 
     // compute the best split with SAH cost
     int bestSplit = getBestSplit(geoms, start, end);
-    // Recursively construct child nodes
     if (bestSplit == -1) {
-        node->isLeafNode = true;
-        node->geomIndex = start;
-    }
-    else {
-        node->left = constructBVH(geoms, start, bestSplit + 1);
-        node->right = constructBVH(geoms, bestSplit + 1, end);
+        // fall backs to midpoint split
+        bestSplit = start + (end - start) / 2; 
     }
 
-    return node;
+    // Recursively construct child nodes
+    node->left = constructBVH(geoms, start, bestSplit + 1, numLeaves);
+    node->right = constructBVH(geoms, bestSplit + 1, end, numLeaves);
+
+    return node.release();
 }
 
 int Scene::flattenBVHTree(BVHNode* node) {
     if (!node) return 0;
 
-    CompactBVH compactNode;
-    compactNode.minBounds = node->minBounds;
-    compactNode.maxBounds = node->maxBounds;
-    compactNode.geomCount = 0;
-    compactNode.rightChildOffset = 0;
+    std::unique_ptr<CompactBVH> compactNode = std::make_unique<CompactBVH>();
+    compactNode->minBounds = node->minBounds;
+    compactNode->maxBounds = node->maxBounds;    
+    compactNode->rightChildOffset = 0;
 
-    bvh.push_back(compactNode);
-    CompactBVH& storedNode = bvh.back();
+    bvh.push_back(*std::move(compactNode));
+    int currentIndex = bvh.size() - 1;  // Store the index of the current node
+
+    int leftSize = 0, rightSize = 0;
 
     if (node->isLeafNode) {
-        storedNode.geomCount = 1;
-        storedNode.geomIndex = node->geomIndex;
+        bvh[currentIndex].geomStartIndex = node->geomIndex;
+        bvh[currentIndex].geomEndIndex = node->geomIndex + node->numGeoms;
     }
     else {
-        int leftSize = flattenBVHTree(node->left);
-        compactNode.rightChildOffset = leftSize + 1; 
-        int rightSize = flattenBVHTree(node->right);
+        leftSize = flattenBVHTree(node->left);
+        bvh[currentIndex].rightChildOffset = leftSize + 1;  // Update the correct node
+        // printf("Stored node right child index: %d\n", bvh[currentIndex].rightChildOffset);
+        rightSize = flattenBVHTree(node->right);
     }
 
     // Total size of the flattened subtree
-    printf("Total Size: %d\n", compactNode.rightChildOffset + compactNode.rightChildOffset);
-    return 1 + (node->left ? compactNode.rightChildOffset + (node->right ? compactNode.rightChildOffset : 0) : 0);  
+    return 1 + leftSize + rightSize;
 }
 
