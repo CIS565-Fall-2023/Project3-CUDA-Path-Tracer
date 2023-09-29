@@ -1,7 +1,9 @@
 #pragma once
 
 #include "intersections.h"
-
+#define REFLECTIVE_ONLY 0
+#define DIFFUSE_ONLY 0
+#define BOTH 1
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
@@ -76,4 +78,44 @@ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+    //float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+    //pathSegments.color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+    glm::vec3 sampled_direction;
+    thrust::uniform_real_distribution<float> u01(0, 1);
+#if REFLECTIVE_ONLY
+    if (m.hasReflective)
+    {
+        sampled_direction = glm::reflect(pathSegment.ray.direction, normal);
+    }
+
+    else
+    {
+#endif
+#if DIFFUSE_ONLY
+        sampled_direction = calculateRandomDirectionInHemisphere(normal, rng);
+#endif
+#if REFLECTIVE_ONLY
+    }
+#endif
+#if BOTH
+    if (m.hasReflective && (u01(rng) > 0.7))
+    {
+        /*sampled_direction = u01(rng) > 0.8 ? glm::reflect(pathSegment.ray.direction, normal) 
+                                           : calculateRandomDirectionInHemisphere(normal, rng);*/
+        sampled_direction = glm::reflect(pathSegment.ray.direction, normal);
+        pathSegment.color *= m.specular.color;
+    }
+    else
+    {
+		sampled_direction = calculateRandomDirectionInHemisphere(normal, rng);
+        pathSegment.color *= (m.color);
+	}
+#endif
+    pathSegment.ray.direction = glm::normalize(sampled_direction);
+    pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
+}
+
+__host__ __device__
+float bsdf_diffuse(glm::vec3 normal, glm::vec3 lightDir) {
+	return glm::dot(normal, lightDir) / PI;
 }
