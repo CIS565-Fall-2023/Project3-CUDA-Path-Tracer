@@ -91,16 +91,11 @@ __host__ __device__ void scatterRay(
 
     glm::vec3 rayDirection = u01(rng) < specular_probability ? specularDirection : randomDirection;
 
-    float abs_cos = glm::abs(glm::dot(rayDirection, normal));
-
     pathSegment.ray.origin = intersect + 0.001f * randomDirection;
     pathSegment.ray.direction = rayDirection;
-    glm::vec3 diffuseColor = m.color / PI; /// PI) * abs_cos / PI;
+    glm::vec3 diffuseColor = m.color;
     glm::vec3 specularColor = m.specular.color * glm::pow(glm::abs(glm::dot(specularDirection, normal)), m.specular.exponent);
 
     pathSegment.color *= (diffuseColor * diffuse_probability + specularColor * specular_probability);
-
-    pathSegment.color *= u01(rng);
-    pathSegment.remainingBounces--;
 }
 

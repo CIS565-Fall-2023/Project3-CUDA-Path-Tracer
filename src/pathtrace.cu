@@ -6,6 +6,7 @@
 #include <thrust/remove.h>
 #include <thrust/sort.h>
 #include <thrust/gather.h>
+#include <thrust/partition.h>
 #include <thrust/device_vector.h>
 
 #include "sceneStructs.h"
@@ -317,6 +318,7 @@ __global__ void shadeMaterial(
 			}
 			else {
 				scatterRay(pathSegments[idx], intersection.intersectPoint, intersection.surfaceNormal, material, rng);
+				pathSegments[idx].remainingBounces--;
 			}
 		}
 		else {
@@ -339,18 +341,21 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 
 __global__ void grabMaterial(int nPaths, int* odata, ShadeableIntersection* intersections)
 {
+	extern __shared__ int sdata[];
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
 	if (index < nPaths)
 	{
-		odata[index] = intersections[index].materialId;
+		sdata[threadIdx.x] = intersections[index].materialId;
+		__syncthreads();
+		odata[index] = sdata[threadIdx.x];
 	}
 }
 
-struct is_terminated {
+struct is_valid {
 	__host__ __device__
 		bool operator()(const PathSegment& path) {
-		return path.remainingBounces <= 0;
+		return path.remainingBounces > 0;
 	}
 };
 
@@ -475,7 +480,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		// dev_path_end = thrust::remove_if(thrust::device, dev_paths, dev_path_end, is_terminated());
 		// num_paths = dev_path_end - dev_paths;
-		
+		// std::cout << "num_paths: " << num_paths << std::endl;
+		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, is_valid());
+		num_paths = dev_path_end - dev_paths;
+		std::cout << "num_paths: " << num_paths << std::endl;
+
 		if (num_paths <= 0 || depth >= traceDepth) {
 			iterationComplete = true;
 		}
@@ -488,7 +497,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
 
