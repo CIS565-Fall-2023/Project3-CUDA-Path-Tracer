@@ -40,11 +40,11 @@ __host__ __device__ bool unitBoxIntersection(const Ray& q, float& tmin, float& t
     tmax = 1e38f;
     for (int xyz = 0; xyz < 3; ++xyz)
     {
-        float qdxyz = q.direction[xyz];
+        float qdxyz = 1.f / q.direction[xyz];
         /*if (glm::abs(qdxyz) > 0.00001f)*/
         {
-            float t1 = (-0.5f - q.origin[xyz]) / qdxyz;
-            float t2 = (+0.5f - q.origin[xyz]) / qdxyz;
+            float t1 = (-0.5f - q.origin[xyz]) * qdxyz;
+            float t2 = (+0.5f - q.origin[xyz]) * qdxyz;
             float ta = glm::min(t1, t2);
             float tb = glm::max(t1, t2);
             glm::vec3 n;
