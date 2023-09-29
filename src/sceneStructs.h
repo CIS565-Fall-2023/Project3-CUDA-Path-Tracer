@@ -62,6 +62,7 @@ struct RenderState {
 struct PathSegment {
     Ray ray;
     glm::vec3 color;
+    glm::vec3 accum_throughput;     // throughput, we'll only use it if we eventually hit a light source
     int pixelIndex;
     int remainingBounces;
 };
@@ -69,7 +70,7 @@ struct PathSegment {
 // Use with a corresponding PathSegment to do:
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
-struct ShadeableIntersection {
+struct Intersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;

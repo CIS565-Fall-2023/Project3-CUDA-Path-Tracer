@@ -92,7 +92,7 @@ void saveImage() {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
 			glm::vec3 pix = renderState->image[index];
-			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
+			img.setPixel(width - 1 - x, y, glm::vec3(pix);
 		}
 	}
 
@@ -101,6 +101,7 @@ void saveImage() {
 	ss << filename << "." << startTimeString << "." << samples << "samp";
 	filename = ss.str();
 
+	filename = "../img/" + filename;
 	// CHECKITOUT
 	img.savePNG(filename);
 	//img.saveHDR(filename);  // Save a Radiance HDR file

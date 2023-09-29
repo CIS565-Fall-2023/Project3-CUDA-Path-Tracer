@@ -41,6 +41,31 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__ void sample_f_diffuse(glm::vec3 &wi,
+                                            PathSegment &pathSegment,
+                                            const glm::vec3 &normal, 
+                                            const Material &mat,
+                                            float diffusePDF,
+                                            thrust::default_random_engine& rng)
+{
+    wi = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
+    pathSegment.accum_throughput *= mat.color / diffusePDF;        // throughput
+}
+
+__host__ __device__ void sample_f_specular(glm::vec3& wi,
+                                            PathSegment& pathSegment,
+                                            const glm::vec3& normal,
+                                            const Material& mat,
+                                            float specularPDF,
+                                            thrust::default_random_engine& rng)
+{
+    wi = glm::reflect(pathSegment.ray.direction, normal);
+    pathSegment.accum_throughput *= mat.specular.color / specularPDF;      // technically PDF for specular reflections is a delta distribution
+                                                                // and the "usable" ray that is a perfect reflection
+                                                                // will always have a PDF of 1 since that's the only ray we can use
+                                                                // but we're using this weird method of using intensities, so we'll go with it
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -66,14 +91,38 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
-void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        const Material &m,
-        thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+
+__host__ __device__ void sample_f(PathSegment &pathSegment,
+                                  const glm::vec3 &intersectionPoint,
+                                  const glm::vec3 &normal,
+                                  const Material &mat,
+                                  thrust::default_random_engine &rng) {
+    // Renaming this to sample_f() because we're sampling a new "bounce" (new wi) and also computing bsdf at the intersection point
+
+    // Using squared length to avoid sqrt calculations
+    // More performant without any accuracy loss
+    float diffuseAmt = glm::length2(mat.color);
+    float specAmt = glm::length2(mat.specular.color);
+
+    float totalAmt = diffuseAmt + specAmt;
+    float diffuseProbability = diffuseAmt / totalAmt;
+    float specProbability = specAmt / totalAmt;
+
+    glm::vec3 wi(0.0f); // next iteration ray
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+
+    float probability = u01(rng);
+    if (probability <= diffuseProbability)
+    {
+        sample_f_diffuse(wi, pathSegment, normal, mat, diffuseProbability, rng);
+    }
+    else
+    {
+        sample_f_specular(wi, pathSegment, normal, mat, specProbability, rng);
+    }
+
+    pathSegment.ray.origin = intersectionPoint;
+    pathSegment.ray.direction = wi;
+    pathSegment.remainingBounces--;
 }
