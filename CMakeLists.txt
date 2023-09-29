@@ -73,9 +73,12 @@ set(headers
     src/sceneStructs.h
     src/preview.h
     src/utilities.h
+    src/material.h
+    src/light.h	
+    src/sample.h
+
     src/ImGui/imconfig.h
-	
-	src/ImGui/imgui.h
+    src/ImGui/imgui.h
     src/ImGui/imconfig.h
     src/ImGui/imgui_impl_glfw.h
      src/ImGui/imgui_impl_opengl3.h 
