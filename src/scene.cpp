@@ -170,7 +170,7 @@ int Scene::loadMesh(string filePath)
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
                         tris.push_back(triangle);
-                        bvhTriIdx.push_back(startTri + numTris);
+                        //bvhTriIdx.push_back(startTri + numTris);
                         ++numTris;
                     }
                 }
@@ -201,7 +201,7 @@ int Scene::loadMesh(string filePath)
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
                         tris.push_back(triangle);
-                        bvhTriIdx.push_back(startTri + numTris);
+                        //bvhTriIdx.push_back(startTri + numTris);
                         ++numTris;
                     }
                 }
@@ -256,7 +256,7 @@ void Scene::bvhUpdateNodeBounds(BvhNode& node)
     node.aabb = AABB();
     for (int i = 0; i < node.triCount; ++i)
     {
-        const Triangle& leafTri = tris[bvhTriIdx[node.leftFirst + i]];
+        const Triangle& leafTri = tris[node.leftFirst + i];
         node.aabb.grow(leafTri);
     }
 }
@@ -267,7 +267,7 @@ float Scene::bvhEvaluateSAH(BvhNode& node, int axis, float pos)
     int leftCount = 0, rightCount = 0;
     for (int i = 0; i < node.triCount; ++i)
     {
-        const Triangle& triangle = tris[bvhTriIdx[node.leftFirst + i]];
+        const Triangle& triangle = tris[node.leftFirst + i];
         if (triangle.centroid[axis] < pos)
         {
             ++leftCount;
@@ -300,7 +300,7 @@ float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos, AA
         float axisMax = -FLT_MAX;
         for (int i = 0; i < node.triCount; ++i)
         {
-            const Triangle& tri = tris[bvhTriIdx[node.leftFirst + i]];
+            const Triangle& tri = tris[node.leftFirst + i];
             axisMin = min(axisMin, tri.centroid[candidateAxis]);
             axisMax = max(axisMax, tri.centroid[candidateAxis]);
         }
@@ -314,7 +314,7 @@ float Scene::bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos, AA
         float scale = BVH_NUM_INTERVALS / (axisMax - axisMin);
         for (int i = 0; i < node.triCount; ++i)
         {
-            const Triangle& tri = tris[bvhTriIdx[node.leftFirst + i]];
+            const Triangle& tri = tris[node.leftFirst + i];
             int binIdx = min(BVH_NUM_INTERVALS - 1, (int)((tri.centroid[candidateAxis] - axisMin) * scale));
             ++bins[binIdx].triCount;
             bins[binIdx].aabb.grow(tri);
@@ -370,13 +370,13 @@ void Scene::bvhSubdivide(BvhNode& node)
     int j = i + node.triCount - 1;
     while (i <= j)
     {
-        if (tris[bvhTriIdx[i]].centroid[axis] < splitPos)
+        if (tris[i].centroid[axis] < splitPos)
         {
             ++i;
         }
         else
         {
-            std::swap(bvhTriIdx[i], bvhTriIdx[j--]);
+            std::swap(tris[i], tris[j--]);
         }
     }
 

@@ -41,6 +41,5 @@ public:
     std::vector<Texture> textures;
     std::vector<Triangle> tris;
     std::vector<BvhNode> bvhNodes;
-    std::vector<int> bvhTriIdx;
     RenderState state;
 };

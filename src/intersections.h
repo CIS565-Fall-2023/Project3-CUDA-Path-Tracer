@@ -157,7 +157,7 @@ __host__ __device__ bool intersectAABB(const glm::vec3& ro, const glm::vec3& rdR
     return tmax >= tmin && tmax > 0;
 }
 
-__host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const Triangle* tris, const BvhNode* bvhNodes, const int* bvhTriIdx, float& t, int& triIdx)
+__host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const Triangle* tris, const BvhNode* bvhNodes, float& t, int& triIdx)
 {
     int stack[32]; // assume BVH depth doesn't exceed 32
     int stackPtr = 0;
@@ -184,7 +184,7 @@ __host__ __device__ bool intersectBvh(const Ray& ray, const int nodeIdx, const T
         {
             for (int i = 0; i < node.triCount; ++i)
             {
-                const int potentialTriIdx = bvhTriIdx[node.leftFirst + i];
+                const int potentialTriIdx = node.leftFirst + i;
                 const Triangle& tri = tris[potentialTriIdx];
                 const glm::vec3& v0 = tri.v0.pos;
                 const glm::vec3& v1 = tri.v1.pos;
@@ -230,7 +230,7 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c,
     return glm::vec3(u, v, w);
 }
 
-__host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes, int* bvhTriIdx,
+__host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes,
     Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, int& triIdx)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
@@ -239,7 +239,7 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     Ray transformedRay = { ro, rd };
 
     float t;
-    if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, bvhTriIdx, t, triIdx))
+    if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, t, triIdx))
     {
         return -1;
     }

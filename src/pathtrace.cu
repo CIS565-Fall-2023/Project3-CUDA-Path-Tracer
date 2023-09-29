@@ -85,7 +85,6 @@ static Material* dev_materials = NULL;
 static Triangle* dev_tris = NULL;
 
 static BvhNode* dev_bvh_nodes = NULL;
-static int* dev_bvh_tri_idx = NULL;
 
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
@@ -129,8 +128,6 @@ void Pathtracer::init(Scene* scene) {
 
 	cudaMalloc(&dev_bvh_nodes, scene->bvhNodes.size() * sizeof(BvhNode));
 	cudaMemcpy(dev_bvh_nodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
-	cudaMalloc(&dev_bvh_tri_idx, scene->bvhTriIdx.size() * sizeof(int));
-	cudaMemcpy(dev_bvh_tri_idx, scene->bvhTriIdx.data(), scene->bvhTriIdx.size() * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
 	dev_thrust_paths = thrust::device_pointer_cast(dev_paths);
@@ -198,7 +195,6 @@ void Pathtracer::free() {
 	cudaFree(dev_tris);
 
 	cudaFree(dev_bvh_nodes);
-	cudaFree(dev_bvh_tri_idx);
 
 	cudaFree(dev_paths);
 	cudaFree(dev_intersections);
@@ -290,7 +286,6 @@ __global__ void computeIntersections(
 	int geoms_size,
 	Triangle* tris,
 	BvhNode* bvhNodes,
-	int* bvhTriIdx,
 	ShadeableIntersection* intersections
 )
 {
@@ -332,7 +327,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, bvhTriIdx, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, tmp_triIdx);
+			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, tmp_triIdx);
 		}
 
 		if (t < 0 || t > t_min)
@@ -548,7 +543,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				hst_scene->geoms.size(),
 				dev_tris,
 				dev_bvh_nodes,
-				dev_bvh_tri_idx,
 				dev_intersections
 			);
 			checkCUDAError("trace one bounce");
