@@ -4,6 +4,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <thrust/partition.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 #include <stdio.h>
@@ -62,7 +63,6 @@ public:
 		return x.remainingBounces != _a;
 	}
 };
-
 
 #pragma endregion
 
@@ -469,13 +469,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials);
 
-		// compact here?
 		// compact
-		//thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
-		//thrust::device_ptr<PathSegment> new_path_end = thrust::remove_if(thrust_dev_paths, thrust_dev_paths + num_paths, notEquals(0));
-		//int oldNum = num_paths;
-		//int newNum = new_path_end.get() - thrust_dev_paths.get();
-		//std::cout << "old count: " << oldNum << ", after compaction new count: " << newNum;
+		thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
+		thrust::device_ptr<PathSegment> new_path_end = thrust::stable_partition(thrust_dev_paths, thrust_dev_paths + num_paths, notEquals(0));
+		num_paths = new_path_end.get() - dev_paths;
 
 		iterationComplete = depth >= traceDepth || num_paths == 0; // TODO: should be based off stream compaction results.
 
@@ -487,7 +484,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, iter, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, iter, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
 
