@@ -18,7 +18,7 @@
 #include "bvh.h"
 
 #define ERRORCHECK 1
-#define DEBUG 1
+#define DEBUG 0
 #define GATHER 0
 #define BVH 1
 
@@ -50,34 +50,6 @@ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int de
 	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
 	return thrust::default_random_engine(h);
 }
-
-//Kernel that writes the image to the OpenGL PBO directly.
-__global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* image ,int iter) {
-	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
-
-	if (x < resolution.x && y < resolution.y) {
-		int index = x + (y * resolution.x);
-		glm::vec3 pix = image[index];
-
-		glm::ivec3 color;
-#if GATHER
-		color.x = glm::clamp((int)(pix.x * 255.0),0,255);
-		color.y = glm::clamp((int)(pix.y * 255.0),0,255);
-		color.z = glm::clamp((int)(pix.z * 255.0),0,255);
-#else
-		color.x = glm::clamp((int)(pix.x * 255.0 / iter), 0, 255);
-		color.y = glm::clamp((int)(pix.y * 255.0 / iter), 0, 255);
-		color.z = glm::clamp((int)(pix.z * 255.0 / iter), 0, 255);
-#endif
-		// Each thread writes one pixel location in the texture (textel)
-		pbo[index].w = 0;
-		pbo[index].x = color.x;
-		pbo[index].y = color.y;
-		pbo[index].z = color.z;
-	}
-}
-
 
 /**
 * Generate PathSegments with rays from the camera through the screen into the
@@ -193,6 +165,32 @@ __global__ void finalGather(int nPaths, float iter, glm::vec3* image, PathSegmen
 	}
 }
 
+//Kernel that writes the image to the OpenGL PBO directly.
+__global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* image, float iter) {
+	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+
+	if (x < resolution.x && y < resolution.y) {
+		int index = x + (y * resolution.x);
+		glm::vec3 pix = image[index];
+
+		glm::ivec3 color;
+#if GATHER
+		color.x = glm::clamp((int)(pix.x * 255.0), 0, 255);
+		color.y = glm::clamp((int)(pix.y * 255.0), 0, 255);
+		color.z = glm::clamp((int)(pix.z * 255.0), 0, 255);
+#else
+		color.x = glm::clamp((int)(pix.x * 255.0 / iter), 0, 255);
+		color.y = glm::clamp((int)(pix.y * 255.0 / iter), 0, 255);
+		color.z = glm::clamp((int)(pix.z * 255.0 / iter), 0, 255);
+#endif
+		// Each thread writes one pixel location in the texture (textel)
+		pbo[index].w = 0;
+		pbo[index].x = color.x;
+		pbo[index].y = color.y;
+		pbo[index].z = color.z;
+	}
+}
 
 __global__ void transformTriangles(int num_trigs, Mesh* in_meshs, Triangle* out_trigs) {
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -256,11 +254,6 @@ void PathTracer::pathtraceInit(Scene* scene)
 	this->dev_bvh.malloc(bvh.size(), "Malloc dev_bvh error");
 	cudaMemcpy(this->dev_bvh.get(), bvh.data(), bvh.size() * sizeof(LinearBVHNode), cudaMemcpyHostToDevice);
 	
-	//auto b = bvh[0].boundingBox;
-	//cout << b.maxBound.x << ", " << b.maxBound.y << ", " << b.maxBound.z << ", " << endl;
-	//cout << b.minBound.x << ", " << b.minBound.y << ", " << b.minBound.z << ", " << endl;
-	//cout << AABBIntersectionTest(glm::vec3(0, 2.5, -5), glm::vec3(0, 0, 1), b) << endl;
-
 
 	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
 	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
@@ -304,10 +297,10 @@ __global__ void computeIntersections(
 		{
 			const Triangle& trig = in_trigs[i];
 
-			t = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary);
+			bool hit = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary, t);
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
-			if (t > 0.0f && t_min > t)
+			if (hit && t_min > t)
 			{
 				t_min = t;
 				bary = tmp_bary;
@@ -347,35 +340,36 @@ __global__ void computeIntersections(
 	if (path_index < num_paths)
 	{
 		PathSegment seg = in_paths[path_index];
-
+		
 		float t;
-		float t_min = FLT_MAX;
-
+		float t_min = 100000.f;
+		
 		glm::vec3 bary; // for interpolation
 		glm::vec3 tmp_bary;
 		int hit_trig_index = -1;
-		//Triangle hit_trig;
 		int needToVisit[33];
 		int stackTop = 0;
 		needToVisit[0] = 0;
+
 		while (stackTop >= 0 && stackTop < 33) {
 			int idxToVis = needToVisit[stackTop--];
 			LinearBVHNode node = in_bvh[idxToVis];
-			t = AABBIntersectionTest(seg.ray.origin, seg.ray.direction, node.boundingBox);
-			//if (t > 0.f && t_min > t) { won't work, don't know why yet
-			if (t > 0.f) {
+			bool hit = AABBIntersectionTest(seg.ray.origin, seg.ray.direction, node.boundingBox,t);
+			if (hit && t_min > t) 
+			{ 
 				if (node.primNum == 0) {
-					//first child
-					needToVisit[++stackTop] = idxToVis + 1;
 					//second child
 					if (node.secondChildOffset != -1) {
 						needToVisit[++stackTop] = idxToVis + node.secondChildOffset;
 					}
-				}else if (t_min > t) { //every thing in bounding box will have larger t
+					//first child
+					needToVisit[++stackTop] = idxToVis + 1;
+				}
+				else { //every thing in bounding box will have larger t
 					for (int i = 0;i < node.primNum;++i) {
 						const Triangle& trig = in_trigs[node.firstPrimId + i];
-						t = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary);
-						if (t > 0.0f && t_min > t)
+						hit = triangleIntersectionTest(seg.ray.origin, seg.ray.direction, trig.v1.pos, trig.v2.pos, trig.v3.pos, tmp_bary,t);
+						if (hit && t_min > t)
 						{
 							t_min = t;
 							bary = tmp_bary;
@@ -383,9 +377,9 @@ __global__ void computeIntersections(
 						}
 					}
 				}
-				
 			}
 		}
+
 		if (hit_trig_index == -1)
 		{
 			out_intersects[path_index].t = -1.0f;

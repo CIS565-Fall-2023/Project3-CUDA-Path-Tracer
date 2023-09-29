@@ -27,24 +27,6 @@ struct BVHPrimitiveInfo {
 
 enum PARTITION_AXIS{X,Y,Z};
 
-//struct BVHNode {
-//	BoundingBox boundingBox;
-//	BVHNode* children[2];
-//	PARTITION_AXIS axis;
-//	int primIdxBegin;
-//	int primNum;
-//	BVHNode(const BoundingBox& _boundingBox
-//		, int _primIdxBegin
-//		, int _primNum
-//		, BVHNode* _child0 = nullptr
-//		, BVHNode* _child1 = nullptr
-//		, PARTITION_AXIS _axis = X
-//	) :boundingBox(_boundingBox), axis(_axis), primIdxBegin(_primIdxBegin), primNum(_primNum)
-//	{
-//		children[0] = _child0; children[1] = _child1;
-//	}
-//};
-
 enum NODE_TYPE{LEAF_NODE,INTERIOR_NODE};
 
 struct LinearBVHNode {
@@ -65,11 +47,8 @@ struct LinearBVHNode {
 };
 
 class BVHTreeBuilder {
-	//std::vector<std::unique_ptr<BVHNode>> m_nodes;
 	std::vector<LinearBVHNode> m_lnodes;
 	std::vector<BVHPrimitiveInfo> initPrimitiveInfo(const std::vector<Triangle>& trigs);
-	//BVHNode* buildTree(std::vector<BVHPrimitiveInfo>& primInfo);
-	//BVHNode* recursiveBuildTree(int start, int end, std::vector<BVHPrimitiveInfo>& primInfo);
 	int recursiveLBuildTree(int start, int end, std::vector<BVHPrimitiveInfo>& primInfo);
 	PARTITION_AXIS calPartitionAxis(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo, float& out_maxAxisDiff);
 	std::vector<Triangle> rearrangeBasedOnPrimtiveInfo(const std::vector<BVHPrimitiveInfo>& primInfo, const std::vector<Triangle>& trigs);

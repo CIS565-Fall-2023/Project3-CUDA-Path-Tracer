@@ -95,75 +95,49 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
 //    return glm::length(r.origin - intersectionPoint);
 //}
 
-//__host__ __device__ float triangleIntersectionTest(
-//    const glm::vec3& orig, const glm::vec3& dir,
-//    const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, 
-//    glm::vec3 &bary) {
-//    glm::vec3 b;
-//    bool hit = glm::intersectRayTriangle(orig, dir, v1, v2, v3, bary);
-//    if (!hit) {
-//        return -1;
-//        //backface
-//        //hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, bary);
-//        //if (!hit)return -1;
-//        //bary.x = 1 - bary.x - bary.y;
-//    }
-//    float t = bary.z;
-//    bary.z = 1 - bary.x - bary.y;
-//    return t;
-//}
-__host__ __device__ float triangleIntersectionTest(
+__host__ __device__ bool triangleIntersectionTest(
     const glm::vec3& orig,const glm::vec3& dir,
     const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
-    glm::vec3& bary) {
-    //glm::vec3 b;
-    //bool hit = glm::intersectRayTriangle(orig, dir, v1, v2, v3, bary);
-    //if (!hit) {
-    //    return -1;
-    //    //backface
-    //    //hit = glm::intersectRayTriangle(orig, dir, v3, v2, v1, bary);
-    //    //if (!hit)return -1;
-    //    //bary.x = 1 - bary.x - bary.y;
-    //}
-    //float t = bary.z;
-    //bary.z = 1 - bary.x - bary.y;
-
+    glm::vec3& bary, float& t) {
     glm::vec3 e1 = v1 - v0;
     glm::vec3 e2 = v2 - v0;
 
     glm::vec3 p = glm::cross(dir, e2);
     float det = glm::dot(e1, p);
-    if (det < EPSILON && det > -EPSILON)
-        return -1;
+    if (det < EPSILON && det > -EPSILON)return false;
+
     float inv_det = 1.0f / det;
     glm::vec3 s = orig - v0;
     bary.x = glm::dot(s, p) * inv_det;
-    if (bary.x < 0.f || bary.x > 1.f)return -1;
+    if (bary.x < 0.f || bary.x > 1.f)return false;
+
     glm::vec3 q = glm::cross(s, e1);
     bary.y = glm::dot(dir, q) * inv_det;
-    if (bary.y < 0.f || (bary.x + bary.y) > 1.f)return -1;
+    if (bary.y < 0.f || (bary.x + bary.y) > 1.f)return false;
+
     bary.z = 1 - bary.x - bary.y;
-    return  inv_det * glm::dot(e2, q);
+    t = inv_det * glm::dot(e2, q);
+    return  t > 0;
 }
 
-__host__ __device__ float AABBIntersectionTest(
+__host__ __device__ bool AABBIntersectionTest(
     const glm::vec3& orig
     , const glm::vec3& dir
     , const BoundingBox& b
+    , float& t
 ) {
-    glm::vec3 inv_dir = glm::vec3(1.f) / dir;
 
+    glm::vec3 inv_dir = glm::vec3(1.f) / dir;
     glm::vec3 t_min = (b.minBound - orig) * inv_dir;
     glm::vec3 t_max = (b.maxBound - orig) * inv_dir;
 
-    float t = 10000.f;
-    if (t_min.x > 0)t = min(t, t_min.x);
-    if (t_min.y > 0)t = min(t, t_min.y);
-    if (t_min.z > 0)t = min(t, t_min.z);
-    if (t_max.x > 0)t = min(t, t_max.x);
-    if (t_max.y > 0)t = min(t, t_max.y);
-    if (t_max.z > 0)t = min(t, t_max.z);
+    glm::vec3 t_near = glm::min(t_min, t_max);
+    glm::vec3 t_far = glm::max(t_min, t_max);
 
-    if (t > 0.0001 && t <10000.f)return t;
-    return -1.f;
+    float t0 = glm::max(glm::max(t_near.x, t_near.y), t_near.z);
+    float t1 = glm::min(glm::min(t_far.x, t_far.y), t_far.z);
+
+    if (t0 > t1) return false;
+    t = t0;
+    return true;
 }

@@ -80,7 +80,7 @@ int BVHTreeBuilder::recursiveLBuildTree(int start, int end, std::vector<BVHPrimi
 					switch (axis)
 					{
 					case X:
-						return a.center.x < b.center.x;
+						return a.center[axis] < b.center.x;
 					case Y:
 						return a.center.y < b.center.y;
 					case Z:
@@ -96,7 +96,7 @@ int BVHTreeBuilder::recursiveLBuildTree(int start, int end, std::vector<BVHPrimi
 				m_lnodes[posId].secondChildOffset = secondChildId - posId;
 			}
 			return posId;
-		}
+		}	
 	}
 	return -1;
 }
@@ -136,10 +136,12 @@ std::vector<Triangle> BVHTreeBuilder::rearrangeBasedOnPrimtiveInfo(const std::ve
 
 void BVHTreeBuilder::displayBVHTree(const std::vector<LinearBVHNode>& m_lnodes, int depth, int curId)
 {
-	std::string space(depth, ' ');
+	std::string space(depth*2, ' ');
 	LinearBVHNode node = m_lnodes[curId];
 	if (node.primNum == 0) {
 		std::cout << space << "interior: " << std::endl;
+		std::cout << space << "[ " << node.boundingBox.maxBound.x << ", " << node.boundingBox.maxBound.y << ", " << node.boundingBox.maxBound.z << "]" << std::endl;
+		std::cout << space << "[ " << node.boundingBox.minBound.x << ", " << node.boundingBox.minBound.y << ", " << node.boundingBox.minBound.z << "]" << std::endl;
 		displayBVHTree(m_lnodes, depth + 1, curId + 1);
 		if (node.secondChildOffset != -1)
 			displayBVHTree(m_lnodes, depth + 1, curId + node.secondChildOffset);

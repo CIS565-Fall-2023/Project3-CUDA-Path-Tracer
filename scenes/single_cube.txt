@@ -62,65 +62,10 @@ UP          0 1 0
 
 // Floor
 MESH 0
-plane.obj
-material 1
-TRANS       0 -2.5 0
-ROTAT       -90 0 0
-SCALE       10 10 1
-
-// Red wall
-MESH 1
-plane.obj
-material 2
-TRANS       5 2.5 0
-ROTAT       0 -90 0
-SCALE       10 10 1
-
-// Green wall
-MESH 2
-plane.obj
-material 3
-TRANS       -5 2.5 0
-ROTAT       0 90 0
-SCALE       10 10 1
-
-// Back wall
-MESH 3
-plane.obj
-material 1
-TRANS       0 2.5 5
-ROTAT       0 180 0
-SCALE       10 10 1
-
-// Ceiling wall
-MESH 4
-plane.obj
-material 1
-TRANS       0 7.5 0
-ROTAT       90 0 0
-SCALE       10 10 1
-
-// Long cube
-MESH 5
 cube.obj
 material 1
-TRANS       2 0 3
-ROTAT       0 27.5 0
-SCALE       3 6 3
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
 
-// Short cube
-MESH 6
-cube.obj
-material 1
-TRANS       -2 -1 0.75
-ROTAT       0 -17.5 0
-SCALE       3 3 3
-
-// Ceiling light
-MESH 7
-plane.obj
-material 0
-TRANS       0 7.45 0
-ROTAT       90 0 0
-SCALE       3 3 1
 

@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 	//}
 
 	string sceneFilePath = SCENE_PATH;
-	sceneFilePath += "test.txt";
+	sceneFilePath += "cow.txt";
 
 	auto& app = Application::getInstance();
 	app.loadScene(sceneFilePath.c_str());
