@@ -87,7 +87,7 @@ CHILD_OF 2
 
 OBJECT 4
 mesh
-gltf/shinji/chair.gltf
+gltf/shinji/chair.glb
 material 4
 TRANS -7 0 -10
 ROTAT 0 90 0
@@ -95,12 +95,12 @@ SCALE 1.6
 
 OBJECT 5
 mesh
-gltf/shinji/hair.gltf
+gltf/shinji/hair.glb
 material 5
 CHILD_OF 4
 
 OBJECT 6
 mesh
-gltf/shinji/shinji.gltf
+gltf/shinji/shinji.glb
 material 6
 CHILD_OF 4

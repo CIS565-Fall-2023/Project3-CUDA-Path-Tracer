@@ -44,4 +44,5 @@ namespace Utils {
     extern std::string convertIntToString(int number);
     extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413
     extern uint64_t timeSinceEpochMillisec();
+    extern bool filePathHasExtension(const std::string& filePath, const std::string& ext);
 }

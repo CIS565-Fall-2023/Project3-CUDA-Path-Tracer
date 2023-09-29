@@ -3,6 +3,7 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include "utilities.h"
 
 #define TINYGLTF_IMPLEMENTATION
 
@@ -55,12 +56,28 @@ int Scene::loadMesh(string filePath)
 
     cout << "Loading mesh: " << filePath << endl;
 
+    auto time1 = Utils::timeSinceEpochMillisec();
+
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
     std::string warn;
+    bool ret;
 
-    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, this->basePath + filePath);
+    if (Utils::filePathHasExtension(filePath, ".glb"))
+    {
+        ret = loader.LoadBinaryFromFile(&model, &err, &warn, this->basePath + filePath);
+    }
+    else if (Utils::filePathHasExtension(filePath, ".gltf"))
+    {
+        ret = loader.LoadASCIIFromFile(&model, &err, &warn, this->basePath + filePath);
+    }
+    else
+    {
+        printf("File extension not supported\n");
+        return -1;
+    }
+
     if (!warn.empty())
     {
         printf("Warn: %s\n", warn.c_str());
@@ -74,6 +91,12 @@ int Scene::loadMesh(string filePath)
         printf("Failed to parse glTF\n");
         return -1;
     }
+
+    auto time2 = Utils::timeSinceEpochMillisec();
+    auto timeTaken = (time2 - time1);
+    cout << "Took " << timeTaken << " ms to read mesh file" << endl;
+
+    time1 = Utils::timeSinceEpochMillisec();
 
     int startTri = tris.size();
     int numTris = 0;
@@ -122,20 +145,27 @@ int Scene::loadMesh(string filePath)
                     {
                         Triangle triangle;
 
-                        int vertexIndex = indexData[i];
-                        triangle.v0.pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                        if (normalData) triangle.v0.nor = glm::vec3(normalData[vertexIndex * 3], normalData[vertexIndex * 3 + 1], normalData[vertexIndex * 3 + 2]);
-                        if (uvData) triangle.v0.uv = glm::vec2(uvData[vertexIndex * 2], uvData[vertexIndex * 2 + 1]);
+                        const int vIdx0 = indexData[i];
+                        const int vIdx1 = indexData[i + 1];
+                        const int vIdx2 = indexData[i + 2];
 
-                        vertexIndex = indexData[i + 1];
-                        triangle.v1.pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                        if (normalData) triangle.v1.nor = glm::vec3(normalData[vertexIndex * 3], normalData[vertexIndex * 3 + 1], normalData[vertexIndex * 3 + 2]);
-                        if (uvData) triangle.v1.uv = glm::vec2(uvData[vertexIndex * 2], uvData[vertexIndex * 2 + 1]);
+                        triangle.v0.pos = glm::vec3(positionData[vIdx0 * 3], positionData[vIdx0 * 3 + 1], positionData[vIdx0 * 3 + 2]);
+                        triangle.v1.pos = glm::vec3(positionData[vIdx1 * 3], positionData[vIdx1 * 3 + 1], positionData[vIdx1 * 3 + 2]);
+                        triangle.v2.pos = glm::vec3(positionData[vIdx2 * 3], positionData[vIdx2 * 3 + 1], positionData[vIdx2 * 3 + 2]);
 
-                        vertexIndex = indexData[i + 2];
-                        triangle.v2.pos = glm::vec3(positionData[vertexIndex * 3], positionData[vertexIndex * 3 + 1], positionData[vertexIndex * 3 + 2]);
-                        if (normalData) triangle.v2.nor = glm::vec3(normalData[vertexIndex * 3], normalData[vertexIndex * 3 + 1], normalData[vertexIndex * 3 + 2]);
-                        if (uvData) triangle.v2.uv = glm::vec2(uvData[vertexIndex * 2], uvData[vertexIndex * 2 + 1]);
+                        if (normalData)
+                        {
+                            triangle.v0.nor = glm::vec3(normalData[vIdx0 * 3], normalData[vIdx0 * 3 + 1], normalData[vIdx0 * 3 + 2]);
+                            triangle.v1.nor = glm::vec3(normalData[vIdx1 * 3], normalData[vIdx1 * 3 + 1], normalData[vIdx1 * 3 + 2]);
+                            triangle.v2.nor = glm::vec3(normalData[vIdx2 * 3], normalData[vIdx2 * 3 + 1], normalData[vIdx2 * 3 + 2]);
+                        }
+
+                        if (uvData)
+                        {
+                            triangle.v0.uv = glm::vec2(uvData[vIdx0 * 2], uvData[vIdx0 * 2 + 1]);
+                            triangle.v1.uv = glm::vec2(uvData[vIdx1 * 2], uvData[vIdx1 * 2 + 1]);
+                            triangle.v2.uv = glm::vec2(uvData[vIdx2 * 2], uvData[vIdx2 * 2 + 1]);
+                        }
 
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
@@ -151,16 +181,22 @@ int Scene::loadMesh(string filePath)
                         Triangle triangle;
 
                         triangle.v0.pos = glm::vec3(positionData[i * 3], positionData[i * 3 + 1], positionData[i * 3 + 2]);
-                        if (normalData) triangle.v0.nor = glm::vec3(normalData[i * 3], normalData[i * 3 + 1], normalData[i * 3 + 2]);
-                        if (uvData) triangle.v0.uv = glm::vec2(uvData[i * 2], uvData[i * 2 + 1]);
-
                         triangle.v1.pos = glm::vec3(positionData[(i + 1) * 3], positionData[(i + 1) * 3 + 1], positionData[(i + 1) * 3 + 2]);
-                        if (normalData) triangle.v1.nor = glm::vec3(normalData[(i + 1) * 3], normalData[(i + 1) * 3 + 1], normalData[(i + 1) * 3 + 2]);
-                        if (uvData) triangle.v1.uv = glm::vec2(uvData[(i + 1) * 2], uvData[(i + 1) * 2 + 1]);
-
                         triangle.v2.pos = glm::vec3(positionData[(i + 2) * 3], positionData[(i + 2) * 3 + 1], positionData[(i + 2) * 3 + 2]);
-                        if (normalData) triangle.v2.nor = glm::vec3(normalData[(i + 2) * 3], normalData[(i + 2) * 3 + 1], normalData[(i + 2) * 3 + 2]);
-                        if (uvData) triangle.v2.uv = glm::vec2(uvData[(i + 2) * 2], uvData[(i + 2) * 2 + 1]);
+
+                        if (normalData)
+                        {
+                            triangle.v0.nor = glm::vec3(normalData[i * 3], normalData[i * 3 + 1], normalData[i * 3 + 2]);
+                            triangle.v1.nor = glm::vec3(normalData[(i + 1) * 3], normalData[(i + 1) * 3 + 1], normalData[(i + 1) * 3 + 2]);
+                            triangle.v2.nor = glm::vec3(normalData[(i + 2) * 3], normalData[(i + 2) * 3 + 1], normalData[(i + 2) * 3 + 2]);
+                        }
+
+                        if (uvData)
+                        {
+                            triangle.v0.uv = glm::vec2(uvData[i * 2], uvData[i * 2 + 1]);
+                            triangle.v1.uv = glm::vec2(uvData[(i + 1) * 2], uvData[(i + 1) * 2 + 1]);
+                            triangle.v2.uv = glm::vec2(uvData[(i + 2) * 2], uvData[(i + 2) * 2 + 1]);
+                        }
 
                         triangle.centroid = (triangle.v0.pos + triangle.v1.pos + triangle.v2.pos) * 0.33333333333f;
 
@@ -173,6 +209,10 @@ int Scene::loadMesh(string filePath)
         }
     }
 
+    time2 = Utils::timeSinceEpochMillisec();
+    timeTaken = (time2 - time1);
+    cout << "Took " << timeTaken << " ms to populate mesh triangles" << endl;
+
     int bvhRootNodeIdx = buildBvh(startTri, numTris);
     bvhRootIndices[filePath] = bvhRootNodeIdx;
     return bvhRootNodeIdx;
@@ -180,6 +220,8 @@ int Scene::loadMesh(string filePath)
 
 int Scene::buildBvh(int startTri, int numTris)
 {
+    auto time1 = Utils::timeSinceEpochMillisec();
+
     bvhNodes.reserve(bvhNodes.size() + 2 * numTris);
 
     int rootNodeIdx = bvhNodes.size();
@@ -188,6 +230,10 @@ int Scene::buildBvh(int startTri, int numTris)
     root.leftFirst = startTri, root.triCount = numTris;
     bvhUpdateNodeBounds(root);
     bvhSubdivide(root);
+
+    auto time2 = Utils::timeSinceEpochMillisec();
+    auto timeTaken = (time2 - time1);
+    cout << "Took " << timeTaken << " ms to build BVH" << endl;
 
 #if DEBUG_PRINT_BVH
     int totalTris = 0;
@@ -385,12 +431,7 @@ int Scene::loadGeom(string objectid) {
                 Utils::safeGetline(fp_in, filePath);
                 string fullPath = basePath + filePath;
                 newGeom.type = MESH;
-
-                auto time1 = Utils::timeSinceEpochMillisec();
                 newGeom.bvhRootNodeIdx = loadMesh(fullPath);
-                auto time2 = Utils::timeSinceEpochMillisec();
-                auto timeTaken = (time2 - time1);
-                cout << "Took " << timeTaken << " ms to build BVH" << endl;
             }
         }
 

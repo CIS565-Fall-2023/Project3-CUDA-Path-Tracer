@@ -73,7 +73,7 @@ SCALE       100 1 100
 
 OBJECT 2
 mesh
-gltf/shinji/chair.gltf
+gltf/shinji/chair.glb
 material 1
 TRANS -7 0 -10
 ROTAT 0 90 0

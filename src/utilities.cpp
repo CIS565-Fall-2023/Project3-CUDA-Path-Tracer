@@ -117,3 +117,13 @@ uint64_t Utils::timeSinceEpochMillisec()
     using namespace std::chrono;
     return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
+
+bool Utils::filePathHasExtension(const std::string& filePath, const std::string& ext)
+{
+    if (filePath.size() <= ext.size())
+    {
+        return false;
+    }
+
+    return std::equal(ext.rbegin(), ext.rend(), filePath.rbegin());
+}
