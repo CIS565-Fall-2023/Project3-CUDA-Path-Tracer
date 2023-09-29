@@ -29,20 +29,20 @@ namespace utilityCore {
     extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/
 }
 
-INILNE CPU_GPU void CoordinateSystem(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
+__forceinline CPU_GPU void CoordinateSystem(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
 {
 	glm::vec3 up = glm::abs(normal.z) < 0.999f ? glm::vec3(0.f, 0.f, 1.f) : glm::vec3(1.f, 0.f, 0.f);
 	tangent = glm::normalize(glm::cross(up, normal));
 	bitangent = glm::cross(normal, tangent);
 }
 
-INILNE CPU_GPU glm::mat3 LocalToWorld(const::glm::vec3& nor)
+__forceinline CPU_GPU glm::mat3 LocalToWorld(const::glm::vec3& nor)
 {
 	glm::vec3 tan, bit;
 	CoordinateSystem(nor, tan, bit);
 	return glm::mat3(tan, bit, nor);
 }
-INILNE CPU_GPU glm::mat3 WorldToLocal(const::glm::vec3& nor)
+__forceinline CPU_GPU glm::mat3 WorldToLocal(const::glm::vec3& nor)
 {
 	return glm::transpose(LocalToWorld(nor));
 }

@@ -558,3 +558,5 @@ xcuserdata
 *.xccheckout
 *.moved-aside
 *.xcuserstate
+
+/resources/

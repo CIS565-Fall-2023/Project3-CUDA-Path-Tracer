@@ -29,6 +29,14 @@
       "name": "MatteGreen",
       "type": "DiffuseReflection",
       "albedo": [ 0.14, 0.45, 0.091 ]
+    },
+    {
+      "name": "WahooTexture",
+      "type": "DiffuseReflection",
+      "albedo map": {
+        "path": "textures/wahoo.bmp",
+        "flip": true
+      }
     }
   ],
   "geomerties": [
@@ -88,12 +96,12 @@
     },
     {
       "type": "obj",
-      "path": "meshes/mc_castle.obj",
+      "path": "meshes/wahoo.obj",
       "name": "bunny",
-      "material": "MatteWhite",
+      "material": "WahooTexture",
       "translation": [ 0, 2, 0 ],
       "rotation": [ 0, 180, 0 ],
-      "scale": [ 1.5, 1.5, 1.5 ]
+      "scale": [ 0.7, 0.7, 0.7 ]
     }
   ]
 }

@@ -8,6 +8,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
+#include "cudaTexture.h"
 
 #include <json.hpp>
 
@@ -35,12 +36,13 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
+    std::vector<Texture2D> m_Textures;
 
     std::vector<glm::vec3> m_Vertices;
     std::vector<glm::vec3> m_Normals;
     std::vector<glm::vec2> m_UVs;
     std::vector<TriangleIdx> m_TriangleIdxs;
-
+    
     std::unordered_map<std::string, unsigned int> m_MaterialMap;
 
     RenderState state;

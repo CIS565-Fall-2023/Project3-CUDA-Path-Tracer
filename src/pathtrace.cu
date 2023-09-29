@@ -20,6 +20,7 @@
 #include "gpuScene.h"
 #include "scene.h"
 #include "rng.h"
+#include "cudaTexture.h"
 
 struct CompactTerminatedPaths {
 	CPU_GPU bool operator() (const PathSegment& segment) {
@@ -53,6 +54,11 @@ CPU_ONLY CudaPathTracer::~CudaPathTracer()
 CPU_ONLY GPU_ONLY thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
 	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
 	return thrust::default_random_engine(h);
+}
+
+GPU_ONLY float4 CudaTexture2D::Get(const float& x, const float& y) const
+{
+	return tex2D<float4>(m_TexObj, x, y);
 }
 
 CPU_GPU void writePixel(glm::vec3& hdr_pixel, uchar4& pixel)
@@ -242,7 +248,7 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 	if (idx >= num_paths) return;
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
-	
+
 	if (intersection.materialId >= 0)
 	{
 		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
@@ -250,7 +256,7 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 		PathSegment segment = pathSegments[idx];
 		
 		Material material = materials[intersection.materialId];
-		glm::vec3 materialColor = material.albedo;
+		glm::vec3 materialColor = material.GetAlbedo(intersection.uv);
 		
 		if (material.emittance > 0.f) 
 		{

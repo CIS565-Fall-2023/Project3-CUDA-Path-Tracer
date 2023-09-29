@@ -6,6 +6,7 @@
 #include "glm/glm.hpp"
 
 #include "common.h"
+#include "cudaTexture.h"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
@@ -45,6 +46,21 @@ struct Geom {
 struct Material {
     glm::vec3 albedo{0.f};
     float emittance = 0.f;
+    CudaTexture2D albedo_tex;
+    CudaTexture2D normal_tex;
+
+    GPU_ONLY glm::vec3 GetAlbedo(const glm::vec2& uv) const 
+    {
+        if (albedo_tex.m_TexObj > 0)
+        {
+            float4 tex_value = albedo_tex.Get(uv.x, uv.y);
+            return glm::vec3(tex_value.x, tex_value.y, tex_value.z);
+        }
+        else
+        {
+            return albedo;
+        }
+    }
 };
 
 struct Camera {

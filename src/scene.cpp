@@ -219,6 +219,22 @@ void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path
 
         SafeGetVec<glm::vec3, float, 3>(material_json[i], "albedo", material.albedo);
         SafeGet<float>(material_json[i], "emittance", material.emittance);
+        if(material_json[i].contains("albedo map"))
+        {
+            const Json& albedo_map_json = material_json[i]["albedo map"];
+            std::string map_str;
+            bool flip_v = false;
+            SafeGet <std::string>(albedo_map_json, "path", map_str);
+            SafeGet <bool>(albedo_map_json, "flip", flip_v);
+            std::filesystem::path texture_path(res_path);
+            texture_path.append(map_str);
+            if (std::filesystem::directory_entry(texture_path).exists())
+            {
+                m_Textures.emplace_back(texture_path.string(), flip_v);
+                
+                material.albedo_tex.m_TexObj = m_Textures.back().m_TexObj;
+            }
+        }
         materials.push_back(std::move(material));
     }
     std::cout << "Loading Materials Success!" << std::endl;

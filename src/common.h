@@ -12,7 +12,6 @@
 #define CPU_ONLY __host__
 #define GPU_ONLY __device__
 #define CPU_GPU __device__ __host__
-#define INILNE __forceinline
 
 #define ERRORCHECK 1
 #define SAH_BVH 1
