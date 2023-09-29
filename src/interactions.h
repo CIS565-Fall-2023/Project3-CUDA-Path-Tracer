@@ -135,7 +135,7 @@ __device__ glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi
 		glm::vec3 F = util_math_fschlick(reflectionAlbedo, glm::dot(wo, h));
 		float G1 = util_math_smith_ggx_masking(wo, a2);
 		float G2 = util_math_smith_ggx_shadowing_masking(*wi, wo, a2);
-		*pdf = (*wi).z;//pdf is already divided
+		*pdf = (*wi).z;//pdf already divided
 		return F * G2 / G1;
 	}
 	else

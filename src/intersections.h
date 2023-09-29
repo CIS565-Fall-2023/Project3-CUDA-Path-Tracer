@@ -35,15 +35,16 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
-__host__ __device__ inline float util_geometry_ray_box_intersection(const glm::vec3& pMin, const glm::vec3& pMax, const Ray& r, glm::vec3* normal = nullptr)
+__host__ __device__ inline float util_geometry_ray_box_intersection(const glm::vec3& pMin, const glm::vec3& pMax, const Ray& r, bool& outside, glm::vec3* normal = nullptr)
 {
     float tmin = -1e38f;
     float tmax = 1e38f;
     glm::vec3 tmin_n;
     glm::vec3 tmax_n;
+    
     for (int xyz = 0; xyz < 3; ++xyz) {
         float qdxyz = r.direction[xyz];
-        /*if (glm::abs(qdxyz) > 0.00001f)*/ {
+        {
             float t1 = (pMin[xyz] - r.origin[xyz]) / qdxyz;
             float t2 = (pMax[xyz] - r.origin[xyz]) / qdxyz;
             float ta = glm::min(t1, t2);
@@ -60,18 +61,19 @@ __host__ __device__ inline float util_geometry_ray_box_intersection(const glm::v
             }
         }
     }
-
-    if (tmax > tmin && tmax > 0) {
+    if (tmax >= tmin && tmax > 0) {
+        outside = true;
         if (tmin <= 0) {
             tmin = tmax;
             tmin_n = tmax_n;
+            outside = false;
         }
-        if (normal)
-            (*normal) = glm::normalize(tmin_n);
+        if (normal) *normal = tmin_n;
         return tmin;
     }
     return -1;
 }
+
 
 // CHECKITOUT
 /**
@@ -88,9 +90,9 @@ __host__ __device__ float boxIntersectionTest(const Object& box,const Ray& r,
     Ray q;
     q.origin    =                multiplyMV(box.Transform.inverseTransform, glm::vec4(r.origin   , 1.0f));
     q.direction = glm::normalize(multiplyMV(box.Transform.inverseTransform, glm::vec4(r.direction, 0.0f)));
-
+    bool outside;
     glm::vec3 local_n;
-    float t = util_geometry_ray_box_intersection(glm::vec3(-0.5f), glm::vec3(0.5f), q, &local_n);
+    float t = util_geometry_ray_box_intersection(glm::vec3(-0.5f), glm::vec3(0.5f), q, outside, &local_n);
 
     if (t>0) {
         intersectionPoint = multiplyMV(box.Transform.transform, glm::vec4(getPointOnRay(q, t), 1.0f));
@@ -101,9 +103,9 @@ __host__ __device__ float boxIntersectionTest(const Object& box,const Ray& r,
 }
 
 
-__host__ __device__ bool boundingBoxIntersectionTest(const BoundingBox& bbox, const Ray& r)
+__host__ __device__ float boundingBoxIntersectionTest(const BoundingBox& bbox, const Ray& r, bool& outside)
 {
-    return util_geometry_ray_box_intersection(bbox.pMin, bbox.pMax, r) > 0.0;
+    return util_geometry_ray_box_intersection(bbox.pMin, bbox.pMax, r, outside);
 }
 
 // CHECKITOUT

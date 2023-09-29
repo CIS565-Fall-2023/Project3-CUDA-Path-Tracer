@@ -35,9 +35,11 @@ public:
     std::vector<glm::vec2> uvs;
     std::vector<Primitive> primitives;
     std::vector<BVHGPUNode> bvhArray;
+    std::vector<MTBVHGPUNode> MTBVHArray;
     RenderState state;
     BVHNode* bvhroot = nullptr;
     cudaTextureObject_t skyboxTextureObj = 0;
+    int bvhTreeSize = 0;
     std::vector<cudaArray*> textureDataPtrs;
     std::unordered_map< std::string, cudaTextureObject_t> strToTextureObj;
     std::vector<std::pair<std::string, int> > textureLoadJobs;//texture path, materialID

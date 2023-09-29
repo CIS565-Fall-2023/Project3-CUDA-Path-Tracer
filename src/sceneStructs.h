@@ -6,7 +6,19 @@
 #include "glm/glm.hpp"
 
 
-#define BACKGROUND_COLOR_MULT (3.0f)
+#define USE_BVH 1
+#define MTBVH 1
+#define VIS_NORMAL 0
+#define TONEMAPPING 1
+#define BACKGROUND_COLOR_MULT 1.0f
+#define SCATTER_ORIGIN_OFFSETMULT 0.01f
+#define BOUNDING_BOX_EXPAND 0.00001f
+#define STOCHASTIC_SAMPLING 1
+#define MAX_ITER 8
+#define SORT_BY_MATERIAL_TYPE 0
+#define MAX_NUM_PRIMS_IN_LEAF 2
+#define SAH_BUCKET_SIZE 20
+#define SAH_RAY_BOX_INTERSECTION_COST 0.1f
 
 enum GeomType {
     SPHERE,
@@ -66,6 +78,19 @@ struct BVHGPUNode
     int parent, left, right;
     int startPrim, endPrim;
     BVHGPUNode() :axis(-1), parent(-1), left(-1), right(-1), startPrim(-1), endPrim(-1){}
+};
+
+
+struct MTBVHGPUNode
+{
+    BoundingBox bbox;
+    int hitLink, missLink;
+    int startPrim, endPrim;
+    MTBVHGPUNode():hitLink(-1), missLink(-1), startPrim(-1), endPrim(-1){}
+};
+
+const int dirs[] = {
+    1,-1,2,-2,3,-3
 };
 
 

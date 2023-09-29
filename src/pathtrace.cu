@@ -17,13 +17,7 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-#define VIS_NORMAL 0
-#define SCATTER_ORIGIN_OFFSETMULT 0.01f
-#define STOCHASTIC_SAMPLING 1
 
-#define MAX_ITER 8
-#define USE_BVH 1
-#define SORT_BY_MATERIAL_TYPE 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -58,6 +52,16 @@ __device__ inline bool util_math_is_nan(const glm::vec3& v)
 	return (v.x != v.x) || (v.y != v.y) || (v.z != v.z);
 }
 
+__device__ inline glm::vec3 ACESFilm(glm::vec3 x)
+{
+	float a = 2.51f;
+	float b = 0.03f;
+	float c = 2.43f;
+	float d = 0.59f;
+	float e = 0.14f;
+	return glm::clamp((x * (a * x + b)) / (x * (c * x + d) + e), glm::vec3(0), glm::vec3(1));
+}
+
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	int iter, glm::vec3* image) {
@@ -68,12 +72,17 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		int index = x + (y * resolution.x);
 		glm::vec3 pix = image[index];
 
-		glm::ivec3 color;
+		glm::vec3 color;
+#if TONEMAPPING
+		color = pix / (float)iter;
+		color = glm::pow(ACESFilm(color), glm::vec3(1 / 2.2f));
+		color = color * 255.0f;
+#else
 		color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
 		color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
 		color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
-
-		if (util_math_is_nan(image[index]))
+#endif
+		if (util_math_is_nan(pix))
 		{
 			pbo[index].x = 255;
 			pbo[index].y = 192;
@@ -96,6 +105,7 @@ static glm::vec3* dev_image = NULL;
 static Object* dev_objs = NULL;
 static Material* dev_materials = NULL;
 static BVHGPUNode* dev_bvhArray = NULL;
+static MTBVHGPUNode* dev_mtbvhArray = NULL;
 static Primitive* dev_primitives = NULL;
 static glm::ivec3* dev_triangles = NULL;
 static glm::vec3* dev_vertices = NULL;
@@ -138,9 +148,13 @@ void pathtraceInit(Scene* scene) {
 		cudaMalloc(&dev_uvs, scene->uvs.size() * sizeof(glm::vec2));
 		cudaMemcpy(dev_uvs, scene->uvs.data(), scene->uvs.size() * sizeof(glm::vec2), cudaMemcpyHostToDevice);
 	}
-
+#if MTBVH
+	cudaMalloc(&dev_mtbvhArray, scene->MTBVHArray.size() * sizeof(MTBVHGPUNode));
+	cudaMemcpy(dev_mtbvhArray, scene->MTBVHArray.data(), scene->MTBVHArray.size() * sizeof(MTBVHGPUNode), cudaMemcpyHostToDevice);
+#else
 	cudaMalloc(&dev_bvhArray, scene->bvhArray.size() * sizeof(BVHGPUNode));
 	cudaMemcpy(dev_bvhArray, scene->bvhArray.data(), scene->bvhArray.size() * sizeof(BVHGPUNode), cudaMemcpyHostToDevice);
+#endif
 
 	cudaMalloc(&dev_primitives, scene->primitives.size() * sizeof(Primitive));
 	cudaMemcpy(dev_primitives, scene->primitives.data(), scene->primitives.size() * sizeof(Primitive), cudaMemcpyHostToDevice);
@@ -169,7 +183,11 @@ void pathtraceFree(Scene* scene) {
 		cudaFree(dev_uvs);
 	}
 	cudaFree(dev_primitives);
+#if MTBVH
+	cudaFree(dev_mtbvhArray);
+#else
 	cudaFree(dev_bvhArray);
+#endif
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections1);
 	cudaFree(dev_intersections2);
@@ -327,13 +345,9 @@ __device__ inline int util_bvh_get_sibling(const BVHGPUNode* bvhArray, int curr)
 	return bvhArray[parent].left == curr ? bvhArray[parent].right : bvhArray[parent].left;
 }
 
-__device__ inline int util_bvh_get_near_child(const BVHGPUNode* bvhArray, int curr, const glm::vec3& rayOri)
+__device__ inline int util_bvh_get_near_child(const BVHGPUNode* bvhArray, int curr, const glm::vec3& rayDir)
 {
-	glm::vec3 cl = (bvhArray[bvhArray[curr].left].bbox.pMin + bvhArray[bvhArray[curr].left].bbox.pMax) * 0.5f;
-	glm::vec3 cr = (bvhArray[bvhArray[curr].right].bbox.pMin + bvhArray[bvhArray[curr].right].bbox.pMax) * 0.5f;
-	float distl = glm::distance(cl, rayOri);
-	float distr = glm::distance(cr, rayOri);
-	return distl < distr ? bvhArray[curr].left : bvhArray[curr].right;
+	return rayDir[bvhArray[curr].axis] > 0.0 ? bvhArray[curr].left : bvhArray[curr].right;
 }
 
 __device__ inline bool util_bvh_is_leaf(const BVHGPUNode* bvhArray, int curr)
@@ -341,9 +355,8 @@ __device__ inline bool util_bvh_is_leaf(const BVHGPUNode* bvhArray, int curr)
 	return bvhArray[curr].left == -1 && bvhArray[curr].right == -1;
 }
 
-__device__ inline bool util_bvh_leaf_intersect(const BVHGPUNode* bvhArray, int curr, const Primitive* primitives, const Object* objects, const glm::ivec3* modelTriangles, const  glm::vec3* modelVertices, const  glm::vec2* modelUVs, const Ray& ray, ShadeableIntersection* intersection)
+__device__ inline bool util_bvh_leaf_intersect(const Primitive* primitives, int primsStart, int primsEnd, const Object* objects, const glm::ivec3* modelTriangles, const  glm::vec3* modelVertices, const  glm::vec2* modelUVs, const Ray& ray, ShadeableIntersection* intersection)
 {
-	int primsStart = bvhArray[curr].startPrim, primsEnd = bvhArray[curr].endPrim;
 	glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord;
 	glm::vec2	tmp_uv;
 	bool intersected = false;
@@ -420,7 +433,7 @@ __global__ void compute_intersection_bvh_stackless(
 	int curr = util_bvh_get_near_child(bvhArray, 0, rayOri);
 	bvh_traverse_state state = fromParent;
 	ShadeableIntersection tmpIntersection;
-	tmpIntersection.t = 1e38f;
+	tmpIntersection.t = 1e37f;
 	bool intersected = false;
 	while (curr >= 0 && curr < bvhArraySize)
 	{
@@ -441,14 +454,18 @@ __global__ void compute_intersection_bvh_stackless(
 		}
 		else if (state == fromSibling)
 		{
-			if (!boundingBoxIntersectionTest(bvhArray[curr].bbox, pathSegment.ray))
+			bool outside = true;
+			float boxt = boundingBoxIntersectionTest(bvhArray[curr].bbox, pathSegment.ray, outside);
+			if (!outside) boxt = EPSILON;
+			if (!(boxt > 0 && boxt < tmpIntersection.t))
 			{
 				curr = bvhArray[curr].parent;
 				state = fromChild;
 			}
 			else if (util_bvh_is_leaf(bvhArray, curr))
 			{
-				if (util_bvh_leaf_intersect(bvhArray, curr, primitives, objects, modelTriangles, modelVertices, modelUVs, pathSegment.ray, &tmpIntersection))
+				int start = bvhArray[curr].startPrim, end = bvhArray[curr].endPrim;
+				if (util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, pathSegment.ray, &tmpIntersection))
 				{
 					intersected = true;
 				}
@@ -463,14 +480,18 @@ __global__ void compute_intersection_bvh_stackless(
 		}
 		else// from parent
 		{
-			if (!boundingBoxIntersectionTest(bvhArray[curr].bbox, pathSegment.ray))
+			bool outside = true;
+			float boxt = boundingBoxIntersectionTest(bvhArray[curr].bbox, pathSegment.ray, outside);
+			if (!outside) boxt = EPSILON;
+			if (!(boxt > 0 && boxt < tmpIntersection.t))
 			{
 				curr = util_bvh_get_sibling(bvhArray, curr);
 				state = fromSibling;
 			}
 			else if (util_bvh_is_leaf(bvhArray, curr))
 			{
-				if (util_bvh_leaf_intersect(bvhArray, curr, primitives, objects, modelTriangles, modelVertices, modelUVs, pathSegment.ray, &tmpIntersection))
+				int start = bvhArray[curr].startPrim, end = bvhArray[curr].endPrim;
+				if (util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, pathSegment.ray, &tmpIntersection))
 				{
 					intersected = true;
 				}
@@ -484,7 +505,7 @@ __global__ void compute_intersection_bvh_stackless(
 			}
 		}
 	}
-	rayValid[path_index] = intersected ? 1 : 0;
+	rayValid[path_index] = intersected;
 	if (intersected)
 	{
 		intersections[path_index] = tmpIntersection;
@@ -496,6 +517,78 @@ __global__ void compute_intersection_bvh_stackless(
 		float4 skyColorRGBA = tex2D<float4>(skyboxTex, uv.x, uv.y);
 		glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
 		image[pathSegment.pixelIndex] += pathSegment.color * skyColor * BACKGROUND_COLOR_MULT;
+	}
+}
+
+
+
+__global__ void compute_intersection_bvh_stackless_mtbvh(
+	int depth
+	, int num_paths
+	, PathSegment* pathSegments
+	, Material* materials
+	, const Object* objects
+	, int geoms_size
+	, const glm::ivec3* modelTriangles
+	, const glm::vec3* modelVertices
+	, const glm::vec2* modelUVs
+	, cudaTextureObject_t skyboxTex
+	, const Primitive* primitives
+	, const MTBVHGPUNode* bvhArray
+	, int bvhArraySize
+	, ShadeableIntersection* intersections
+	, int* rayValid
+	, glm::vec3* image
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+	if (path_index >= num_paths) return;
+	PathSegment& pathSegment = pathSegments[path_index];
+	Ray& ray = pathSegment.ray;
+	glm::vec3 rayDir = pathSegment.ray.direction;
+	glm::vec3 rayOri = pathSegment.ray.origin;
+	float x = fabs(rayDir.x), y = fabs(rayDir.y), z = fabs(rayDir.z);
+	int axis = x > y && x > z ? 0 : (y > z ? 1 : 2);
+	int sgn = rayDir[axis] > 0 ? 0 : 1;
+	int d = (axis << 1) + sgn;
+	const MTBVHGPUNode* currArray = bvhArray + d * bvhArraySize;
+	int curr = 0;
+	ShadeableIntersection tmpIntersection;
+	tmpIntersection.t = 1e37f;
+	bool intersected = false;
+	while (curr >= 0 && curr < bvhArraySize)
+	{
+		bool outside = true;
+		float boxt = boundingBoxIntersectionTest(currArray[curr].bbox, ray, outside);
+		if (!outside) boxt = EPSILON;
+		if (boxt > 0 && boxt < tmpIntersection.t)
+		{
+			if (currArray[curr].startPrim != -1)//leaf node
+			{
+				int start = currArray[curr].startPrim, end = currArray[curr].endPrim;
+				bool intersect = util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, ray, &tmpIntersection);
+				intersected = intersected || intersect;
+			}
+			curr = currArray[curr].hitLink;
+		}
+		else
+		{
+			curr = currArray[curr].missLink;
+		}
+	}
+	
+	rayValid[path_index] = intersected;
+	if (intersected)
+	{
+		intersections[path_index] = tmpIntersection;
+		intersections[path_index].type = materials[tmpIntersection.materialId].type;
+	}
+	else if (skyboxTex)
+	{
+		glm::vec2 uv = util_sample_spherical_map(glm::normalize(rayDir));
+		float4 skyColorRGBA = tex2D<float4>(skyboxTex, uv.x, uv.y);
+		glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
+		image[pathSegment.pixelIndex] += depth > 0 ? pathSegment.color * skyColor * BACKGROUND_COLOR_MULT : pathSegment.color * skyColor;
 	}
 }
 
@@ -700,6 +793,26 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// tracing
 		dim3 numblocksPathSegmentTracing = (numRays + blockSize1d - 1) / blockSize1d;
 #if USE_BVH
+#if MTBVH
+		compute_intersection_bvh_stackless_mtbvh << <numblocksPathSegmentTracing, blockSize1d >> > (
+			depth
+			, numRays
+			, dev_paths1
+			, dev_materials
+			, dev_objs
+			, hst_scene->objects.size()
+			, dev_triangles
+			, dev_vertices
+			, dev_uvs
+			, hst_scene->skyboxTextureObj
+			, dev_primitives
+			, dev_mtbvhArray
+			, hst_scene->bvhTreeSize
+			, dev_intersections1
+			, rayValid
+			, dev_image
+			);
+#else
 		compute_intersection_bvh_stackless << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, numRays
@@ -718,6 +831,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, rayValid
 			, dev_image
 			);
+#endif
 #else
 		compute_intersection << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth

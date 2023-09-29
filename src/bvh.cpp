@@ -49,14 +49,15 @@ Primitive::Primitive(const Object& obj, int objID, int triangleOffset, const glm
 			bbox = Union(bbox, tmp);
 		}
 	}
-	bbox.pMin -= glm::vec3(0.02f);
-	bbox.pMax += glm::vec3(0.02f);
+	bbox.pMin -= glm::vec3(BOUNDING_BOX_EXPAND);
+	bbox.pMax += glm::vec3(BOUNDING_BOX_EXPAND);
 	assert(bbox.pMin.x < bbox.pMax.x && bbox.pMin.y < bbox.pMax.y && bbox.pMin.z < bbox.pMax.z);
 }
 
-BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start, int end)
+BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start, int end, int* size)
 {
 	BVHNode* root = new BVHNode();
+	(*size)++;
 	BoundingBox bb;
 	for (int i = start; i < end; i++)
 	{
@@ -70,7 +71,7 @@ BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start,
 	}
 	int numPrims = end - start;
 	glm::vec3 centerDiff = bCenter.pMax - bCenter.pMin;
-	int axis = centerDiff.x >= centerDiff.y && centerDiff.x >= centerDiff.z ? 0 : (centerDiff.y >= centerDiff.x && centerDiff.y >= centerDiff.z ? 1 : 2);
+	int axis = centerDiff.x >= centerDiff.y && centerDiff.x >= centerDiff.z ? 0 : (centerDiff.y >= centerDiff.z ? 1 : 2);
 	root->axis = axis;
 	root->startPrim = start;
 	root->endPrim = end;
@@ -123,8 +124,8 @@ BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start,
 					return bidx <= minSplitCostIdx;
 				});
 			int mid = midit - primitives.begin();
-			root->left = buildBVHTreeRecursiveSAH(primitives, start, mid);
-			root->right = buildBVHTreeRecursiveSAH(primitives, mid, end);
+			root->left = buildBVHTreeRecursiveSAH(primitives, start, mid, size);
+			root->right = buildBVHTreeRecursiveSAH(primitives, mid, end, size);
 		}
 		else
 		{
@@ -173,3 +174,41 @@ int compactBVHTreeForStacklessTraverse(std::vector<BVHGPUNode>& bvhArray, BVHNod
 	bvhArray[curr].right = right;
 	return curr;
 }
+
+
+static int recursiveCompactBVHTreeToMTBVH(MTBVHGPUNode* MTBVHArr, BVHNode* root, int curr, int dir)
+{
+	if (!root) return -1;
+	int axis = abs(dirs[dir]) - 1;
+	int sgn = dirs[dir] > 0 ? 1 : -1;
+	int next;
+	MTBVHArr[curr].bbox = root->bbox;
+	if (root->left && root->right)
+	{
+		BVHNode* nextHitNode = root->left->bbox.center()[axis] * sgn < root->right->bbox.center()[axis] * sgn ? root->left : root->right;
+		MTBVHArr[curr].hitLink = curr + 1;
+		next = recursiveCompactBVHTreeToMTBVH(MTBVHArr, nextHitNode, curr + 1, dir);
+		next = recursiveCompactBVHTreeToMTBVH(MTBVHArr, root->left != nextHitNode ? root->left : root->right, next, dir);
+		MTBVHArr[curr].missLink = next;
+	}
+	else//leaf node
+	{
+		next = curr + 1;
+		MTBVHArr[curr].hitLink = next;
+		MTBVHArr[curr].missLink = next;
+		MTBVHArr[curr].startPrim = root->startPrim;
+		MTBVHArr[curr].endPrim = root->endPrim;
+	}
+	return next;
+}
+
+void compactBVHTreeToMTBVH(std::vector<MTBVHGPUNode>& MTBVHGPUNode, BVHNode* root, int treeSize)
+{
+	MTBVHGPUNode.resize(6 * treeSize);
+	for (int d = 0; d < 6; d++)
+	{
+		int next = recursiveCompactBVHTreeToMTBVH(&MTBVHGPUNode[d * treeSize], root, 0, d);
+		assert(next == treeSize);
+	}
+}
+

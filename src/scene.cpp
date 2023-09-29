@@ -509,11 +509,15 @@ void Scene::buildBVH()
             primitives.emplace_back(obj, i);
         }
     }
-    bvhroot = buildBVHTreeRecursiveSAH(primitives, 0, primitives.size());
+    bvhroot = buildBVHTreeRecursiveSAH(primitives, 0, primitives.size(), &bvhTreeSize);
     assert(checkBVHTreeFull(bvhroot));
 }
 
 void Scene::buildStacklessBVH()
 {
+#if MTBVH
+    compactBVHTreeToMTBVH(MTBVHArray, bvhroot, bvhTreeSize);
+#else
     compactBVHTreeForStacklessTraverse(bvhArray, bvhroot);
+#endif
 }
