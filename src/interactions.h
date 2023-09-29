@@ -56,8 +56,7 @@ __host__ __device__ void sample_f_specular(glm::vec3& wi,
                                             PathSegment& pathSegment,
                                             const glm::vec3& normal,
                                             const Material& mat,
-                                            float specularPDF,
-                                            thrust::default_random_engine& rng)
+                                            float specularPDF)
 {
     wi = glm::reflect(pathSegment.ray.direction, normal);
     pathSegment.accum_throughput *= mat.specular.color / specularPDF;      // technically PDF for specular reflections is a delta distribution
@@ -101,12 +100,8 @@ __host__ __device__ void sample_f(PathSegment &pathSegment,
 
     // Using squared length to avoid sqrt calculations
     // More performant without any accuracy loss
-    float diffuseAmt = glm::length2(mat.color);
-    float specAmt = glm::length2(mat.specular.color);
-
-    float totalAmt = diffuseAmt + specAmt;
-    float diffuseProbability = diffuseAmt / totalAmt;
-    float specProbability = specAmt / totalAmt;
+    float specProbability = mat.hasReflective;
+    float diffuseProbability = 1.0f - specProbability;
 
     glm::vec3 wi(0.0f); // next iteration ray
 
@@ -119,7 +114,7 @@ __host__ __device__ void sample_f(PathSegment &pathSegment,
     }
     else
     {
-        sample_f_specular(wi, pathSegment, normal, mat, specProbability, rng);
+        sample_f_specular(wi, pathSegment, normal, mat, specProbability);
     }
 
     pathSegment.ray.origin = intersectionPoint;
