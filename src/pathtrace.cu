@@ -20,6 +20,8 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
+#define SORT_BY_MATERIAL 1
+#define STREAM_COMPACT 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -61,6 +63,14 @@ public:
 	__host__ __device__ bool operator()(const PathSegment& x)
 	{
 		return x.remainingBounces != _a;
+	}
+};
+
+struct sortByMaterialId
+{
+	__host__ __device__ bool operator()(const Intersection& isect1, const Intersection& isect2)
+	{
+		return isect1.materialId < isect2.materialId;
 	}
 };
 
@@ -441,27 +451,23 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 		depth++;
 
-		// compact
-		//thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
-		//thrust::device_ptr<PathSegment> new_path_end = thrust::remove_if(thrust_dev_paths, thrust_dev_paths + num_paths, notEquals(0));
-		//int oldNum = num_paths;
-		//int newNum = new_path_end.get() - thrust_dev_paths.get();
-		//std::cout << "old count: " << oldNum << ", after compaction new count: " << newNum;
+#if SORT_BY_MATERIAL
+		// Sort intersections and paths by material Id
+		// Theoretically this should make everything way faster
+		// because now all arrays are contiguous based on material ID,
+		// so all chunks of materials are processed together
+		// However this is wrecking my scene FPS because - aha - the materials are not that complex
+		// and sorting itself is super slow :)
+		thrust::device_ptr<Intersection> thrust_dev_intersections(dev_intersections);
+		thrust::stable_sort_by_key(thrust::device, thrust_dev_intersections, thrust_dev_intersections + num_paths, dev_paths, sortByMaterialId());
+#endif
+
 		// TODO:
 		// --- Shading Stage ---
 		// Shade path segments based on intersections and generate new rays by
 	  // evaluating the BSDF.
 	  // Start off with just a big kernel that handles all the different
 	  // materials you have in the scenefile.
-	  // TODO: compare between directly shading the path segments and shading
-	  // path segments that have been reshuffled to be contiguous in memory.
-		//shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
-		//	iter,
-		//	num_paths,
-		//	dev_intersections,
-		//	dev_paths,
-		//	dev_materials
-		//	);
 
 		kernel_sample_f<<<numblocksPathSegmentTracing, blockSize1d>>>(iter, depth,
 			num_paths,
@@ -469,12 +475,22 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials);
 
-		// compact
+#if STREAM_COMPACT
+		// compact away terminated paths
+		// again, this should make unterminated paths on which threads are actually doing meaningful work contiguous
+		// but similar to the material sorting, the gains achieved by doing that seem to be significantly outweighed
+		// by the losses that come from the time partitioning the arrays takes
+		// We can't use thrust::remove_if without doing fancy computations
+		// because remove_if will move the "unterminated" arrays to the beginning of the array
+		// but does not guarantee moving the "terminated" arrays to the end
 		thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
-		thrust::device_ptr<PathSegment> new_path_end = thrust::stable_partition(thrust_dev_paths, thrust_dev_paths + num_paths, notEquals(0));
+		thrust::device_ptr<PathSegment> new_path_end = thrust::stable_partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths, notEquals(0));
 		num_paths = new_path_end.get() - dev_paths;
+#endif
 
-		iterationComplete = depth >= traceDepth || num_paths == 0; // TODO: should be based off stream compaction results.
+		// we've either hit the max path tracing depth OR all paths have been terminated
+		// stop tracing further
+		iterationComplete = depth >= traceDepth || num_paths == 0;
 
 		if (guiData != NULL)
 		{
