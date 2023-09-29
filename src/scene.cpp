@@ -119,9 +119,10 @@ Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_fil
 
     std::filesystem::path scene_res_path(res_path);
 
-    LoadCamera(scene_json["camera"]);
-    LoadMaterials(scene_json["materials"], scene_res_path); 
-    LoadGeoms(scene_json["geomerties"], scene_res_path);
+    if (scene_json.contains("camera")) LoadCamera(scene_json["camera"]);
+    if (scene_json.contains("materials")) LoadMaterials(scene_json["materials"], scene_res_path);
+    if (scene_json.contains("geomerties")) LoadGeoms(scene_json["geomerties"], scene_res_path);
+    if (scene_json.contains("environment map")) LoadEnvironmentMap(scene_json["environment map"], scene_res_path);
 
     std::cout << "Reading scene success!"<< std::endl;
 }
@@ -204,6 +205,23 @@ void Scene::LoadCamera(const Json& camera_json)
     SafeGetVec<glm::ivec2, unsigned int, 2>(camera_json, "resolution", camera.resolution);
 
     std::cout << "Loading Camera Success!" << std::endl;
+}
+
+void Scene::LoadEnvironmentMap(const Json& environment_json, const std::filesystem::path& res_path)
+{
+    std::cout << "Loading Environment Map ..." << std::endl;
+
+    std::string map_str;
+    bool flip_v = false;
+    SafeGet <std::string>(environment_json, "path", map_str);
+    SafeGet <bool>(environment_json, "flip", flip_v);
+    std::filesystem::path texture_path(res_path);
+    texture_path.append(map_str);
+    if (std::filesystem::directory_entry(texture_path).exists())
+    {
+        m_Textures.emplace_back(texture_path.string(), flip_v);
+        m_EnvironmentMapId = m_Textures.size() - 1;
+    }
 }
 
 void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path& res_path)

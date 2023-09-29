@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.h"
-#include "cuda_runtime_api.h"
+
 class Texture2D
 {
 public:

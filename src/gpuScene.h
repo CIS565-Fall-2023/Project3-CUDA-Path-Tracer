@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "triangle.h"
+#include "environmentMap.h"
 
 class GPUScene
 {
@@ -122,6 +123,8 @@ public:
 	glm::vec2* dev_uvs;
 
 	AABB* dev_BVH;
+
+	EnvironmentMap env_map;
 
 	size_t shape_count;
 	size_t bvh_count;

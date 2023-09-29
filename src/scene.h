@@ -27,6 +27,7 @@ public:
     void LoadGeoms(const Json& geometry_json, const std::filesystem::path& res_path);
     void LoadMaterials(const Json& material_json, const std::filesystem::path& res_path);
     void LoadCamera(const Json& camera_json);
+    void LoadEnvironmentMap(const Json& environment_json, const std::filesystem::path& res_path);
 
     void ReadObj(const std::string& obj_file_path,
                 unsigned int matrial_id);
@@ -44,6 +45,7 @@ public:
     std::vector<TriangleIdx> m_TriangleIdxs;
     
     std::unordered_map<std::string, unsigned int> m_MaterialMap;
-
+    
+    unsigned int m_EnvironmentMapId;
     RenderState state;
 };

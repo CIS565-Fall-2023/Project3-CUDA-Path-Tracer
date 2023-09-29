@@ -159,7 +159,7 @@ __global__ void computeIntersections(int num_paths, PathSegment* pathSegments, S
 		shadeable.normal = BarycentricInterpolation<glm::vec3>(scene.dev_normals[n_id.x],
 															   scene.dev_normals[n_id.y],
 															   scene.dev_normals[n_id.z], intersection.uv);;
-
+		shadeable.normal = glm::normalize(shadeable.normal);
 		shadeable.uv = BarycentricInterpolation<glm::vec2>(scene.dev_uvs[uv_id.x], 
 														   scene.dev_uvs[uv_id.y], 
 														   scene.dev_uvs[uv_id.z], intersection.uv);;
@@ -242,18 +242,18 @@ __global__ void finalGather(float u, int nPaths, glm::vec3* image, PathSegment* 
 __global__ void KernelNaiveGI(int iteration, int num_paths, 
 							ShadeableIntersection* shadeableIntersections,
 							PathSegment* pathSegments,
-							Material* materials)
+							Material* materials, EnvironmentMap env_map)
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= num_paths) return;
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
+	PathSegment segment = pathSegments[idx];
 
 	if (intersection.materialId >= 0)
 	{
 		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
-		//return;
-		PathSegment segment = pathSegments[idx];
+		//return;	
 		
 		Material material = materials[intersection.materialId];
 		glm::vec3 materialColor = material.GetAlbedo(intersection.uv);
@@ -288,6 +288,7 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 	}
 	else
 	{
+		pathSegments[idx].radiance = segment.throughput * glm::clamp(env_map.Get(segment.ray.direction), 0.f, 1000.f);
 		pathSegments[idx].Terminate();
 	}
 }
@@ -364,7 +365,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 5 && num_paths > 0) 
+	while (depth < 2 && num_paths > 0) 
 	{
 		depth++;
 
@@ -378,7 +379,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 		cudaDeviceSynchronize();
 
 		KernelNaiveGI<<<numblocksPathSegmentTracing, blockSize1d >>>(m_Iteration, num_paths,
-																		dev_intersections, dev_paths, dev_materials);
+																	 dev_intersections, dev_paths, dev_materials, scene.env_map);
 		checkCUDAError("NaiveGI Error");
 		cudaDeviceSynchronize();
 
