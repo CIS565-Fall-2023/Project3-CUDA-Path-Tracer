@@ -20,6 +20,13 @@ enum LightType {
     ENVIRONMENT = 3
 };
 
+enum MaterialType {
+    DIFFUSE = 0,
+    SPECULAR_REFL = 1,
+    SPECULAR_TRANS = 2,
+    SPECULAR_FRES = 3
+};
+
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
@@ -57,6 +64,8 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+
+    MaterialType type;
 };
 
 struct Camera {
@@ -87,6 +96,11 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+
+    glm::vec3 throughput;
+
+    bool isSpecularBounce;
+    bool isFromCamera;
 };
 
 // Use with a corresponding PathSegment to do:

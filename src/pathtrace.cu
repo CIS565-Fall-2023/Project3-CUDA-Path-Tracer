@@ -19,10 +19,11 @@
 
 #define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 0
+#define ANTI_ALIASING 0
 
 #define NAIVE 0
-#define DIRECT_MIS 1
-#define FULL 0
+#define DIRECT_MIS 0
+#define FULL 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -184,13 +185,21 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		thrust::uniform_real_distribution<float> u01(0, 1);
 
 		segment.ray.origin = cam.position;
-		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+		segment.color = glm::vec3(0.0f, 0.0f, 0.0f);
+		segment.throughput = glm::vec3(1.0f, 1.0f, 1.0f);
+
+		segment.isFromCamera = true;
+		segment.isSpecularBounce = false;
 
 		// anti-aliasing by jittering
 		// u01(rng) - 0.5f
+		glm::vec2 bias(0.0f);
+#if ANTI_ALIASING
+		bias = glm::vec2(u01(rng) - 0.5f, u01(rng) - 0.5f);
+#endif
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) - 0.5f - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y + u01(rng) - 0.5f - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x + bias.x - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + bias.y - (float)cam.resolution.y * 0.5f)
 		);
 
 		// Physically-based depth-of-field
@@ -318,7 +327,6 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
-
 // naive path tracing
 __global__ void shadeNaive(
 	int iter
@@ -344,7 +352,7 @@ __global__ void shadeNaive(
 
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
-				cur.color *= (materialColor * material.emittance);
+				cur.color += cur.throughput * (materialColor * material.emittance);
 				cur.remainingBounces = 0; // terminate path
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
@@ -366,6 +374,7 @@ __global__ void shadeNaive(
 	}
 }
 
+// multi importance sampling
 __global__ void shadeDirectMIS(
 	int iter
 	, int num_paths
@@ -395,61 +404,80 @@ __global__ void shadeDirectMIS(
 			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
 
 			if (material.emittance > 0.0f) {
-				cur.color *= (materialColor * material.emittance);
+				cur.color = (materialColor * material.emittance);
 				cur.remainingBounces = 0; // terminate path
 			} else {
-				glm::vec3 Ld(0.0f);
-				// sample light source
-				glm::vec3 wiW;
-				float lightPdf = 0.0f, scatterPdf = 0.0f;
-				bool specular = false;
-				Light chosenLight;
-				glm::vec3 lightColor = sampleLight(point, intersection.surfaceNormal, 
-					wiW, chosenLight, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
-
-				if (length(lightColor) > 0.0f) {
-					glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent,
-						material, cur.ray.direction, wiW, scatterPdf, specular, rng);
-					f *= abs(dot(wiW, intersection.surfaceNormal));
-
-					if (specular) {
-						f = glm::vec3(0.0f); // specular not considered in direct lighting
-					}
-
-					if (lightPdf > 0.0f && length(f) > 0.0f) {
-						Ld += chosenLight.lightType == LightType::AREA ? 
-							(f * lightColor * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf :
-							f * lightColor / lightPdf;
-					}
-				}
-
-				// sample BSDF
-				if (chosenLight.lightType == LightType::AREA) {
-					glm::vec3 f = sampleMaterial(point, intersection.surfaceNormal, intersection.surfaceTangent,
-						material, cur.ray.direction, wiW, scatterPdf, specular, rng);
-					f *= abs(dot(wiW, intersection.surfaceNormal));
-
-					float weight = specular ? 1.0f : powerHeuristic(1, scatterPdf, 1, lightPdf);
-
-					if (scatterPdf > 0.0f && length(f) > 0.0f) {
-						// check visibility
-						Ray shadowRay;
-						shadowRay.origin = point;
-						shadowRay.direction = wiW;
-						ShadeableIntersection shadowIntersection;
-						computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
-
-						if (shadowIntersection.t > 0.0f && shadowIntersection.materialId == chosenLight.geom.materialid) {
-							Ld += f * lightColor * weight / scatterPdf;
-						}
-					}
-				}
-
-				cur.color = Ld;
-				cur.remainingBounces = 0; // terminate path
+				cur.color = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
+					, materials, material, geoms, numGeoms, lights, numLights, rng);
+				cur.remainingBounces = 0;
 			}
 		} else {
 			cur.color = glm::vec3(0.0f);
+			cur.remainingBounces = 0; // terminate path
+		}
+	}
+}
+
+// full light integrator
+__global__ void shadeFull(
+	int iter
+	, int num_paths
+	, ShadeableIntersection* shadeableIntersections
+	, PathSegment* pathSegments
+	, Material* materials
+	, Geom* geoms
+	, int numGeoms
+	, Light* lights
+	, int numLights
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths)
+	{
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+		PathSegment& cur = pathSegments[idx];
+		if (intersection.t > 0.0) { // if the intersection exists...
+			// Set up the RNG
+			// LOOK: this is how you use thrust's RNG! Please look at
+			// makeSeededRandomEngine as well.
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			Material material = materials[intersection.materialId];
+			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
+			glm::vec3 materialColor = material.color;
+
+			// specular or direct from camera
+			if (cur.isFromCamera || cur.isSpecularBounce) {
+				// If the material indicates that the object was a light, "light" the ray
+				cur.color += cur.throughput * materialColor * material.emittance;
+				
+				cur.isFromCamera = false;
+				cur.isSpecularBounce = false;
+			} 
+
+
+			// If the surface is diffuse or microfacet, compute MIS direct light
+			if (material.type == MaterialType::DIFFUSE) {
+				glm::vec3 Ld = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
+					, materials, material, geoms, numGeoms, lights, numLights, rng);
+				cur.color += Ld * cur.throughput;
+			}
+				
+			// Sample BSDF
+			scatterRay(cur, point, intersection.surfaceNormal, intersection.surfaceTangent, material, rng);
+
+			// TODO: subsurface scattering
+
+			// TODO: russian roulette
+		}
+		else {
+			cur.color = glm::vec3(0.0f);
+			if (cur.isFromCamera || cur.isSpecularBounce) {
+				// TODO: environment map
+				/*for (int i = 0; i < numLights; ++i) {
+					Material mat = materials[lights[i].geom.materialid];
+					cur.color += cur.throughput * mat.color * mat.emittance;
+				}*/
+			}
 			cur.remainingBounces = 0; // terminate path
 		}
 	}
@@ -589,6 +617,19 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 #if DIRECT_MIS
 		shadeDirectMIS << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter,
+			num_paths,
+			dev_intersections,
+			dev_paths,
+			dev_materials,
+			dev_geoms,
+			hst_scene->geoms.size(),
+			dev_lights,
+			hst_scene->lights.size()
+			);
+#endif
+#if FULL
+		shadeFull << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
 			dev_intersections,

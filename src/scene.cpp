@@ -212,6 +212,19 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.emittance = atof(tokens[1].c_str());
             }
         }
+
+        // judge material type
+        // TODO: change
+        if (newMaterial.hasReflective > 0.0f && newMaterial.hasRefractive > 0.0f) {
+            newMaterial.type = MaterialType::SPECULAR_FRES;
+        } else if (newMaterial.hasReflective > 0.0f) {
+            newMaterial.type = MaterialType::SPECULAR_REFL;
+		} else if (newMaterial.hasRefractive > 0.0f) {
+			newMaterial.type = MaterialType::SPECULAR_TRANS;
+		} else {
+			newMaterial.type = MaterialType::DIFFUSE;
+		}
+
         materials.push_back(newMaterial);
         return 1;
     }

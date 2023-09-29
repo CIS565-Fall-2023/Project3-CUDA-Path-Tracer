@@ -70,6 +70,35 @@ __host__ __device__ glm::vec3 sampleMaterial(glm::vec3 intersect,
     }
 }
 
+__host__ __device__ glm::vec3 sampleLight(
+    glm::vec3 intersect,
+    glm::vec3 normal,
+    glm::vec3& wi,
+    Light& chosenLight,
+    thrust::default_random_engine& rng,
+    float& lightPDF,
+    Geom* geoms,
+    int num_geoms,
+    Material* materials,
+    const Light* lights,
+    const int& num_lights) {
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    int chosenLightIndex = (int)(u01(rng) * num_lights);
+
+    chosenLight = lights[chosenLightIndex];
+
+    switch (chosenLight.lightType)
+    {
+        case LightType::AREA:
+        {
+            return sampleAreaLight(chosenLight, intersect, normal, num_lights, wi, lightPDF, geoms, num_geoms, materials, rng);
+        }
+    }
+
+    return glm::vec3(0.0f);
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -108,42 +137,70 @@ void scatterRay(
     // calculateRandomDirectionInHemisphere defined above.
 
     float pdf = 1.0;
-    bool specular = false;
     glm::vec3 dir = pathSegment.ray.direction;
 
-    pathSegment.color *= sampleMaterial(intersect, normal, tangent, m, dir, pathSegment.ray.direction, pdf, specular, rng);
-    pathSegment.color *= abs(glm::dot(glm::normalize(pathSegment.ray.direction), normal)) / pdf;
+    pathSegment.throughput *= sampleMaterial(intersect, normal, tangent, m, dir, pathSegment.ray.direction, pdf, pathSegment.isSpecularBounce, rng);
+    if (length(pathSegment.throughput) == 0.0f || pdf == 0.0f) {
+        pathSegment.remainingBounces = 0;
+		return;
+    }
+    
+    pathSegment.throughput *= abs(glm::dot(glm::normalize(pathSegment.ray.direction), normal)) / pdf;
 
     --pathSegment.remainingBounces;
     pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
 }
 
-__host__ __device__ glm::vec3 sampleLight(
-    glm::vec3 intersect,
-    glm::vec3 normal,
-    glm::vec3& wi,
-    Light& chosenLight,
-    thrust::default_random_engine& rng,
-    float& lightPDF,
-    Geom* geoms,
-    int num_geoms,
-    Material* materials,
-    const Light* lights,
-    const int& num_lights) {
+__host__ __device__ glm::vec3 sampleUniformLight(
+      glm::vec3 point
+    , glm::vec3 normal
+    , glm::vec3 tangent
+    , const glm::vec3& wo
+    , Material* materials
+    , Material& material
+    , Geom* geoms
+    , int numGeoms
+    , Light* lights
+    , int numLights
+    , thrust::default_random_engine& rng
+) {
+    glm::vec3 Ld(0.0f);
+    // sample light source
+    glm::vec3 wiW;
+    float lightPdf = 0.0f, scatterPdf = 0.0f;
+    bool specular = false;
+    Light chosenLight;
+    glm::vec3 lightColor = sampleLight(point, normal,
+        wiW, chosenLight, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
 
-    thrust::uniform_real_distribution<float> u01(0, 1);
-    int chosenLightIndex = (int)(u01(rng) * num_lights);
+    glm::vec3 f = sampleMaterial(point, normal, tangent, material, wo, wiW, scatterPdf, specular, rng);
+    f *= abs(dot(wiW, normal));
 
-    chosenLight = lights[chosenLightIndex];
-
-    switch (chosenLight.lightType)
-    {
-        case LightType::AREA:
-		{
-			return sampleAreaLight(chosenLight, intersect, normal, num_lights, wi, lightPDF, geoms, num_geoms, materials, rng);
-		}
-        
+    if (length(lightColor) > 0.0f && !specular) {
+        if (lightPdf > 0.0f && length(f) > 0.0f) {
+            Ld += chosenLight.lightType == LightType::AREA ?
+                (f * lightColor * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf :
+                f * lightColor / lightPdf;
+        }
     }
 
-    return glm::vec3(0.0f);
+    // sample BSDF
+    if (chosenLight.lightType == LightType::AREA) {
+        float weight = specular ? 1.0f : powerHeuristic(1, scatterPdf, 1, lightPdf);
+
+        if (scatterPdf > 0.0f && length(f) > 0.0f) {
+            // check visibility
+            Ray shadowRay;
+            shadowRay.origin = point;
+            shadowRay.direction = wiW;
+            ShadeableIntersection shadowIntersection;
+            computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
+
+            if (shadowIntersection.t > 0.0f && shadowIntersection.materialId == chosenLight.geom.materialid) {
+                Ld += f * lightColor * weight / scatterPdf;
+            }
+        }
+    }
+
+    return Ld;
 }
