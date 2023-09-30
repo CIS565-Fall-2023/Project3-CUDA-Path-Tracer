@@ -231,7 +231,7 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c,
 }
 
 __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes,
-    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, int& triIdx)
+    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, int& triIdx, bool useBvh)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -239,9 +239,39 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     Ray transformedRay = { ro, rd };
 
     float t;
-    if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, t, triIdx))
+    if (useBvh)
     {
-        return -1;
+        if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, t, triIdx))
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        t = FLT_MAX;
+        triIdx = -1;
+
+        for (int i = geom.startTriIdx; i < geom.startTriIdx + geom.numTris; ++i)
+        {
+            const Triangle& tri = tris[i];
+
+            glm::vec3 barycentricPos;
+            if (!glm::intersectRayTriangle(ro, rd, tri.v0.pos, tri.v1.pos, tri.v2.pos, barycentricPos))
+            {
+                continue;
+            }
+
+            if (barycentricPos.z < t)
+            {
+                t = barycentricPos.z;
+                triIdx = i;
+            }
+        }
+
+        if (triIdx == -1)
+        {
+            return -1;
+        }
     }
 
     const Triangle& tri = tris[triIdx];

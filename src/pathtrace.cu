@@ -278,6 +278,12 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	segment.remainingBounces = traceDepth;
 }
 
+struct SegmentProcessingSettings
+{
+	bool russianRoulette;
+	bool useBvh;
+};
+
 __global__ void computeIntersections(
 	int depth, 
 	int num_paths, 
@@ -286,7 +292,8 @@ __global__ void computeIntersections(
 	int geoms_size,
 	Triangle* tris,
 	BvhNode* bvhNodes,
-	ShadeableIntersection* intersections
+	ShadeableIntersection* intersections,
+	SegmentProcessingSettings settings
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -327,7 +334,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, tmp_triIdx);
+			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, tmp_triIdx, settings.useBvh);
 		}
 
 		if (t < 0 || t > t_min)
@@ -360,11 +367,6 @@ __global__ void computeIntersections(
 	}
 }
 
-struct SegmentProcessingSettings
-{
-	bool russianRoulette;
-};
-
 __device__ void processSegment(
 	PathSegment& segment, 
 	ShadeableIntersection& intersection,
@@ -374,7 +376,8 @@ __device__ void processSegment(
 	cudaTextureObject_t* textureObjects, 
 	int iter, 
 	int idx, 
-	SegmentProcessingSettings settings)
+	SegmentProcessingSettings settings
+)
 {
 	if (intersection.t <= 0.0f)
 	{
@@ -521,6 +524,10 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_valid_paths + blockSize1d - 1) / blockSize1d;
 
+		SegmentProcessingSettings settings;
+		settings.russianRoulette = guiData->russianRoulette;
+		settings.useBvh = guiData->useBvh;
+
 #if FIRST_BOUNCE_CACHE
 		if (guiData->firstBounceCache && !fbcNeedsRefresh && depth == 0)
 		{
@@ -543,7 +550,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				hst_scene->geoms.size(),
 				dev_tris,
 				dev_bvh_nodes,
-				dev_intersections
+				dev_intersections,
+				settings
 			);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
@@ -560,9 +568,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			);
 			checkCUDAError("sort by material");
 		}
-
-		SegmentProcessingSettings settings;
-		settings.russianRoulette = guiData->russianRoulette;
 
 		shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			iter,

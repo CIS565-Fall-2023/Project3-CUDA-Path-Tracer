@@ -47,7 +47,7 @@ Scene::~Scene()
     }
 }
 
-int Scene::loadMesh(string filePath)
+int Scene::loadMesh(string filePath, int& startTriIdx, int& numTris)
 {
     if (bvhRootIndices.find(filePath) != bvhRootIndices.end())
     {
@@ -98,8 +98,8 @@ int Scene::loadMesh(string filePath)
 
     time1 = Utils::timeSinceEpochMillisec();
 
-    int startTri = tris.size();
-    int numTris = 0;
+    startTriIdx = tris.size();
+    numTris = 0;
 
     for (auto& nodeIndex : model.scenes[model.defaultScene].nodes)
     {
@@ -213,7 +213,7 @@ int Scene::loadMesh(string filePath)
     timeTaken = (time2 - time1);
     cout << "Took " << timeTaken << " ms to populate mesh triangles" << endl;
 
-    int bvhRootNodeIdx = buildBvh(startTri, numTris);
+    int bvhRootNodeIdx = buildBvh(startTriIdx, numTris);
     bvhRootIndices[filePath] = bvhRootNodeIdx;
     return bvhRootNodeIdx;
 }
@@ -431,7 +431,11 @@ int Scene::loadGeom(string objectid) {
                 Utils::safeGetline(fp_in, filePath);
                 string fullPath = basePath + filePath;
                 newGeom.type = MESH;
-                newGeom.bvhRootNodeIdx = loadMesh(fullPath);
+                newGeom.bvhRootNodeIdx = loadMesh(fullPath, newGeom.startTriIdx, newGeom.numTris);
+
+                cout << "start tri: " << newGeom.startTriIdx << endl;
+                cout << "num tris: " << newGeom.numTris << endl;
+                cout << endl;
             }
         }
 

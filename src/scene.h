@@ -20,7 +20,7 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
 
-    int loadMesh(string filePath);
+    int loadMesh(string filePath, int& startTriIdx, int& numTris);
     int buildBvh(int startTri, int numTris);
     void bvhUpdateNodeBounds(BvhNode& node);
     float bvhEvaluateSAH(BvhNode& node, int axis, float pos);

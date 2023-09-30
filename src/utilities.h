@@ -30,8 +30,9 @@ public:
     bool firstBounceCache{ true };
 #endif
     bool russianRoulette{ true };
-    float lensRadius;
-    float focusDistance;
+    bool useBvh{ true };
+    float lensRadius{ 0.f };
+    float focusDistance{ 0.f };
 };
 
 namespace Utils {

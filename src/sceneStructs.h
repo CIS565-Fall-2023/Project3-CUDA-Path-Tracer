@@ -28,6 +28,8 @@ struct Geom
     enum GeomType type;
     int materialId;
     int bvhRootNodeIdx; // used only for meshes
+    int startTriIdx;
+    int numTris;
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
