@@ -100,7 +100,7 @@ __device__ inline float util_math_smith_ggx_shadowing_masking(const glm::vec3& w
 __device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
 {
 	*wi = util_sample_hemisphere_cosine(random);
-	*pdf = wo.z > 0 ? util_math_tangent_space_abscos(*wi) * INV_PI : 0;
+	*pdf = util_math_tangent_space_abscos(*wi) * INV_PI;
 	return diffuseAlbedo * INV_PI;
 }
 

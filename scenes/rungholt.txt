@@ -4,10 +4,16 @@ ROUGHNESS   -1.0
 REFRIOR     0
 EMITTANCE   0
 
+MATERIAL 1
+RGB         0.9 0.9 0.7
+ROUGHNESS   -1.0
+REFRIOR     0
+EMITTANCE   100
+
 // Camera
 CAMERA
-RES         2560 1440
-FOVY        45
+RES         1920 1080
+FOVY        30
 ITERATIONS  10000
 DEPTH       8
 FILE        rungholt
@@ -22,6 +28,13 @@ material -1
 TRANS       0 0 0
 ROTAT       0 0 0
 SCALE       0.1 0.1 0.1
+
+//OBJECT 1
+//geometry cube
+//material 1
+//TRANS       0 50 0
+//ROTAT       0 0 0
+//SCALE       1 1 1
 
 
 SKYBOX

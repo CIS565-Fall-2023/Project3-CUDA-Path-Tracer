@@ -52,15 +52,7 @@ __device__ inline bool util_math_is_nan(const glm::vec3& v)
 	return (v.x != v.x) || (v.y != v.y) || (v.z != v.z);
 }
 
-__device__ inline glm::vec3 ACESFilm(glm::vec3 x)
-{
-	float a = 2.51f;
-	float b = 0.03f;
-	float c = 2.43f;
-	float d = 0.59f;
-	float e = 0.14f;
-	return glm::clamp((x * (a * x + b)) / (x * (c * x + d) + e), glm::vec3(0), glm::vec3(1));
-}
+
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
@@ -75,7 +67,7 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		glm::vec3 color;
 #if TONEMAPPING
 		color = pix / (float)iter;
-		color = glm::pow(ACESFilm(color), glm::vec3(1 / 2.2f));
+		color = util_postprocess_gamma(util_postprocess_ACESFilm(color));
 		color = color * 255.0f;
 #else
 		color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
@@ -196,6 +188,20 @@ void pathtraceFree(Scene* scene) {
 	checkCUDAError("pathtraceFree");
 }
 
+__device__ inline glm::vec2 util_concentric_sample_disk(glm::vec2 rand)
+{
+	rand = 2.0f * rand - 1.0f;
+	if (rand.x == 0 && rand.y == 0)
+	{
+		return glm::vec2(0);
+	}
+	const float pi_4 = PI / 4, pi_2 = PI / 2;
+	bool x_g_y = abs(rand.x) > abs(rand.y);
+	float theta = x_g_y ? pi_4 * rand.y / rand.x : pi_2 - pi_4 * rand.x / rand.y;
+	float r = x_g_y ? rand.x : rand.y;
+	return glm::vec2(cos(theta), sin(theta)) * r;
+}
+
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -224,6 +230,19 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + jitter[0])
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + jitter[1])
 		);
+#if DOF_ENABLED
+		float lensR = cam.lensRadius;
+		glm::vec3 perpDir = glm::cross(cam.right, cam.up);
+		perpDir = glm::normalize(perpDir);
+		float focalLen = cam.focalLength;
+		float tFocus = focalLen / glm::abs(glm::dot(segment.ray.direction, perpDir));
+		glm::vec2 offset = lensR * util_concentric_sample_disk(glm::vec2(u01(rng), u01(rng)));
+		glm::vec3 newOri = offset.x * cam.right + offset.y * cam.up + cam.position;
+		glm::vec3 pFocus = segment.ray.direction * tFocus + segment.ray.origin;
+		segment.ray.direction = glm::normalize(pFocus - newOri);
+		segment.ray.origin = newOri;
+#endif
+
 #else
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
@@ -582,6 +601,7 @@ __global__ void compute_intersection_bvh_stackless_mtbvh(
 	{
 		intersections[path_index] = tmpIntersection;
 		intersections[path_index].type = materials[tmpIntersection.materialId].type;
+		pathSegment.remainingBounces--;
 	}
 	else if (skyboxTex)
 	{
@@ -646,26 +666,35 @@ __global__ void scatter_on_intersection(
 		{
 			bxdf = bxdf_microfacet_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor, material.roughness);
 		}
-		else
+		else//diffuse
 		{
+			float4 color = { 0,0,0,1 };
 			if (material.diffuseMap != 0)
 			{
-				float4 color = tex2D<float4>(material.diffuseMap, intersection.uv.x, intersection.uv.y);
-				/*materialColor.x = intersection.uv.x;
-				materialColor.y = intersection.uv.y;
-				materialColor.z = 0;*/
+				color = tex2D<float4>(material.diffuseMap, intersection.uv.x, intersection.uv.y);
 				materialColor.x = color.x;
 				materialColor.y = color.y;
 				materialColor.z = color.z;
 			}
-			bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor);
+			if (color.w <= ALPHA_CUTOFF)
+			{
+				bxdf = pathSegments[idx].remainingBounces == 0 ? glm::vec3(0, 0, 0) : glm::vec3(1, 1, 1);
+				wi = -wo;
+				pdf = util_math_tangent_space_abscos(wi);
+			}
+			else
+			{
+				bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(u01(rng), u01(rng)), &pdf, materialColor);
+			}
+			
 		}
 		if (pdf > 0)
 		{
 			pathSegments[idx].color *= bxdf * util_math_tangent_space_abscos(wi) / pdf;
 			glm::vec3 newDir = glm::normalize(TBN * wi);
 			glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
-			pathSegments[idx].ray.origin = intersection.worldPos + offset * SCATTER_ORIGIN_OFFSETMULT;
+			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;
+			pathSegments[idx].ray.origin = intersection.worldPos + offset * offsetMult;
 			pathSegments[idx].ray.direction = newDir;
 			rayValid[idx] = 1;
 		}
@@ -724,7 +753,6 @@ int compact_rays(int* rayValid,int* rayIndex,int numRays, bool sortByMat=false)
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
-	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
@@ -768,7 +796,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// TODO: perform one iteration of path tracing
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths1);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, MAX_ITER, dev_paths1);
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;

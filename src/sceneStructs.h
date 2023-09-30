@@ -10,11 +10,13 @@
 #define MTBVH 1
 #define VIS_NORMAL 0
 #define TONEMAPPING 1
+#define DOF_ENABLED 1
 #define BACKGROUND_COLOR_MULT 1.0f
-#define SCATTER_ORIGIN_OFFSETMULT 0.01f
+#define SCATTER_ORIGIN_OFFSETMULT 0.00001f
 #define BOUNDING_BOX_EXPAND 0.00001f
+#define ALPHA_CUTOFF 0.01f
 #define STOCHASTIC_SAMPLING 1
-#define MAX_ITER 8
+#define MAX_ITER 10
 #define SORT_BY_MATERIAL_TYPE 0
 #define MAX_NUM_PRIMS_IN_LEAF 2
 #define SAH_BUCKET_SIZE 20
@@ -117,6 +119,8 @@ struct Camera {
     glm::vec3 right;
     glm::vec2 fov;
     glm::vec2 pixelLength;
+    float lensRadius = 0.001f;
+    float focalLength = 1.0f;
 };
 
 struct RenderState {

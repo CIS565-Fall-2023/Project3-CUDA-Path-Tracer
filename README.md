@@ -8,7 +8,9 @@ CUDA Path Tracer
   
 * Tested on: Windows 11, i9-12900HX @ 2.30GHz 16GB, RTX4080 laptop 12GB
 
-![](./img/rungholt-sq.png)
+  ![](./img/rungholt-dof.png)
+
+  ![](./img/bunny-dof.png)
 
 ![](./img/sponza.png)
 

@@ -245,6 +245,10 @@ void RenderImGui()
 		camchanged = true;
 	if (ImGui::SliderFloat("Pos z", &renderState->camera.position.z, -10.0f, 10.0f))
 		camchanged = true;
+	if (ImGui::SliderFloat("Lens Radius", &renderState->camera.lensRadius, 0.0f, 0.15f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Focal Length", &renderState->camera.focalLength, 0.1f, 20.0f))
+		camchanged = true;
 
 	ImGui::End();
 
