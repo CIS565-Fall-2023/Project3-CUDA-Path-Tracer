@@ -19,10 +19,6 @@
 - glTF mesh loading
 - BVH construction and traversal
 
-### Planned features
-
-- Option to toggle BVH (annoying but required)
-
 ### Attribution
 
 #### Code
