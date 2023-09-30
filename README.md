@@ -12,7 +12,6 @@
 - Basic path tracer with lambert and specular reflection
 - Toggleable option to sort rays by material type
 - Toggleable first bounce cache
-  - Disabled for now because it seems to slow performance at higher maximum depths
 - Russian roulette path termination
 - Specular refraction
 - Depth of field
