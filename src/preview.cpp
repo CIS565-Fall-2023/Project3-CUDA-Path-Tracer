@@ -219,6 +219,7 @@ void RenderImGui()
 	//ImGui::Text("counter = %d", counter);
 	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
 	ImGui::Checkbox("Sort By Material", &imguiData->SortByMaterial);
+	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 
@@ -240,7 +241,7 @@ void mainLoop() {
 
 		runCuda();
 
-		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
+		std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 		glBindTexture(GL_TEXTURE_2D, displayImage);

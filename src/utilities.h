@@ -23,12 +23,17 @@
 #define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
 #define EPSILON 0.00001f
 
+#define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
+void checkCUDAErrorFn(const char* msg, const char* file, int line);
+
 class GuiDataContainer
 {
 public:
     GuiDataContainer() : TracedDepth(0) {}
     int TracedDepth;
     bool SortByMaterial;
+    bool UseBVH;
 };
 
 namespace utilityCore

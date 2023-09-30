@@ -23,7 +23,7 @@ endif()
 ########################################
 # CUDA Setup
 ########################################
-find_package(CUDA 10 REQUIRED)
+find_package(CUDA 12 REQUIRED)
 include(${CMAKE_MODULE_PATH}/CUDAComputesList.cmake)
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} --extended-lambda)
 list(APPEND CUDA_NVCC_FLAGS ${CUDA_GENERATE_CODE})
@@ -65,7 +65,6 @@ include_directories(${GLM_INCLUDE_DIRS})
 set(headers
     src/main.h
     src/image.h
-    src/interactions.h
     src/intersections.h
     src/glslUtility.hpp
     src/pathtrace.h
@@ -96,6 +95,7 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/bvh.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
