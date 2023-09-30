@@ -68,12 +68,60 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  */
 __host__ __device__
 void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        const Material &m,
-        thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+    PathSegment& pathSegment,
+    glm::vec3 intersect,
+    glm::vec3 normal,
+    const Material& m,
+    thrust::default_random_engine& rng) {
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float random = u01(rng);
+    glm::vec3 newDir;
+
+    if (m.hasReflective && m.hasRefractive) {
+        // Fresnel's equation to decide between reflection and refraction
+        float cosTheta = glm::dot(normal, pathSegment.ray.direction);
+        float R0 = (1.0f - m.indexOfRefraction) / (1.0f + m.indexOfRefraction);
+        R0 = R0 * R0;
+        float R = R0 + (1.0f - R0) * pow(1.0f - cosTheta, 5);
+        if (random < R) {
+            newDir = glm::reflect(pathSegment.ray.direction, normal);
+            // Imperfect specular reflection
+            newDir += calculateRandomDirectionInHemisphere(normal, rng) * 0.1f;  // Add a small random direction
+            newDir = glm::normalize(newDir);
+            pathSegment.color *= m.specular.color;
+        }
+        else {
+            float eta = cosTheta > 0 ? 1.0f / m.indexOfRefraction : m.indexOfRefraction;
+            newDir = glm::refract(pathSegment.ray.direction, normal, eta);
+            
+            // Imperfect specular refraction
+            newDir += calculateRandomDirectionInHemisphere(-normal, rng) * 0.1f;  // Note the -normal
+            newDir = glm::normalize(newDir);
+
+            pathSegment.color *= m.specular.color;
+        }
+    }
+    else if (random < m.hasReflective) {
+        newDir = glm::reflect(pathSegment.ray.direction, normal);
+        pathSegment.color *= m.specular.color;
+    }
+    else if (random < m.hasRefractive) {
+        float cosTheta = glm::dot(normal, pathSegment.ray.direction);
+        bool entering = cosTheta > 0;
+        float eta = entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction;
+        newDir = glm::refract(pathSegment.ray.direction, normal, eta);
+        if (glm::length(newDir) < 0.01f) { // Check for total internal reflection
+            newDir = glm::reflect(pathSegment.ray.direction, normal);
+        }
+        pathSegment.color *= m.specular.color;
+    }
+    else {
+        newDir = calculateRandomDirectionInHemisphere(normal, rng);
+        pathSegment.color *= m.color;
+    }
+
+    pathSegment.ray.origin = intersect + newDir * 0.001f;
+    pathSegment.ray.direction = newDir;
 }
+

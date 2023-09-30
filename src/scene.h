@@ -22,5 +22,8 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
+    std::vector<Triangle> triangles;
+    std::vector<glm::vec4> textures;
+    int triIdx = 0;
     RenderState state;
 };

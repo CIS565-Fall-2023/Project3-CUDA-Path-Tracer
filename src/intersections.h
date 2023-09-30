@@ -142,3 +142,85 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float triangleIntersectionTest(Geom custom_obj, Ray r,
+    glm::vec3& intersectionPoint, Triangle* triangles, int triangles_start, int triangles_end, glm::vec3& normal, bool& outside,
+    glm::vec2& uv)
+{
+
+    // get the Ray in local space
+    Ray ray_inversed;
+    ray_inversed.origin = multiplyMV(custom_obj.inverseTransform, glm::vec4(r.origin, 1.0f));
+    ray_inversed.direction = glm::normalize(multiplyMV(custom_obj.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    float min_t = FLT_MAX;
+
+    for (int i = triangles_start; i < triangles_end; i++)
+    {
+        Triangle& triangle = triangles[i];
+        glm::vec3 vertices[3];
+        glm::vec3 normals[3];
+        glm::vec2 uvs[3];
+
+        for (int j = 0; j < 3; j++) {
+            vertices[j] = triangle.vertices[j];
+            normals[j] = triangle.normals[j];
+            uvs[j] = triangle.uvs[j];
+        }
+        glm::vec3 baryPos;
+
+
+        // Not intersected
+        if (glm::intersectRayTriangle(ray_inversed.origin, ray_inversed.direction, vertices[0], vertices[1], vertices[3], baryPos))
+        {
+
+            // Smooth interpolate normals
+            glm::vec3 n0;
+            glm::vec3 n1;
+            glm::vec3 n2;
+
+            glm::vec3 isect_pos = (1.f - baryPos.x - baryPos.y) * vertices[1] + baryPos.x * vertices[2] + baryPos.y * vertices[3];
+            intersectionPoint = multiplyMV(custom_obj.transform, glm::vec4(isect_pos, 1.f));
+            float t = glm::length(r.origin - intersectionPoint);
+            if (t > min_t)
+            {
+                continue;
+            }
+            min_t = t;
+
+            if ((glm::length(normals[0]) != 0) && (glm::length(normals[1]) != 0) && (glm::length(normals[2]) != 0))
+            {
+                n0 = normals[0];
+                n1 = normals[1];
+                n2 = normals[2];
+            }
+            else
+            {
+                n0 = glm::normalize(glm::cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+                n1 = glm::normalize(glm::cross(vertices[0] - vertices[1], vertices[2] - vertices[1]));
+                n2 = glm::normalize(glm::cross(vertices[0] - vertices[2], vertices[1] - vertices[2]));
+            }
+
+            // Barycentric Interpolation
+            float S = 0.5f * glm::length(glm::cross(vertices[0] - vertices[1], vertices[2] - vertices[1]));
+            float S0 = 0.5f * glm::length(glm::cross(vertices[1] - isect_pos, vertices[2] - isect_pos));
+            float S1 = 0.5f * glm::length(glm::cross(vertices[0] - isect_pos, vertices[2] - isect_pos));
+            float S2 = 0.5f * glm::length(glm::cross(vertices[0] - isect_pos, vertices[1] - isect_pos));
+            glm::vec3 newNormal = glm::normalize(n0 * S0 / S + n1 * S1 / S + n2 * S2 / S);
+
+            if ((glm::length(uvs[0]) != 0) && (glm::length(uvs[1]) != 0) && (glm::length(uvs[2]) != 0))
+            {
+                uv = uvs[0] * S0 / S + uvs[1] * S1 / S + uvs[2] * S2 / S;
+            }
+
+            normal = glm::normalize(multiplyMV(custom_obj.invTranspose, glm::vec4(newNormal, 0.f)));
+            outside = glm::dot(normal, ray_inversed.direction) < 0;
+            isect_pos = multiplyMV(custom_obj.transform, glm::vec4(isect_pos, 1.f));
+        }
+    }
+    if (!outside)
+    {
+        normal = -normal;
+    }
+    return min_t;
+}
