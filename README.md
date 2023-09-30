@@ -132,9 +132,9 @@ Scene with 1k faces
         - Normals in world coordinate
     ![](img/bump_mapping_world_coord.png)
         - Before bump mapping
-    ![](img/bump_mapping_before.png)
+    ![](img/bump_mapping_before_annotated.png)
         - After bump mapping
-    ![](img/bump_mapping_after.png)
+    ![](img/bump_mapping_after_annotated.png)
     It might be a little difficult to notice the difference before and after bump mapping. **Please observe the logo on the box, more details are added.**
 
 
@@ -147,7 +147,14 @@ Scene with 1k faces
 09.30
 
 - [ ] Microfacet
-
-- [ ] Antialiasing
+    - [x] Metal Fresnel hack
+    - [ ] Conductor
+        - [ ] After mixing, need to consider how to sample
+- [x] Camera 
+    - [x] Antialiasing
 
 - [ ] Denoising
+    - [x] OpenImage Denoiser built
+        - CPU only for now
+        - [ ] Figure out how to build `oidn` for cuda
+    - [ ] Integrate it into project

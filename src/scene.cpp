@@ -155,22 +155,27 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
         const auto& indicesAccessor = model.accessors[primitive.indices];
         const auto& positionsAccessor = model.accessors[primitive.attributes.at("POSITION")];
         const auto& normalsAccessor = model.accessors[primitive.attributes.at("NORMAL")];
-        const auto& uvAccessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
 
         const auto& indicesView = model.bufferViews[indicesAccessor.bufferView];
         const auto& positionsView = model.bufferViews[positionsAccessor.bufferView];
         const auto& normalsView = model.bufferViews[normalsAccessor.bufferView];
-        const auto& uvView = model.bufferViews[uvAccessor.bufferView];
 
         // TODO: Dynamic type array according to componentType
         const unsigned short* indexData = reinterpret_cast<const unsigned short*>(&model.buffers[indicesView.buffer].data[indicesAccessor.byteOffset + indicesView.byteOffset]);
         const float* positionData       = reinterpret_cast<const float*>(&model.buffers[positionsView.buffer].data[positionsAccessor.byteOffset + positionsView.byteOffset]);
         const float* normalData         = reinterpret_cast<const float*>(&model.buffers[normalsView.buffer].data[normalsAccessor.byteOffset + normalsView.byteOffset]);
-        const float* uvData             = reinterpret_cast<const float*>(&model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]);
 
         const size_t vertexStride = 3;
         const size_t normalStride = 3;
         const size_t uvStride = 2;
+
+        const float* uvData;
+        bool hasUV = (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end());
+        if (hasUV) {
+            const auto& uvAccessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+            const auto& uvView = model.bufferViews[uvAccessor.bufferView];
+            uvData = reinterpret_cast<const float*>(&model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]);
+        }
 
         const size_t numIndices = indicesAccessor.count;
         glm::mat4x4 normalTransform = glm::transpose(glm::inverse(transform));
@@ -203,10 +208,12 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
             triangle.n1 = glm::normalize(glm::vec3(normalTransform * glm::vec4(triangle.n1, 0.0f)));
             triangle.n2 = glm::normalize(glm::vec3(normalTransform * glm::vec4(triangle.n2, 0.0f)));
             triangle.n3 = glm::normalize(glm::vec3(normalTransform * glm::vec4(triangle.n3, 0.0f)));
-
-            triangle.uv1 = glm::vec2(uvData[indexData[i] * uvStride], uvData[indexData[i] * uvStride + 1]);
-            triangle.uv2 = glm::vec2(uvData[indexData[i + 1] * uvStride], uvData[indexData[i + 1] * uvStride + 1]);
-            triangle.uv3 = glm::vec2(uvData[indexData[i + 2] * uvStride], uvData[indexData[i + 2] * uvStride + 1]);
+            
+            if (hasUV) {
+                triangle.uv1 = glm::vec2(uvData[indexData[i] * uvStride], uvData[indexData[i] * uvStride + 1]);
+                triangle.uv2 = glm::vec2(uvData[indexData[i + 1] * uvStride], uvData[indexData[i + 1] * uvStride + 1]);
+                triangle.uv3 = glm::vec2(uvData[indexData[i + 2] * uvStride], uvData[indexData[i + 2] * uvStride + 1]);
+            }
 
             //printf("triangle.uv1: %f %f\n", triangle.uv1.x, triangle.uv1.y);
             //printf("triangle.uv2: %f %f\n", triangle.uv2.x, triangle.uv2.y);

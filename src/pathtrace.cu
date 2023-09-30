@@ -142,6 +142,52 @@ __global__ void initBSDFWithTextures(BSDFStruct* bsdfStructs, Texture* texture, 
 	}
 }
 
+void pathtraceInitBeforeMainLoop() {
+
+	// TODO: initialize any extra device memeory you need
+
+	textureSize = pa->textures.size();
+	auto textureInfos = pa->textures.data();
+	cudaMalloc(&dev_textureInfos, textureSize * sizeof(TextureInfo));
+	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
+	unsigned char* dev_texture_data = nullptr;
+	for (int i = 0; i < textureSize; i++)
+	{
+		cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
+		cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+		initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
+	}
+
+
+	checkCUDAError("initDeviceTextures");
+
+	auto bsdfStructs = pa->bsdfStructs.data();
+	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
+	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
+
+	initBSDFWithTextures << <1, 1 >> > (dev_bsdfStructs, dev_textures, pa->bsdfStructs.size());
+	checkCUDAError("initBSDFWithTextures");
+
+
+	bvh = new BVHAccel();
+	bvh->initBVH(pa->triangles);
+	auto triangles = bvh->orderedPrims.data();
+	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
+	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
+	int triangle_size = bvh->orderedPrims.size();
+	int blockSize = 256;
+	dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
+
+	initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
+
+}
+
 void pathtraceInit(HostScene* scene) {
 	
 	hst_scene = scene;
@@ -162,49 +208,49 @@ void pathtraceInit(HostScene* scene) {
 
 	// TODO: initialize any extra device memeory you need
 
-	textureSize = pa->textures.size();
-	auto textureInfos = pa->textures.data();
-	cudaMalloc(&dev_textureInfos, textureSize * sizeof(TextureInfo));
-	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
-	unsigned char* dev_texture_data = nullptr;
-	for (int i =0;i<textureSize;i++)
-	{
-		cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
-		cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
-		initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
-	}
-
-
-	checkCUDAError("initDeviceTextures");
-
-	auto bsdfStructs = pa->bsdfStructs.data();
-	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
-	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
-
-	initBSDFWithTextures<<<1,1>>>(dev_bsdfStructs, dev_textures, pa->bsdfStructs.size());
-	checkCUDAError("initBSDFWithTextures");
-
-
-	bvh = new BVHAccel();
-	bvh->initBVH(pa->triangles);
-	auto triangles = bvh->orderedPrims.data();
-	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
-	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
-	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
-
-	int triangle_size = bvh->orderedPrims.size();
-	int blockSize = 256;
-	dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
-
-	initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
-
-	// TODO: Init Texture Pointers within 
-
-	checkCUDAError("pathtraceInit");
+	//textureSize = pa->textures.size();
+	//auto textureInfos = pa->textures.data();
+	//cudaMalloc(&dev_textureInfos, textureSize * sizeof(TextureInfo));
+	//cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+	//
+	//cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
+	//unsigned char* dev_texture_data = nullptr;
+	//for (int i =0;i<textureSize;i++)
+	//{
+	//	cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
+	//	cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+	//	initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
+	//}
+	//
+	//
+	//checkCUDAError("initDeviceTextures");
+	//
+	//auto bsdfStructs = pa->bsdfStructs.data();
+	//cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
+	//cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
+	//
+	//initBSDFWithTextures<<<1,1>>>(dev_bsdfStructs, dev_textures, pa->bsdfStructs.size());
+	//checkCUDAError("initBSDFWithTextures");
+	//
+	//
+	//bvh = new BVHAccel();
+	//bvh->initBVH(pa->triangles);
+	//auto triangles = bvh->orderedPrims.data();
+	//cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
+	//cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	//
+	//cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
+	//cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+	//
+	//int triangle_size = bvh->orderedPrims.size();
+	//int blockSize = 256;
+	//dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
+	//
+	//initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
+	//
+	//// TODO: Init Texture Pointers within 
+	//
+	//checkCUDAError("pathtraceInit");
 }
 
 void pathtraceFree() {
@@ -212,11 +258,18 @@ void pathtraceFree() {
 	cudaFree(dev_paths);
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
+	//cudaFree(dev_triangles);
+	//cudaFree(dev_bsdfStructs);
+	//delete bvh;
+	cudaFree(dev_first_iteration_first_bounce_cache_intersections);
+	checkCUDAError("pathtraceFree");
+}
+
+void pathtraceFreeAfterMainLoop() {
 	cudaFree(dev_triangles);
 	cudaFree(dev_bsdfStructs);
-	cudaFree(dev_first_iteration_first_bounce_cache_intersections);
 	delete bvh;
-	checkCUDAError("pathtraceFree");
+	delete pa;
 }
 
 /**

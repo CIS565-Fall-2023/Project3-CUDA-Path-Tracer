@@ -32,9 +32,8 @@ glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float * pdf
     float Xi2 = u01(rng);
 
     float r = sqrt(Xi1);
-    float theta = acos(r);
     float phi = 2. * PI * Xi2;
-    *pdf = sqrt(1 - r) / PI;
+    *pdf = sqrt(1 - r) * INV_PI;
     return glm::vec3(r * cos(phi), r * sin(phi), sqrt(1 - Xi1));
 }
 
