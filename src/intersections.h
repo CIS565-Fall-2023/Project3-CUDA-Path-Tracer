@@ -197,23 +197,18 @@ __host__ __device__ bool intersectBVHNode(const Ray& ray, const CompactBVH& node
 
     if (tymin > tymax) swap(tymin, tymax);
 
-    if ((txmin > tymax) || (tymin > txmax))
-        return false;
-
-    if (tymin > txmin)
-        txmin = tymin;
-
-    if (tymax < txmax)
-        txmax = tymax;
-
     float tzmin = (node.minBounds.z - ray.origin.z) / ray.direction.z;
     float tzmax = (node.maxBounds.z - ray.origin.z) / ray.direction.z;
 
     if (tzmin > tzmax) swap(tzmin, tzmax);
 
-    if ((txmin > tzmax) || (tzmin > txmax))
+    // Check for overlap in the intervals found for each axis
+    float tmin = fmaxf(fmaxf(txmin, tymin), tzmin);
+    float tmax = fminf(fminf(txmax, tymax), tzmax);
+
+    // If the intervals don't overlap, return false
+    if (tmin > tmax)
         return false;
 
     return true;
 }
-

@@ -36,14 +36,6 @@ Scene::Scene(string filename) {
         }
     }
     
-    /*for (const auto& geom : geoms) {
-        if (geom.type == TRIANGLE) {
-            printf("V0: (%f, %f, %f)\n", geom.triangle.v0[0], geom.triangle.v0[1], geom.triangle.v0[2]);
-            printf("V1: (%f, %f, %f)\n", geom.triangle.v1[0], geom.triangle.v1[1], geom.triangle.v1[2]);
-            printf("V2: (%f, %f, %f)\n", geom.triangle.v2[0], geom.triangle.v2[1], geom.triangle.v2[2]);
-            printf("\n");
-        }
-    }*/
     printf("Number of Geoms: %d\n", geoms.size());
     printf("\n");
 }
@@ -76,7 +68,7 @@ int Scene::loadGeom(string objectid) {
 
                 ObjLoader objLoader;
 
-                if (objLoader.Load("../scenes/cube.obj")) {
+                if (objLoader.Load("../scenes/teapot.obj")) {
                     loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
                     printf("Triangle Size: %d\n", tempTriangles.size());
                 }
@@ -399,7 +391,7 @@ BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end,
 
     // compute bounding box for all geoms from start to end
     glm::vec3 minBounds(FLT_MAX);
-    glm::vec3 maxBounds(FLT_MIN);  
+    glm::vec3 maxBounds(-FLT_MAX);  
 
     for (unsigned int i = start; i < end; ++i) {
         glm::vec3 geomMin, geomMax;
@@ -435,14 +427,19 @@ BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end,
 
     // compute the best split with SAH cost
     int bestSplit = getBestSplit(geoms, start, end);
-    if (bestSplit == -1) {
+    if (bestSplit == -1 || bestSplit == start) {
         // fall backs to midpoint split
         bestSplit = start + (end - start) / 2; 
     }
 
+    // Debugging print statements
+    /*std::cout << "Constructing BVH for range: " << start << " to " << end << std::endl;
+    std::cout << "Best split index: " << bestSplit << std::endl;*/
+
+
     // Recursively construct child nodes
-    node->left = constructBVH(geoms, start, bestSplit + 1, numLeaves);
-    node->right = constructBVH(geoms, bestSplit + 1, end, numLeaves);
+    node->left = constructBVH(geoms, start, bestSplit, numLeaves);
+    node->right = constructBVH(geoms, bestSplit, end, numLeaves);
 
     return node.release();
 }

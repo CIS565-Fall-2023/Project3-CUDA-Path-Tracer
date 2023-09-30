@@ -47,6 +47,40 @@ int main(int argc, char** argv) {
 	// Load scene file
 	scene = new Scene(sceneFile);
 
+	cout << "Constructing BVH..." << endl;
+	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size(), LEAF_THRESHOLD);
+	scene->flattenBVHTree(scene->root);
+	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
+
+	cout << "" << endl;
+	printf("Dubugging for first root:\n");
+	auto root = scene->root;
+	printf("Root\n");
+	printf("Min Bounds: (%f, %f, %f)\n", root->minBounds[0], root->minBounds[1], root->minBounds[2]);
+	printf("Max Bounds: (%f, %f, %f)\n", root->maxBounds[0], root->maxBounds[1], root->maxBounds[2]);
+	printf("Geom count: %d\n", root->isLeafNode);
+	cout << "" << endl;
+
+	auto node = scene->bvh[0];
+	printf("Flatten\n");
+	printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
+	printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
+	printf("Geom count: %d\n", node.geomEndIndex - node.geomStartIndex);
+	cout << "" << endl;
+
+	printf("Check the flattened node:\n");
+	for (const auto& node : scene->bvh) {
+		printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
+		printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
+		if (node.geomStartIndex == -1) {
+			printf("Right Child Index: %d\n", node.rightChildOffset);
+		}
+		printf("Geom Start Index: %d\n", node.geomStartIndex);
+		printf("Geom End Index: %d\n", node.geomEndIndex);
+
+		cout << "" << endl;
+	}
+
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
 

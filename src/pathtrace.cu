@@ -16,20 +16,16 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
+#include "main.h"
 
 #define ERRORCHECK 1
-#define DEBUG_OBJ_LOADER 0
+#define DEBUG_OBJ_LOADER 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
-#define CACHE_FIRST_BOUNCE 1
+#define CACHE_FIRST_BOUNCE 0
 #define SORT_RAY_BY_MATERIAL 1
-
-#define USE_BVH 1
-#if USE_BVH
-const int LEAF_THRESHOLD = 2;
-#endif
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #if ERRORCHECK
@@ -147,40 +143,6 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_stencil, pixelcount * sizeof(int));
 
 #if USE_BVH
-	cout << "Constructing BVH..." << endl;
-	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size(), LEAF_THRESHOLD);
-	int offset = 0;
-	scene->flattenBVHTree(scene->root);
-	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
-
-	for (const auto& node : scene->bvh) {
-		printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
-		printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
-		// printf("Geom count: %d\n", node.geomCount);
-		if (node.geomStartIndex != -1) {
-			printf("Geom Start Index: %d\n", node.geomStartIndex);
-			printf("Geom End Index: %d\n", node.geomEndIndex);
-		}
-		else {
-			printf("Right Child Index: %d\n", node.rightChildOffset);
-		}
-		cout << "" << endl;
-	}
-
-	/*auto root = scene->root;
-	printf("Root\n");
-	printf("Min Bounds: (%f, %f, %f)\n", root->minBounds[0], root->minBounds[1], root->minBounds[2]);
-	printf("Max Bounds: (%f, %f, %f)\n", root->maxBounds[0], root->maxBounds[1], root->maxBounds[2]);
-	printf("Geom count: %d\n", root->isLeafNode);
-	cout << "" << endl;
-
-	auto node = scene->bvh[0];
-	printf("Flatten\n");
-	printf("Min Bounds: (%f, %f, %f)\n", node.minBounds[0], node.minBounds[1], node.minBounds[2]);
-	printf("Max Bounds: (%f, %f, %f)\n", node.maxBounds[0], node.maxBounds[1], node.maxBounds[2]);
-	printf("Geom count: %d\n", node.geomCount);
-	cout << "" << endl;*/
-
 	cudaMalloc(&dev_bvh, scene->bvh.size() * sizeof(CompactBVH));
 	cudaMemcpy(dev_bvh, scene->bvh.data(), scene->bvh.size() * sizeof(CompactBVH), cudaMemcpyHostToDevice);
 #endif 
@@ -338,7 +300,7 @@ __global__ void computeIntersectionsBVH(
 			int node_index = stack[--stack_ptr];
 
 			if (node_index < bvh_size) {
-				auto boundingVol = bvh[node_index];
+				auto& boundingVol = bvh[node_index];
 
 				if (intersectBVHNode(pathSegment.ray, boundingVol)) {
 					if (boundingVol.geomStartIndex != -1) {   // hit the leaf node
@@ -371,10 +333,15 @@ __global__ void computeIntersectionsBVH(
 						}	
 					}	
 					else {
-						// internal node
-						stack[stack_ptr++] = node_index + 1;
-						if (boundingVol.rightChildOffset > 0) {
+						// internal node, append the right child first,
+						// and then left child
+						if (node_index + boundingVol.rightChildOffset < bvh_size &&
+							boundingVol.rightChildOffset > 0) {
 							stack[stack_ptr++] = node_index + boundingVol.rightChildOffset;
+						}
+
+						if (node_index + 1 < bvh_size) {
+							stack[stack_ptr++] = node_index + 1;
 						}
 					}
 				}
@@ -430,7 +397,7 @@ __global__ void shadeFakeMaterial(
 			}
 		}
 		else {
-			pathSegments[idx].color = glm::vec3(0.5f);
+			pathSegments[idx].color = glm::vec3(0);
 		}
 	}
 }
@@ -459,7 +426,7 @@ __global__ void shadeBSDFMaterial(
 				scatterRay(pathSegments[idx], intersectPoint, intersection.surfaceNormal,
 					material, rng);
 			}
-		}
+		} 
 		else {
 			// If there was no intersection, color the ray black and terminate the ray.
 			pathSegments[idx].color = glm::vec3(0.0f);
