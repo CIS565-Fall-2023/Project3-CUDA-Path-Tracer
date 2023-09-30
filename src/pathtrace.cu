@@ -96,6 +96,7 @@ static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
+static Triangle* dev_triangles = NULL;
 static Light* dev_lights = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
@@ -144,6 +145,10 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
 	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
+	// triangles
+	cudaMalloc(&dev_triangles, scene->triangles.size() * sizeof(Triangle));
+	cudaMemcpy(dev_triangles, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
 	checkCUDAError("pathtraceInit");
 }
 
@@ -160,6 +165,7 @@ void pathtraceFree() {
 #endif
 
 	cudaFree(dev_lights);
+	cudaFree(dev_triangles);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -261,6 +267,8 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
+	, Triangle* triangles
+	, int triangles_size
 	, ShadeableIntersection* intersections
 )
 {
@@ -269,7 +277,7 @@ __global__ void computeIntersections(
 	if (path_index < num_paths)
 	{
 		PathSegment pathSegment = pathSegments[path_index];
-		computeRayIntersection(geoms, geoms_size, pathSegment.ray, intersections[path_index]);
+		computeRayIntersection(geoms, geoms_size, triangles, triangles_size, pathSegment.ray, intersections[path_index]);
 	}
 }
 
@@ -383,6 +391,8 @@ __global__ void shadeDirectMIS(
 	, Material* materials
 	, Geom* geoms
 	, int numGeoms
+	, Triangle* triangles
+	, int numTriangles
 	, Light* lights
 	, int numLights
 )
@@ -408,7 +418,7 @@ __global__ void shadeDirectMIS(
 				cur.remainingBounces = 0; // terminate path
 			} else {
 				cur.color = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, numGeoms, lights, numLights, rng);
+					, materials, material, geoms, numGeoms, triangles, numTriangles, lights, numLights, rng);
 				cur.remainingBounces = 0;
 			}
 		} else {
@@ -427,6 +437,8 @@ __global__ void shadeFull(
 	, Material* materials
 	, Geom* geoms
 	, int numGeoms
+	, Triangle* triangles
+	, int numTriangles
 	, Light* lights
 	, int numLights
 )
@@ -458,7 +470,7 @@ __global__ void shadeFull(
 			// If the surface is diffuse or microfacet, compute MIS direct light
 			if (material.type == MaterialType::DIFFUSE) {
 				glm::vec3 Ld = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, numGeoms, lights, numLights, rng);
+					, materials, material, geoms, numGeoms, triangles, numTriangles, lights, numLights, rng);
 				cur.color += Ld * cur.throughput;
 			}
 				
@@ -570,6 +582,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
+				, dev_triangles
+				, hst_scene->triangles.size()
 				, dev_intersections
 				);
 
@@ -587,6 +601,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
+			, dev_triangles
+			, hst_scene->triangles.size()
 			, dev_intersections
 			);
 #endif
@@ -624,6 +640,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			dev_geoms,
 			hst_scene->geoms.size(),
+			dev_triangles,
+			hst_scene->triangles.size(),
 			dev_lights,
 			hst_scene->lights.size()
 			);
@@ -637,6 +655,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			dev_geoms,
 			hst_scene->geoms.size(),
+			dev_triangles,
+			hst_scene->triangles.size(),
 			dev_lights,
 			hst_scene->lights.size()
 			);

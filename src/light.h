@@ -4,7 +4,9 @@
 
 // sample lights
 __host__ __device__ glm::vec3 sampleAreaLight(const Light& light, glm::vec3& view_point, glm::vec3& view_nor,
-    int num_lights, glm::vec3& wiW, float& pdf, Geom* geoms, int geom_size, Material* materials, thrust::default_random_engine& rng) {
+    int num_lights, glm::vec3& wiW, float& pdf, 
+    Geom* geoms, int geom_size, Triangle* triangles, int triangle_size,
+    Material* materials, thrust::default_random_engine& rng) {
 
     thrust::uniform_real_distribution<float> u01(0, 1);
     switch (light.geom.type)
@@ -32,7 +34,7 @@ __host__ __device__ glm::vec3 sampleAreaLight(const Light& light, glm::vec3& vie
 
         ShadeableIntersection intersection;
 
-        computeRayIntersection(geoms, geom_size, shadowRay, intersection);
+        computeRayIntersection(geoms, geom_size, triangles, triangle_size, shadowRay, intersection);
 
         if (intersection.t >= 0.0f && intersection.geomId == light.geom.geomId) {
             return materials[intersection.materialId].color * materials[intersection.materialId].emittance;

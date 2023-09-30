@@ -10,6 +10,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    MESH,
 };
 
 enum LightType {
@@ -24,12 +25,19 @@ enum MaterialType {
     DIFFUSE = 0,
     SPECULAR_REFL = 1,
     SPECULAR_TRANS = 2,
-    SPECULAR_FRES = 3
+    SPECULAR_FRES = 3,
+    MICROFACET = 4,
 };
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+};
+
+struct Triangle {
+    glm::vec3 position[3];
+    glm::vec3 normal[3];
+    glm::vec2 texcoord[3];
 };
 
 struct Geom {
@@ -42,6 +50,10 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+
+    // Mesh, triangle start, end
+    int triangleStart;
+    int triangleEnd;
 
     // Bounding box
     glm::vec3 minPoint;

@@ -79,6 +79,8 @@ __host__ __device__ glm::vec3 sampleLight(
     float& lightPDF,
     Geom* geoms,
     int num_geoms,
+    Triangle* triangles,
+    int num_triangles,
     Material* materials,
     const Light* lights,
     const int& num_lights) {
@@ -92,7 +94,8 @@ __host__ __device__ glm::vec3 sampleLight(
     {
         case LightType::AREA:
         {
-            return sampleAreaLight(chosenLight, intersect, normal, num_lights, wi, lightPDF, geoms, num_geoms, materials, rng);
+            return sampleAreaLight(chosenLight, intersect, normal, num_lights, wi, lightPDF, 
+                geoms, num_geoms, triangles, num_triangles, materials, rng);
         }
     }
 
@@ -160,6 +163,8 @@ __host__ __device__ glm::vec3 sampleUniformLight(
     , Material& material
     , Geom* geoms
     , int numGeoms
+    , Triangle* triangles
+    , int numTriangles
     , Light* lights
     , int numLights
     , thrust::default_random_engine& rng
@@ -171,7 +176,7 @@ __host__ __device__ glm::vec3 sampleUniformLight(
     bool specular = false;
     Light chosenLight;
     glm::vec3 lightColor = sampleLight(point, normal,
-        wiW, chosenLight, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
+        wiW, chosenLight, rng, lightPdf, geoms, numGeoms, triangles, numTriangles, materials, lights, numLights);
 
     glm::vec3 f = sampleMaterial(point, normal, tangent, material, wo, wiW, scatterPdf, specular, rng);
     f *= abs(dot(wiW, normal));
@@ -194,7 +199,7 @@ __host__ __device__ glm::vec3 sampleUniformLight(
             shadowRay.origin = point;
             shadowRay.direction = wiW;
             ShadeableIntersection shadowIntersection;
-            computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
+            computeRayIntersection(geoms, numGeoms, triangles, numTriangles, shadowRay, shadowIntersection);
 
             if (shadowIntersection.t > 0.0f && shadowIntersection.materialId == chosenLight.geom.materialid) {
                 Ld += f * lightColor * weight / scatterPdf;
