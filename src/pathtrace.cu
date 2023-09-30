@@ -20,8 +20,9 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-#define SORT_BY_MATERIAL 1
-#define STREAM_COMPACT 1
+#define SORT_BY_MATERIAL 0
+#define STREAM_COMPACT 0
+#define CACHE_FIRST_INTERSECTION 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -109,6 +110,10 @@ static Intersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
+#if CACHE_FIRST_INTERSECTION
+static Intersection* dev_cached_intersections = NULL;
+#endif
+
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
@@ -136,6 +141,11 @@ void pathtraceInit(Scene* scene) {
 
 	// TODO: initialize any extra device memeory you need
 
+#if CACHE_FIRST_INTERSECTION
+	cudaMalloc(&dev_cached_intersections, pixelcount * sizeof(Intersection));
+	cudaMemset(dev_cached_intersections, 0, pixelcount * sizeof(Intersection));
+#endif
+
 	checkCUDAError("pathtraceInit");
 }
 
@@ -146,6 +156,10 @@ void pathtraceFree() {
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
+
+#if CACHE_FIRST_INTERSECTION
+	cudaFree(dev_cached_intersections);
+#endif
 
 	checkCUDAError("pathtraceFree");
 }
@@ -419,8 +433,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// * Finally, add this iteration's results to the image. This has been done
 	//   for you.
 
-	// TODO: perform one iteration of path tracing
-
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
 
@@ -433,22 +445,50 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	bool iterationComplete = false;
 	while (!iterationComplete) {
-
-		// clean shading chunks
-		cudaMemset(dev_intersections, 0, pixelcount * sizeof(Intersection));
-
-		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
-			depth
-			, num_paths
-			, dev_paths
-			, dev_geoms
-			, hst_scene->geoms.size()
-			, dev_intersections
-			);
-		checkCUDAError("trace one bounce");
-		cudaDeviceSynchronize();
+
+#if CACHE_FIRST_INTERSECTION
+		// are we caching the first intersection?
+		// if we are, is this the FIRST bounce of a frame that is not the first frame?
+		if (depth == 0 && iter > 1)
+		{				
+			// use the cached intersection
+			cudaMemcpy(dev_intersections, dev_cached_intersections, pixelcount * sizeof(Intersection), cudaMemcpyDeviceToDevice);
+		}
+		else
+#endif
+		{
+			// every other situation
+			// use new intersections
+			// this can be second bounces when caching
+			// or first bounce of first frame when caching
+			// or every single bounce when not caching
+
+			// clean shading chunks
+			cudaMemset(dev_intersections, 0, pixelcount * sizeof(Intersection));
+
+			// tracing
+			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, num_paths
+				, dev_paths
+				, dev_geoms
+				, hst_scene->geoms.size()
+				, dev_intersections
+				);
+			checkCUDAError("trace one bounce");
+			cudaDeviceSynchronize();
+		}
+
+#if CACHE_FIRST_INTERSECTION
+		if (depth == 0 && iter == 1)
+		{
+			// if this is the first intersection of the first frame and caching is enabled
+			// cache the first intersection
+			cudaMemcpy(dev_cached_intersections, dev_intersections, pixelcount * sizeof(Intersection), cudaMemcpyDeviceToDevice);
+		}
+#endif
+
 		depth++;
 
 #if SORT_BY_MATERIAL
