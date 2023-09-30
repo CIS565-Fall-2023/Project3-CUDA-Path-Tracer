@@ -24,11 +24,11 @@ int main(int argc, char** argv) {
 	//}
 
 	string sceneFilePath = SCENE_PATH;
-	sceneFilePath += "sphere.txt";
+	sceneFilePath += "refract.txt";
 
 	glm::vec3 wi(0, 1, 0);
 	glm::vec3 n(0, 1, 0); 
-	float idxOfRrefract = 1.5;
+	float idxOfRrefract = 1/1.5;
 	glm::vec3 ref = glm::refract(wi, n, idxOfRrefract);
 	float R0 = pow((1 - idxOfRrefract) / (1 + idxOfRrefract), 2.);
 	float fresnel = R0 + (1 - R0) * pow(1 - glm::dot(n, wi), 5);//how much is reflected

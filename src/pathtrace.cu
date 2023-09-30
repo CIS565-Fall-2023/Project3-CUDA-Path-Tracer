@@ -18,7 +18,7 @@
 #include "bvh.h"
 
 #define ERRORCHECK 1
-#define DEBUG 1
+#define DEBUG 0
 #define GATHER 1
 #define BVH 1
 
@@ -78,7 +78,8 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		glm::vec3 pix = glm::pow(image[index],glm::vec3(1/2.2));
+		glm::vec3 pix = image[index];
+		//glm::vec3 pix = glm::pow(image[index]/(image[index] + 1.f),glm::vec3(1/2.2));
 
 		glm::ivec3 color;
 #if GATHER

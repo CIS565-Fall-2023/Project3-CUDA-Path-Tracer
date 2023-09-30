@@ -135,39 +135,33 @@ __device__ bool sampleRay(
 ) {
 	bool inside = glm::dot(norm, wo) < 0;
 	glm::vec3 normal = norm;
+	if (inside) normal = -normal;
 	if (material.hasRefractive) {
-		float indexOfRefract = material.indexOfRefraction;
+		float indexOfRefract = 1.f/material.indexOfRefraction;
 		float R0 = pow((1 - indexOfRefract) / (1 + indexOfRefract), 2.);
 
 		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
 		
 		if (inside) {
 			indexOfRefract = 1.0 / indexOfRefract;
-			normal = -normal;
 		}
 		float fresnel = R0 + (1 - R0) * pow(1 - glm::dot(normal, wo), 5);//how much is reflected
 		glm::vec3 refract = glm::refract(-wo, normal, indexOfRefract);
-		if ( fresnel < u01(rng)) // not reflected
+		if (
+			!isnan(refract.x) &&
+			fresnel < u01(rng)
+			) // not reflected
 		{ 
-			if (isnan(refract.x)) return false;//total reflct 
 			float absdot = glm::dot(-normal, refract);
-			out_pdf = 1./absdot;
+			out_pdf = absdot;
 			out_wi = refract;
-			return true;
-		}
-		else {
-			glm::vec3 reflect = glm::reflect(-wo, norm);
-			float absdot = glm::dot(norm, reflect);
-			out_pdf = 1. / absdot;
-			out_wi = reflect;
-			if (isnan(refract.x)) out_pdf /= (fresnel);
 			return true;
 		}
 	}
 	if (material.hasReflective) { 
-		glm::vec3 reflect = glm::reflect(-wo, norm);
-		float absdot = glm::dot(norm, reflect);
-		out_pdf = 1./absdot;
+		glm::vec3 reflect = glm::reflect(-wo, normal);
+		float absdot = glm::dot(normal, reflect);
+		out_pdf = absdot;
 		out_wi = reflect;
 		return true;
 	}
@@ -175,7 +169,6 @@ __device__ bool sampleRay(
 		
 		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
 		glm::vec3 sampleDir = sampleHemisphereCosine(glm::vec2(u01(rng), u01(rng)), out_pdf);
-		if (inside)normal = -normal;
 		glm::mat3 rotMat = tangentToWorld(normal);
 		out_wi = rotMat * sampleDir;
 		return true;
