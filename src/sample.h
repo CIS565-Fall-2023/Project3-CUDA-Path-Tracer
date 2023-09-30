@@ -3,6 +3,9 @@
 #include "utilities.h"
 #include <cuda_runtime.h>
 
+#define USE_STRATIFIED 0
+const int RES_PER_SIDE = 100;
+
 __host__ __device__
 glm::vec2 concentricSampleDisk(const glm::vec2& sample)
 {
@@ -29,13 +32,6 @@ __host__ __device__
 glm::vec3 calculateRandomDirectionInHemisphere(
     glm::vec3 normal, thrust::default_random_engine& rng, float& pdf) {
     thrust::uniform_real_distribution<float> u01(0, 1);
-
-    float up = sqrt(u01(rng)); // cos(theta)
-    float over = sqrt(1 - up * up); // sin(theta)
-    float around = u01(rng) * TWO_PI;
-
-    pdf = up / PI;
-
     // Find a direction that is not the normal based off of whether or not the
     // normal's components are all equal to sqrt(1/3) or whether or not at
     // least one component is less than sqrt(1/3). Learned this trick from
@@ -58,7 +54,29 @@ glm::vec3 calculateRandomDirectionInHemisphere(
     glm::vec3 perpendicularDirection2 =
         glm::normalize(glm::cross(normal, perpendicularDirection1));
 
+#if USE_STRATIFIED
+    // ref: https://fja05680.github.io/BFS_Sequences/BFS%20Sequences.pdf
+    int i = u01(rng) * RES_PER_SIDE * RES_PER_SIDE;
+
+    // (i + u) / N
+    float up = sqrt(((float)(i / RES_PER_SIDE) + u01(rng)) / (float)RES_PER_SIDE); // cos(theta)
+    float over = sqrt(1 - up * up); // sin(theta)
+    float around = (((float)(i % RES_PER_SIDE)+u01(rng)) / (float)RES_PER_SIDE) * TWO_PI;
+
+    pdf = up / PI;
+
     return up * normal
         + cos(around) * over * perpendicularDirection1
         + sin(around) * over * perpendicularDirection2;
+#else
+    float up = sqrt(u01(rng)); // cos(theta)
+    float over = sqrt(1 - up * up); // sin(theta)
+    float around = u01(rng) * TWO_PI;
+
+    pdf = up / PI;
+
+    return up * normal
+        + cos(around) * over * perpendicularDirection1
+        + sin(around) * over * perpendicularDirection2;
+#endif
 }
