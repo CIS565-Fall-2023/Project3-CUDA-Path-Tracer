@@ -14,8 +14,11 @@ private:
 	CudaMemory<Triangle> dev_trigs;
 	CudaMemory<Material> dev_mat;
 	CudaMemory<PathSegment> dev_path;
+	CudaMemory<PathSegment> dev_donePaths;
 	CudaMemory<ShadeableIntersection> dev_intersect;
 	CudaMemory<BVHNode> dev_bvh;
+	CudaMemory<int> dev_materialId;
+	int doneOffset = 0;
 	PathTracer(const PathTracer& _pathtracer);
 	PathTracer& operator=(const PathTracer& _pathtracer);
 	void initMeshTransform();//update trigs based on mesh data

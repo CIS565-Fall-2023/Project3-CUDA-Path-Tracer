@@ -5,6 +5,7 @@
 #include <thrust/random.h>
 #include <thrust/remove.h>
 #include <thrust/device_ptr.h>
+#include <thrust/sort.h>
 #include <device_launch_parameters.h>
 
 #include "sceneStructs.h"
@@ -21,6 +22,8 @@
 #define DEBUG 0
 #define GATHER 1
 #define BVH 1
+#define COMPACTION 1
+#define MATERIAL_SORT 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -45,14 +48,21 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 }
 
 
-struct is_black
+struct is_done
 {
 	__host__ __device__
 		bool operator()(const PathSegment& seg)
 	{
-		return seg.color == glm::vec3(0.);
+		return seg.remainingBounces == 0;
 	}
 };
+
+__global__ void updateMaterialKey(int num_paths, ShadeableIntersection* in_intersects, int* out_materialKey) {
+	int idx = threadIdx.x + blockDim.x * blockIdx.x;
+	if (idx < num_paths) {
+		out_materialKey[idx] = in_intersects[idx].materialId;
+	}
+}
 
 
 // Add the current iteration's output to the overall image
@@ -123,7 +133,6 @@ void PathTracer::initMeshTransform()
 	dim3 numblocksTransformTrigs = (N + blockSize1d - 1) / blockSize1d;
 	transformTriangles<<<numblocksTransformTrigs,blockSize1d>>>(N, dev_geoms.get(), dev_trigs.get());
 }
-
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -143,6 +152,9 @@ void PathTracer::pathtraceInit(Scene* scene)
 	cudaMemset(this->dev_img.get(), 0, pixelcount * sizeof(glm::vec3));
 	
 	this->dev_path.malloc(pixelcount, "Malloc dev_path error");
+	this->dev_donePaths.malloc(pixelcount, "Malloc dev_donePath error");//COMPACTION
+	this->dev_materialId.malloc(pixelcount, "Malloc path material id error");//MATERIAL SORT
+
 
 	this->dev_geoms.malloc(scene->meshs.size(), "Malloc dev_mesh error");
 	cudaMemcpy(this->dev_geoms.get(), scene->meshs.data(), scene->meshs.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
@@ -163,6 +175,7 @@ void PathTracer::pathtraceInit(Scene* scene)
 
 	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
 	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+	
 
 	this->dev_intersect.malloc(pixelcount, "Malloc dev_intersect error");
 	cudaMemset(dev_intersect.get(), 0, pixelcount * sizeof(ShadeableIntersection));
@@ -328,10 +341,11 @@ __global__ void processPBR(
 	if (path_idx >= num_paths)return; // no light
 	PathSegment& seg = pathSegments[path_idx];
 	ShadeableIntersection& intersect = intersections[path_idx];
-	if (seg.remainingBounces <= 0) // end bounce
+	if (seg.remainingBounces < 1) // end bounce
 	{
 		return;
 	}
+	--seg.remainingBounces;
 	if (intersect.t <= 0.) // no intersection
 	{
 		seg.color = glm::vec3(0.f);
@@ -350,8 +364,8 @@ __global__ void processPBR(
 		seg.remainingBounces = 0;
 		return;
 	}
-	--seg.remainingBounces;
-	if (seg.remainingBounces <= 0) // end bounce and didn't hit light
+	
+	if (seg.remainingBounces < 1) // end bounce and didn't hit light
 	{
 		seg.color = glm::vec3(0.);
 		return;
@@ -378,7 +392,7 @@ __global__ void processPBR(
 	//           albedo           absdot
 	seg.color *= (bsdf * glm::clamp(abs(glm::dot(intersect.surfaceNormal, seg.ray.direction)), 0.f, 1.f) / pdf);
 	
-#endif
+#endif //DEBUG
 }
 
 
@@ -434,6 +448,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 	// TODO: perform one iteration of path tracing
 	PathSegment* dev_paths = this->dev_path.get();
+	PathSegment* dev_donePaths = this->dev_donePaths.get();
+	int* dev_materialId = this->dev_materialId.get();
 	ShadeableIntersection* dev_intersections = this->dev_intersect.get();
 	Mesh* dev_meshs = this->dev_geoms.get();
 	Triangle* dev_trigs = this->dev_trigs.get();
@@ -451,6 +467,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 	thrust::device_ptr<PathSegment> thrust_paths(dev_paths);
 	thrust::device_ptr<PathSegment> thrust_paths_end(dev_paths + pixelcount);
+	thrust::device_ptr<PathSegment> thrust_donePaths(dev_donePaths);
+	thrust::device_ptr<int> thrust_materialId(dev_materialId);
 	int num_paths = thrust_paths_end - thrust_paths;
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
@@ -464,16 +482,6 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 #if BVH
-		//int depth
-		//	, int num_paths
-		//	, PathSegment* in_paths
-		//	, Triangle* in_trigs
-		//	, Mesh* in_meshs
-		//	, int num_trigs
-		//	, LinearBVHNode* in_bvh
-		//	, int num_bvh
-		//	, ShadeableIntersection* out_intersects
-		//	)
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
@@ -485,14 +493,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, num_bvh
 			, dev_intersections
 			);
+		checkCUDAError("trace one bounce");
 #else
-		//int depth
-		//	, int num_paths
-		//	, PathSegment* in_paths
-		//	, Triangle* in_trigs
-		//	, Mesh* in_meshs
-		//	, int num_trigs
-		//	, ShadeableIntersection* out_intersects
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
@@ -502,10 +504,24 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, num_trigs
 			, dev_intersections
 			);
-#endif
 		checkCUDAError("trace one bounce");
+#endif //BVH
 
-
+#if MATERIAL_SORT
+		updateMaterialKey << < numblocksPathSegmentTracing, blockSize1d >> > (
+			num_paths
+			, dev_intersections
+			, dev_materialId
+			);
+		thrust::sort_by_key(thrust_materialId, thrust_materialId + num_paths, dev_paths);
+		updateMaterialKey << < numblocksPathSegmentTracing, blockSize1d >> > (
+			num_paths
+			, dev_intersections
+			, dev_materialId
+			);
+		thrust::sort_by_key(thrust_materialId, thrust_materialId + num_paths, dev_intersections);
+#endif
+		
 
 		cudaDeviceSynchronize();
 		
@@ -524,19 +540,22 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, dev_paths
 			, dev_materials
 			);
-
-		// * TODO: Stream compact away all of the terminated paths.
-		// You may use either your implementation or `thrust::remove_if` or its
-		// cousins.
-		// * Note that you can't really use a 2D kernel launch any more - switch
-		// to 1D.
-#if DEBUG
-#else
-		//thrust_paths_end = thrust::remove_if(thrust_paths, thrust_paths_end, is_black());
-		//num_paths = thrust_paths_end - thrust_paths;
-#endif
 		depth++;
+#if DEBUG
 		iterationComplete = depth >= (traceDepth);
+#else
+#if COMPACTION
+		// * TODO: Stream compact away all of the terminated paths.
+		thrust_donePaths = thrust::copy_if(thrust_paths, thrust_paths_end, thrust_donePaths, is_done());
+		thrust_paths_end = thrust::remove_if(thrust_paths, thrust_paths_end, is_done());
+		num_paths = thrust_paths_end - thrust_paths;
+		iterationComplete = (num_paths  == 0);
+#else
+		iterationComplete = depth >= (traceDepth);
+#endif //COMPACTION
+#endif //DEBUG
+
+		
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;
@@ -545,7 +564,11 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, iter, dev_image, dev_paths);
+#if COMPACTION
+	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, iter, dev_image, dev_donePaths);
+#else
+	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, iter, dev_image, dev_paths);
+#endif
 
 	///////////////////////////////////////////////////////////////////////////
 

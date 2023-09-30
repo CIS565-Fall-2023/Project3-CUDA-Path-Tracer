@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 	//}
 
 	string sceneFilePath = SCENE_PATH;
-	sceneFilePath += "refract.txt";
+	sceneFilePath += "test.txt";
 
 	glm::vec3 wi(0, 1, 0);
 	glm::vec3 n(0, 1, 0); 
