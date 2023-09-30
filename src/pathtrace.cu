@@ -92,7 +92,7 @@ static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
-static Scene * pa = new Scene("D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\scenes\\pathtracer_test.glb");
+static Scene * pa = new Scene("..\\scenes\\pathtracer_test_texture.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -347,7 +347,7 @@ __global__ void shadeBSDF(
 				//glm::vec3 bsdf = f(bsdfStruct, -pathSegment.ray.direction, ); // Hard coded for now
 				glm::vec3 L_direct;
 				float pdf;
-				glm::vec3 wo = -pathSegment.ray.direction;
+				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 				//float test = (w2o * wo).z;
 				//if (test < 0.0f) {
 				//	pathSegment.color = glm::vec3();
@@ -387,7 +387,7 @@ __global__ void shadeBSDF(
 				float one_over_n = 1.0f / (n_valid_sample + 1);
 				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
 #endif //  ONE_BOUNCE_DIRECT_LIGHTINIG
-				glm::vec3 bsdf = sample_f(bsdfStruct, w2o * wo, wi, &pdf, rng, intersection.uv);
+				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
 				//pathSegment.color = bsdf;
 				//return;
 				float cosineTerm = abs(wi.z);
