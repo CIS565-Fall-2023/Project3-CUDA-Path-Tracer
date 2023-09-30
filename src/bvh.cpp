@@ -60,7 +60,7 @@ int BVHTreeBuilder::recursiveLBuildTree(int start, int end, std::vector<BVHPrimi
 	int primNum = end - start;
 	if (primNum < 5) {
 		//leaf node
-		m_lnodes.push_back(LinearBVHNode(nodeBBox, LEAF_NODE, primNum, start));
+		m_lnodes.push_back(BVHNode(nodeBBox, LEAF_NODE, primNum, start));
 		return m_lnodes.size()-1;
 	}
 	else {
@@ -68,7 +68,7 @@ int BVHTreeBuilder::recursiveLBuildTree(int start, int end, std::vector<BVHPrimi
 		PARTITION_AXIS axis = calPartitionAxis(start, end, primInfo, maxAxisDiff);
 		if (maxAxisDiff < 0.01f) {
 			//leaf node
-			m_lnodes.push_back(LinearBVHNode(nodeBBox, LEAF_NODE, primNum, start));
+			m_lnodes.push_back(BVHNode(nodeBBox, LEAF_NODE, primNum, start));
 			return m_lnodes.size() - 1;
 		}
 		else {
@@ -88,7 +88,7 @@ int BVHTreeBuilder::recursiveLBuildTree(int start, int end, std::vector<BVHPrimi
 					}
 					return a.center.x < b.center.x;
 				});
-			m_lnodes.push_back(LinearBVHNode(nodeBBox, INTERIOR_NODE, 0, -1,axis));
+			m_lnodes.push_back(BVHNode(nodeBBox, INTERIOR_NODE, 0, -1,axis));
 			int posId = m_lnodes.size() - 1;
 			recursiveLBuildTree(start, mid, primInfo);
 			int secondChildId = recursiveLBuildTree(mid, end, primInfo);
@@ -134,10 +134,10 @@ std::vector<Triangle> BVHTreeBuilder::rearrangeBasedOnPrimtiveInfo(const std::ve
 	return ans;
 }
 
-void BVHTreeBuilder::displayBVHTree(const std::vector<LinearBVHNode>& m_lnodes, int depth, int curId)
+void BVHTreeBuilder::displayBVHTree(const std::vector<BVHNode>& m_lnodes, int depth, int curId)
 {
 	std::string space(depth*2, ' ');
-	LinearBVHNode node = m_lnodes[curId];
+	BVHNode node = m_lnodes[curId];
 	if (node.primNum == 0) {
 		std::cout << space << "interior: " << std::endl;
 		std::cout << space << "[ " << node.boundingBox.maxBound.x << ", " << node.boundingBox.maxBound.y << ", " << node.boundingBox.maxBound.z << "]" << std::endl;
@@ -151,7 +151,7 @@ void BVHTreeBuilder::displayBVHTree(const std::vector<LinearBVHNode>& m_lnodes, 
 	}
 }
 
-std::vector<LinearBVHNode> BVHTreeBuilder::buildBVHTree(std::vector<Triangle>& trigs)
+std::vector<BVHNode> BVHTreeBuilder::buildBVHTree(std::vector<Triangle>& trigs)
 {
 	auto info = initPrimitiveInfo(trigs);
 	if (!m_lnodes.empty())m_lnodes.clear();
@@ -164,7 +164,7 @@ std::vector<LinearBVHNode> BVHTreeBuilder::buildBVHTree(std::vector<Triangle>& t
 BVHTreeBuilder::BVHTreeBuilder()
 {}
 
-LinearBVHNode::LinearBVHNode(const BoundingBox& _boundingBox, NODE_TYPE type, int _primNum, int unionVal, PARTITION_AXIS _axis)
+BVHNode::BVHNode(const BoundingBox& _boundingBox, NODE_TYPE type, int _primNum, int unionVal, PARTITION_AXIS _axis)
 	:boundingBox(_boundingBox), primNum(_primNum), axis(_axis)
 {
 	switch (type)

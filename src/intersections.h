@@ -99,6 +99,10 @@ __host__ __device__ bool triangleIntersectionTest(
     const glm::vec3& orig,const glm::vec3& dir,
     const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
     glm::vec3& bary, float& t) {
+    //bool result = glm::intersectRayTriangle(orig, dir, v0, v1, v2, bary);
+    //t = bary.z;
+    //bary.z = 1. - bary.x - bary.y;
+    //return result;
     glm::vec3 e1 = v1 - v0;
     glm::vec3 e2 = v2 - v0;
 

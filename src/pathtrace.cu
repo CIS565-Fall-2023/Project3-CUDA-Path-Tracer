@@ -18,8 +18,8 @@
 #include "bvh.h"
 
 #define ERRORCHECK 1
-#define DEBUG 0
-#define GATHER 0
+#define DEBUG 1
+#define GATHER 1
 #define BVH 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -44,100 +44,6 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #endif
 }
 
-
-__host__ __device__
-thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
-	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
-	return thrust::default_random_engine(h);
-}
-
-/**
-* Generate PathSegments with rays from the camera through the screen into the
-* scene, which is the first bounce of rays.
-*
-* Antialiasing - add rays for sub-pixel sampling
-* motion blur - jitter rays "in time"
-* lens effect - jitter ray origin positions based on a lens
-*/
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
-{
-	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
-
-	if (x < cam.resolution.x && y < cam.resolution.y) {
-		int index = x + (y * cam.resolution.x);
-		PathSegment& segment = pathSegments[index];
-
-		segment.ray.origin = cam.position;
-		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
-		thrust::uniform_real_distribution<float> u01(-1.2, 1.2);
-
-		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y + u01(rng) - (float)cam.resolution.y * 0.5f)
-		);
-
-		segment.pixelIndex = index;
-		segment.remainingBounces = traceDepth;
-	}
-}
-
-__device__ glm::vec3 sampleHemisphereCosine(glm::vec2 i, float& pdf) {
-	float sinTheta = sqrt(1.0 - i.x);
-	float cosTheta = sqrt(i.x);
-	float sinPhi = sin(TWO_PI * i.y);
-	float cosPhi = cos(TWO_PI * i.y);
-	float x = sinTheta * cosPhi;
-	float y = sinTheta * sinPhi;
-	float z = cosTheta;
-	pdf = z * INV_PI;
-	return glm::vec3(x, y, z);
-}
-
-__device__ glm::mat3 tangentToWorld(glm::vec3 worldNorm) {
-	glm::vec3 up = abs(worldNorm.z) < 0.999 ? glm::vec3(0.0, 0.0, 1.0) : glm::vec3(1.0, 0.0, 0.0);
-	glm::vec3 tangent = normalize(cross(up, worldNorm));
-	glm::vec3 bitangent = cross(worldNorm, tangent);
-	return glm::mat3(tangent, bitangent, worldNorm);
-}
-
-__device__ glm::vec3 sampleRay(
-	glm::vec3 wo
-	, glm::vec3 norm
-	, Material material
-	, int iter, int depth
-	, int path_idx
-	, float& out_pdf) {
-
-	if (material.hasReflective) {
-		glm::vec3 reflect = glm::reflect(-wo, norm);
-		out_pdf = 1.;
-		return reflect;
-	}
-	else {
-		thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth);
-		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
-		glm::vec3 sampleDir = sampleHemisphereCosine(glm::vec2(u01(rng), u01(rng)), out_pdf);
-		glm::mat3 rotMat = tangentToWorld(norm);
-		return rotMat * sampleDir;
-	}
-	return norm;
-}
-
-__device__ glm::vec3 getBSDF(
-	glm::vec3 wi
-	, glm::vec3 wo
-	, glm::vec3 norm
-	, Material material
-) {
-	if (material.hasReflective) {
-		float absdot = glm::clamp(glm::dot(wi, norm), 0.001f, 1.f);
-		return material.color / absdot;
-	}
-	return material.color * INV_PI;
-}
 
 struct is_black
 {
@@ -172,7 +78,7 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		glm::vec3 pix = image[index];
+		glm::vec3 pix = glm::pow(image[index],glm::vec3(1/2.2));
 
 		glm::ivec3 color;
 #if GATHER
@@ -225,7 +131,6 @@ void PathTracer::initDataContainer(GuiDataContainer* guiData)
 {
 	m_guiData = guiData;
 }
-
 void PathTracer::pathtraceInit(Scene* scene)
 {
 	hst_scene = scene;
@@ -252,7 +157,7 @@ void PathTracer::pathtraceInit(Scene* scene)
 	//sent ordered triangle back to GPU
 	cudaMemcpy(this->dev_trigs.get(), tmp_trig.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 	this->dev_bvh.malloc(bvh.size(), "Malloc dev_bvh error");
-	cudaMemcpy(this->dev_bvh.get(), bvh.data(), bvh.size() * sizeof(LinearBVHNode), cudaMemcpyHostToDevice);
+	cudaMemcpy(this->dev_bvh.get(), bvh.data(), bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
 	
 
 	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
@@ -330,7 +235,7 @@ __global__ void computeIntersections(
 	, Triangle* in_trigs
 	, Mesh* in_meshs
 	, int num_trigs
-	, LinearBVHNode* in_bvh
+	, BVHNode* in_bvh
 	, int num_bvh
 	, ShadeableIntersection* out_intersects
 )
@@ -353,17 +258,29 @@ __global__ void computeIntersections(
 
 		while (stackTop >= 0 && stackTop < 33) {
 			int idxToVis = needToVisit[stackTop--];
-			LinearBVHNode node = in_bvh[idxToVis];
+			BVHNode node = in_bvh[idxToVis];
 			bool hit = AABBIntersectionTest(seg.ray.origin, seg.ray.direction, node.boundingBox,t);
 			if (hit && t_min > t) 
 			{ 
 				if (node.primNum == 0) {
 					//second child
+					int firstChild = idxToVis + 1;
+					int secondChild = -1;
 					if (node.secondChildOffset != -1) {
-						needToVisit[++stackTop] = idxToVis + node.secondChildOffset;
+						secondChild = idxToVis + node.secondChildOffset;
+						if (seg.ray.direction[node.axis] > 0) {
+							needToVisit[++stackTop] = secondChild;
+							needToVisit[++stackTop] = firstChild;
+						}
+						else {
+							needToVisit[++stackTop] = firstChild;
+							needToVisit[++stackTop] = secondChild;
+						}
 					}
-					//first child
-					needToVisit[++stackTop] = idxToVis + 1;
+					else {
+						needToVisit[++stackTop] = firstChild;
+					}
+					
 				}
 				else { //every thing in bounding box will have larger t
 					for (int i = 0;i < node.primNum;++i) {
@@ -445,14 +362,20 @@ __global__ void processPBR(
 
 	glm::vec3 wo = -seg.ray.direction;
 
-	seg.ray.direction = sampleRay(wo, intersect.surfaceNormal, material, iter, depth, path_idx, pdf);
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth);
+	if (!sampleRay(wo, intersect.surfaceNormal, material, rng, pdf, seg.ray.direction)) {
+		//this is a ray need to be discarded
+		seg.remainingBounces = 0;
+		seg.color = glm::vec3(0.);
+		return;
+	}
 
 	//fix strange artifact
 	seg.ray.origin += 0.01f * seg.ray.direction;
 
 	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
 	//           albedo           absdot
-	seg.color *= (bsdf * glm::clamp(glm::dot(intersect.surfaceNormal, seg.ray.direction), 0.f, 1.f) / pdf);
+	seg.color *= (bsdf * glm::clamp(abs(glm::dot(intersect.surfaceNormal, seg.ray.direction)), 0.f, 1.f) / pdf);
 	
 #endif
 }
@@ -517,7 +440,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	Material* dev_materials = this->dev_mat.get();
 	GuiDataContainer* guiData = this->m_guiData;
 	glm::vec3* dev_image = this->dev_img.get();
-	LinearBVHNode* dev_bvh = this->dev_bvh.get();
+	BVHNode* dev_bvh = this->dev_bvh.get();
 	int num_bvh = this->dev_bvh.size();
 	
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
@@ -608,8 +531,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		// to 1D.
 #if DEBUG
 #else
-		thrust_paths_end = thrust::remove_if(thrust_paths, thrust_paths_end, is_black());
-		num_paths = thrust_paths_end - thrust_paths;
+		//thrust_paths_end = thrust::remove_if(thrust_paths, thrust_paths_end, is_black());
+		//num_paths = thrust_paths_end - thrust_paths;
 #endif
 		depth++;
 		iterationComplete = depth >= (traceDepth);
