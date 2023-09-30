@@ -16,6 +16,7 @@ private:
 	CudaMemory<PathSegment> dev_path;
 	CudaMemory<PathSegment> dev_donePaths;
 	CudaMemory<ShadeableIntersection> dev_intersect;
+	CudaMemory<ShadeableIntersection> dev_firstIntersect;
 	CudaMemory<BVHNode> dev_bvh;
 	CudaMemory<int> dev_materialId;
 	int doneOffset = 0;
