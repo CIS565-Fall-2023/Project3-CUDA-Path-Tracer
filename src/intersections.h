@@ -111,7 +111,8 @@ __device__ bool intersectAABB(const Ray& ray, const AABB& aabb)
         tmax = glm::min(tmax, t2);
         if (tmin > tmax) return false;
     }
-    return true;
+    return !(tmin > ray.max_t || tmax < ray.min_t);
+    //return true;
 }
 
 

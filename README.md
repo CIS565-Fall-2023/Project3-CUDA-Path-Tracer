@@ -11,22 +11,15 @@ CUDA Path Tracer
 *DO NOT* leave the README to the last minute! It is a crucial part of the
 project, and we will not be able to grade you without a good README.
 
-- [x] Load arbitrary scene(only geom)
+- [x] Load mesh within arbitrary scene
     - [x] Triangle
-    - [x] ~~Primitive assemble phase~~(This will not work, see `README` of this commit)
-    - [x] Use tinygltf
-        Remember to check [data type]((https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#accessor-data-types)) before using accessor
-    ![Alt text](img/accessor_data_types.png)
-    - [x] Done with loading a scene with node tree!
-            ![blender_reference](img/blender_reference.png)
-            ![rendered](img/first_scene.png)
-        > Can't tell how excited I am! Now my raytracer is open to most of the scenes!
-        - Scene with parenting relationship
-            ![with_parenting](img/scene_with_parenting.png)
+    - [x] Integrate `tinygltf`
+    - [x] Scene Node Tree
 
 - [ ] Core
     - [x] G Buffer
     - [ ] Russian Roulette
+    - [ ] Sort by material
 
 - [ ] More BSDF
     - [x] Diffuse
@@ -34,6 +27,7 @@ project, and we will not be able to grade you without a good README.
     - [ ] Reflective
     - [ ] Refractive
     - [ ] Microfacet
+    - [ ] Disney
 
 - [ ] BVH
     - [x] Basic BVH
@@ -46,7 +40,9 @@ project, and we will not be able to grade you without a good README.
 
 - [ ] Texture
     - [x] Naive texture sampling
-        - [ ] A Resource Mananger to help get the handle to texture?
+        - A Resource Mananger to help get the handle to texture?
+    - [x] Bump mapping
+    - [ ] Displacement mapping
     - [ ] Deal with antialiasing
 
 - [ ] Better sampler
@@ -56,13 +52,41 @@ project, and we will not be able to grade you without a good README.
     - [ ] Importance sampling
 
 
-- [ ] Light (probably not gonna do a lot about it because gltf has a poor support over area light)
+- [ ] Light 
+    - ~~Probably not gonna do a lot about it because gltf has a poor support over area light~~ 
+    - Might need to implement it for direct lighting to speed up the converging speed of ray tracing
+
+- [ ] Camera
+    - [ ] Field of depth
+    - [ ] Motion blur 
+
 
 - [ ] Denoiser 
     - [ ] Use Intel OpenImage Denoiser for now
 
 
 ### Log
+09.20
+- Basic raytracer
+- Refactor integrator
+- First triangle!
+
+09.21-22
+- Load arbitrary scene(only geom)
+    - Triangle
+    - ~~Primitive assemble phase~~(This will not work, see `README` of this commit)
+    - Use tinygltf
+        Remember to check [data type]((https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#accessor-data-types)) before using accessor
+    ![Alt text](img/accessor_data_types.png)
+    - Done with loading a scene with node tree!
+            ![blender_reference](img/blender_reference.png)
+            ![rendered](img/first_scene.png)
+        > Can't tell how excited I am! Now my raytracer is open to most of the scenes!
+        - Scene with parenting relationship
+            ![with_parenting](img/scene_with_parenting.png)
+
+09.23-09.26
+> Waste too much time on OOP. Eventually used C-style coding.
 
 09.26
 Finally, finish gltf loading and basic bsdf.
