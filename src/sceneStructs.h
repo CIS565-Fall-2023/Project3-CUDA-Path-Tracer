@@ -6,6 +6,8 @@
 #include "glm/glm.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
+#define BBOX_TRI_NUM 5
+#define BVH_GPU_STACK_SIZE 20
 
 enum GeomType {
     SPHERE,
@@ -23,9 +25,50 @@ struct Triangle {
     int materialid;
     glm::vec3 pos[3];
     glm::vec2 uv[3];
+
+    glm::vec3 min;
+    glm::vec3 max;
     // glm::vec3 nor[3];
     // Triangle() {}
     // Triangle(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2) :pos{ p0, p1, p2 } {}
+
+    void setCorner(){
+        min = glm::vec3(
+            glm::min(glm::min(pos[0].x, pos[1].x), pos[2].x),
+            glm::min(glm::min(pos[0].y, pos[1].y), pos[2].y),
+            glm::min(glm::min(pos[0].z, pos[1].z), pos[2].z)
+        );
+        max = glm::vec3(
+            glm::max(glm::max(pos[0].x, pos[1].x), pos[2].x),
+            glm::max(glm::max(pos[0].y, pos[1].y), pos[2].y),
+            glm::max(glm::max(pos[0].z, pos[1].z), pos[2].z)
+        );
+    }
+};
+
+struct BoundingBox {
+    glm::vec3 min;
+    glm::vec3 max;
+    int leftId;
+    int rightId;
+    int triArrId;
+
+    BoundingBox() : min(), max(), leftId(-1), rightId(-1), triArrId(-1) {}
+
+    BoundingBox(glm::vec3 minPos, glm::vec3 maxPos, int tai = -1) :
+        min(minPos), max(maxPos), leftId(-1), rightId(-1), triArrId(tai) {}
+
+    BoundingBox(const Triangle& tri, int tai = -1) :
+        min(tri.min), max(tri.max), leftId(-1), rightId(-1), triArrId(tai) {}
+};
+
+struct TriangleArray {
+    int triIds[BBOX_TRI_NUM];
+    // int triIds[BBOX_TRI_NUM];
+
+    TriangleArray() {
+        memset(&triIds, -1, BBOX_TRI_NUM * sizeof(int));
+    }
 };
 
 struct Geom {

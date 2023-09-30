@@ -32,6 +32,10 @@ Scene::Scene(string filename) {
             }
         }
     }
+
+#ifdef USING_BVH
+    buildTree();
+#endif
 }
 
 int Scene::loadGeom(string objectid) {
@@ -111,6 +115,9 @@ int Scene::loadGeom(string objectid) {
                 singleTri.pos[i] = glm::vec3(newPos.x, newPos.y, newPos.z);
             }
             singleTri.materialid = newGeom.materialid;
+#ifdef USING_BVH
+            singleTri.setCorner();
+#endif
             tris.push_back(singleTri);
         }
         // load mesh
@@ -154,6 +161,9 @@ int Scene::loadGeom(string objectid) {
                             t.pos[k] = glm::vec3(newPos.x, newPos.y, newPos.z);
                         }
                         t.materialid = newGeom.materialid;
+#ifdef USING_BVH
+                        t.setCorner();
+#endif
                         tris.push_back(t);
                     }
                     std::cout << "shape " << i << " has " << indices.size() << " triangles" << std::endl;
@@ -265,5 +275,178 @@ int Scene::loadMaterial(string materialid) {
         }
         materials.push_back(newMaterial);
         return 1;
+    }
+}
+
+/*
+* Funtions to build a bvh tree
+*/
+
+inline void printVec(glm::vec3 v) {
+    cout << "(" << v.x << ", " << v.y << ", " << v.z << ")";
+}
+
+void Scene::buildTree()
+{
+    cout << "buildTree" << endl;
+
+    if (tris.size() == 0) { return; }
+
+    std::vector<int> triIds;
+    for (int ti = 0; ti < tris.size(); ti++) { triIds.push_back(ti); }
+
+    glm::vec3 min = tris[0].min;
+    glm::vec3 maxmin = tris[0].min;
+    glm::vec3 max = tris[0].max;
+    for (int ti = 1; ti < tris.size(); ti++) {
+        min = glm::min(min, tris[ti].min);
+        maxmin = glm::max(maxmin, tris[ti].min);
+        max = glm::max(max, tris[ti].max);
+    }
+    bvh.emplace_back(min, max);
+
+    cout << "global, min = "; printVec(min);
+    cout << ", max = "; printVec(max);
+    cout << ", maxmin = "; printVec(maxmin); cout << endl;
+
+    splitTree(triIds, 0, tris.size(), 0, maxmin);
+    
+    // printTree();
+    cout << "bbox num = " << bvh.size() << ", triArr num = " << triArr.size() << endl;
+}
+
+
+void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int bboxId, glm::vec3 maxmin)
+{    
+    //cout << endl;
+    // cout << "splitTree: " << leftEnd << ", " << rightEnd << ", " << bboxId << endl;
+    //cout << "box[" << bboxId << "]: "; printVec(bvh[bboxId].min); printVec(bvh[bboxId].max);
+    //cout << endl;
+
+    if (rightEnd - leftEnd <= BBOX_TRI_NUM) {
+        // buld triangle array
+        TriangleArray triArrObj;
+        for (int i = 0; i < rightEnd - leftEnd; i++) {
+            triArrObj.triIds[i] = triIds[leftEnd + i];
+        }
+
+        triArr.push_back(triArrObj);
+        bvh[bboxId].triArrId = triArr.size() - 1;
+
+        // cout << "leaf node" << endl;
+        return;
+    }
+    // cout << "here0" << endl;
+
+    glm::vec3 lmin, lmax, rmin, rmax, lmaxmin, rmaxmin;
+
+    int axis = 0;
+    while ((axis < 3) && (abs(bvh[bboxId].min[axis] - maxmin[axis]) < 0.001f)) {
+        axis++;
+    }
+    // cout << "here1" << endl;
+
+    int midPoint = rightEnd;
+    if (axis < 3) {
+        float midmin = (maxmin[axis] - bvh[bboxId].min[axis]) / 2.0f + bvh[bboxId].min[axis];
+        int ti = leftEnd;
+
+        // cout << "midmin = " << midmin << endl;
+
+        while (ti < midPoint) {            
+            if (tris[triIds[ti]].min[axis] <= midmin) {
+                // cout << "left, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
+                if (ti == leftEnd) {
+                    lmin = tris[triIds[ti]].min;
+                    lmax = tris[triIds[ti]].max;
+                    lmaxmin = tris[triIds[ti]].min;
+                }
+                else {
+                    lmin = glm::min(lmin, tris[triIds[ti]].min);
+                    lmax = glm::max(lmax, tris[triIds[ti]].max);
+                    lmaxmin = glm::max(lmaxmin, tris[triIds[ti]].min);
+                }
+                ti++;
+
+                // cout << "lmin: " << lmin[axis] << ", lmaxmin: " << lmaxmin[axis] << endl;
+            }
+            else {
+                // cout << "right, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
+                if (midPoint == rightEnd) {
+                    rmin = tris[triIds[ti]].min;
+                    rmax = tris[triIds[ti]].max;
+                    rmaxmin = tris[triIds[ti]].min;
+                }
+                else {
+                    rmin = glm::min(rmin, tris[triIds[ti]].min);
+                    rmax = glm::max(rmax, tris[triIds[ti]].max);
+                    rmaxmin = glm::max(rmaxmin, tris[triIds[ti]].min);
+                }
+                midPoint--;
+                if (midPoint != ti) {
+                    int temp = triIds[midPoint];
+                    triIds[midPoint] = triIds[ti];
+                    triIds[ti] = temp;
+                }
+                // cout << "rmin: " << rmin[axis] << ", rmaxmin: " << rmaxmin[axis] << endl;
+            }
+        }
+    }
+    else { // can't find good axis to split, just split naively
+        std::cout << "Axis Not Found!!!" << std::endl;
+        lmin = tris[leftEnd].min;
+        lmax = tris[leftEnd].max;
+        lmaxmin = tris[leftEnd].min;
+        midPoint = (rightEnd + leftEnd) / 2;
+        for (int ti = leftEnd + 1; ti < midPoint; ti++) {
+            lmin = tris[triIds[ti]].min;
+            lmax = tris[triIds[ti]].max;
+            lmaxmin = tris[triIds[ti]].min;
+        }
+        rmin = tris[midPoint].min;
+        rmax = tris[midPoint].max;
+        rmaxmin = tris[midPoint].min;
+        for (int ti = midPoint; ti < rightEnd; ti++) {
+            rmin = glm::min(rmin, tris[triIds[ti]].min);
+            rmax = glm::max(rmax, tris[triIds[ti]].max);
+            rmaxmin = glm::max(rmaxmin, tris[triIds[ti]].min);
+        }
+    }
+
+    // cout << "midPoint = " << midPoint << endl;
+
+    
+    bvh.emplace_back(lmin, lmax);
+    bvh.emplace_back(rmin, rmax);
+    bvh[bboxId].leftId = bvh.size() - 2;
+    bvh[bboxId].rightId = bvh.size() - 1;
+    splitTree(triIds, leftEnd, midPoint, bvh[bboxId].leftId, lmaxmin);
+    splitTree(triIds, midPoint, rightEnd, bvh[bboxId].rightId, rmaxmin);
+}
+
+void Scene::printTree() {
+    if (bvh.empty()) {
+        cout << "BVH Tree Is Empty!!!" << endl;
+        return;
+    }
+    std::vector<int> bids;
+    bids.push_back(0);
+    while (!bids.empty()) {
+        int bi = bids.back();
+        bids.pop_back();
+        cout << "box[" << bi << "]:"; printVec(bvh[bi].min); printVec(bvh[bi].max);
+        cout << endl;
+        if (bvh[bi].triArrId >= 0) {
+            cout << "triIds: ";
+            for (int i = 0; i < BBOX_TRI_NUM; i++) {
+                cout << triArr[bvh[bi].triArrId].triIds[i] << " ";
+            }cout << endl;
+        }
+        else {
+            cout << "box[" << bi << "] -> box[" << bvh[bi].leftId << "] bbox[" << bvh[bi].rightId << "]" << endl;
+            bids.push_back(bvh[bi].leftId);
+            bids.push_back(bvh[bi].rightId);
+        }
+        
     }
 }

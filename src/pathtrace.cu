@@ -17,9 +17,6 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-// #define MATERIAL_SORT
-#define CACHE_FIRST_BOUNCE
-// #define DEBUG_OUTPUT
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -88,6 +85,8 @@ static int* dev_nbools = NULL;
 static int* dev_scanBools = NULL;
 static int* dev_scanNBools = NULL;
 static Triangle* dev_tris = NULL;
+static BoundingBox* dev_bvh = NULL;
+static TriangleArray* dev_triArr = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -155,6 +154,14 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_intersectionsBuffer, pixelcount * sizeof(ShadeableIntersection));
 	cudaMalloc(&dev_pathsBuffer, pixelcount * sizeof(PathSegment));
 #endif
+
+#ifdef USING_BVH
+	cudaMalloc(&dev_bvh, scene->bvh.size() * sizeof(BoundingBox));
+	cudaMemcpy(dev_bvh, scene->bvh.data(), scene->bvh.size() * sizeof(BoundingBox), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_triArr, scene->triArr.size() * sizeof(TriangleArray));
+	cudaMemcpy(dev_triArr, scene->triArr.data(), scene->triArr.size() * sizeof(TriangleArray), cudaMemcpyHostToDevice);
+#endif
+
 	checkCUDAError("pathtraceInit");	
 }
 
@@ -175,6 +182,10 @@ void pathtraceFree() {
 #ifdef CACHE_FIRST_BOUNCE
 	cudaFree(dev_intersectionsBuffer);
 	cudaFree(dev_pathsBuffer);
+#endif
+#ifdef USING_BVH
+	cudaFree(dev_bvh);
+	cudaFree(dev_triArr);
 #endif
 	checkCUDAError("pathtraceFree");
 }
@@ -216,7 +227,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
 // Feel free to modify the code below.
-__global__ void computeIntersections(
+__global__ void computeIntersectionsNaive(
 	int depth
 	, int num_paths
 	, const PathSegment* pathSegments
@@ -228,7 +239,6 @@ __global__ void computeIntersections(
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
-
 	if (path_index < num_paths)
 	{
 		PathSegment pathSegment = pathSegments[path_index];
@@ -296,6 +306,167 @@ __global__ void computeIntersections(
 		}
 	}
 }
+
+
+__device__ __host__ void searchTriArrIntersect(
+	Ray& ray, float& t_min, int& hit_index, TriangleArray& triIndices, Triangle* tris,
+	glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside
+) {
+	#pragma unroll
+	for (int j = 0; j < BBOX_TRI_NUM; j++) {
+		int ti = triIndices.triIds[j];
+		if (ti < 0) { return; }
+		glm::vec3 tmp_intersect;
+		glm::vec3 tmp_normal;
+		float t = triangleIntersectionTest(tris[ti], ray, tmp_intersect, tmp_normal, outside);
+		if (t > 0.0f && t_min > t)
+		{
+			t_min = t;
+			hit_index = ti;
+			intersectionPoint = tmp_intersect;
+			normal = tmp_normal;
+		}
+	}
+}
+
+__device__ __host__ float bvhSearch(
+	Ray& ray, int& hit_index
+	, Triangle* tris, int tris_size
+	, BoundingBox* bvh, int bvh_size
+	, TriangleArray* tri_arr, int tri_arr_size
+	, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside
+) {
+
+	float t_min = 1e5;
+
+	// Test BVH
+	//for (int i = 0; i < bvh_size; i++) {
+	//	BoundingBox& bbox = bvh[i];
+	//	// if (boundingboxIntersectionTest(ray, bbox.min, bbox.max))
+	//	
+	//	// reach leaf node of bvh
+	//	if (bbox.triArrId >= 0) {
+	//		searchTriArrIntersect(ray, t_min, hit_index, tri_arr[bbox.triArrId], tris, intersectionPoint, normal, outside);
+	//	}
+	//}
+
+	
+
+	
+	int arr[BVH_GPU_STACK_SIZE];
+	int sign = 0;
+	arr[0] = 0;
+
+	while (sign >= 0) {
+		BoundingBox& bbox = bvh[arr[sign]];
+		sign--;
+		if (boundingboxIntersectionTest(ray, bbox.min, bbox.max))
+		{
+			// reach leaf node of bvh
+			if (bbox.triArrId >= 0) {
+				searchTriArrIntersect(ray, t_min, hit_index, tri_arr[bbox.triArrId], tris, intersectionPoint, normal, outside);
+			}
+			// keep searching
+			else {
+				if (sign + 2 < BVH_GPU_STACK_SIZE) {
+					sign++;
+					arr[sign] = bbox.leftId;
+					sign++;
+					arr[sign] = bbox.rightId;
+				}
+			}
+		}
+	}
+	
+	
+	return hit_index < 0 ? -1 : t_min;
+
+}
+
+
+__global__ void computeIntersectionsBVH(
+	int depth
+	, int num_paths
+	, const PathSegment* pathSegments
+	, Geom* geoms
+	, int geoms_size
+	, Triangle* tris
+	, int tris_size
+	, BoundingBox* bvh
+	, int bvh_size
+	, TriangleArray* tri_arr
+	, int tri_arr_size
+	, ShadeableIntersection* intersections
+) {
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+	if (path_index < num_paths)
+	{
+		PathSegment pathSegment = pathSegments[path_index];
+
+		float t;
+		glm::vec3 intersect_point;
+		glm::vec3 normal;
+		float t_min = FLT_MAX;
+		int hit_index = -1;
+		bool hit_geom = true;
+		bool outside = true;
+
+		glm::vec3 tmp_intersect;
+		glm::vec3 tmp_normal;
+
+		// naive parse through global geoms
+		for (int i = 0; i < geoms_size; i++)
+		{
+			Geom& geom = geoms[i];
+
+			if (geom.type == CUBE)
+			{
+				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			}
+			else if (geom.type == SPHERE)
+			{
+				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			}
+			// TODO: add more intersection tests here... triangle? metaball? CSG?
+
+			// Compute the minimum t from the intersection tests to determine what
+			// scene geometry object was hit first.
+			if (t > 0.0f && t_min > t)
+			{
+				t_min = t;
+				hit_index = i;
+				intersect_point = tmp_intersect;
+				normal = tmp_normal;
+			}
+		}
+
+		int hit_tri_index = -1;
+
+		t = bvhSearch(pathSegment.ray, hit_tri_index, tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside);
+		if (t > 0.0f && t_min > t)
+		{
+			t_min = t;
+			hit_index = hit_tri_index;
+			hit_geom = false;
+			intersect_point = tmp_intersect;
+			normal = tmp_normal;
+		}
+
+
+		if (hit_index == -1)
+		{
+			intersections[path_index].t = -1.0f;
+		}
+		else
+		{
+			//The ray hits something
+			intersections[path_index].t = t_min;
+			intersections[path_index].materialId = hit_geom ? geoms[hit_index].materialid : tris[hit_index].materialid;
+			intersections[path_index].surfaceNormal = normal;
+		}
+	}
+}
+
 
 
 // LOOK: "fake" shader demonstrating what you might do with the info in
@@ -521,6 +692,21 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	checkCUDAError("generate camera ray");
 #endif
 
+
+
+	//Ray testRay = Ray();
+	//testRay.origin = cam.position;
+	//testRay.direction = glm::normalize(glm::vec3(0, 5, -5) - cam.position);
+	//int testTriID = -1;
+	//glm::vec3 testIntersectionPoint;
+	//glm::vec3 testNormal;
+	//bool testOutside;
+	//bvhSearch(testRay, testTriID, hst_scene->tris.data(), hst_scene->tris.size(), hst_scene->bvh.data(), hst_scene->bvh.size(),
+	//	hst_scene->triArr.data(), hst_scene->triArr.size(), testIntersectionPoint, testNormal, testOutside);
+
+	//cout << "Test: triId = " << testTriID << endl;
+
+
 	
 	// PathSegment* dev_path_end = dev_paths + pixelcount;
 	// int num_paths = dev_path_end - dev_paths;
@@ -535,9 +721,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	while (!iterationComplete) {
 		
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-
 		// clean shading chunks
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+		checkCUDAError("cudaMemset dev_intersections");
 
 #ifdef CACHE_FIRST_BOUNCE
 		if (iter > 1 && depth == 0) {
@@ -545,32 +731,39 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			checkCUDAError("load dev_intersectionsBuffer");
 		}
 		else {
+#endif
 			// tracing
-			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
-				depth, num_paths, dev_paths,
-				dev_geoms, hst_scene->geoms.size(),
-				dev_tris, hst_scene->tris.size(),
-				dev_intersections
-			);
+#ifdef USING_BVH
+			if (hst_scene->bvh.size() > 0) {
+				computeIntersectionsBVH << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth, num_paths, dev_paths,
+					dev_geoms, hst_scene->geoms.size(),
+					dev_tris, hst_scene->tris.size(),
+					dev_bvh, hst_scene->bvh.size(),
+					dev_triArr, hst_scene->triArr.size(),
+					dev_intersections);
+				checkCUDAError("tcomputeIntersectionsBVH");
+			} else {
+#endif
+				computeIntersectionsNaive << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth, num_paths, dev_paths,
+					dev_geoms, hst_scene->geoms.size(),
+					dev_tris, hst_scene->tris.size(),
+					dev_intersections);
+#ifdef USING_BVH
+			}
+#endif
+
+
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
-
+#ifdef CACHE_FIRST_BOUNCE
 			if (iter == 1 && depth == 0) {
 				cudaMemcpy(dev_intersectionsBuffer, dev_intersections, sizeof(ShadeableIntersection) * pixelcount, cudaMemcpyDeviceToDevice);
 				checkCUDAError("save dev_intersectionsBuffer");
 			}
 		}
-
-#else
-		// tracing
-		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
-			depth, num_paths, dev_paths, dev_geoms,
-			hst_scene->geoms.size(), dev_intersections
-			);
-		checkCUDAError("trace one bounce");
-		cudaDeviceSynchronize();
 #endif
-
 
 		depth++;
 

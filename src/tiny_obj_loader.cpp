@@ -446,6 +446,7 @@ std::string LoadMtl(std::map<std::string, int> &material_map,
 
     // new mtl
     if ((0 == strncmp(token, "newmtl", 6)) && isSpace((token[6]))) {
+        continue;
       // flush previous material.
       if (!material.name.empty()) {
         material_map.insert(
@@ -747,7 +748,7 @@ std::string LoadObj(std::vector<shape_t> &shapes,
 
     // use mtl
     if ((0 == strncmp(token, "usemtl", 6)) && isSpace((token[6]))) {
-
+        continue;
       char namebuf[4096];
       token += 7;
 #ifdef _MSC_VER
@@ -775,6 +776,7 @@ std::string LoadObj(std::vector<shape_t> &shapes,
 
     // load mtl
     if ((0 == strncmp(token, "mtllib", 6)) && isSpace((token[6]))) {
+        continue;
       char namebuf[4096];
       token += 7;
 #ifdef _MSC_VER
@@ -783,11 +785,13 @@ std::string LoadObj(std::vector<shape_t> &shapes,
       sscanf(token, "%s", namebuf);
 #endif
 
+      
       std::string err_mtl = readMatFn(namebuf, materials, material_map);
       if (!err_mtl.empty()) {
         faceGroup.clear(); // for safety
         return err_mtl;
       }
+      
 
       continue;
     }

@@ -92,8 +92,56 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Mesh
+// Floor-0
 OBJECT 4
+triangle
+material 1
+VERTEX 5 0 -5
+VERTEX -5 0 5
+VERTEX 5 0 5
+
+// Floor-1
+OBJECT 5
+triangle
+material 1
+VERTEX -5 0 -5
+VERTEX -5 0 5
+VERTEX 5 0 -5
+
+// Ceiling-0
+OBJECT 6
+triangle
+material 1
+VERTEX 5 10 -5
+VERTEX 5 10 5
+VERTEX -5 10 5
+
+// Ceiling-1
+OBJECT 7
+triangle
+material 1
+VERTEX -5 10 -5
+VERTEX 5 10 -5
+VERTEX -5 10 5
+
+// Back wall-0
+OBJECT 8
+triangle
+material 1
+VERTEX -5 0 -5
+VERTEX 5 10 -5
+VERTEX -5 10 -5
+
+// Back wall-1
+OBJECT 9
+triangle
+material 1
+VERTEX 5 10 -5
+VERTEX -5 0 -5
+VERTEX 5 0 -5
+
+// Mesh
+OBJECT 10
 mesh
 material 1
 MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\dodecahedron.obj

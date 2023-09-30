@@ -35,6 +35,46 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+__host__ __device__ bool boundingboxIntersectionTest(Ray& r,
+    glm::vec3& minv, glm::vec3& maxv) {
+
+    //if (r.origin[0] > minv[0] - 0.01f && r.origin[0] < maxv[0] + 0.01f &&
+    //    r.origin[1] > minv[1] - 0.01f && r.origin[0] < maxv[1] + 0.01f &&
+    //    r.origin[2] > minv[2] - 0.01f && r.origin[0] < maxv[2] + 0.01f) { return true; }
+
+    if (r.origin[0] > minv[0] && r.origin[0] < maxv[0] &&
+        r.origin[1] > minv[1] && r.origin[0] < maxv[1] &&
+        r.origin[2] > minv[2] && r.origin[0] < maxv[2]) {
+        return true;
+    }
+
+    float tmin[3] = {0, 0, 0};
+    // float tmax[3] = {0, 0, 0};
+
+    #pragma unroll
+    for (int i = 0; i < 3; i++) {
+        if (abs(r.direction[i]) < FLT_EPSILON) {
+            if (r.origin[i] < minv[i] - 0.01f || r.origin[i] > maxv[i] + 0.01f) {
+                return false;
+            }
+            tmin[i] = -1;
+            // tmax[i] = 1e5;
+        }
+        else {
+            tmin[i] = min((minv[i] - r.origin[i]) / r.direction[i], (maxv[i] - r.origin[i]) / r.direction[i]);
+            // tmax[i] = glm::max(t0, t1);
+
+        }
+    }
+
+    // float dstB = glm::min(tmax[0], glm::min(tmax[1], tmax[2]));
+
+    //float dstToBox = std::max(0, dstA);
+    //float dstInsideBox = max(0, dstB - dstToBox);
+    //return float2(dstToBox, dstInsideBox);
+    return max(max(tmin[0], tmin[1]), tmin[2]) > -0.001f;
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,
