@@ -6,6 +6,11 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 #include "bvh.h"
+#include "textureStruct.h"
+#include "bsdfStruct.h"
+#include "texture.h"
+extern Texture* dev_textures;
+extern BSDFStruct * dev_bsdfs;
 
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
@@ -68,20 +73,18 @@ __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableInterse
     bool hasHit = glm::intersectRayTriangle(r.origin, r.direction, tri.p1, tri.p2, tri.p3, bary);
     if (hasHit) {
         glm::vec3 intersection = (1.0f - bary.x - bary.y) * tri.p1 + bary.x * tri.p2 + bary.y * tri.p3;
-        //glm::vec3 intersection = bary.x * p1 + bary.y * p2 + (1.0f - bary.x - bary.y) * p3;
-        //float t = (intersection - r.origin).length();
-
         float t = bary.z;
-        glm::vec3 hitPoint = r.origin + r.direction * t;
-        //printf("intersection: %f %f %f hitPoint: %f %f %f bary: %f %f\n", intersection.x, intersection.y, intersection.z, hitPoint.x, hitPoint.y, hitPoint.z, bary.x, bary.y);
-
         if (r.min_t < t && t < r.max_t) {
             r.max_t = t;
             isect->t = t;
             //isect->primitive = this;
             isect->materialId = tri.materialID;
-            isect->intersectionPoint = r.origin + r.direction * t;
+            isect->intersectionPoint = r.at(t);
+            isect->uv = (1.0f - bary.x - bary.y) * tri.uv1 + bary.x * tri.uv2 + bary.y * tri.uv3;
             isect->surfaceNormal = glm::normalize((1.0f - bary.x - bary.y) * tri.n1 + bary.x * tri.n2 + bary.y * tri.n3);
+   //         if (tri.normalTextureID != -1) {
+			//	isect->surfaceNormal = sampleTextureRGB(*tri.normalTexture, isect->uv);
+			//}
         }
     }
     return hasHit;

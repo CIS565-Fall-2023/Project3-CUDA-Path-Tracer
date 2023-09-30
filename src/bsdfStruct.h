@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <thrust/random.h>
 #include "utilities.h"
+#include "textureStruct.h"
 
 enum BSDFType {
     UNIMPLEMENTED = -1,
@@ -10,15 +11,23 @@ enum BSDFType {
     SPECULAR = 1,
     REFRACTIVE = 2,
     MICROFACET = 3,
-    EMISSIVE = 4
+    EMISSIVE = 4,
+    DISNEY= 5
+
 };
 
-class BSDFStruct {
-public:
+struct BSDFStruct {
     glm::vec3 reflectance;
     glm::vec3 emissiveFactor;
     float strength;
     BSDFType bsdfType;
-    int diffuseTextureID;
-    int roughtnessTextureID;
+    Texture * baseColorTexture;
+    int baseColorTextureID = -1;
+    Texture * metallicRoughnessTexture;
+    int metallicRoughnessTextureID = -1;
+    Texture * normalTexture;
+    int normalTextureID = -1;
+    float metallicFactor;
+    float roughnessFactor;
+    float ior;
 };

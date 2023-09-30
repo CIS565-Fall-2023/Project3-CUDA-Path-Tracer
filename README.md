@@ -40,11 +40,12 @@ project, and we will not be able to grade you without a good README.
         - [x] BoundingBox Array
         - [x] Construct BVH
         - [x] Traverse BVH
-    - [ ] Better Heuristics
+    - [x] Better Heuristics
         - [x] SAH 
+    - [ ] MTBVH
 
 - [ ] Texture
-    - [ ] Naive texture sampling
+    - [x] Naive texture sampling
         - [ ] A Resource Mananger to help get the handle to texture?
     - [ ] Deal with antialiasing
 
@@ -91,11 +92,37 @@ Scene with 1k faces
 
 09.28
 
-- [x] SAH BVH(probably done...)
+- SAH BVH(probably done...)
 
-- [ ] Texture sampling
-    - [x] Try billboarding
+- Texture sampling
+    - Try billboarding
     ![Alt text](img/billboarding.png)
-    - [ ] Texture mapping
-    
-- [ ] 
+
+09.29
+
+- Texture mapping
+    - Texture mapping test(only baseColor shading)
+    ![Alt text](img/texture_mapping_test.png)
+    - Bump mapping
+        - Normals in world coordinate
+    ![](img/bump_mapping_world_coord.png)
+        - Before bump mapping
+    ![](img/bump_mapping_before.png)
+        - After bump mapping
+    ![](img/bump_mapping_after.png)
+    It might be a little difficult to notice the difference before and after bump mapping. **Please observe the logo on the box, more details are added.**
+
+
+    - [ ] Texture aliasing is indeed quite serious!
+        - [ ] However, to implement antialiasing for texture mapping, I may need to consider implementing mipmapping. 
+
+- [ ] Microfacet model pbr failed...
+    - [ ] Need to read through microfacet part and think about how to use roughness and metallic indeed
+
+09.30
+
+- [ ] Microfacet
+
+- [ ] Antialiasing
+
+- [ ] Denoising

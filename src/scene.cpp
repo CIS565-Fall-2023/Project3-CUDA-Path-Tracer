@@ -28,9 +28,9 @@ Scene::Scene(const char* filename)
         assert(0);
     }
 
-    initTriangles();
     initTextures();
     initBSDFs();
+    initTriangles();
 }
 
 void Scene::initTriangles()
@@ -47,6 +47,7 @@ void Scene::initBSDFs() {
         printf("material name: %s\n", material.name.c_str());
         //BSDF* bsdf = nullptr;
         BSDFStruct bsdfStruct;
+        bsdfStruct.normalTextureID = material.normalTexture.index;
         if (*std::max_element(material.emissiveFactor.begin(), material.emissiveFactor.end()) > DBL_EPSILON) {
             auto ext = material.extensions.find("KHR_materials_emissive_strength");
             float strength;
@@ -62,11 +63,23 @@ void Scene::initBSDFs() {
             }
             //bsdf = new EmissionBSDF(strength * glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]));
         }
-
+		else if (material.pbrMetallicRoughness.baseColorTexture.index >= 0) {
+			//bsdf = new DiffuseBSDF(glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]));
+			bsdfStruct.bsdfType = MICROFACET;
+			bsdfStruct.reflectance = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]);
+			bsdfStruct.baseColorTextureID = material.pbrMetallicRoughness.baseColorTexture.index;
+			bsdfStruct.metallicRoughnessTextureID = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+            bsdfStruct.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
+            bsdfStruct.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
+            bsdfStruct.ior = 1.5f;
+			bsdfStructs.push_back(bsdfStruct);
+		}
         else {
             //bsdf = new DiffuseBSDF(glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]));
             bsdfStruct.bsdfType = DIFFUSE;
             bsdfStruct.reflectance = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]);
+            bsdfStruct.baseColorTextureID = material.pbrMetallicRoughness.baseColorTexture.index;
+            bsdfStruct.metallicRoughnessTextureID = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
             bsdfStructs.push_back(bsdfStruct);
         }
         //bsdfs.push_back(bsdf);
@@ -139,7 +152,6 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
     std::cout << "Loading mesh: " << mesh.name << std::endl;
 
     for (const auto& primitive : mesh.primitives) {
-        int p_size = mesh.primitives.size();
         const auto& indicesAccessor = model.accessors[primitive.indices];
         const auto& positionsAccessor = model.accessors[primitive.attributes.at("POSITION")];
         const auto& normalsAccessor = model.accessors[primitive.attributes.at("NORMAL")];
@@ -152,19 +164,24 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
 
         // TODO: Dynamic type array according to componentType
         const unsigned short* indexData = reinterpret_cast<const unsigned short*>(&model.buffers[indicesView.buffer].data[indicesAccessor.byteOffset + indicesView.byteOffset]);
-        const float* positionData = reinterpret_cast<const float*>(&model.buffers[positionsView.buffer].data[positionsAccessor.byteOffset + positionsView.byteOffset]);
-        const float* normalData = reinterpret_cast<const float*>(&model.buffers[normalsView.buffer].data[normalsAccessor.byteOffset + normalsView.byteOffset]);
-        const float* uvData = reinterpret_cast<const float*>(&model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]);
+        const float* positionData       = reinterpret_cast<const float*>(&model.buffers[positionsView.buffer].data[positionsAccessor.byteOffset + positionsView.byteOffset]);
+        const float* normalData         = reinterpret_cast<const float*>(&model.buffers[normalsView.buffer].data[normalsAccessor.byteOffset + normalsView.byteOffset]);
+        const float* uvData             = reinterpret_cast<const float*>(&model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]);
 
         const size_t vertexStride = 3;
         const size_t normalStride = 3;
-        const size_t uvStride = 3;
+        const size_t uvStride = 2;
 
         const size_t numIndices = indicesAccessor.count;
         glm::mat4x4 normalTransform = glm::transpose(glm::inverse(transform));
 
         int materialID = primitive.material;
         if (primitive.material < 0) {
+            printf("WARNING: No material specified for mesh %s\n", mesh.name.c_str());
+            if (model.materials.size() == 0) {
+				printf("ERROR: No material found in the model\n");
+                assert(0);
+			}
 			materialID = 0;
 		}
         // Iterate through indices and create triangles
@@ -190,10 +207,15 @@ void Scene::processMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh
             triangle.uv1 = glm::vec2(uvData[indexData[i] * uvStride], uvData[indexData[i] * uvStride + 1]);
             triangle.uv2 = glm::vec2(uvData[indexData[i + 1] * uvStride], uvData[indexData[i + 1] * uvStride + 1]);
             triangle.uv3 = glm::vec2(uvData[indexData[i + 2] * uvStride], uvData[indexData[i + 2] * uvStride + 1]);
+
+            //printf("triangle.uv1: %f %f\n", triangle.uv1.x, triangle.uv1.y);
+            //printf("triangle.uv2: %f %f\n", triangle.uv2.x, triangle.uv2.y);
+            //printf("triangle.uv3: %f %f\n", triangle.uv3.x, triangle.uv3.y);
             //auto index0 = indexData[i];
             //auto index1 = indexData[i + 1];
             //auto index2 = indexData[i + 2];
             triangle.materialID = materialID;
+            triangle.normalTextureID = bsdfStructs[materialID].normalTextureID;
 
             triangles.push_back(triangle);
         }

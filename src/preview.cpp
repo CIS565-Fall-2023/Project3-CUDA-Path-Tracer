@@ -256,7 +256,7 @@ void mainLoop() {
 		RenderImGui();
 
 		glfwSwapBuffers(window);
-		system("pause");
+		//system("pause");
 	}
 
 	ImGui_ImplOpenGL3_Shutdown();

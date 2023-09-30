@@ -59,6 +59,16 @@ EYE         0 0 10
 LOOKAT      0 0 0
 UP          0 1 0
 
+// Camera for bump mapping texture scene
+//CAMERA
+//RES         800 800
+//FOVY        45
+//ITERATIONS  5000
+//DEPTH       8
+//FILE        cornell
+//EYE         0 -5 10
+//LOOKAT      0 0 5
+//UP          0 1 0
 
 // Sphere
 OBJECT 0

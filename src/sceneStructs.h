@@ -6,6 +6,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "glm/gtx/intersect.hpp"
+#include "textureStruct.h"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
@@ -92,6 +93,7 @@ struct ShadeableIntersection {
   glm::vec3 surfaceNormal;
   int materialId;
   glm::vec3 intersectionPoint;
+  glm::vec2 uv;
 };
 
 
@@ -156,4 +158,5 @@ struct Triangle{
     glm::vec3 N;
     int materialID;
     int normalTextureID;
+    Texture * normalTexture;
 };

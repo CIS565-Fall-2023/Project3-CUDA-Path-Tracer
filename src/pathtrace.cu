@@ -116,8 +116,30 @@ __global__ void initDeviceTextures(Texture & dev_texture, const TextureInfo & de
 	dev_texture.data = data;
 	printf("dev_texture.data[0]: %d\n", dev_texture.data[0]);
 
-	auto test_sample = sampleTextureRGBA(dev_texture, 0.0f, 0.0f);
+	auto test_sample = sampleTextureRGBA(dev_texture, glm::vec2(1.0f, 1.0f));
 	printf("test_sample: %f, %f, %f, %f\n", test_sample.x, test_sample.y, test_sample.z, test_sample.w);
+}
+
+__global__ void initPrimitivesNormalTexture(Triangle* triangles, Texture* textures, int triangle_size) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index < triangle_size){
+		triangles[index].normalTexture = textures + triangles[index].normalTextureID;
+	}
+}
+
+__global__ void initBSDFWithTextures(BSDFStruct* bsdfStructs, Texture* texture, int bsdfStructs_size) {
+	for (size_t i = 0; i < bsdfStructs_size; i++)
+	{
+		if (bsdfStructs[i].baseColorTextureID != -1)
+			bsdfStructs[i].baseColorTexture	= &(texture[bsdfStructs[i].baseColorTextureID]);
+		if (bsdfStructs[i].metallicRoughnessTextureID != -1)
+			bsdfStructs[i].metallicRoughnessTexture = &(texture[bsdfStructs[i].metallicRoughnessTextureID]);
+		if (bsdfStructs[i].normalTextureID != -1)
+			bsdfStructs[i].normalTexture = &(texture[bsdfStructs[i].normalTextureID]);
+		printf("bsdfStructs[i].diffuseTextureID: %d\n", bsdfStructs[i].baseColorTextureID);
+		printf("bsdfStructs[i].roughnessTextureID: %d\n", bsdfStructs[i].metallicRoughnessTextureID);
+
+	}
 }
 
 void pathtraceInit(HostScene* scene) {
@@ -139,18 +161,6 @@ void pathtraceInit(HostScene* scene) {
 	cudaMemset(dev_first_iteration_first_bounce_cache_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
-	bvh = new BVHAccel();
-	bvh->initBVH(pa->triangles);
-	auto triangles = bvh->orderedPrims.data();
-	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
-	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-	
-	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
-	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
-
-	auto bsdfStructs = pa->bsdfStructs.data();
-	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
-	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
 
 	textureSize = pa->textures.size();
 	auto textureInfos = pa->textures.data();
@@ -165,7 +175,34 @@ void pathtraceInit(HostScene* scene) {
 		cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
 		initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
 	}
+
+
 	checkCUDAError("initDeviceTextures");
+
+	auto bsdfStructs = pa->bsdfStructs.data();
+	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
+	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
+
+	initBSDFWithTextures<<<1,1>>>(dev_bsdfStructs, dev_textures, pa->bsdfStructs.size());
+	checkCUDAError("initBSDFWithTextures");
+
+
+	bvh = new BVHAccel();
+	bvh->initBVH(pa->triangles);
+	auto triangles = bvh->orderedPrims.data();
+	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
+	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
+	int triangle_size = bvh->orderedPrims.size();
+	int blockSize = 256;
+	dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
+
+	initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
+
+	// TODO: Init Texture Pointers within 
 
 	checkCUDAError("pathtraceInit");
 }
@@ -283,6 +320,10 @@ __global__ void shadeBSDF(
 		  // makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
+			//pathSegment.color = glm::vec3(intersection.surfaceNormal);
+			//pathSegment.color = glm::vec3(intersection.uv.x, intersection.uv.y, 0.0f);
+			////printf("intersection.uv: %f, %f\n", intersection.uv.x, intersection.uv.y);
+			//return;
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
@@ -295,11 +336,24 @@ __global__ void shadeBSDF(
 				glm::mat3x3 o2w;
 				make_coord_space(o2w, intersection.surfaceNormal);
 				glm::mat3x3 w2o(glm::transpose(o2w));
+				if (bsdfStructs[intersection.materialId].normalTextureID != -1) {
+					glm::vec3 sampledNormal = sampleTextureRGB(*(bsdfStructs[intersection.materialId].normalTexture), intersection.uv) * 2.0f - 1.0f;
+					intersection.surfaceNormal = o2w * sampledNormal;
+					make_coord_space(o2w, intersection.surfaceNormal);
+					w2o = glm::transpose(o2w);
+				}
+				//return;
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
-				glm::vec3 bsdf = bsdfStruct.reflectance * INV_PI; // Hard coded for now
+				//glm::vec3 bsdf = f(bsdfStruct, -pathSegment.ray.direction, ); // Hard coded for now
 				glm::vec3 L_direct;
 				float pdf;
 				glm::vec3 wo = -pathSegment.ray.direction;
+				//float test = (w2o * wo).z;
+				//if (test < 0.0f) {
+				//	pathSegment.color = glm::vec3();
+				//}
+				//else pathSegment.color = glm::vec3(1.0f);
+				//return;
 				glm::vec3 wi;
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Estimate one bounce direct lighting */
@@ -333,7 +387,9 @@ __global__ void shadeBSDF(
 				float one_over_n = 1.0f / (n_valid_sample + 1);
 				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
 #endif //  ONE_BOUNCE_DIRECT_LIGHTINIG
-				sample_f(bsdfStruct, wo, wi, &pdf, rng);
+				glm::vec3 bsdf = sample_f(bsdfStruct, w2o * wo, wi, &pdf, rng, intersection.uv);
+				//pathSegment.color = bsdf;
+				//return;
 				float cosineTerm = abs(wi.z);
 #if ONE_BOUNCE_DIRECT_LIGHTINIG
 				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
@@ -372,7 +428,7 @@ __global__ void sampleScreen(glm::vec3 * dev_image, Texture & texture, int image
 	{
 		for (size_t y = 0; y < imageHeight; y++)
 		{
-			auto sampleResult = sampleTextureRGBA(texture, float(x) / imageWidth, float(y) / imageHeight);
+			auto sampleResult = sampleTextureRGBA(texture, glm::vec2(float(x) / imageWidth, float(y) / imageHeight));
 			dev_image[x + y * imageWidth] = glm::vec3(sampleResult.x, sampleResult.y, sampleResult.z);
 		}
 	}
@@ -538,7 +594,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		num_paths = dev_path_end - dev_paths;
 
 		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
-		 //iterationComplete = (true);
+		//iterationComplete = (true);
+		
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;

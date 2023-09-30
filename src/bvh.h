@@ -7,7 +7,7 @@
 
 #define BVH_LOG 0
 #define BVH_NAIVE 1
-#define BVH_SAH 1
+#define BVH_SAH 0
 
 struct AABB {
 	glm::vec3 pmax;
