@@ -92,7 +92,7 @@ static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
-static Scene * pa = new Scene("..\\scenes\\pathtracer_test_texture.glb");
+static Scene * pa = new Scene("..\\scenes\\pathtracer_test_box.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -239,10 +239,13 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(0.0f, 0.0f, 0.0f);
 
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		thrust::random::uniform_real_distribution<float> u01(0,1);
+		glm::vec2 jitter(u01(rng)-0.5f, u01(rng)-0.5f);
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)x + jitter[0] - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + jitter[1] - (float)cam.resolution.y * 0.5f)
 		);
 
 		segment.pixelIndex = index;

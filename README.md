@@ -57,6 +57,7 @@ project, and we will not be able to grade you without a good README.
     - Might need to implement it for direct lighting to speed up the converging speed of ray tracing
 
 - [ ] Camera
+    - [x] Jitter
     - [ ] Field of depth
     - [ ] Motion blur 
 
