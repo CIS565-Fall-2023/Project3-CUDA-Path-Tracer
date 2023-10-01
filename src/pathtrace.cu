@@ -236,13 +236,20 @@ __global__ void finalGather(float u, int nPaths, glm::vec3* image, PathSegment* 
 }
 
 // Naive BSDF sample only
-__global__ void KernelNaiveGI(int iteration, int num_paths, 
+__global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 							ShadeableIntersection* shadeableIntersections,
 							PathSegment* pathSegments,
 							Material* materials, EnvironmentMap env_map)
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= num_paths) return;
+
+	__shared__ Material shared_materials[128];
+	if (threadIdx.x < 128 && threadIdx.x < num_materials)
+	{
+		shared_materials[threadIdx.x] = materials[threadIdx.x];
+	}
+	__syncthreads();
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	PathSegment segment = pathSegments[idx];
@@ -252,7 +259,9 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
 		//return;	
 		
-		Material material = materials[intersection.materialId];
+		//Material material = materials[intersection.materialId];
+		const Material& material = shared_materials[intersection.materialId];
+
 		glm::vec3 materialColor = material.GetAlbedo(intersection.uv);
 		
 		if (material.emittance > 0.f) 
@@ -373,7 +382,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 		checkCUDAError("Intersection Error");
 		cudaDeviceSynchronize();
 
-		KernelNaiveGI<<<numblocksPathSegmentTracing, blockSize1d >>>(m_Iteration, num_paths,
+		KernelNaiveGI<<<numblocksPathSegmentTracing, blockSize1d >>>(m_Iteration, num_paths, scene.material_count,
 																	 dev_intersections, dev_paths, dev_materials, scene.env_map);
 		checkCUDAError("NaiveGI Error");
 		cudaDeviceSynchronize();

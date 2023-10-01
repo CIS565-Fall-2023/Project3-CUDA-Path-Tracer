@@ -100,6 +100,7 @@ SandBox::SandBox()
 
 	m_GPUScene = mkU<GPUScene>();
 	m_GPUScene->shape_count = m_Scene->m_TriangleIdxs.size();
+	m_GPUScene->material_count = m_Scene->materials.size();
 	
 	BVH bvh;
 	bvh.Create(m_Scene->m_Vertices, m_Scene->m_TriangleIdxs);

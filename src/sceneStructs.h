@@ -48,10 +48,10 @@ struct Geom {
 enum MaterialType : unsigned int
 {
     None                = 0,
-    Albedo_Texture      = BIT(28),
-    Normal_Texture      = BIT(29),
-    Roughness_Texture   = BIT(30),
-    Metallic_Texture    = BIT(31),
+    Albedo_Texture      = BIT(27),
+    Normal_Texture      = BIT(28),
+    Roughness_Texture   = BIT(29),
+    Metallic_Texture    = BIT(30),
     Clear_Texture       = ~(Albedo_Texture | Normal_Texture | Roughness_Texture | Metallic_Texture),
     Specular            = BIT(6),
     DiffuseReflection   = 1,
@@ -110,6 +110,7 @@ struct Material
         inline CPU_GPU MaterialUnionData& operator=(const MaterialUnionData& other)
         {
             values = other.values;
+            textures = other.textures;
         }
     };
 
@@ -150,7 +151,6 @@ struct Material
     {
         if (HasTexture(type, Normal) && data.textures.normal_tex.Valid())
         {
-            printf("normal_tex id : %d\n", data.textures.normal_tex.m_TexObj);
             float4 tex_value = data.textures.normal_tex.Get(uv.x, uv.y);
             glm::vec3 tex_normal(tex_value.x, tex_value.y, tex_value.z);
             normal = glm::normalize(LocalToWorld(normal) * tex_normal);
