@@ -16,7 +16,6 @@
 #include "intersections.h"
 #include "interactions.h"
 
-#include "sampler.h"
 #include "gpuScene.h"
 #include "scene.h"
 #include "rng.h"
@@ -117,15 +116,15 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	if (x < cam.resolution.x && y < cam.resolution.y) 
 	{
 		int index = x + (y * cam.resolution.x);
-		PathSegment& segment = pathSegments[index];
-		segment.Reset();
+		PathSegment segment;
 		
 		CudaRNG rng(iter, index, 0);
 
 		segment.ray = cam.CastRay({x + rng.rand(), y + rng.rand()});
-
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
+
+		pathSegments[index] = segment;
 	}
 }
 
@@ -154,8 +153,6 @@ __global__ void computeIntersections(int num_paths, PathSegment* pathSegments, S
 		glm::ivec3 n_id = scene.dev_triangles[intersection.shapeId].n_id;
 		glm::ivec3 uv_id = scene.dev_triangles[intersection.shapeId].uv_id;
 
-		//glm::vec3 v[3]{ scene.dev_vertices[idx.x], scene.dev_vertices[idx.y], scene.dev_vertices[idx.z] };
-		//shadeable.normal = glm::normalize(glm::cross(v[1] - v[0], v[2] - v[0]));
 		shadeable.normal = BarycentricInterpolation<glm::vec3>(scene.dev_normals[n_id.x],
 															   scene.dev_normals[n_id.y],
 															   scene.dev_normals[n_id.z], intersection.uv);;
@@ -186,41 +183,41 @@ __global__ void shadeFakeMaterial(
 	, Material* materials
 )
 {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_paths)
-	{
-		ShadeableIntersection intersection = shadeableIntersections[idx];
-		if (intersection.t > 0.0f) { // if the intersection exists...
-		  // Set up the RNG
-		  // LOOK: this is how you use thrust's RNG! Please look at
-		  // makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
+	//int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	//if (idx < num_paths)
+	//{
+	//	ShadeableIntersection intersection = shadeableIntersections[idx];
+	//	if (intersection.t > 0.0f) { // if the intersection exists...
+	//	  // Set up the RNG
+	//	  // LOOK: this is how you use thrust's RNG! Please look at
+	//	  // makeSeededRandomEngine as well.
+	//		thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+	//		thrust::uniform_real_distribution<float> u01(0, 1);
 
-			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.albedo;
+	//		Material material = materials[intersection.materialId];
+	//		glm::vec3 materialColor = material.albedo;
 
-			// If the material indicates that the object was a light, "light" the ray
-			if (material.emittance > 0.0f) {
-				pathSegments[idx].throughput *= (materialColor * material.emittance);
-			}
-			// Otherwise, do some pseudo-lighting computation. This is actually more
-			// like what you would expect from shading in a rasterizer like OpenGL.
-			// TODO: replace this! you should be able to start with basically a one-liner
-			else {
-				float lightTerm = glm::dot(intersection.normal, glm::vec3(0.0f, 1.0f, 0.0f));
-				pathSegments[idx].throughput *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-				pathSegments[idx].throughput *= u01(rng); // apply some noise because why not
-			}
-			// If there was no intersection, color the ray black.
-			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-			// used for opacity, in which case they can indicate "no opacity".
-			// This can be useful for post-processing and image compositing.
-		}
-		else {
-			pathSegments[idx].throughput = glm::vec3(0.0f);
-		}
-	}
+	//		// If the material indicates that the object was a light, "light" the ray
+	//		if (material.emittance > 0.0f) {
+	//			pathSegments[idx].throughput *= (materialColor * material.emittance);
+	//		}
+	//		// Otherwise, do some pseudo-lighting computation. This is actually more
+	//		// like what you would expect from shading in a rasterizer like OpenGL.
+	//		// TODO: replace this! you should be able to start with basically a one-liner
+	//		else {
+	//			float lightTerm = glm::dot(intersection.normal, glm::vec3(0.0f, 1.0f, 0.0f));
+	//			pathSegments[idx].throughput *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+	//			pathSegments[idx].throughput *= u01(rng); // apply some noise because why not
+	//		}
+	//		// If there was no intersection, color the ray black.
+	//		// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
+	//		// used for opacity, in which case they can indicate "no opacity".
+	//		// This can be useful for post-processing and image compositing.
+	//	}
+	//	else {
+	//		pathSegments[idx].throughput = glm::vec3(0.0f);
+	//	}
+	//}
 }
 
 // Add the current iteration's output to the overall image
@@ -266,29 +263,27 @@ __global__ void KernelNaiveGI(int iteration, int num_paths,
 		}
 		else
 		{	
-			glm::vec3 wo = WorldToLocal(intersection.normal) * -segment.ray.direction;
-			if (wo.z < 0.f)
-			{
-				pathSegments[idx].Terminate();
-				return;
-			}
+			material.GetNormal(intersection.uv, intersection.normal);
 
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
-			glm::vec2 xi(rng.rand(), rng.rand());
-			glm::vec3 wi = SquareToHemisphereCosine(xi);
-			glm::vec3 wiW = glm::normalize(LocalToWorld(intersection.normal) * wi);
-		
-			float pdf = SquareToHemisphereCosinePDF(wi);
-		
+			BSDFSample bsdf_sample;
+			bsdf_sample.wiW = -segment.ray.direction;
+			SampleBSDF::Sample(material, intersection, segment.eta, rng, bsdf_sample);
+
 			// generate new ray
-			pathSegments[idx].ray = Ray::SpawnRay(intersection.position, wiW);
-			pathSegments[idx].throughput *= materialColor * InvPi * wi.z / pdf;
+			pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
+			pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
+			pathSegments[idx].eta = material.eta;
 			--pathSegments[idx].remainingBounces;
 		}
 	}
 	else
 	{
-		pathSegments[idx].radiance = segment.throughput * glm::clamp(env_map.Get(segment.ray.direction), 0.f, 1000.f);
+		if (env_map.Valid())
+		{
+			pathSegments[idx].radiance = segment.throughput * glm::clamp(env_map.Get(segment.ray.direction), 0.f, 1000.f);
+		}
+		
 		pathSegments[idx].Terminate();
 	}
 }
@@ -365,12 +360,12 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 2 && num_paths > 0) 
+	while (depth < 8 && num_paths > 0) 
 	{
 		depth++;
 
 		// clean shading chunks
-		//cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;

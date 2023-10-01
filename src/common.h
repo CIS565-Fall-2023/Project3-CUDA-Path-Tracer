@@ -16,6 +16,8 @@
 #define ERRORCHECK 1
 #define SAH_BVH 1
 
+#define BIT(x) (1 << (x))
+
 GPU_ONLY static constexpr float Pi				= 3.1415927f;
 GPU_ONLY static constexpr float TWO_Pi			= 6.2831853f;
 GPU_ONLY static constexpr float InvPi			= 0.3183099f;

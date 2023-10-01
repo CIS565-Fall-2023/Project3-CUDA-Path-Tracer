@@ -23,7 +23,7 @@ class CudaTexture2D
 public:
 	CPU_ONLY CudaTexture2D(const cudaTextureObject_t& tex_obj = 0);
 	GPU_ONLY float4 Get(const float& x, const float& y) const;
-
+	inline CPU_GPU bool Valid() const { return m_TexObj > 0; }
 public:
-	cudaTextureObject_t  m_TexObj;
+	unsigned int  m_TexObj;
 };

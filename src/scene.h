@@ -46,6 +46,6 @@ public:
     
     std::unordered_map<std::string, unsigned int> m_MaterialMap;
     
-    unsigned int m_EnvironmentMapId;
+    int m_EnvironmentMapId;
     RenderState state;
 };

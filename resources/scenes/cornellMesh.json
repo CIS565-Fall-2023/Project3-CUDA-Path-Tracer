@@ -37,6 +37,17 @@
         "path": "textures/wahoo.bmp",
         "flip": true
       }
+    },
+    {
+      "name": "Mirror",
+      "type": "SpecularReflection",
+      "albedo": [ 1, 1, 1 ]
+    },
+    {
+      "name": "Glass",
+      "type": "Glass",
+      "albedo": [ 0.9, 0.9, 1 ],
+      "eta": 1.55
     }
   ],
   "geomerties": [
@@ -96,12 +107,12 @@
     },
     {
       "type": "obj",
-      "path": "meshes/wahoo.obj",
+      "path": "meshes/untitled.obj",
       "name": "bunny",
-      "material": "WahooTexture",
-      "translation": [ 0, 2, 0 ],
-      "rotation": [ 0, 180, 0 ],
-      "scale": [ 0.7, 0.7, 0.7 ]
+      "material": "Glass",
+      "translation": [ 0, 1.25, 0 ],
+      "rotation": [ 0, 0, 0 ],
+      "scale": [ 1.5, 1.5, 1.5 ]
     }
   ]
 }

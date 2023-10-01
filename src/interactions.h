@@ -1,79 +1,185 @@
 #pragma once
 
-#include "intersections.h"
+#include "common.h"
 
-// CHECKITOUT
-/**
- * Computes a cosine-weighted random direction in a hemisphere.
- * Used for diffuse lighting.
- */
-__host__ __device__
-glm::vec3 calculateRandomDirectionInHemisphere(
-        glm::vec3 normal, thrust::default_random_engine &rng) {
-    thrust::uniform_real_distribution<float> u01(0, 1);
+#include "sceneStructs.h"
+#include "rng.h"
 
-    float up = sqrt(u01(rng)); // cos(theta)
-    float over = sqrt(1 - up * up); // sin(theta)
-    float around = u01(rng) * TWO_Pi;
+inline CPU_GPU glm::vec2 SquareToDiskConcentric(const glm::vec2& xi)
+{
+	glm::vec2 offset = xi * 2.f - 1.f;
 
-    // Find a direction that is not the normal based off of whether or not the
-    // normal's components are all equal to sqrt(1/3) or whether or not at
-    // least one component is less than sqrt(1/3). Learned this trick from
-    // Peter Kutz.
-
-    glm::vec3 directionNotNormal;
-    if (abs(normal.x) < Sqrt_One_Thrid) {
-        directionNotNormal = glm::vec3(1, 0, 0);
-    } else if (abs(normal.y) < Sqrt_One_Thrid) {
-        directionNotNormal = glm::vec3(0, 1, 0);
-    } else {
-        directionNotNormal = glm::vec3(0, 0, 1);
-    }
-
-    // Use not-normal direction to generate two perpendicular directions
-    glm::vec3 perpendicularDirection1 =
-        glm::normalize(glm::cross(normal, directionNotNormal));
-    glm::vec3 perpendicularDirection2 =
-        glm::normalize(glm::cross(normal, perpendicularDirection1));
-
-    return up * normal
-        + cos(around) * over * perpendicularDirection1
-        + sin(around) * over * perpendicularDirection2;
+	if (offset.x != 0.f || offset.y != 0.f)
+	{
+		float theta, r;
+		if (glm::abs(offset.x) > glm::abs(offset.y))
+		{
+			r = offset.x;
+			theta = PiOver4 * (offset.y / offset.x);
+		}
+		else
+		{
+			r = offset.y;
+			theta = PiOver2 - PiOver4 * (offset.x / offset.y);
+		}
+		return r * glm::vec2(glm::cos(theta), glm::sin(theta));
+	}
+	return glm::vec2(0.);
 }
 
-/**
- * Scatter a ray with some probabilities according to the material properties.
- * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
- * A perfect specular surface scatters in the reflected ray direction.
- * In order to apply multiple effects to one surface, probabilistically choose
- * between them.
- *
- * The visual effect you want is to straight-up add the diffuse and specular
- * components. You can do this in a few ways. This logic also applies to
- * combining other types of materias (such as refractive).
- *
- * - Always take an even (50/50) split between a each effect (a diffuse bounce
- *   and a specular bounce), but divide the resulting color of either branch
- *   by its probability (0.5), to counteract the chance (0.5) of the branch
- *   being taken.
- *   - This way is inefficient, but serves as a good starting point - it
- *     converges slowly, especially for pure-diffuse or pure-specular.
- * - Pick the split based on the intensity of each material color, and divide
- *   branch result by that branch's probability (whatever probability you use).
- *
- * This method applies its changes to the Ray parameter `ray` in place.
- * It also modifies the color `color` of the ray in place.
- *
- * You may need to change the parameter list for your purposes!
- */
-__host__ __device__
-void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        const Material &m,
-        thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+inline CPU_GPU glm::vec3 SquareToHemisphereCosine(const glm::vec2& xi)
+{
+	glm::vec3 result = glm::vec3(SquareToDiskConcentric(xi), 0.f);
+	result.z = glm::sqrt(glm::max(0.f, 1.f - result.x * result.x - result.y * result.y));
+	result.z = glm::max(result.z, 0.01f);
+
+	return result;
 }
+
+inline CPU_GPU glm::vec3 SquareToSphereUniform(const glm::vec2& xi)
+{
+	float z = 1.f - 2.f * xi.x;
+
+	return glm::vec3(glm::cos(2 * Pi * xi.y) * glm::sqrt(1.f - z * z),
+		glm::sin(2 * Pi * xi.y) * glm::sqrt(1.f - z * z),
+		z);
+}
+
+inline CPU_GPU float SquareToSphereUniformPDF(const glm::vec3& sample)
+{
+	return Inv4Pi;
+}
+
+inline CPU_GPU float SquareToHemisphereCosinePDF(const glm::vec3& sample)
+{
+	return sample.z * InvPi; // cos(theta) / PI
+}
+
+inline CPU_GPU float FresnelDielectric(const float& etaI, 
+									   const float& etaO, 
+									   const float& cosThetaI,
+									   const float& cosThetaO)
+{
+	float Rparl = ((etaO * cosThetaI) - (etaI * cosThetaO)) / ((etaO * cosThetaI) + (etaI * cosThetaO));
+	float Rperp = ((etaI * cosThetaI) - (etaO * cosThetaO)) / ((etaI * cosThetaI) + (etaO * cosThetaO));
+
+	return (Rparl * Rparl + Rperp * Rperp) / 2.f;
+}
+
+inline CPU_GPU void Refract(const glm::vec3& dir, 
+						  const glm::vec3& normal, 
+						  const float& eta, 
+						  const float& cosThetaI,
+						  const float& cosThetaO,
+						  glm::vec3& wiW)
+{
+	wiW = glm::normalize(eta * dir + (eta * cosThetaI - cosThetaO) * normal);
+}
+
+inline GPU_ONLY void SampleLight()
+{
+
+}
+
+class SampleBSDF
+{
+public:
+	inline static GPU_ONLY void Sample(const Material& material,
+									const ShadeableIntersection& intersection,
+									const float& etaA,
+									CudaRNG& rng,
+									BSDFSample& sample)
+	{
+		// woW is stored in sample.wiW
+		switch (material.type & MaterialType::Clear_Texture)
+		{
+		case MaterialType::DiffuseReflection:
+		{
+			DiffuseReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample);
+			break;
+		}
+		case MaterialType::SpecularReflection:
+		{
+			SpecularReflection(material.GetAlbedo(intersection.uv), intersection, sample);
+			break;
+		}
+		case MaterialType::Glass:
+		{
+			Glass(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
+			break;
+		}
+		}
+	}
+
+protected:
+	inline static GPU_ONLY void DiffuseReflection(const glm::vec3& albedo,
+												const ShadeableIntersection& intersection,
+												CudaRNG& rng,
+												BSDFSample& sample)
+	{
+		// woW is stored in sample.wiW
+		if (glm::dot(intersection.normal, sample.wiW) < 0.f)
+		{
+			return;
+		}
+		sample.f	= albedo * InvPi;
+		sample.wiW	= SquareToHemisphereCosine({ rng.rand(), rng.rand() });
+		sample.pdf	= SquareToHemisphereCosinePDF(sample.wiW);
+		sample.wiW	= glm::normalize(LocalToWorld(intersection.normal) * sample.wiW);
+	}
+
+	inline static GPU_ONLY void SpecularReflection(const glm::vec3& albedo,
+												const ShadeableIntersection& intersection,
+												BSDFSample& sample)
+	{
+		// woW is stored in sample.wiW
+		if (glm::dot(intersection.normal, sample.wiW) < 0.f)
+		{
+			return;
+		}
+		sample.wiW = glm::normalize(glm::reflect(-sample.wiW, intersection.normal));
+		sample.f = albedo / glm::abs(glm::dot(sample.wiW, intersection.normal));
+		sample.pdf = 1.f;
+	}
+
+	inline static GPU_ONLY void Glass(const glm::vec3& albedo,
+									float etaA,
+									float etaB,
+									const ShadeableIntersection& intersection,
+									CudaRNG& rng,
+									BSDFSample& sample)
+	{
+		// woW is stored in sample.wiW
+		float cosThetaI = glm::dot(intersection.normal, sample.wiW);
+		glm::vec3 normal = intersection.normal;
+		if (cosThetaI < 0.f)
+		{
+			normal = -normal;
+			cosThetaI = -cosThetaI;
+			thrust::swap(etaA, etaB);
+		}
+		float eta = etaA / etaB;
+
+		float sinThetaI = glm::sqrt(glm::max(0.f, 1.f - cosThetaI * cosThetaI));
+		float sinThetaO = eta * sinThetaI;
+		float cosThetaO = glm::sqrt(glm::max(0.f, 1.f - sinThetaO * sinThetaO));
+
+		float F = 1.f;
+
+		if (sinThetaO < 1.f)
+		{
+			F = FresnelDielectric(etaA, etaB, cosThetaI, cosThetaO);
+		}
+
+		if (rng.rand() < F) // Reflection
+		{
+			SpecularReflection(albedo, intersection, sample);
+		}
+		else // Refraction
+		{
+			Refract(-sample.wiW, normal, eta, cosThetaI, cosThetaO, sample.wiW);
+			sample.f = albedo / glm::abs(glm::dot(sample.wiW, intersection.normal));
+			sample.pdf = 1.f;
+		}
+	}
+};

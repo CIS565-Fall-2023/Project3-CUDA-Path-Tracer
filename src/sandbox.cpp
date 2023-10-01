@@ -89,7 +89,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/cornellMesh.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -114,7 +114,11 @@ SandBox::SandBox()
 
 	MallocArrayOnCuda<TriangleIdx>(m_GPUScene->dev_triangles, m_Scene->m_TriangleIdxs);
 	cudaMemcpy(bvh.m_AABBs.data(), m_GPUScene->dev_BVH, bvh.m_AABBs.size() * sizeof(AABB), cudaMemcpyDeviceToHost);
-	m_GPUScene->env_map.m_Texture.m_TexObj = m_Scene->m_Textures[m_Scene->m_EnvironmentMapId].m_TexObj;
+	if (m_Scene->m_EnvironmentMapId >= 0)
+	{
+		m_GPUScene->env_map.m_Texture.m_TexObj = m_Scene->m_Textures[m_Scene->m_EnvironmentMapId].m_TexObj;
+	}
+	std::cout << sizeof(Material) << std::endl;
 	checkCUDAError("Copy array Error");
 }
 

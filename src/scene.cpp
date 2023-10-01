@@ -98,7 +98,8 @@ void ApplyTransform(int start_id, std::vector<glm::vec3>& vertices, int n_start_
     }
 }
 
-Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_filename) 
+Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_filename)
+    : m_EnvironmentMapId(-1)
 {
     std::filesystem::path scene_path(res_path);
     scene_path.append(scene_filename);
@@ -230,15 +231,20 @@ void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path
     for (unsigned int i = 0; i < material_json.size(); ++i)
     {
         Material material;
-        std::string name;
+        std::string name, type;
+        SafeGet<std::string>(material_json[i], "type", type);
         SafeGet<std::string>(material_json[i], "name", name);
+        
+        material.type = StringToMaterialType(type);
 
         m_MaterialMap.emplace(name, i);
 
-        SafeGetVec<glm::vec3, float, 3>(material_json[i], "albedo", material.albedo);
         SafeGet<float>(material_json[i], "emittance", material.emittance);
+        SafeGet<float>(material_json[i], "eta", material.eta);
+
         if(material_json[i].contains("albedo map"))
         {
+            material.type = static_cast<MaterialType>(material.type | MaterialType::Albedo_Texture);
             const Json& albedo_map_json = material_json[i]["albedo map"];
             std::string map_str;
             bool flip_v = false;
@@ -250,8 +256,12 @@ void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path
             {
                 m_Textures.emplace_back(texture_path.string(), flip_v);
                 
-                material.albedo_tex.m_TexObj = m_Textures.back().m_TexObj;
+                material.data.textures.albedo_tex.m_TexObj = m_Textures.back().m_TexObj;
             }
+        }
+        else
+        {
+            SafeGetVec<glm::vec3, float, 3>(material_json[i], "albedo", material.data.values.albedo);
         }
         materials.push_back(std::move(material));
     }

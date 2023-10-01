@@ -7,8 +7,10 @@
 
 #include "common.h"
 #include "cudaTexture.h"
+#include "utilities.h"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
+static constexpr float ETA_AIR = 1.f;
 
 enum GeomType {
     SPHERE,
@@ -43,22 +45,141 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
-struct Material {
-    glm::vec3 albedo{0.f};
-    float emittance = 0.f;
-    CudaTexture2D albedo_tex;
-    CudaTexture2D normal_tex;
+enum MaterialType : unsigned int
+{
+    None                = 0,
+    Albedo_Texture      = BIT(28),
+    Normal_Texture      = BIT(29),
+    Roughness_Texture   = BIT(30),
+    Metallic_Texture    = BIT(31),
+    Clear_Texture       = ~(Albedo_Texture | Normal_Texture | Roughness_Texture | Metallic_Texture),
+    Specular            = BIT(6),
+    DiffuseReflection   = 1,
+    SpecularReflection  = Specular | 2,
+    Specularrefraction  = Specular | 3,
+    Glass               = Specular | 4
+};
 
-    GPU_ONLY glm::vec3 GetAlbedo(const glm::vec2& uv) const 
+#define TryStr2Type(str, type) if(str == #type) { return MaterialType::type;}
+
+#define IsSpecular(type) ((MaterialType::Specular & type) > 0)
+#define HasTexture(type, t_type) ((MaterialType::##t_type##_Texture & type) > 0)
+
+inline MaterialType StringToMaterialType(const std::string& str)
+{
+    TryStr2Type(str, DiffuseReflection);
+    TryStr2Type(str, SpecularReflection);
+    TryStr2Type(str, Specularrefraction);
+    TryStr2Type(str, Glass);
+    
+    return MaterialType::None;
+}
+CPU_GPU inline bool AlbedoTexture(const MaterialType& type)
+{
+    return (type & MaterialType::Albedo_Texture) > 0;
+}
+
+struct Material 
+{
+    struct MaterialTextures
     {
-        if (albedo_tex.m_TexObj > 0)
+        CudaTexture2D roughness_tex;
+        CudaTexture2D metallic_tex;
+        CudaTexture2D albedo_tex;
+        CudaTexture2D normal_tex;
+    };
+
+    struct MaterialValues
+    {
+        float rougness = 0.f;
+        float metallic = 0.f;
+        glm::vec3 albedo = glm::vec3(0.f);
+    };
+
+    union MaterialUnionData
+    {
+        MaterialValues values;
+        MaterialTextures textures;
+        CPU_GPU MaterialUnionData() 
+            : values()
         {
-            float4 tex_value = albedo_tex.Get(uv.x, uv.y);
+        }
+        CPU_GPU MaterialUnionData(const MaterialUnionData& other)
+            : values(other.values)
+        {}
+        inline CPU_GPU MaterialUnionData& operator=(const MaterialUnionData& other)
+        {
+            values = other.values;
+        }
+    };
+
+    MaterialType type = MaterialType::None;
+    float emittance = 0.f;
+    float eta = ETA_AIR;
+    MaterialUnionData data;
+    CPU_GPU Material() {}
+
+    CPU_GPU Material(const Material& other)
+        :type(other.type), emittance(other.emittance), eta(other.eta), data(other.data)
+    {}
+
+    inline CPU_GPU Material& operator=(const Material& other)
+    {
+        type = other.type;
+        emittance = other.emittance;
+        eta = other.eta;
+        data = other.data;
+
+        return *this;
+    }
+
+    inline GPU_ONLY glm::vec3 GetAlbedo(const glm::vec2& uv) const 
+    {
+        if (HasTexture(type, Albedo) && data.textures.albedo_tex.Valid())
+        {
+            float4 tex_value = data.textures.albedo_tex.Get(uv.x, uv.y);
             return glm::vec3(tex_value.x, tex_value.y, tex_value.z);
         }
         else
         {
-            return albedo;
+            return data.values.albedo;
+        }
+    }
+
+    inline GPU_ONLY void GetNormal(const glm::vec2& uv, glm::vec3& normal) const
+    {
+        if (HasTexture(type, Normal) && data.textures.normal_tex.Valid())
+        {
+            printf("normal_tex id : %d\n", data.textures.normal_tex.m_TexObj);
+            float4 tex_value = data.textures.normal_tex.Get(uv.x, uv.y);
+            glm::vec3 tex_normal(tex_value.x, tex_value.y, tex_value.z);
+            normal = glm::normalize(LocalToWorld(normal) * tex_normal);
+        }
+    }
+
+    inline GPU_ONLY float GetRoughness(const glm::vec2& uv) const
+    {
+        if (HasTexture(type, Roughness) && data.textures.roughness_tex.Valid())
+        {
+            float4 tex_value = data.textures.roughness_tex.Get(uv.x, uv.y);
+            return tex_value.x;
+        }
+        else
+        {
+            return data.values.rougness;
+        }
+    }
+
+    inline GPU_ONLY float GetMetallic(const glm::vec2& uv) const
+    {
+        if (HasTexture(type, Metallic) && data.textures.metallic_tex.Valid())
+        {
+            float4 tex_value = data.textures.metallic_tex.Get(uv.x, uv.y);
+            return tex_value.x;
+        }
+        else
+        {
+            return data.values.metallic;
         }
     }
 };
@@ -120,8 +241,10 @@ struct RenderState {
 
 struct PathSegment {
     Ray ray;
+    float eta = ETA_AIR; // eta of last intermedia
     glm::vec3 throughput{ 1, 1, 1 };
     glm::vec3 radiance{0, 0, 0};
+
     int pixelIndex;
     int remainingBounces;
     CPU_GPU void Reset() 
@@ -129,6 +252,7 @@ struct PathSegment {
         throughput = glm::vec3(1.f);
         radiance = glm::vec3(0.f);
         pixelIndex = 0;
+        eta = ETA_AIR;
     }
     CPU_GPU void Terminate() { remainingBounces = 0; }
     CPU_GPU bool IsEnd() const { return remainingBounces <= 0; }
@@ -221,4 +345,11 @@ struct TriangleIdx
     unsigned int material;
     glm::ivec3 n_id;
     glm::ivec3 uv_id;
+};
+
+struct BSDFSample
+{
+    glm::vec3 f;
+    glm::vec3 wiW;
+    float pdf;
 };
