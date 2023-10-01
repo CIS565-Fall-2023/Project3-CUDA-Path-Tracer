@@ -12,6 +12,7 @@
 #define CACHE_FIRST_BOUNCE
 // #define DEBUG_OUTPUT
 #define USING_BVH
+// #define PRINT_TREE
 
 using namespace std;
 
@@ -22,8 +23,9 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     void buildTree();
-    void splitTree(std::vector<int>& triIds, int left, int right, int bbox, glm::vec3 maxmin);
+    void splitTree(std::vector<int>& triIds, int left, int right, int bbox, glm::vec3 maxmin, int axis);
     void printTree();
+    bool checkTree();
 public:
     Scene(string filename);
     ~Scene();

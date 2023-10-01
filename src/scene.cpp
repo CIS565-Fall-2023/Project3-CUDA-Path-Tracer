@@ -4,6 +4,8 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include "tiny_obj_loader.h"
+#include <deque>
+#include <unordered_set>
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -309,14 +311,16 @@ void Scene::buildTree()
     cout << ", max = "; printVec(max);
     cout << ", maxmin = "; printVec(maxmin); cout << endl;
 
-    splitTree(triIds, 0, tris.size(), 0, maxmin);
-    
-    // printTree();
+    splitTree(triIds, 0, tris.size(), 0, maxmin, 0);
+#ifdef PRINT_TREE
+    printTree();
+#endif
     cout << "bbox num = " << bvh.size() << ", triArr num = " << triArr.size() << endl;
+    checkTree();
 }
 
 
-void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int bboxId, glm::vec3 maxmin)
+void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int bboxId, glm::vec3 maxmin, int axis)
 {    
     //cout << endl;
     // cout << "splitTree: " << leftEnd << ", " << rightEnd << ", " << bboxId << endl;
@@ -340,21 +344,25 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
 
     glm::vec3 lmin, lmax, rmin, rmax, lmaxmin, rmaxmin;
 
-    int axis = 0;
-    while ((axis < 3) && (abs(bvh[bboxId].min[axis] - maxmin[axis]) < 0.001f)) {
-        axis++;
+    // int axis = 0;
+    int off = 0;
+    while ((off < 3) && (abs(bvh[bboxId].min[(axis + off) % 3] - maxmin[(axis + off) % 3]) < 0.001f)) {
+        off++;
     }
+    axis = (axis + off) % 3;
     // cout << "here1" << endl;
 
     int midPoint = rightEnd;
-    if (axis < 3) {
-        float midmin = (maxmin[axis] - bvh[bboxId].min[axis]) / 2.0f + bvh[bboxId].min[axis];
+    if (off < 3) {
+        // float midmin = (maxmin[axis] - bvh[bboxId].min[axis]) / 2.0f + bvh[bboxId].min[axis];
+        float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
         int ti = leftEnd;
 
         // cout << "midmin = " << midmin << endl;
 
-        while (ti < midPoint) {            
-            if (tris[triIds[ti]].min[axis] <= midmin) {
+        while (ti < midPoint) {    
+            // if (tris[triIds[ti]].min[axis] <= midmin) {
+            if (tris[triIds[ti]].min[axis] + tris[triIds[ti]].max[axis] <= midsum) {
                 // cout << "left, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
                 if (ti == leftEnd) {
                     lmin = tris[triIds[ti]].min;
@@ -420,8 +428,8 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
     bvh.emplace_back(rmin, rmax);
     bvh[bboxId].leftId = bvh.size() - 2;
     bvh[bboxId].rightId = bvh.size() - 1;
-    splitTree(triIds, leftEnd, midPoint, bvh[bboxId].leftId, lmaxmin);
-    splitTree(triIds, midPoint, rightEnd, bvh[bboxId].rightId, rmaxmin);
+    splitTree(triIds, leftEnd, midPoint, bvh[bboxId].leftId, lmaxmin, (axis + 1) % 3);
+    splitTree(triIds, midPoint, rightEnd, bvh[bboxId].rightId, rmaxmin, (axis + 1) % 3);
 }
 
 void Scene::printTree() {
@@ -429,11 +437,11 @@ void Scene::printTree() {
         cout << "BVH Tree Is Empty!!!" << endl;
         return;
     }
-    std::vector<int> bids;
+    std::deque<int> bids;
     bids.push_back(0);
     while (!bids.empty()) {
-        int bi = bids.back();
-        bids.pop_back();
+        int bi = bids.front();
+        bids.pop_front();
         cout << "box[" << bi << "]:"; printVec(bvh[bi].min); printVec(bvh[bi].max);
         cout << endl;
         if (bvh[bi].triArrId >= 0) {
@@ -449,4 +457,49 @@ void Scene::printTree() {
         }
         
     }
+}
+
+inline bool bigger(glm::vec3 v0, glm::vec3 v1) {
+    return v0.x > FLT_EPSILON + v1.x && v0.y > FLT_EPSILON + v1.y && v0.z > FLT_EPSILON + v1.z;
+}
+
+bool Scene::checkTree() {
+    if (bvh.empty()) {
+        return true;
+    }
+    int maxi = 0;
+    unordered_set<int> tri_set;
+    deque<int> bids;
+    bids.push_back(0);
+    while (!bids.empty()) {
+        int bi = bids.front();
+        bids.pop_front();
+        if (bvh[bi].triArrId >= 0) {
+            for (int i = 0; i < BBOX_TRI_NUM; i++) {
+                if (triArr[bvh[bi].triArrId].triIds[i] >= 0) {
+                    tri_set.insert(triArr[bvh[bi].triArrId].triIds[i]);
+                    maxi = max(maxi, triArr[bvh[bi].triArrId].triIds[i]);
+                }
+                else {
+                    break;
+                }
+                
+            }
+        }
+        else {
+            bids.push_back(bvh[bi].leftId);
+            bids.push_back(bvh[bi].rightId);
+            if (bigger(bvh[bi].min, bvh[bvh[bi].leftId].min)|| bigger(bvh[bvh[bi].leftId].max, bvh[bi].max))
+            {
+                cout << "WRONG bbox from " << bi << " to " << bvh[bi].leftId << " !!!!!!!!!!!!!" << endl;
+            }
+            if (bigger(bvh[bi].min, bvh[bvh[bi].rightId].min) || bigger(bvh[bvh[bi].rightId].max, bvh[bi].max))
+            {
+                cout << "WRONG bbox from " << bi << " to " << bvh[bi].rightId << " !!!!!!!!!!!!!" << endl;
+            }
+        }
+    }
+
+    cout << "tris num = " << tris.size() << ", check num = " << tri_set.size() << ", maxi = " << maxi << endl;
+    return tris.size() == tri_set.size();
 }

@@ -329,55 +329,92 @@ __device__ __host__ void searchTriArrIntersect(
 	}
 }
 
-__device__ __host__ float bvhSearch(
-	Ray& ray, int& hit_index
+__device__  float bvhSearch(
+	const Ray& ray, int& hit_index
 	, Triangle* tris, int tris_size
 	, BoundingBox* bvh, int bvh_size
 	, TriangleArray* tri_arr, int tri_arr_size
 	, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside
+	, int blockDim, int threadId
 ) {
 
-	float t_min = 1e5;
+	float t_min = 1e4;
+	// float bt_min = 1e4;
 
-	// Test BVH
-	//for (int i = 0; i < bvh_size; i++) {
-	//	BoundingBox& bbox = bvh[i];
-	//	// if (boundingboxIntersectionTest(ray, bbox.min, bbox.max))
-	//	
+	
+	//for (int i = 0; i < bvh_size; i++) {  ///// Test BVH
+	//	BoundingBox& bbox = bvh[i]; // if (boundingboxIntersectionTest(ray, bbox.min, bbox.max))
 	//	// reach leaf node of bvh
 	//	if (bbox.triArrId >= 0) {
 	//		searchTriArrIntersect(ray, t_min, hit_index, tri_arr[bbox.triArrId], tris, intersectionPoint, normal, outside);
 	//	}
 	//}
-
 	
 
-	
-	int arr[BVH_GPU_STACK_SIZE];
+	__shared__ int arr[BLOCK_SIZE_1D][BVH_GPU_STACK_SIZE];
+
+	// int arr[BVH_GPU_STACK_SIZE];
 	int sign = 0;
-	arr[0] = 0;
+	arr[threadId][0] = 0;
 
 	while (sign >= 0) {
-		BoundingBox& bbox = bvh[arr[sign]];
+		BoundingBox& bbox = bvh[arr[threadId][sign]];
 		sign--;
-		if (boundingboxIntersectionTest(ray, bbox.min, bbox.max))
+		glm::vec3 minDiff = bbox.min - ray.origin;
+		glm::vec3 maxDiff = bbox.max - ray.origin;
+		bool inside = (minDiff.x * maxDiff.x <= 0 &&
+			minDiff.y * maxDiff.y <= 0 &&
+			minDiff.z * maxDiff.z <= 0);
+		// bool inside = false;
+
+		float bt = (abs(ray.direction[0]) < 1e-5) ? -1.0f : max(-1.0f, min(minDiff.x / ray.direction[0], maxDiff.x / ray.direction[0]));
+		bt = (abs(ray.direction[1]) < 1e-5) ? bt : max(bt, min(minDiff.y / ray.direction[1], maxDiff.y / ray.direction[1]));
+		bt = (abs(ray.direction[2]) < 1e-5) ? bt : max(bt, min(minDiff.z / ray.direction[2], maxDiff.z / ray.direction[2]));
+
+		if (inside || (bt > -1e-3 && bt < t_min))
 		{
 			// reach leaf node of bvh
 			if (bbox.triArrId >= 0) {
-				searchTriArrIntersect(ray, t_min, hit_index, tri_arr[bbox.triArrId], tris, intersectionPoint, normal, outside);
+				// searchTriArrIntersect(ray, t_min, hit_index, tri_arr[bbox.triArrId], tris, intersectionPoint, normal, outside);
+				
+				TriangleArray& triIndices = tri_arr[bbox.triArrId];
+				// #pragma unroll
+				for (int j = 0; j < BBOX_TRI_NUM; j++) {
+					int ti = triIndices.triIds[j];
+					if (ti < 0) { break; }
+					glm::vec3 tmp_intersect;
+					glm::vec3 tmp_normal;
+					float t = triangleIntersectionTest(tris[ti], ray, tmp_intersect, tmp_normal, outside);
+					if (t > 0.0f && t_min > t)
+					{
+						//if (t_min < bt) {
+						//	/////
+						//}
+						//if (t < bt) {
+						//	/////
+						//	float ori[3] = { ray.origin.x, ray.origin.y, ray.origin.z };
+						//	float dir[3] = { ray.direction.x, ray.direction.y, ray.direction.z };
+						//	int bboxId = arr[threadId][sign + 1];
+						//	int a = 1;
+						//}
+						t_min = t;
+						hit_index = ti;
+						intersectionPoint = tmp_intersect;
+						normal = tmp_normal;
+					}
+				}
 			}
 			// keep searching
+			else if (sign + 2 < BVH_GPU_STACK_SIZE) {
+				arr[threadId][sign + 1] = bbox.leftId;
+				arr[threadId][sign + 2] = bbox.rightId;
+				sign += 2;
+			}
 			else {
-				if (sign + 2 < BVH_GPU_STACK_SIZE) {
-					sign++;
-					arr[sign] = bbox.leftId;
-					sign++;
-					arr[sign] = bbox.rightId;
-				}
+				return -99.0f;
 			}
 		}
 	}
-	
 	
 	return hit_index < 0 ? -1 : t_min;
 
@@ -442,7 +479,10 @@ __global__ void computeIntersectionsBVH(
 
 		int hit_tri_index = -1;
 
-		t = bvhSearch(pathSegment.ray, hit_tri_index, tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside);
+		t = bvhSearch(pathSegment.ray, hit_tri_index,
+			tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside,
+			blockDim.x, threadIdx.x);
+
 		if (t > 0.0f && t_min > t)
 		{
 			t_min = t;
@@ -452,8 +492,7 @@ __global__ void computeIntersectionsBVH(
 			normal = tmp_normal;
 		}
 
-
-		if (hit_index == -1)
+		if (hit_index == -1 || t < -90.0f)
 		{
 			intersections[path_index].t = -1.0f;
 		}
@@ -672,9 +711,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
 	// 1D block for path tracing
-	const int blockSize1d = 128;
+	const int blockSize1d = BLOCK_SIZE_1D;
 	int depth = 0;
 	int num_paths = pixelcount;
+
 
 #ifdef CACHE_FIRST_BOUNCE
 	if (iter == 1) {
@@ -693,18 +733,31 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 
 
-
+	//cout << "cam pos = " << cam.position.x << ", " << cam.position.y << ", " << cam.position.z << endl;
 	//Ray testRay = Ray();
 	//testRay.origin = cam.position;
-	//testRay.direction = glm::normalize(glm::vec3(0, 5, -5) - cam.position);
+	//testRay.direction = glm::normalize(glm::vec3(-1, 4, -5) - cam.position);
 	//int testTriID = -1;
 	//glm::vec3 testIntersectionPoint;
 	//glm::vec3 testNormal;
 	//bool testOutside;
 	//bvhSearch(testRay, testTriID, hst_scene->tris.data(), hst_scene->tris.size(), hst_scene->bvh.data(), hst_scene->bvh.size(),
 	//	hst_scene->triArr.data(), hst_scene->triArr.size(), testIntersectionPoint, testNormal, testOutside);
+	//cout << "Test: triId = " << testTriID << ", matId = " << hst_scene->tris[testTriID].materialid << endl;
 
-	//cout << "Test: triId = " << testTriID << endl;
+
+	//Ray testRay = Ray();
+	//testRay.origin = cam.position;
+	//testRay.direction = glm::normalize(glm::vec3(0.14668556f, 0.66375220f, -0.73342776f));
+	//glm::vec3 testIntersectionPoint;
+	//glm::vec3 testNormal;
+	//bool testOutside;
+	//float test_tri_t = triangleIntersectionTest(hst_scene->tris[2], testRay, testIntersectionPoint, testNormal, testOutside);
+	//glm::vec3 minDiff = hst_scene->bvh[61].min - testRay.origin;
+	//glm::vec3 maxDiff = hst_scene->bvh[61].max - testRay.origin;
+	//float test_bt_x = (abs(testRay.direction[0]) < 1e-5) ? -1.0f : glm::max(-1.0f, min(minDiff.x / testRay.direction[0], maxDiff.x / testRay.direction[0]));
+	//float test_bt_y = (abs(testRay.direction[1]) < 1e-5) ? -1.0f : glm::max(-1.0f, min(minDiff.y / testRay.direction[1], maxDiff.y / testRay.direction[1]));
+	//float test_bt_z = (abs(testRay.direction[2]) < 1e-5) ? -1.0f : glm::max(-1.0f, min(minDiff.z / testRay.direction[2], maxDiff.z / testRay.direction[2]));
 
 
 	

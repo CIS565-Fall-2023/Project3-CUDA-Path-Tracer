@@ -6,8 +6,9 @@
 #include "glm/glm.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
-#define BBOX_TRI_NUM 5
-#define BVH_GPU_STACK_SIZE 20
+#define BBOX_TRI_NUM 4000
+#define BVH_GPU_STACK_SIZE 40
+#define BLOCK_SIZE_1D 64
 
 enum GeomType {
     SPHERE,

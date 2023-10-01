@@ -48,16 +48,6 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Diffuse blue
-MATERIAL 5
-RGB         .35 .35 .85
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
 // Camera
 CAMERA
 RES         800 800
@@ -81,10 +71,10 @@ SCALE       3 .3 3
 // Sphere
 OBJECT 1
 sphere
-material 4
-TRANS       -1 4 -1
+material 2
+TRANS       3 4 3
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       2 2 2
 
 // Left wall
 OBJECT 2
@@ -153,17 +143,35 @@ VERTEX 5 0 -5
 // Mesh
 OBJECT 10
 mesh
-material 5
+material 1
 MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\dodecahedron.obj
-TRANS       0 2 1.5
+TRANS       0 2 2
 ROTAT       0 90 0
-SCALE       1.5 1.5 1.5
+SCALE       1.2 1.2 1.2
 
 // Mesh
 OBJECT 11
 mesh
-material 5
-MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\dodecahedron.obj
-TRANS       -2 2 3
-ROTAT       0 90 0
-SCALE       1.5 1.5 1.5
+material 1
+MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\wahoo.obj
+TRANS       -2 2.5 0
+ROTAT       0 0 0
+SCALE       0.9 0.9 0.9
+
+// Mesh
+OBJECT 12
+mesh
+material 1
+MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\torus.obj
+TRANS       2 2 -2
+ROTAT       0 0 0
+SCALE       1 1 1
+
+// Mesh
+OBJECT 13
+mesh
+material 1
+MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\torus.obj
+TRANS       2 8 -2
+ROTAT       0 0 0
+SCALE       1 1 1
