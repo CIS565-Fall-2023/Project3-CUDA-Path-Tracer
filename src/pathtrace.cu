@@ -140,6 +140,26 @@ void pathtraceFree() {
 	checkCUDAError("pathtraceFree");
 }
 
+#define M_PI 3.14159265358979323846
+__host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u) {
+	glm::vec2 uOffset = 2.f * u - glm::vec2(1, 1);
+
+	if (uOffset.x == 0.f && uOffset.y == 0.f)
+		return glm::vec2(0.f);
+
+	float theta, r;
+	if (std::abs(uOffset.x) > std::abs(uOffset.y)) {
+		r = uOffset.x;
+		theta = (M_PI / 4.f) * (uOffset.y / uOffset.x);
+	}
+	else {
+		r = uOffset.y;
+		theta = (M_PI / 2.f) - (M_PI / 4.f) * (uOffset.x / uOffset.y);
+	}
+
+	return r * glm::vec2(std::cos(theta), std::sin(theta));
+}
+
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -180,12 +200,13 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 #endif
 		
 		// Depth of Field effect
+		// Ref: PBTR 6.2
 		if (cam.aperture > 0.0f) {
 			float lensRadius = cam.aperture / 2.0f;
-			glm::vec2 randomCircle = glm::vec2(u01(rng), u01(rng));
+			glm::vec2 randomCircle = ConcentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
 			glm::vec2 pointOnLens = lensRadius * randomCircle;
 
-			float focalDistance = length(cam.lookAt - cam.position);
+			float focalDistance = length(cam.lookAt - cam.position) * lensRadius / cam.aperture;
 			glm::vec3 focalPoint = segment.ray.origin + focalDistance * segment.ray.direction;
 
 			// Update ray's origin and direction for Depth of Field

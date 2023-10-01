@@ -159,7 +159,7 @@ SCALE       4 4 4
 OBJECT 8
 cube
 material 3
-TRANS       0 5 0
+TRANS       0 5 4
 ROTAT       25 45 0
 SCALE       3 3 3
 
