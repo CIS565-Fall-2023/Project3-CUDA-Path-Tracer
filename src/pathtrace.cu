@@ -26,6 +26,7 @@
 //#include "utilities.cuh"
 
 #define USE_FIRST_BOUNCE_CACHE 1
+#define USE_SORT_BY_MATERIAL 0
 #define ONE_BOUNCE_DIRECT_LIGHTINIG 0
 #define USE_BVH 1
 
@@ -100,6 +101,11 @@ static ShadeableIntersection * dev_first_iteration_first_bounce_cache_intersecti
 static Texture * dev_textures = nullptr;
 static TextureInfo * dev_textureInfos = nullptr;
 int textureSize = 0;
+
+#if USE_SORT_BY_MATERIAL
+thrust::device_ptr<int> dev_bsdfStructIDs = nullptr;
+thrust::device_ptr<int> dev_bsdfStructIDs_copy = nullptr;
+#endif
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -206,51 +212,16 @@ void pathtraceInit(HostScene* scene) {
 	cudaMalloc(&dev_first_iteration_first_bounce_cache_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_first_iteration_first_bounce_cache_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-	// TODO: initialize any extra device memeory you need
-
-	//textureSize = pa->textures.size();
-	//auto textureInfos = pa->textures.data();
-	//cudaMalloc(&dev_textureInfos, textureSize * sizeof(TextureInfo));
-	//cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
-	//
-	//cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
-	//unsigned char* dev_texture_data = nullptr;
-	//for (int i =0;i<textureSize;i++)
-	//{
-	//	cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
-	//	cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
-	//	initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
-	//}
-	//
-	//
-	//checkCUDAError("initDeviceTextures");
-	//
-	//auto bsdfStructs = pa->bsdfStructs.data();
-	//cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
-	//cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
-	//
-	//initBSDFWithTextures<<<1,1>>>(dev_bsdfStructs, dev_textures, pa->bsdfStructs.size());
-	//checkCUDAError("initBSDFWithTextures");
-	//
-	//
-	//bvh = new BVHAccel();
-	//bvh->initBVH(pa->triangles);
-	//auto triangles = bvh->orderedPrims.data();
-	//cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
-	//cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-	//
-	//cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
-	//cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
-	//
-	//int triangle_size = bvh->orderedPrims.size();
-	//int blockSize = 256;
-	//dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
-	//
-	//initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
-	//
-	//// TODO: Init Texture Pointers within 
-	//
-	//checkCUDAError("pathtraceInit");
+#if USE_SORT_BY_MATERIAL
+	int* dev_bsdfStructIDs_ptr;
+	int * dev_bsdfStructIDs_copy_ptr;
+	cudaMalloc(&(dev_bsdfStructIDs_ptr), pixelcount * sizeof(int));
+	cudaMemset(dev_bsdfStructIDs_ptr, 0, pixelcount * sizeof(int));
+	cudaMalloc(&dev_bsdfStructIDs_copy_ptr, pixelcount * sizeof(int));
+	cudaMemset(dev_bsdfStructIDs_copy_ptr, 0, pixelcount * sizeof(int));
+	dev_bsdfStructIDs = thrust::device_ptr<int>(dev_bsdfStructIDs_ptr);
+	dev_bsdfStructIDs_copy = thrust::device_ptr<int>(dev_bsdfStructIDs_copy_ptr);
+#endif // USE_SORT_BY_MATERIAL
 }
 
 void pathtraceFree() {
@@ -262,12 +233,20 @@ void pathtraceFree() {
 	//cudaFree(dev_bsdfStructs);
 	//delete bvh;
 	cudaFree(dev_first_iteration_first_bounce_cache_intersections);
+#if USE_SORT_BY_MATERIAL
+	cudaFree(dev_bsdfStructIDs.get());
+	cudaFree(dev_bsdfStructIDs_copy.get());
+#endif // SORT_BY_MATERIAL
 	checkCUDAError("pathtraceFree");
 }
 
 void pathtraceFreeAfterMainLoop() {
 	cudaFree(dev_triangles);
 	cudaFree(dev_bsdfStructs);
+	cudaFree(dev_textureInfos);
+
+	/* TODO: Also need to free the texture that dev_texture point to*/
+	cudaFree(dev_textures);
 	delete bvh;
 	delete pa;
 }
@@ -330,6 +309,10 @@ __global__ void intersect(
 	, ShadeableIntersection* intersections
 	, BVHNode * bvhNodes
 	, int bvhNodes_size
+#if USE_SORT_BY_MATERIAL
+	, thrust::device_ptr<int> bsdfStructIDs
+	, thrust::device_ptr<int> bsdfStructIDs_copy
+#endif
 ) {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -341,6 +324,11 @@ __global__ void intersect(
 		intersections[path_index].t = -1;
 		//intersectBVH(bvhNodes, bvhNodes_size, triangles, ray, intersections[path_index]);
 		intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, pathSegments[path_index].ray, intersections[path_index]);
+#if USE_SORT_BY_MATERIAL
+		bsdfStructIDs[path_index] = intersections[path_index].materialId;
+		bsdfStructIDs_copy[path_index] = intersections[path_index].materialId;
+#endif // SORT_BY_MATERIAL
+
 	}
 }
 
@@ -400,16 +388,9 @@ __global__ void shadeBSDF(
 				}
 				//return;
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
-				//glm::vec3 bsdf = f(bsdfStruct, -pathSegment.ray.direction, ); // Hard coded for now
 				glm::vec3 L_direct;
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
-				//float test = (w2o * wo).z;
-				//if (test < 0.0f) {
-				//	pathSegment.color = glm::vec3();
-				//}
-				//else pathSegment.color = glm::vec3(1.0f);
-				//return;
 				glm::vec3 wi;
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Estimate one bounce direct lighting */
@@ -444,8 +425,6 @@ __global__ void shadeBSDF(
 				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
 #endif //  ONE_BOUNCE_DIRECT_LIGHTINIG
 				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
-				//pathSegment.color = bsdf;
-				//return;
 				float cosineTerm = abs(wi.z);
 #if ONE_BOUNCE_DIRECT_LIGHTINIG
 				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
@@ -577,6 +556,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_intersections
 				, dev_bvhNodes
 				, bvh->nodes.size()
+#if USE_SORT_BY_MATERIAL
+				, dev_bsdfStructIDs
+				, dev_bsdfStructIDs_copy
+#endif
 				);
 			if (depth == 0) {
 				cudaMemcpy(dev_first_iteration_first_bounce_cache_intersections, dev_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
@@ -597,6 +580,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 					, dev_intersections
 					, dev_bvhNodes
 					, bvh->nodes.size()
+#if USE_SORT_BY_MATERIAL
+					, dev_bsdfStructIDs
+					, dev_bsdfStructIDs_copy
+#endif
 					);
 			}
 		}
@@ -614,8 +601,18 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_intersections
 			, dev_bvhNodes
 			, bvh->nodes.size()
+#if USE_SORT_BY_MATERIAL
+			, dev_bsdfStructIDs
+			, dev_bsdfStructIDs_copy
+#endif
 			);
 #endif
+
+#if USE_SORT_BY_MATERIAL
+		thrust::sort_by_key(thrust::device, dev_bsdfStructIDs, dev_bsdfStructIDs + num_paths, dev_paths);
+		thrust::sort_by_key(thrust::device, dev_bsdfStructIDs_copy, dev_bsdfStructIDs_copy + num_paths, dev_intersections);
+#endif // USE_SORT_BY_MATERIAL
+
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
 		depth++;
