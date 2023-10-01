@@ -14,7 +14,7 @@ __device__ __inline__ glm::vec3 sampleTexture(cudaTextureObject_t tex, glm::vec2
 
 __device__ __inline__ float2 texMetallicRoughness(cudaTextureObject_t tex, glm::vec2 const& uv) {
     auto color = tex2D<float4>(tex, uv.x, uv.y);
-    return float2{ color.z, color.y };
+    return float2{ color.y, color.z };
 }
 
 __device__ __inline__ glm::vec2 sampleSphericalMap(glm::vec3 v) {

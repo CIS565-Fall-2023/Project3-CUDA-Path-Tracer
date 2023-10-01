@@ -41,7 +41,7 @@ std::pair<const uint16_t*, int> getIndexBuffer(tinygltf::Model* model, const tin
     const tinygltf::Accessor& indexAccessor = model->accessors[primitive.indices];
     const tinygltf::BufferView& indexBufferView = model->bufferViews[indexAccessor.bufferView];
     const tinygltf::Buffer& indexBuffer = model->buffers[indexBufferView.buffer];
-    const uint16_t* indices = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexBufferView.byteOffset]);
+    const uint16_t* indices = reinterpret_cast<const uint16_t*>(&indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset]);
     return { indices , indexAccessor.count };
 }
 
