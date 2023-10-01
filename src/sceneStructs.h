@@ -98,9 +98,11 @@ struct NormalTextureInfo {
     double scale{
         1.0 };  // scaledNormal = normalize((<sampled normal texture value>
     // * 2.0 - 1.0) * vec3(<normal scale>, <normal scale>, 1.0))
-
+    cudaTextureObject_t cudaTexObj;
 
     NormalTextureInfo() = default;
+    NormalTextureInfo(int _index, int _texCoord, double _scale, cudaTextureObject_t _cudaTexObj) :
+        index(_index), texCoord(_texCoord), scale(_scale), cudaTexObj(_cudaTexObj) {}
     DEFAULT_METHODS(NormalTextureInfo)
         bool operator==(const NormalTextureInfo&) const;
 };
@@ -112,10 +114,13 @@ struct OcclusionTextureInfo {
     // texture coordinate mapping.
     double strength{ 1.0 };  // occludedColor = lerp(color, color * <sampled
     // occlusion texture value>, <occlusion strength>)
+    cudaTextureObject_t cudaTexObj;
 
     // Filled when SetStoreOriginalJSONForExtrasAndExtensions is enabled.
 
     OcclusionTextureInfo() = default;
+    OcclusionTextureInfo(int _index, int _texCoord, double _strength, cudaTextureObject_t _cudaTexObj) :
+        index(_index), texCoord(_texCoord), strength(_strength), cudaTexObj(_cudaTexObj) {}
     DEFAULT_METHODS(OcclusionTextureInfo)
         bool operator==(const OcclusionTextureInfo&) const;
 };

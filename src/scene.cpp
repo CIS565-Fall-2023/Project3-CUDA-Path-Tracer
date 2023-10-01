@@ -28,7 +28,8 @@ std::ifstream findFile(const std::string& fileName) {
 
 template<typename T>
 std::pair<const T*, int> getPrimitiveBuffer(tinygltf::Model* model, const tinygltf::Primitive& primitive, const std::string& type) {
-    if (primitive.attributes.find(type) == primitive.attributes.end())return{ nullptr,0 };
+    if (primitive.attributes.find(type) == primitive.attributes.end())
+        return{ nullptr,0 };
     const tinygltf::Accessor& accessor = model->accessors[primitive.attributes.at(type)];
     const tinygltf::BufferView& bufferView = model->bufferViews[accessor.bufferView];
     const tinygltf::Buffer& buffer = model->buffers[bufferView.buffer];
@@ -469,12 +470,17 @@ int Scene::loadMaterial() {
         material.alphaCutoff = gltfMaterial.alphaCutoff;
         material.doubleSided = gltfMaterial.doubleSided;
 
-        if (gltfMaterial.normalTexture.index >= 0)
-            material.normalTexture.index = gltfMaterial.normalTexture.index;
-        if (gltfMaterial.occlusionTexture.index >= 0)
-            material.occlusionTexture.index = gltfMaterial.occlusionTexture.index;
-        if (gltfMaterial.emissiveTexture.index >= 0)
-            material.emissiveTexture.index = gltfMaterial.emissiveTexture.index;
+        if (gltfMaterial.normalTexture.index >= 0) {
+            auto& normalTexture = gltfMaterial.normalTexture;
+            material.normalTexture = NormalTextureInfo{ normalTexture.index, normalTexture.texCoord, normalTexture.scale, textures[normalTexture.index].cudaTexObj };
+        }
+        if (gltfMaterial.occlusionTexture.index >= 0) {
+            auto& occlusionTexture = gltfMaterial.occlusionTexture;
+            material.occlusionTexture = OcclusionTextureInfo{ occlusionTexture.index, occlusionTexture.texCoord, occlusionTexture.strength, textures[occlusionTexture.index].cudaTexObj };
+        }
+        if (gltfMaterial.emissiveTexture.index >= 0) {
+            material.emissiveTexture = textures[gltfMaterial.emissiveTexture.index];
+        }
 
         if (gltfMaterial.extensions.size() != 0)
             loadExtensions(material, gltfMaterial.extensions);

@@ -6,6 +6,7 @@
 #include <thrust/remove.h>
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
+#include <cuda_runtime.h>
 
 #include "scene.h"
 #include "glm/glm.hpp"
@@ -291,7 +292,17 @@ __global__ void shadeMaterial(
             // TODO: replace this! you should be able to start with basically a one-liner
             else {
                 BsdfSample sample;
-                auto bsdf = sample_f(material, intersection.surfaceNormal, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
+                float ao{ 1.f };
+                if (material.occlusionTexture.index != -1) {
+                    auto aoData = tex2D<float4>(material.occlusionTexture.cudaTexObj, intersection.uv.x, intersection.uv.y);
+                    ao = aoData.x;
+                }
+                glm::vec3 nor = intersection.surfaceNormal;
+                if (material.normalTexture.index != -1) {
+                    float4 normal = tex2D<float4>(material.normalTexture.cudaTexObj, intersection.uv.x, intersection.uv.y);
+                    nor = glm::vec3(normal.x, normal.y, normal.z);
+                }
+                auto bsdf = ao * sample_f(material, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
                 if (sample.pdf <= 0) {
                     pSeg.remainingBounces = 0;
                     pSeg.pixelIndex = -1;
