@@ -769,6 +769,13 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		iter
 	);
 
+	checkCUDAError("pathtrace");
+
+	if ((iter - 1) % guiData->denoiseInterval != 0)
+	{
+		return;
+	}
+
 	///////////////////////////////////////////////////////////////////////////
 
 	if (guiData->denoising)
@@ -800,7 +807,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	cudaMemcpy(hst_scene->state.image.data(), dev_image_ptr,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 
-	checkCUDAError("pathtrace");
+	checkCUDAError("denoise and send to OpenGL");
 }
 
 void Pathtracer::onCamChanged()

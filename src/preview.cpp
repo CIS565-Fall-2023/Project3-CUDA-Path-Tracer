@@ -42,8 +42,8 @@ void initVAO(void) {
 	GLfloat vertices[] = {
 		-1.0f, -1.0f,
 		1.0f, -1.0f,
-		1.0f,  1.0f,
-		-1.0f,  1.0f,
+		1.0f, 1.0f,
+		-1.0f, 1.0f,
 	};
 
 	GLfloat texcoords[] = {
@@ -224,45 +224,53 @@ bool RenderImGui()
 	ImGui::Text("traced depth %d", imguiData->tracedDepth);
 	ImGui::Text("application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
-	ImGui::Text("toggles");
-	ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
-#if FIRST_BOUNCE_CACHE
-	ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
-#endif
-	ImGui::Checkbox("russian roulette", &imguiData->russianRoulette);
-#if BVH_TOGGLE
-	ImGui::Checkbox("use BVH", &imguiData->useBvh);
-#endif
-	ImGui::Checkbox("denoising", &imguiData->denoising);
-
-	ImGui::Text("depth of field");
-	shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
-	shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
-
-	ImGui::Text("debug options");
-	//ImGui::Checkbox("show albedo", &imguiData->showAlbedo);
-	//ImGui::Checkbox("show normals", &imguiData->showNormals);
-
-	static const char* items[] = { "final", "albedo", "normals" };
-	static const char* currentItem = items[0];
-
-	if (ImGui::BeginCombo("render output", currentItem))
+	if (ImGui::CollapsingHeader("toggles"))
 	{
-		for (int n = 0; n < IM_ARRAYSIZE(items); n++)
+		ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
+#if FIRST_BOUNCE_CACHE
+		ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
+#endif
+		ImGui::Checkbox("russian roulette", &imguiData->russianRoulette);
+#if BVH_TOGGLE
+		ImGui::Checkbox("use BVH", &imguiData->useBvh);
+#endif
+	}
+
+	if (ImGui::CollapsingHeader("denoising"))
+	{
+		ImGui::Checkbox("use denoising", &imguiData->denoising);
+		ImGui::SliderInt("denoise interval", &imguiData->denoiseInterval, 1, 10);
+	}
+
+	if (ImGui::CollapsingHeader("depth of field"))
+	{
+		shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
+		shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
+	}
+
+	if (ImGui::CollapsingHeader("debug"))
+	{
+		static const char* items[] = { "final", "albedo", "normals" };
+		static const char* currentItem = items[0];
+
+		if (ImGui::BeginCombo("render output", currentItem))
 		{
-			bool isSelected = (currentItem == items[n]);
-			if (ImGui::Selectable(items[n], isSelected))
+			for (int n = 0; n < IM_ARRAYSIZE(items); n++)
 			{
-				currentItem = items[n];
-				imguiData->showAlbedo = (strcmp(currentItem, items[1]) == 0);
-				imguiData->showNormals = (strcmp(currentItem, items[2]) == 0);
+				bool isSelected = (currentItem == items[n]);
+				if (ImGui::Selectable(items[n], isSelected))
+				{
+					currentItem = items[n];
+					imguiData->showAlbedo = (strcmp(currentItem, items[1]) == 0);
+					imguiData->showNormals = (strcmp(currentItem, items[2]) == 0);
+				}
+				if (isSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
 			}
-			if (isSelected)
-			{
-				ImGui::SetItemDefaultFocus();
-			}
+			ImGui::EndCombo();
 		}
-		ImGui::EndCombo();
 	}
 
 	ImGui::End();

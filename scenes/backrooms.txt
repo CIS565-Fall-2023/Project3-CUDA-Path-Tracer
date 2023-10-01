@@ -96,7 +96,7 @@ gltf/freddy/main.gltf
 material 2
 TRANS       6 0 -10
 ROTAT       0 -90 0
-SCALE       10
+SCALE       11.2
 
 OBJECT 3
 mesh
