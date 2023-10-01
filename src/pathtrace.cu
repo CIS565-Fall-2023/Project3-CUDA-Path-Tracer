@@ -291,7 +291,7 @@ __global__ void shadeFakeMaterial(
 				// like what you would expect from shading in a rasterizer like OpenGL.
 				// TODO: replace this! you should be able to start with basically a one-liner
 				else {
-					glm::vec3 intersection_point = path.ray.origin + intersection.t * path.ray.direction;
+					glm::vec3 intersection_point = getPointOnRay(path.ray, intersection.t);
 					scatterRay(path, intersection_point, intersection.surfaceNormal, material, rng);
 
 					// Russian Roulette

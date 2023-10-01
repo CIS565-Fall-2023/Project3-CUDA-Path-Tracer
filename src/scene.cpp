@@ -1,8 +1,12 @@
+#define TINYGLTF_IMPLEMENTATION
+#define INTEGER_ADDRESS 1
+
 #include <iostream>
 #include "scene.h"
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include "tiny_gltf.h"
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -27,6 +31,10 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
+            }
+            else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
+                loadMesh(tokens[1]);
+                cout << "mesh loading in progress" << endl;
             }
         }
     }
@@ -185,4 +193,79 @@ int Scene::loadMaterial(string materialid) {
         materials.push_back(newMaterial);
         return 1;
     }
+}
+
+int Scene::loadMesh(string meshid) {
+
+    int id = atoi(meshid.c_str());
+    string address;
+    utilityCore::safeGetline(fp_in, address);
+    address = "../scenes/" + address;
+    char* fname = (char*)address.c_str();
+    if (fp_in.good()) {
+        tinygltf::Model model;
+        tinygltf::TinyGLTF loader;
+        string err;
+        string warn;
+
+        bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, address);
+
+        cout << model.accessors[model.meshes[0].primitives[0].indices].componentType << endl;
+
+        for (const auto& modelMesh : model.meshes) {
+            for (const auto& p : modelMesh.primitives) {
+
+                // READING INDEX BUFFER FOR TRIANGLE INDICES
+
+                const auto& indicesAccessor = model.accessors[p.indices];
+                const auto& indicesBufferView = model.bufferViews[indicesAccessor.bufferView];
+                const auto& buffer = model.buffers[indicesBufferView.buffer];
+
+                auto rawData = buffer.data;
+                const auto start = indicesBufferView.byteOffset + indicesAccessor.byteOffset;
+#if INTEGER_ADDRESS
+                
+                if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) throw;
+                cout << "using int" << endl;
+                unsigned int* indicesBuffer = reinterpret_cast<unsigned int*>(&rawData[start]);
+
+
+#else
+                cout << "using short" << endl;
+                if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) throw;
+                unsigned short* indicesBuffer = reinterpret_cast<unsigned short*>(rawData[start]);
+#endif
+
+                // READING POSITION, NORMAL, UV BUFFER
+                float* posBuffer;
+                float* norBuffer;
+                float* uvBuffer;
+
+                for (const auto& att: p.attributes) {
+                    const auto& attAccessor = model.accessors[att.second];
+                    const auto& attBufferView = model.bufferViews[attAccessor.bufferView];
+                    const auto& buffer = model.buffers[attBufferView.buffer];
+
+                    auto rawData = buffer.data;
+                    const auto start = attBufferView.byteOffset + attAccessor.byteOffset;
+                    if (att.first == "POSITION") {
+                        posBuffer = reinterpret_cast<float*>(&rawData[start]);
+                    }
+                    else if (att.first == "NORMAL") {
+                        norBuffer = reinterpret_cast<float*>(&rawData[start]);
+                    }
+                    else {
+                        uvBuffer = reinterpret_cast<float*>(&rawData[start]);
+                    }
+                }
+
+                cout << posBuffer[0] << endl;
+                cout << posBuffer[1] << endl;
+                cout << posBuffer[2] << endl;
+            }
+        }
+        
+    }
+       
+    return 1;
 }

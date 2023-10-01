@@ -40,6 +40,14 @@ struct Material {
     float emittance;
 };
 
+struct Triangle {
+
+};
+
+struct Mesh {
+
+};
+
 struct Camera {
     glm::ivec2 resolution;
     glm::vec3 position;

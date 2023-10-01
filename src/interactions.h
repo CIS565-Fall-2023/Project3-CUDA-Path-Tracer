@@ -85,5 +85,5 @@ void scatterRay(
     }
     pathSegment.color *= m.color;
     pathSegment.ray.direction = wo;
-    pathSegment.ray.origin = intersect + 0.0001f * wo;
+    pathSegment.ray.origin = intersect;
 }

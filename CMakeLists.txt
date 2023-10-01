@@ -83,7 +83,11 @@ set(headers
      src/ImGui/imgui_internal.h 
      src/ImGui/imstb_rectpack.h 
      src/ImGui/imstb_textedit.h 
-     src/ImGui/imstb_truetype.h 
+     src/ImGui/imstb_truetype.h
+
+    src/tiny_gltf.h
+    src/json.hpp
+
     )
 
 set(sources
