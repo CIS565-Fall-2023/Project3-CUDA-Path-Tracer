@@ -14,18 +14,24 @@ class Scene {
 private:
     ifstream fp_in;
     int loadMaterial(string materialid);
+    MaterialType judgeMaterialType(float reflectivity, float refractivity, float roughness);
+
     int loadGeom(string objectid);
     int loadCamera();
 
-    bool loadObj(Geom& geom, const string& objFile);
-    MaterialType judgeMaterialType(float reflectivity, float refractivity, float roughness);
+    void buildKDTree();
+    KDNode* build(KDNode* node, std::vector<Geom>& geoms, int depth);
+    bool loadObj(const Geom& geom, const string& objFile);
+    
 public:
     Scene(string filename);
     ~Scene();
 
     std::vector<Geom> geoms;
-    std::vector<Triangle> triangles;
+    //std::vector<Triangle> triangles;
     std::vector<Material> materials;
     std::vector<Light> lights;
+
+    KDNode* kdTreeRoot;
     RenderState state;
 };

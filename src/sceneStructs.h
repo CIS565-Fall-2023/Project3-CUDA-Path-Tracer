@@ -41,6 +41,12 @@ struct Triangle {
     glm::vec2 texcoord[3];
 };
 
+// Bounding box
+struct AABB {
+    glm::vec3 minPoint;
+    glm::vec3 maxPoint;
+};
+
 struct Geom {
     enum GeomType type;
     int geomId;
@@ -53,12 +59,9 @@ struct Geom {
     glm::mat4 invTranspose;
 
     // Mesh, triangle start, end
-    int triangleStart;
-    int triangleEnd;
-
-    // Bounding box
-    glm::vec3 minPoint;
-    glm::vec3 maxPoint;
+    /*int triangleStart;
+    int triangleEnd;*/
+    Triangle triangle;
 };
 
 struct Light {
@@ -132,4 +135,14 @@ struct ShadeableIntersection {
   glm::vec3 surfaceTangent;
   int geomId;
   int materialId;
+};
+
+struct KDNode {
+    KDNode* leftChild;
+    KDNode* rightChild;
+    unsigned int axis;
+
+	AABB aabb;
+    std::vector<Geom> geoms;
+    //std::vector<Triangle> triangles;
 };

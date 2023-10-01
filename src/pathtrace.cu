@@ -96,7 +96,6 @@ static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
-static Triangle* dev_triangles = NULL;
 static Light* dev_lights = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
@@ -145,10 +144,6 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
 	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
-	// triangles
-	cudaMalloc(&dev_triangles, scene->triangles.size() * sizeof(Triangle));
-	cudaMemcpy(dev_triangles, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-
 	checkCUDAError("pathtraceInit");
 }
 
@@ -165,7 +160,6 @@ void pathtraceFree() {
 #endif
 
 	cudaFree(dev_lights);
-	cudaFree(dev_triangles);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -228,33 +222,33 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-__device__ bool boundingBoxTest(const Ray* ray, const Geom* geom) {
-	float min_t = EPSILON;
-	float max_t = 1000.f;
-
-	for (int a = 0; a < 3; a++) {
-		float o = ray->origin[a];
-		float invD = 1.0f / ray->direction[a];
-
-		float t0 = (geom->minPoint[a] - o) * invD;
-		float t1 = (geom->maxPoint[a] - o) * invD;
-
-		if (invD < 0) {
-			float tmp = t0;
-			t0 = t1;
-			t1 = tmp;
-		}
-
-		min_t = fmax(t0, min_t);
-		max_t = fmin(t1, max_t);
-
-		if (max_t <= min_t) {
-			return false;
-		}
-	}
-
-	return true;
-}
+//__device__ bool boundingBoxTest(const Ray* ray, const Geom* geom) {
+//	float min_t = EPSILON;
+//	float max_t = 1000.f;
+//
+//	for (int a = 0; a < 3; a++) {
+//		float o = ray->origin[a];
+//		float invD = 1.0f / ray->direction[a];
+//
+//		float t0 = (geom->aabb.minPoint[a] - o) * invD;
+//		float t1 = (geom->aabb.maxPoint[a] - o) * invD;
+//
+//		if (invD < 0) {
+//			float tmp = t0;
+//			t0 = t1;
+//			t1 = tmp;
+//		}
+//
+//		min_t = fmax(t0, min_t);
+//		max_t = fmin(t1, max_t);
+//
+//		if (max_t <= min_t) {
+//			return false;
+//		}
+//	}
+//
+//	return true;
+//}
 
 
 // TODO:
@@ -267,8 +261,6 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
-	, Triangle* triangles
-	, int triangles_size
 	, ShadeableIntersection* intersections
 )
 {
@@ -277,7 +269,7 @@ __global__ void computeIntersections(
 	if (path_index < num_paths)
 	{
 		PathSegment pathSegment = pathSegments[path_index];
-		computeRayIntersection(geoms, geoms_size, triangles, triangles_size, pathSegment.ray, intersections[path_index]);
+		computeRayIntersection(geoms, geoms_size, pathSegment.ray, intersections[path_index]);
 	}
 }
 
@@ -391,8 +383,6 @@ __global__ void shadeDirectMIS(
 	, Material* materials
 	, Geom* geoms
 	, int numGeoms
-	, Triangle* triangles
-	, int numTriangles
 	, Light* lights
 	, int numLights
 )
@@ -418,7 +408,7 @@ __global__ void shadeDirectMIS(
 				cur.remainingBounces = 0; // terminate path
 			} else {
 				cur.color = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, numGeoms, triangles, numTriangles, lights, numLights, rng);
+					, materials, material, geoms, numGeoms, lights, numLights, rng);
 				cur.remainingBounces = 0;
 			}
 		} else {
@@ -437,8 +427,6 @@ __global__ void shadeFull(
 	, Material* materials
 	, Geom* geoms
 	, int numGeoms
-	, Triangle* triangles
-	, int numTriangles
 	, Light* lights
 	, int numLights
 )
@@ -458,19 +446,21 @@ __global__ void shadeFull(
 			glm::vec3 materialColor = material.color;
 
 			// specular or direct from camera
-			if (cur.isFromCamera || cur.isSpecularBounce) {
-				// If the material indicates that the object was a light, "light" the ray
-				cur.color += cur.throughput * materialColor * material.emittance;
-				
-				cur.isFromCamera = false;
-				cur.isSpecularBounce = false;
-			} 
-
+			if (material.emittance > 0.0f) {
+				if (cur.isFromCamera || cur.isSpecularBounce) {
+					// If the material indicates that the object was a light, "light" the ray
+					cur.color += cur.throughput * materialColor * material.emittance;
+				}
+				cur.remainingBounces = 0; // terminate path
+			}
+			
+			cur.isFromCamera = false;
+			cur.isSpecularBounce = false;
 
 			// If the surface is diffuse or microfacet, compute MIS direct light
 			if (material.type == MaterialType::DIFFUSE) {
 				glm::vec3 Ld = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, numGeoms, triangles, numTriangles, lights, numLights, rng);
+					, materials, material, geoms, numGeoms, lights, numLights, rng);
 				cur.color += Ld * cur.throughput;
 			}
 				
@@ -582,8 +572,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
-				, dev_triangles
-				, hst_scene->triangles.size()
 				, dev_intersections
 				);
 
@@ -601,8 +589,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
-			, dev_triangles
-			, hst_scene->triangles.size()
 			, dev_intersections
 			);
 #endif
@@ -640,8 +626,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			dev_geoms,
 			hst_scene->geoms.size(),
-			dev_triangles,
-			hst_scene->triangles.size(),
 			dev_lights,
 			hst_scene->lights.size()
 			);
@@ -655,8 +639,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			dev_geoms,
 			hst_scene->geoms.size(),
-			dev_triangles,
-			hst_scene->triangles.size(),
 			dev_lights,
 			hst_scene->lights.size()
 			);

@@ -145,7 +145,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-__host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, Triangle* triangles,
+__host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, bool& outside) {
 
     glm::vec3 ro = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
@@ -155,37 +155,24 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, Triangle* trian
     rt.origin = ro;
     rt.direction = rd;
 
-    float t = FLT_MAX;
-    glm::vec3 local_nor;
+    Triangle triangle = mesh.triangle;
+    glm::vec3 baryPosition;
+    bool intersect = glm::intersectRayTriangle(rt.origin, rt.direction,
+        triangle.position[0], triangle.position[1], triangle.position[2], baryPosition);
 
-    for (int i = mesh.triangleStart; i < mesh.triangleEnd; ++i) {
-        Triangle triangle = triangles[i];
-
-		glm::vec3 baryPosition;
-		bool intersect = glm::intersectRayTriangle(rt.origin, rt.direction, 
-            triangle.position[0], triangle.position[1], triangle.position[2], baryPosition);
-
-		if (intersect && baryPosition.z < t) {
-
-			t = baryPosition.z;
-            local_nor = triangle.normal;
-            outside = true;
-		}
+    if (intersect && baryPosition.z < FLT_MAX) {
+        intersectionPoint = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(rt, baryPosition.z), 1.0f));
+        normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(triangle.normal, 0.0f)));
+        tangent = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
+        outside = true;
+        return glm::length(r.origin - intersectionPoint);
     }
-
-    if (t == FLT_MAX) {
-		return -1;
-	}
-
-    intersectionPoint = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(rt, t), 1.0f));
-    normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(local_nor, 0.0f)));
-    tangent = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
-
-    return glm::length(r.origin - intersectionPoint);
+    else {
+        return -1;
+    }
 }
 
-__host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Triangle* triangles, int triangles_size,
-    Ray ray, ShadeableIntersection& intersection) {
+__host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray ray, ShadeableIntersection& intersection) {
     float t;
     glm::vec3 intersect_point;
     glm::vec3 normal;
@@ -214,7 +201,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Tri
         } 
         else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, ray, triangles, tmp_intersect, tmp_normal, tmp_tangent, outside);
+			t = meshIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
 		}
         // TODO: add more intersection tests here... triangle? metaball? CSG?
 

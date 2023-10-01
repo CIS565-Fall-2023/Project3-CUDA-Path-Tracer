@@ -34,7 +34,13 @@ Scene::Scene(string filename) {
     }
 }
 
-bool Scene::loadObj(Geom& geom, const string& objFile) {
+void Scene::buildKDTree() {
+    cout << "Building KDTree ..." << endl;
+}
+
+
+
+bool Scene::loadObj(const Geom& geom, const string& objFile) {
     tinyobj::attrib_t attribs;
     vector<tinyobj::shape_t> shapes;
     vector<tinyobj::material_t> materials;
@@ -49,8 +55,7 @@ bool Scene::loadObj(Geom& geom, const string& objFile) {
 	}
 
     cout << "Tiny obj load success!" << endl;
-    
-    geom.triangleStart = triangles.size();
+   
 
     for (auto& shape : shapes) {
         auto& mesh = shape.mesh;
@@ -70,18 +75,6 @@ bool Scene::loadObj(Geom& geom, const string& objFile) {
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 2]);
             triangle.normal = glm::cross(triangle.position[1] - triangle.position[0], 
                 triangle.position[2] - triangle.position[0]);
-			/*triangle.normal[0] = glm::vec3(
-					attribs.normals[3 * mesh.indices[i].normal_index],
-					attribs.normals[3 * mesh.indices[i].normal_index + 1],
-					attribs.normals[3 * mesh.indices[i].normal_index + 2]);
-			triangle.normal[1] = glm::vec3(
-					attribs.normals[3 * mesh.indices[i + 1].normal_index],
-					attribs.normals[3 * mesh.indices[i + 1].normal_index + 1],
-					attribs.normals[3 * mesh.indices[i + 1].normal_index + 2]);
-			triangle.normal[2] = glm::vec3(
-					attribs.normals[3 * mesh.indices[i + 2].normal_index],
-					attribs.normals[3 * mesh.indices[i + 2].normal_index + 1],
-					attribs.normals[3 * mesh.indices[i + 2].normal_index + 2]);*/
 			//triangle.t0 = glm::vec2(
 			//		attribs.texcoords[2 * mesh.indices[i]],
 			//		attribs.texcoords[2 * mesh.indices[i] + 1]);
@@ -91,21 +84,22 @@ bool Scene::loadObj(Geom& geom, const string& objFile) {
 			//triangle.t2 = glm::vec2(
 			//		attribs.texcoords[2 * mesh.indices[i + 2]],
 			//		attribs.texcoords[2 * mesh.indices[i + 2] + 1]);
-            triangles.push_back(triangle);
+
+            Geom newGeom = geom;
+            newGeom.geomId = geoms.size();
+            newGeom.triangle = triangle;
+            geoms.push_back(newGeom);
+
+            //triangles.push_back(triangle);
         }
     }
-
-    geom.triangleEnd = triangles.size(); // not include
 
     return res;
 }
 
 int Scene::loadGeom(string objectid) {
-    int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
-        cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-        return -1;
-    } else {
+    int id = geoms.size();
+    {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         newGeom.geomId = id;
@@ -139,6 +133,7 @@ int Scene::loadGeom(string objectid) {
 
         //load transformations
         utilityCore::safeGetline(fp_in, line);
+        string objFile;
         while (!line.empty() && fp_in.good()) {
             vector<string> tokens = utilityCore::tokenizeString(line);
 
@@ -153,7 +148,7 @@ int Scene::loadGeom(string objectid) {
                 lightType = (LightType)atoi(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "OBJFILE") == 0 && newGeom.type == GeomType::MESH) {
 				// tiny obj load
-                loadObj(newGeom, tokens[1]);
+                objFile = tokens[1];
 			}
 
             utilityCore::safeGetline(fp_in, line);
@@ -164,18 +159,23 @@ int Scene::loadGeom(string objectid) {
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
-
         // TODO: calculate bounding box
-        newGeom.minPoint = glm::vec3(newGeom.transform * glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f));
+        /*newGeom.minPoint = glm::vec3(newGeom.transform * glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f));
         newGeom.maxPoint = glm::vec3(newGeom.transform * glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
 
         for (int i = 0; i < 3; ++i) {
             if (newGeom.minPoint[i] > newGeom.maxPoint[i]) {
                 std::swap(newGeom.minPoint[i], newGeom.maxPoint[i]);
             }
-        }
+        }*/
 
-        geoms.push_back(newGeom);
+        if (newGeom.type != GeomType::MESH) {
+            geoms.push_back(newGeom);
+        }
+        else {
+            // newGeom acts as a basic geom to copy transforms
+            loadObj(newGeom, objFile);
+        }
 
         // light
         if (lightType != LightType::NONE) {
