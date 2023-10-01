@@ -28,19 +28,20 @@ void checkCudaMem(T* d_ptr, int size) {
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-    int iter, glm::vec3* image) {
+    int iter, glm::vec3* image, bool acesFilm, bool gammaCorrection) {
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
     if (x < resolution.x && y < resolution.y) {
         int index = x + (y * resolution.x);
-        glm::vec3 pix = image[index];
+        glm::vec3 pix = image[index] / (float)iter;
+        if (acesFilm)
+            pix = pix * (pix * (pix * 2.51f + 0.03f) + 0.024f) / (pix * (pix * 3.7f + 0.078f) + 0.14f);
 
-        glm::ivec3 color;
-        color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
-        color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
-        color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
+        if (gammaCorrection)
+            pix = glm::pow(pix, glm::vec3(1.f / 2.2f));
 
+        glm::ivec3 color = glm::ivec3(glm::clamp(pix, 0.f, 1.f) * 255.0f);
         // Each thread writes one pixel location in the texture (textel)
         pbo[index].w = 0;
         pbo[index].x = color.x;
@@ -511,7 +512,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
     ///////////////////////////////////////////////////////////////////////////
 
     // Send results to OpenGL buffer for rendering
-    sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
+    sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image, guiData->ACESFilm, guiData->GammaCorrection);
 
     // Retrieve image from GPU
     cudaMemcpy(hst_scene->state.image.data(), dev_image,

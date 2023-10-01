@@ -34,6 +34,8 @@ public:
     int TracedDepth;
     bool SortByMaterial;
     bool UseBVH;
+    bool ACESFilm;
+    bool GammaCorrection;
 };
 
 namespace utilityCore

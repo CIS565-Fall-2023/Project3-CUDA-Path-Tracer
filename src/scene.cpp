@@ -204,7 +204,6 @@ void Scene::loadEnvMap()
     }
     else {
         hdrDataPadded = hdrData;
-        numComponents = 4;
     }
 
     if (!hdrDataPadded) {
@@ -213,7 +212,7 @@ void Scene::loadEnvMap()
     }
     int textureIndex = textures.size();
 
-    envMapTexture = createTextureObj(textureIndex, width, height, numComponents, hdrDataPadded, width * height * numComponents);
+    envMapTexture = createTextureObj(textureIndex, width, height, 4, hdrDataPadded, width * height * 4);
 }
 
 void Scene::loadSettings() {
