@@ -355,7 +355,7 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
 
     int midPoint = rightEnd;
     if (off < 3) {
-        // float midmin = (maxmin[axis] - bvh[bboxId].min[axis]) / 2.0f + bvh[bboxId].min[axis];
+        // float midmin = (maxmin[axis] + bvh[bboxId].min[axis]) / 2.0f;
         float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
         int ti = leftEnd;
 

@@ -200,10 +200,16 @@ void pathtraceFree() {
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
+
 __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
 {
+
+
+
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+
+
 
 	if (x < cam.resolution.x && y < cam.resolution.y) {
 		int index = x + (y * cam.resolution.x);
@@ -212,10 +218,21 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
+#ifdef JITTER_RAY
+		thrust::random::default_random_engine rng = makeSeededRandomEngine(iter, x, y);
+		thrust::uniform_real_distribution<float> u1(-1, 1);
+		thrust::uniform_real_distribution<float> u02PI(0, TWO_PI);
+		float rz = sqrt(u1(rng));
+		rz = ((rz > 0) ? 1 : -1) * sqrt(abs(rz));
+#endif
+
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+#ifdef JITTER_RAY
+			+ glm::normalize(glm::vec3(__sinf(u02PI(rng)), __cosf(u02PI(rng)), rz)) * 1e-3f
+#endif
 		);
 
 		segment.pixelIndex = index;

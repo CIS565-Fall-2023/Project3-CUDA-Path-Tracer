@@ -8,10 +8,11 @@
 #include "utilities.h"
 #include "sceneStructs.h"
 
-// #define MATERIAL_SORT
+#define MATERIAL_SORT
 #define CACHE_FIRST_BOUNCE
+// #define JITTER_RAY
 // #define DEBUG_OUTPUT
-#define USING_BVH
+// #define USING_BVH
 // #define PRINT_TREE
 
 using namespace std;
