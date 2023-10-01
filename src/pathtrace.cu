@@ -255,6 +255,7 @@ void Pathtracer::initOIDN()
 	oidnSetFilterImage(oidnFilter, "normal", oidnNormalBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
 	oidnSetFilterImage(oidnFilter, "output", oidnOutputBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
 	oidnSetFilterBool(oidnFilter, "hdr", true);
+	oidnSetFilterInt(oidnFilter, "quality", OIDN_QUALITY_BALANCED);
 	oidnCommitFilter(oidnFilter);
 
 	checkOIDNError();
@@ -779,7 +780,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	///////////////////////////////////////////////////////////////////////////
 
 	glm::vec3* dev_image_ptr;
-	bool isNormals = false;
 	if (guiData->showAlbedo)
 	{
 		dev_image_ptr = dev_first_hit_albedo_accum;
@@ -787,7 +787,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	else if (guiData->showNormals)
 	{
 		dev_image_ptr = dev_first_hit_normals_accum;
-		isNormals = true;
 	}
 	else
 	{
@@ -795,7 +794,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	}
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image_ptr, isNormals);
+	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image_ptr, guiData->showNormals);
 
 	// Retrieve image from GPU
 	cudaMemcpy(hst_scene->state.image.data(), dev_image_ptr,
