@@ -17,6 +17,7 @@
 - Depth of field
 - glTF mesh loading
 - BVH construction and traversal
+- Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
 
 ### Planned Features
 
