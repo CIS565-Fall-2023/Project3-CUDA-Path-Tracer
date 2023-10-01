@@ -13,6 +13,7 @@
 // #define JITTER_RAY
 // #define DEBUG_OUTPUT
 // #define USING_BVH
+// #define USING_FAST_BVH
 // #define PRINT_TREE
 
 using namespace std;

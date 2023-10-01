@@ -7,7 +7,7 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 #define BBOX_TRI_NUM 1000
-#define BVH_GPU_STACK_SIZE 25
+#define BVH_GPU_STACK_SIZE 15
 #define BLOCK_SIZE_1D 64
 
 enum GeomType {
@@ -120,6 +120,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    bool refractionBefore;
 };
 
 // Use with a corresponding PathSegment to do:

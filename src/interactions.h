@@ -83,18 +83,35 @@ void scatterRay(
     if (m.emittance > 0.0f) {
         pathSegment.color *= (m.color * m.emittance);
         pathSegment.remainingBounces = -1;
+        pathSegment.refractionBefore = false;
     }
     else if (m.hasRefractive > 0.0f) { // transparent material
-        // TODO:
-        pathSegment.color = glm::vec3(0.0f);
-        pathSegment.remainingBounces = -1;
-       
-        // pathSegment.remainingBounces -= 1;
+        pathSegment.remainingBounces -= 1;
+        if (pathSegment.refractionBefore) {
+            // pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, m.indexOfRefraction);
+            pathSegment.refractionBefore = false;
+            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, 1.0f / m.indexOfRefraction);
+            pathSegment.ray.origin = intersect + pathSegment.ray.direction * 0.001f;
+        }
+        else {
+            /*
+            float eta = m.indexOfRefraction;
+            glm::vec3 I = pathSegment.ray.direction;
+            glm::vec3 N = normal;
+            float dotValue = glm::dot(N, I);
+            float k = 1.0f - eta * eta * (1.0f - dotValue * dotValue);
+            glm::vec3 refractDir =  (eta * I - (eta * dotValue + std::sqrt(k)) * N) * (float)(k >= 0.0f);
+            */
+            pathSegment.refractionBefore = true;
+            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, m.indexOfRefraction);
+            pathSegment.ray.origin = intersect + pathSegment.ray.direction * 0.001f;
+        }
     }
     else if (m.hasReflective > 0.0f) { // specular reflection
         pathSegment.remainingBounces -= 1;
         pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
         pathSegment.ray.origin = intersect;
+        pathSegment.refractionBefore = false;
     }
     else { // diffuse reflection
 
@@ -105,6 +122,7 @@ void scatterRay(
         pathSegment.ray.origin = intersect + normal * 0.001f;
         pathSegment.remainingBounces -= 1;
         pathSegment.color *= m.color * abs(dot(normal, wi)) / z;
+        pathSegment.refractionBefore = false;
         // pathSegment.color *= m.color;
     }
 

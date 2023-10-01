@@ -204,11 +204,8 @@ void pathtraceFree() {
 __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
 {
 
-
-
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
-
 
 
 	if (x < cam.resolution.x && y < cam.resolution.y) {
@@ -237,6 +234,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
+		segment.refractionBefore = false;
 	}
 }
 
@@ -461,7 +459,7 @@ __global__ void computeIntersectionsBVH(
 		float t;
 		glm::vec3 intersect_point;
 		glm::vec3 normal;
-		float t_min = FLT_MAX;
+		float t_min = 1e5;
 		int hit_index = -1;
 		bool hit_geom = true;
 		bool outside = true;
@@ -495,7 +493,6 @@ __global__ void computeIntersectionsBVH(
 			}
 		}
 
-		int hit_tri_index = -1;
 
 		//t = bvhSearch(pathSegment.ray, hit_tri_index,
 		//	tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside,
@@ -510,37 +507,60 @@ __global__ void computeIntersectionsBVH(
 		int sign = 0;
 		arr[0] = 0;
 
+		float o[3] = { pathSegment.ray.origin.x, pathSegment.ray.origin.y, pathSegment.ray.origin.z };
+		float dir[3] = { pathSegment.ray.direction.x, pathSegment.ray.direction.y, pathSegment.ray.direction.z };
+		float inv_dir[3] = {
+			(abs(dir[0]) < 1e-5) ? 0.0f : 1.0f / dir[0],
+			(abs(dir[1]) < 1e-5) ? 0.0f : 1.0f / dir[1],
+			(abs(dir[2]) < 1e-5) ? 0.0f : 1.0f / dir[2]
+		};
+		// bool dir_zero[3] = { (abs(dir[0]) < 1e-5), (abs(dir[1]) < 1e-5), (abs(dir[2]) < 1e-5) };
+
 		while (sign >= 0) {
 			BoundingBox& bbox = bvh[arr[sign]];
+			int taid = bbox.triArrId;
+			glm::vec3& bmin = bbox.min;
+			glm::vec3& bmax = bbox.max;
 			sign--;
-			glm::vec3 minDiff = bbox.min - pathSegment.ray.origin;
-			glm::vec3 maxDiff = bbox.max - pathSegment.ray.origin;
-			bool inside = (minDiff.x * maxDiff.x <= 0 &&
-				minDiff.y * maxDiff.y <= 0 &&
-				minDiff.z * maxDiff.z <= 0);
+
+			// glm::vec3 minDiff = bbox.min - pathSegment.ray.origin;
+			// glm::vec3 maxDiff = bbox.max - pathSegment.ray.origin;
+			float minDiff[3] = { bmin[0] - o[0], bmin[1] - o[1], bmin[2] - o[2] };
+			float maxDiff[3] = { bmax[0] - o[0], bmax[1] - o[1], bmax[2] - o[2] };
+			//bool inside = (minDiff[0] * maxDiff[0] <= 0 &&
+			//	minDiff[1] * maxDiff[1] <= 0 &&
+			//	minDiff[2] * maxDiff[2] <= 0);
 			// bool inside = false;
 
-			float bt = (abs(pathSegment.ray.direction[0]) < 1e-5) ? -1.0f : max(-1.0f, min(minDiff.x / pathSegment.ray.direction[0], maxDiff.x / pathSegment.ray.direction[0]));
-			bt = (abs(pathSegment.ray.direction[1]) < 1e-5) ? bt : max(bt, min(minDiff.y / pathSegment.ray.direction[1], maxDiff.y / pathSegment.ray.direction[1]));
-			bt = (abs(pathSegment.ray.direction[2]) < 1e-5) ? bt : max(bt, min(minDiff.z / pathSegment.ray.direction[2], maxDiff.z / pathSegment.ray.direction[2]));
 
-			if (inside || (bt > -1e-3 && bt < t_min))
-			{
+			float bt = max(max(
+				min(minDiff[1] * inv_dir[1], maxDiff[1] * inv_dir[1]),
+				min(minDiff[2] * inv_dir[2], maxDiff[2] * inv_dir[2])
+			), min(minDiff[0] * inv_dir[0], maxDiff[0] * inv_dir[0]));
+
+			//float bt = max(-1.0f, min(minDiff[0] * inv_dir[0], maxDiff[0] * inv_dir[1]));
+			//bt = max(bt, min(minDiff[1] * inv_dir[1], maxDiff[1] * inv_dir[1]));
+			//bt = max(bt, min(minDiff[2] * inv_dir[2], maxDiff[2] * inv_dir[2]));
+
+			if ((bt > 1e-5 && bt < t_min)
+#ifndef USING_FAST_BVH
+				|| (minDiff[0] * maxDiff[0] <= 0 &&
+				minDiff[1] * maxDiff[1] <= 0 &&
+				minDiff[2] * maxDiff[2] <= 0)
+#endif
+			){
 				// reach leaf node of bvh
-				if (bbox.triArrId >= 0) {
+				if (taid >= 0) {
 
-					TriangleArray& triIndices = tri_arr[bbox.triArrId];
+					TriangleArray& triIndices = tri_arr[taid];
 					// #pragma unroll
 					for (int j = 1; j < triIndices.triIds[0] + 1; j++) {
-						int ti = triIndices.triIds[j];
-						// if (ti < 0) { break; }
-						glm::vec3 tmp_intersect;
-						glm::vec3 tmp_normal;
-						float t = triangleIntersectionTest(tris[ti], pathSegment.ray, tmp_intersect, tmp_normal, outside);
+
+						t = triangleIntersectionTest(tris[triIndices.triIds[j]], pathSegment.ray, tmp_intersect, tmp_normal, outside);
 						if (t > 0.0f && t_min > t)
 						{
 							t_min = t;
-							hit_index = ti;
+							hit_index = triIndices.triIds[j];
 							hit_geom = false;
 							intersect_point = tmp_intersect;
 							normal = tmp_normal;
@@ -553,15 +573,15 @@ __global__ void computeIntersectionsBVH(
 					arr[sign + 2] = bbox.rightId;
 					sign += 2;
 				}
-				else {
-					break;
-				}
+				//else {
+				//	break;
+				//}
 			}
 		}
 
 
 
-		if (hit_index == -1 || t < -90.0f)
+		if (hit_index == -1)
 		{
 			intersections[path_index].t = -1.0f;
 		}
