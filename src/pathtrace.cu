@@ -179,6 +179,19 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		);
 #endif
 		
+		// Depth of Field effect
+		if (cam.aperture > 0.0f) {
+			float lensRadius = cam.aperture / 2.0f;
+			glm::vec2 randomCircle = glm::vec2(u01(rng), u01(rng));
+			glm::vec2 pointOnLens = lensRadius * randomCircle;
+
+			float focalDistance = length(cam.lookAt - cam.position);
+			glm::vec3 focalPoint = segment.ray.origin + focalDistance * segment.ray.direction;
+
+			// Update ray's origin and direction for Depth of Field
+			segment.ray.origin += cam.right * pointOnLens.x + cam.up * pointOnLens.y;
+			segment.ray.direction = glm::normalize(focalPoint - segment.ray.origin);
+		}
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;

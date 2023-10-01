@@ -41,6 +41,82 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__
+    glm::vec3
+    calculateStratifiedDirectionInHemisphere(glm::vec3 normal, thrust::default_random_engine &rng)
+{
+    thrust::uniform_real_distribution<float> u01(0, 1);
+
+    glm::vec2 samples = glm::vec2(u01(rng), u01(rng));
+
+    float phi, r, u, v;
+
+    // remap from -1 to 1
+    float a = 2 * samples.x - 1;
+    float b = 2 * samples.y - 1;
+
+    if (a > -b)
+    {
+        if (a > b)
+        {
+            r = a;
+            phi = (PI / 4.f) * (b / a);
+        }
+        else
+        {
+            r = b;
+            phi = (PI / 4.f) * (2 - (a / b));
+        }
+    }
+    else
+    {
+        if (a < b)
+        {
+            r = -a;
+            phi = (PI / 4) * (4 + (b / a));
+        }
+        else
+        {
+            r = -b;
+            if (b != 0)
+            {
+                phi = (PI / 4) * (6 - (a / b));
+            }
+            else
+            {
+                phi = 0;
+            }
+        }
+    }
+
+    u = r * glm::cos(phi);
+    v = r * glm::sin(phi);
+
+    float w = glm::sqrt(1 - u * u - v * v);
+    glm::vec3 dir(u, v, w);
+
+    // convert direction from tangent to world space
+    glm::vec3 tangent, bitangent;
+    if (std::abs(normal.x) > std::abs(normal.y))
+    {
+
+        tangent = glm::vec3(-normal.z, 0, normal.x) / std::sqrt(normal.x * normal.x + normal.z * normal.z);
+    }
+    else
+    {
+        tangent = glm::vec3(0, normal.z, -normal.y) / std::sqrt(normal.y * normal.y + normal.z * normal.z);
+    }
+    bitangent = glm::cross(normal, tangent);
+    glm::mat3 tangentToWorld;
+    for (int i = 0; i < 3; i++)
+    {
+        tangentToWorld[0][i] = tangent[i];
+        tangentToWorld[1][i] = bitangent[i];
+        tangentToWorld[2][i] = normal[i];
+    }
+
+    return glm::normalize(tangentToWorld * dir);
+}
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -79,34 +155,37 @@ void scatterRay(
     glm::vec3 newDir;
 
     if (m.hasReflective && m.hasRefractive) {
-        // Fresnel's equation to decide between reflection and refraction
         float cosTheta = glm::dot(normal, pathSegment.ray.direction);
         float R0 = (1.0f - m.indexOfRefraction) / (1.0f + m.indexOfRefraction);
         R0 = R0 * R0;
         float R = R0 + (1.0f - R0) * pow(1.0f - cosTheta, 5);
-        if (random < R) {
+
+        // Importance Sampling: Favor the specular direction
+        if (random < R * 0.9f) {
             newDir = glm::reflect(pathSegment.ray.direction, normal);
-            // Imperfect specular reflection
-            newDir += calculateRandomDirectionInHemisphere(normal, rng) * 0.1f;  // Add a small random direction
-            newDir = glm::normalize(newDir);
-            pathSegment.color *= m.specular.color;
         }
         else {
-            float eta = cosTheta > 0 ? 1.0f / m.indexOfRefraction : m.indexOfRefraction;
+            float eta = cosTheta > 0 ? m.indexOfRefraction : 1.0f / m.indexOfRefraction;
             newDir = glm::refract(pathSegment.ray.direction, normal, eta);
-            
-            // Imperfect specular refraction
-            newDir += calculateRandomDirectionInHemisphere(-normal, rng) * 0.1f;  // Note the -normal
-            newDir = glm::normalize(newDir);
-
-            pathSegment.color *= m.specular.color;
         }
+
+        // Russian Roulette: Randomly terminate paths
+        if (u01(rng) < 0.1f) {
+            pathSegment.color = glm::vec3(0.0f);
+            return;
+        }
+
+        // Imperfect specular reflection/refraction
+        newDir += calculateRandomDirectionInHemisphere(normal, rng) * 0.3f;
+        newDir = glm::normalize(newDir);
+
+        pathSegment.color *= m.specular.color;
     }
-    else if (random < m.hasReflective) {
+    else if (m.hasReflective) {
         newDir = glm::reflect(pathSegment.ray.direction, normal);
         pathSegment.color *= m.specular.color;
     }
-    else if (random < m.hasRefractive) {
+    else if (m.hasRefractive) {
         float cosTheta = glm::dot(normal, pathSegment.ray.direction);
         bool entering = cosTheta > 0;
         float eta = entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction;
