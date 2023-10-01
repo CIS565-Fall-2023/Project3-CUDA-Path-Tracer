@@ -441,18 +441,16 @@ __global__ void computeIntersections(
 	if (hit_geom_index == -1)
 	{
 		intersections[path_index].t = -1.0f;
+		return;
 	}
-	else
-	{
-		//The ray hits something
-		ShadeableIntersection& isect = intersections[path_index];
-		isect.hitGeomIdx = hit_geom_index;
-		isect.t = t_min;
-		isect.materialId = geoms[hit_geom_index].materialId;
-		isect.surfaceNormal = normal;
-		isect.uv = uv;
-		isect.triIdx = triIdx;
-	}
+
+	ShadeableIntersection& isect = intersections[path_index];
+	isect.hitGeomIdx = hit_geom_index;
+	isect.t = t_min;
+	isect.materialId = geoms[hit_geom_index].materialId;
+	isect.surfaceNormal = normal;
+	isect.uv = uv;
+	isect.triIdx = triIdx;
 }
 
 __device__ void processSegment(
