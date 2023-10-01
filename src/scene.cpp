@@ -620,12 +620,9 @@ int Scene::loadMaterial(string materialId) {
         while (!line.empty()) {
             vector<string> tokens = Utils::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "DIFF_COL") == 0) {
-                if (tokens.size() == 2)
-                {
+                if (tokens.size() == 2) {
                     newMaterial.diffuse.textureIdx = loadTexture(basePath + tokens[1]);
-                }
-                else
-                {
+                } else {
                     newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 }
                 newMaterial.hasBaseColor = true;
@@ -642,12 +639,9 @@ int Scene::loadMaterial(string materialId) {
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.specular.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMIT_COL") == 0) {
-                if (tokens.size() == 2)
-                {
+                if (tokens.size() == 2) {
                     newMaterial.emission.textureIdx = loadTexture(basePath + tokens[1]);
-                }
-                else
-                {
+                } else {
                     newMaterial.emission.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 }
             } else if (strcmp(tokens[0].c_str(), "EMIT_STR") == 0) {
