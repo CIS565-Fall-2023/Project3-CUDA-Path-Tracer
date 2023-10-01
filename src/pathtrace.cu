@@ -56,18 +56,23 @@ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int de
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-	int iter, glm::vec3* image) {
+	int iter, glm::vec3* image, bool isNormals) {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		glm::vec3 pix = image[index];
+		glm::vec3 pix = image[index] / (float) iter;
+
+		if (isNormals)
+		{
+			pix = (pix + 1.f) / 2.f;
+		}
 
 		glm::ivec3 color;
-		color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
-		color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
-		color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
+		color.x = glm::clamp((int)(pix.x * 255.0), 0, 255);
+		color.y = glm::clamp((int)(pix.y * 255.0), 0, 255);
+		color.z = glm::clamp((int)(pix.z * 255.0), 0, 255);
 
 		// Each thread writes one pixel location in the texture (textel)
 		pbo[index].w = 0;
@@ -110,7 +115,26 @@ static OIDNDevice oidnDevice;
 static OIDNFilter oidnFilter;
 
 static OIDNBuffer oidnColorBuf;
+static OIDNBuffer oidnAlbedoBuf;
+static OIDNBuffer oidnNormalBuf;
 static OIDNBuffer oidnOutputBuf;
+
+static glm::vec3* dev_first_hit_albedo_accum = NULL;
+static glm::vec3* dev_first_hit_albedo = NULL;
+static glm::vec3* dev_first_hit_normals_accum = NULL;
+static glm::vec3* dev_first_hit_normals = NULL;
+
+void checkOIDNError()
+{
+#if ERRORCHECK
+	const char* errorMessage;
+	if (oidnGetDeviceError(oidnDevice, &errorMessage) != OIDN_ERROR_NONE)
+	{
+		printf("Error: %s\n", errorMessage);
+		exit(EXIT_FAILURE);
+	}
+#endif
+}
 
 void Pathtracer::InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -121,9 +145,9 @@ void Pathtracer::init(Scene* scene) {
 	hst_scene = scene;
 
 	const Camera& cam = hst_scene->state.camera;
-	const int pixelcount = cam.resolution.x * cam.resolution.y;
+	const int pixelCount = cam.resolution.x * cam.resolution.y;
 
-	auto imageSizeBytes = pixelcount * sizeof(glm::vec3);
+	auto imageSizeBytes = pixelCount * sizeof(glm::vec3);
 	cudaMalloc(&dev_image_raw, imageSizeBytes);
 	cudaMemset(dev_image_raw, 0, imageSizeBytes);
 	cudaMalloc(&dev_image_final, imageSizeBytes);
@@ -140,16 +164,25 @@ void Pathtracer::init(Scene* scene) {
 	cudaMalloc(&dev_bvh_nodes, scene->bvhNodes.size() * sizeof(BvhNode));
 	cudaMemcpy(dev_bvh_nodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
 
-	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+	cudaMalloc(&dev_paths, pixelCount * sizeof(PathSegment));
 	dev_thrust_paths = thrust::device_pointer_cast(dev_paths);
-	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
-	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_intersections, pixelCount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_intersections, 0, pixelCount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
 
 #if FIRST_BOUNCE_CACHE
 	cudaMalloc(&dev_intersections_fbc, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections_fbc = thrust::device_pointer_cast(dev_intersections_fbc);
 #endif
+
+	cudaMalloc(&dev_first_hit_albedo_accum, imageSizeBytes);
+	cudaMemset(dev_first_hit_albedo_accum, 0, imageSizeBytes);
+	cudaMalloc(&dev_first_hit_albedo, imageSizeBytes);
+	cudaMemset(dev_first_hit_albedo, 0, imageSizeBytes);
+	cudaMalloc(&dev_first_hit_normals_accum, imageSizeBytes);
+	cudaMemset(dev_first_hit_normals_accum, 0, imageSizeBytes);
+	cudaMalloc(&dev_first_hit_normals, imageSizeBytes);
+	cudaMemset(dev_first_hit_normals, 0, imageSizeBytes);
 
 	initTextures();
 
@@ -209,19 +242,26 @@ void Pathtracer::initOIDN()
 
 	const Camera& cam = hst_scene->state.camera;
 
-	const int imageSizeBytes = cam.resolution.x * cam.resolution.y * sizeof(glm::vec3);
+	const int pixelCount = cam.resolution.x * cam.resolution.y;
+	const int imageSizeBytes = pixelCount * sizeof(glm::vec3);
 	oidnColorBuf = oidnNewSharedBuffer(oidnDevice, dev_image_raw, imageSizeBytes);
+	oidnAlbedoBuf = oidnNewSharedBuffer(oidnDevice, dev_first_hit_albedo, imageSizeBytes);
+	oidnNormalBuf = oidnNewSharedBuffer(oidnDevice, dev_first_hit_normals, imageSizeBytes);
 	oidnOutputBuf = oidnNewSharedBuffer(oidnDevice, dev_image_final, imageSizeBytes);
 
 	oidnFilter = oidnNewFilter(oidnDevice, "RT");
 	oidnSetFilterImage(oidnFilter, "color", oidnColorBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
+	oidnSetFilterImage(oidnFilter, "albedo", oidnAlbedoBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
+	oidnSetFilterImage(oidnFilter, "normal", oidnNormalBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
 	oidnSetFilterImage(oidnFilter, "output", oidnOutputBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
 	oidnSetFilterBool(oidnFilter, "hdr", true);
 	oidnCommitFilter(oidnFilter);
+
+	checkOIDNError();
 }
 
 void Pathtracer::free() {
-	cudaFree(dev_image_raw);  // no-op if dev_image_raw is null
+	cudaFree(dev_image_raw); // no-op if dev_image_raw is null
 
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
@@ -240,7 +280,14 @@ void Pathtracer::free() {
 	freeTextures();
 
 	oidnReleaseBuffer(oidnColorBuf);
+	oidnReleaseBuffer(oidnAlbedoBuf);
+	oidnReleaseBuffer(oidnNormalBuf);
 	oidnReleaseBuffer(oidnOutputBuf);
+
+	cudaFree(dev_first_hit_albedo_accum);
+	cudaFree(dev_first_hit_albedo);
+	cudaFree(dev_first_hit_normals_accum);
+	cudaFree(dev_first_hit_normals);
 
 	oidnReleaseFilter(oidnFilter);
 	oidnReleaseDevice(oidnDevice);
@@ -421,6 +468,12 @@ __device__ void processSegment(
 {
 	if (isect.t <= 0.0f)
 	{
+		if (segment.bouncesSoFar == 0)
+		{
+			segment.firstHitAlbedo = glm::vec3(0.0f);
+			segment.firstHitNormal = glm::vec3(0.0f);
+		}
+
 		segment.color = glm::vec3(0.0f);
 		segment.remainingBounces = 0;
 		return;
@@ -456,6 +509,13 @@ __device__ void processSegment(
 			{
 				segment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
 			}
+
+			if (segment.bouncesSoFar == 0)
+			{
+				segment.firstHitAlbedo = segment.color;
+				segment.firstHitNormal = isect.surfaceNormal;
+			}
+
 			segment.remainingBounces = 0;
 			return;
 		}
@@ -477,12 +537,11 @@ __device__ void processSegment(
 		segment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
 	}
 
-#if DEBUG_SHOW_NORMALS
-		segment.color = (intersection.surfaceNormal + 1.f) / 2.f;
-		segment.remainingBounces = 0;
-		return;
-#endif
-
+	if (segment.bouncesSoFar == 0)
+	{
+		segment.firstHitAlbedo = segment.color;
+		segment.firstHitNormal = isect.surfaceNormal;
+	}
 	++segment.bouncesSoFar;
 
 	if (--segment.remainingBounces == 0)
@@ -530,28 +589,43 @@ __global__ void shadeMaterial(
 }
 
 // Add the current iteration's output to the overall image
-__global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
+__global__ void finalGather(int nPaths, glm::vec3* image, 
+	glm::vec3* firstHitAlbedoAccum, glm::vec3* firstHitAlbedo,
+	glm::vec3* firstHitNormalsAccum, glm::vec3* firstHitNormals, 
+	PathSegment* iterationPaths, int iter)
 {
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-	if (index < nPaths)
+	if (index >= nPaths)
 	{
-		PathSegment iterationPath = iterationPaths[index];
+		return;
+	}
+
+	PathSegment iterationPath = iterationPaths[index];
 
 #if DEBUG_NAN_MAGENTA
-		if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
-		{
-			image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);
-			printf("found a nan");
-		}
-		else
-		{
-			image[iterationPath.pixelIndex] += iterationPath.color;
-		}
+	if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
+	{
+		image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);
+		printf("found a nan");
+	}
+	else
+	{
+		image[iterationPath.pixelIndex] += iterationPath.color;
+}
 #else
 	image[iterationPath.pixelIndex] += iterationPath.color;
 #endif
-	}
+
+	float mult = 1 / (float)iter;
+
+	glm::vec3 albedoAccum = firstHitAlbedoAccum[iterationPath.pixelIndex] + iterationPath.firstHitAlbedo;
+	firstHitAlbedoAccum[iterationPath.pixelIndex] = albedoAccum;
+	firstHitAlbedo[iterationPath.pixelIndex] = albedoAccum * mult;
+
+	glm::vec3 normalAccum = firstHitNormalsAccum[iterationPath.pixelIndex] + iterationPath.firstHitNormal;
+	firstHitNormalsAccum[iterationPath.pixelIndex] = normalAccum;
+	firstHitNormals[iterationPath.pixelIndex] = normalAccum * mult;
 }
 
 struct partition_predicate
@@ -683,27 +757,48 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather<<<numBlocksPixels, blockSize1d>>>(num_total_paths, dev_image_raw, dev_paths);
+	finalGather<<<numBlocksPixels, blockSize1d>>>(
+		num_total_paths, 
+		dev_image_raw,
+		dev_first_hit_albedo_accum,
+		dev_first_hit_albedo,
+		dev_first_hit_normals_accum,
+		dev_first_hit_normals,
+		dev_paths,
+		iter
+	);
 
 	///////////////////////////////////////////////////////////////////////////
 
-	oidnExecuteFilter(oidnFilter);
-
-#if ERRORCHECK
-	const char* errorMessage;
-	if (oidnGetDeviceError(oidnDevice, &errorMessage) != OIDN_ERROR_NONE)
+	if (guiData->denoising)
 	{
-		printf("Error: %s\n", errorMessage);
+		oidnExecuteFilter(oidnFilter);
+		checkOIDNError();
 	}
-#endif
 
 	///////////////////////////////////////////////////////////////////////////
+
+	glm::vec3* dev_image_ptr;
+	bool isNormals = false;
+	if (guiData->showAlbedo)
+	{
+		dev_image_ptr = dev_first_hit_albedo_accum;
+	}
+	else if (guiData->showNormals)
+	{
+		dev_image_ptr = dev_first_hit_normals_accum;
+		isNormals = true;
+	}
+	else
+	{
+		dev_image_ptr = guiData->denoising ? dev_image_final : dev_image_raw;
+	}
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image_final);
+	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image_ptr, isNormals);
 
 	// Retrieve image from GPU
-	cudaMemcpy(hst_scene->state.image.data(), dev_image_final,
+	cudaMemcpy(hst_scene->state.image.data(), dev_image_ptr,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 
 	checkCUDAError("pathtrace");

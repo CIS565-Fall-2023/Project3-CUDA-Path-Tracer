@@ -161,6 +161,9 @@ struct PathSegment
     int pixelIndex;
     int bouncesSoFar;
     int remainingBounces;
+
+    glm::vec3 firstHitAlbedo;
+    glm::vec3 firstHitNormal;
 };
 
 // Use with a corresponding PathSegment to do:

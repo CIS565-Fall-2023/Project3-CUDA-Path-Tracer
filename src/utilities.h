@@ -31,8 +31,13 @@ public:
 #endif
     bool russianRoulette{ true };
     bool useBvh{ true };
+    bool denoising{ true };
+
     float lensRadius{ 0.f };
     float focusDistance{ 0.f };
+
+    bool showAlbedo{ false };
+    bool showNormals{ false };
 };
 
 namespace Utils {

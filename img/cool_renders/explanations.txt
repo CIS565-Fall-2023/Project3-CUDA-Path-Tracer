@@ -23,3 +23,4 @@
 023 - strange interpolation artifacts
 024 - neon genesis evangelion
 025 - backrooms first image
+026 - backrooms with denoising (with albedo and normals auxiliary inputs)

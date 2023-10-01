@@ -20,7 +20,7 @@
 
 ### Planned Features
 
-- Denoising
+- Use separate CUDA stream for denoising?
 
 ### Attribution
 

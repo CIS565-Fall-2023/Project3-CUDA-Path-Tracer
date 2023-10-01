@@ -224,6 +224,7 @@ bool RenderImGui()
 	ImGui::Text("traced depth %d", imguiData->tracedDepth);
 	ImGui::Text("application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
+	ImGui::Text("toggles");
 	ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
 #if FIRST_BOUNCE_CACHE
 	ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
@@ -232,8 +233,37 @@ bool RenderImGui()
 #if BVH_TOGGLE
 	ImGui::Checkbox("use BVH", &imguiData->useBvh);
 #endif
+	ImGui::Checkbox("denoising", &imguiData->denoising);
+
+	ImGui::Text("depth of field");
 	shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
 	shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
+
+	ImGui::Text("debug options");
+	//ImGui::Checkbox("show albedo", &imguiData->showAlbedo);
+	//ImGui::Checkbox("show normals", &imguiData->showNormals);
+
+	static const char* items[] = { "final", "albedo", "normals" };
+	static const char* currentItem = items[0];
+
+	if (ImGui::BeginCombo("render output", currentItem))
+	{
+		for (int n = 0; n < IM_ARRAYSIZE(items); n++)
+		{
+			bool isSelected = (currentItem == items[n]);
+			if (ImGui::Selectable(items[n], isSelected))
+			{
+				currentItem = items[n];
+				imguiData->showAlbedo = (strcmp(currentItem, items[1]) == 0);
+				imguiData->showNormals = (strcmp(currentItem, items[2]) == 0);
+			}
+			if (isSelected)
+			{
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
 
 	ImGui::End();
 
