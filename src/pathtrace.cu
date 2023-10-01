@@ -369,7 +369,7 @@ __global__ void computeIntersections(
 
 __device__ void processSegment(
 	PathSegment& segment, 
-	ShadeableIntersection& intersection,
+	ShadeableIntersection& isect,
 	Geom* geoms,
 	Triangle* tris,
 	Material* materials, 
@@ -379,7 +379,7 @@ __device__ void processSegment(
 	SegmentProcessingSettings settings
 )
 {
-	if (intersection.t <= 0.0f)
+	if (isect.t <= 0.0f)
 	{
 		segment.color = glm::vec3(0.0f);
 		segment.remainingBounces = 0;
@@ -389,25 +389,53 @@ __device__ void processSegment(
 	thrust::uniform_real_distribution<float> u01(0, 1);
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.bouncesSoFar + 1);
 
-	Material material = materials[intersection.materialId];
+	Material m = materials[isect.materialId];
 
-	if (material.emission.strength > 0)
+	// not sure if this approach is fully correct but it does seem to allow for materials to have both diffuse and emissive components
+	bool skippedEmission = false;
+	if (m.emission.strength > 0)
 	{
-		segment.color *= material.emission.color * material.emission.strength;
-		segment.remainingBounces = 0;
-		return;
+		if (m.hasBaseColor && u01(rng) < 0.5)
+		{
+			skippedEmission = true;
+		}
+		else
+		{
+			glm::vec3 emissionColor;
+			if (m.emission.textureIdx != -1)
+			{
+				emissionColor = tex2DCustom(textureObjects[m.emission.textureIdx], isect.uv);
+			}
+			else
+			{
+				emissionColor = m.emission.color;
+			}
+
+			segment.color *= emissionColor * m.emission.strength;
+			if (m.hasBaseColor)
+			{
+				segment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
+			}
+			segment.remainingBounces = 0;
+			return;
+		}
 	} 
 	
 	scatterRay(
 		segment,
-		intersection,
-		getPointOnRay(segment.ray, intersection.t),
+		isect,
+		getPointOnRay(segment.ray, isect.t),
 		geoms,
 		tris,
-		material,
+		m,
 		textureObjects,
 		rng
 	);
+
+	if (skippedEmission)
+	{
+		segment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
+	}
 
 #if DEBUG_SHOW_NORMALS
 		segment.color = (intersection.surfaceNormal + 1.f) / 2.f;
@@ -474,6 +502,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 		if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
 		{
 			image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);
+			printf("found a nan");
 		}
 		else
 		{

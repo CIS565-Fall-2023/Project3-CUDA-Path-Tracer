@@ -628,18 +628,28 @@ int Scene::loadMaterial(string materialId) {
                 {
                     newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 }
+                newMaterial.hasBaseColor = true;
             } else if (strcmp(tokens[0].c_str(), "SPEC_EX") == 0) {
                 newMaterial.specular.exponent = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "SPEC_COL") == 0) {
                 newMaterial.specular.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.specular.hasReflective = atof(tokens[1].c_str());
+                newMaterial.hasBaseColor = true;
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
                 newMaterial.specular.hasRefractive = atof(tokens[1].c_str());
+                newMaterial.hasBaseColor = true;
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.specular.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMIT_COL") == 0) {
-                newMaterial.emission.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                if (tokens.size() == 2)
+                {
+                    newMaterial.emission.textureIdx = loadTexture(basePath + tokens[1]);
+                }
+                else
+                {
+                    newMaterial.emission.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                }
             } else if (strcmp(tokens[0].c_str(), "EMIT_STR") == 0) {
                 newMaterial.emission.strength = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "NORM_MAP") == 0) {

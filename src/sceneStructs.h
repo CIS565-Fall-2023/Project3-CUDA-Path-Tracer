@@ -50,12 +50,14 @@ struct Material
     } specular;
     struct {
         glm::vec3 color = glm::vec3(0);
+        int textureIdx = -1;
         float strength = 0;
     } emission;
-    struct
-    {
+    struct {
         int textureIdx = -1;
     } normalMap;
+
+    bool hasBaseColor = false;
 };
 
 struct Vertex

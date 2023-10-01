@@ -18,7 +18,7 @@ NORM_MAP gltf/freddy/textures/Freddy_Body_normal.png
 
 // freddy eyes
 MATERIAL 3
-DIFF_COL    gltf/freddy/textures/Freddy_Eyes_baseColor.png
+DIFF_COL gltf/freddy/textures/Freddy_Eyes_baseColor.png
 
 // ==================================================
 // CAMERA

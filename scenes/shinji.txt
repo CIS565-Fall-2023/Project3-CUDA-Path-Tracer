@@ -4,12 +4,12 @@
 
 // warm light
 MATERIAL 0
-EMIT_COL    1 0.945 0.878
-EMIT_STR    1.5
+EMIT_COL 1 0.945 0.878
+EMIT_STR 1.5
 
 // diffuse gray
 MATERIAL 1
-DIFF_COL    0.5 0.5 0.5
+DIFF_COL 0.5 0.5 0.5
 
 // freddy main
 MATERIAL 2
@@ -19,6 +19,8 @@ NORM_MAP gltf/freddy/textures/Freddy_Body_normal.png
 // freddy eyes
 MATERIAL 3
 DIFF_COL gltf/freddy/textures/Freddy_Eyes_baseColor.png
+EMIT_COL gltf/freddy/textures/Freddy_Eyes_emissive.jpeg
+EMIT_STR 0.4
 
 // chair
 MATERIAL 4
