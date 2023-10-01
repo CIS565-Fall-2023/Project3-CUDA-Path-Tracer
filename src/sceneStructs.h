@@ -37,7 +37,7 @@ struct Ray {
 
 struct Triangle {
     glm::vec3 position[3];
-    glm::vec3 normal[3];
+    glm::vec3 normal;
     glm::vec2 texcoord[3];
 };
 

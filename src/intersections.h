@@ -168,7 +168,7 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, Triangle* trian
 		if (intersect && baryPosition.z < t) {
 
 			t = baryPosition.z;
-            local_nor = triangle.normal[0];
+            local_nor = triangle.normal;
             outside = true;
 		}
     }
