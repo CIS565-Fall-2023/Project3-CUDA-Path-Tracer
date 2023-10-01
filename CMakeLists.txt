@@ -63,8 +63,8 @@ find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
 # OIDN Setup
-include_directories(oidn-2.0.1.x64.windows/include) # Replace with the path to your OIDN "include" folder
-link_directories(oidn-2.0.1.x64.windows/lib)       # Replace with the path to your OIDN "lib" folder
+include_directories(oidn-2.0.1.x64.windows/include)
+link_directories(oidn-2.0.1.x64.windows/lib)
 
 set(headers
     src/main.h
@@ -129,3 +129,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     OpenImageDenoise
     #stream_compaction  # TODO: uncomment if using your stream compaction
     )
+    
+file(GLOB OIDN_DLLS "${CMAKE_SOURCE_DIR}/oidn-2.0.1.x64.windows/bin/*.dll")
+foreach(DLL ${OIDN_DLLS})
+    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E copy
+                       "${DLL}"
+                       "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
+endforeach()

@@ -79,7 +79,8 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 
 static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
-static glm::vec3* dev_image = NULL;
+static glm::vec3* dev_image_raw = NULL;
+static glm::vec3* dev_image_final = NULL;
 
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
@@ -105,6 +106,11 @@ static ShadeableIntersection* dev_intersections_fbc = NULL;
 static thrust::device_ptr<ShadeableIntersection> dev_thrust_intersections_fbc = NULL;
 #endif
 
+static OIDNDevice oidnDevice;
+static OIDNFilter oidnFilter;
+
+static OIDNBuffer oidnColorBuf;
+static OIDNBuffer oidnOutputBuf;
 
 void Pathtracer::InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -117,8 +123,11 @@ void Pathtracer::init(Scene* scene) {
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
-	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
-	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
+	auto imageSizeBytes = pixelcount * sizeof(glm::vec3);
+	cudaMalloc(&dev_image_raw, imageSizeBytes);
+	cudaMemset(dev_image_raw, 0, imageSizeBytes);
+	cudaMalloc(&dev_image_final, imageSizeBytes);
+	cudaMemset(dev_image_final, 0, imageSizeBytes);
 
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
@@ -137,19 +146,21 @@ void Pathtracer::init(Scene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
 
-	initTextures(scene);
-
 #if FIRST_BOUNCE_CACHE
 	cudaMalloc(&dev_intersections_fbc, pixelcount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections_fbc = thrust::device_pointer_cast(dev_intersections_fbc);
 #endif
 
+	initTextures();
+
+	initOIDN();
+
 	checkCUDAError("pathtraceInit");
 }
 
-void Pathtracer::initTextures(Scene* scene)
+void Pathtracer::initTextures()
 {
-	numTextures = scene->textures.size();
+	numTextures = hst_scene->textures.size();
 	if (numTextures == 0)
 	{
 		return;
@@ -160,7 +171,7 @@ void Pathtracer::initTextures(Scene* scene)
 
 	for (int i = 0; i < numTextures; ++i)
 	{
-		const Texture& texture = scene->textures[i];
+		const Texture& texture = hst_scene->textures[i];
 
 		// wasn't working with linear memory so changed to array
 		// https://stackoverflow.com/questions/63408787/texture-object-fetching-in-cuda
@@ -188,8 +199,29 @@ void Pathtracer::initTextures(Scene* scene)
 	cudaMemcpy(dev_textureObjects, host_textureObjects, numTextures * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
 }
 
+void Pathtracer::initOIDN()
+{
+	int deviceId = -1;
+	cudaStream_t stream = NULL;
+
+	oidnDevice = oidnNewCUDADevice(&deviceId, &stream, 1);
+	oidnCommitDevice(oidnDevice);
+
+	const Camera& cam = hst_scene->state.camera;
+
+	const int imageSizeBytes = cam.resolution.x * cam.resolution.y * sizeof(glm::vec3);
+	oidnColorBuf = oidnNewSharedBuffer(oidnDevice, dev_image_raw, imageSizeBytes);
+	oidnOutputBuf = oidnNewSharedBuffer(oidnDevice, dev_image_final, imageSizeBytes);
+
+	oidnFilter = oidnNewFilter(oidnDevice, "RT");
+	oidnSetFilterImage(oidnFilter, "color", oidnColorBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
+	oidnSetFilterImage(oidnFilter, "output", oidnOutputBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
+	oidnSetFilterBool(oidnFilter, "hdr", true);
+	oidnCommitFilter(oidnFilter);
+}
+
 void Pathtracer::free() {
-	cudaFree(dev_image);  // no-op if dev_image is null
+	cudaFree(dev_image_raw);  // no-op if dev_image_raw is null
 
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
@@ -201,11 +233,17 @@ void Pathtracer::free() {
 	cudaFree(dev_paths);
 	cudaFree(dev_intersections);
 
-	freeTextures();
-
 #if FIRST_BOUNCE_CACHE
 	cudaFree(dev_intersections_fbc);
 #endif
+
+	freeTextures();
+
+	oidnReleaseBuffer(oidnColorBuf);
+	oidnReleaseBuffer(oidnOutputBuf);
+
+	oidnReleaseFilter(oidnFilter);
+	oidnReleaseDevice(oidnDevice);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -645,15 +683,27 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather<<<numBlocksPixels, blockSize1d>>>(num_total_paths, dev_image, dev_paths);
+	finalGather<<<numBlocksPixels, blockSize1d>>>(num_total_paths, dev_image_raw, dev_paths);
+
+	///////////////////////////////////////////////////////////////////////////
+
+	oidnExecuteFilter(oidnFilter);
+
+#if ERRORCHECK
+	const char* errorMessage;
+	if (oidnGetDeviceError(oidnDevice, &errorMessage) != OIDN_ERROR_NONE)
+	{
+		printf("Error: %s\n", errorMessage);
+	}
+#endif
 
 	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image);
+	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image_final);
 
 	// Retrieve image from GPU
-	cudaMemcpy(hst_scene->state.image.data(), dev_image,
+	cudaMemcpy(hst_scene->state.image.data(), dev_image_final,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 
 	checkCUDAError("pathtrace");
