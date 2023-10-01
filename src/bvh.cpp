@@ -75,12 +75,8 @@ BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start,
 	root->axis = axis;
 	root->startPrim = start;
 	root->endPrim = end;
-	if (numPrims <= MAX_NUM_PRIMS_IN_LEAF || centerDiff[axis] < EPSILON)
-	{
-		root->left = nullptr;
-		root->right = nullptr;
-	}
-	else
+
+	if(numPrims > MAX_NUM_PRIMS_IN_LEAF && centerDiff[axis] > EPSILON)
 	{
 		struct SAHBucket {
 			int cnt = 0;
@@ -127,11 +123,6 @@ BVHNode* buildBVHTreeRecursiveSAH(std::vector<Primitive>& primitives, int start,
 			root->left = buildBVHTreeRecursiveSAH(primitives, start, mid, size);
 			root->right = buildBVHTreeRecursiveSAH(primitives, mid, end, size);
 		}
-		else
-		{
-			root->left = nullptr;
-			root->right = nullptr;
-		}
 	}
 
 	return root;
@@ -156,7 +147,7 @@ bool checkBVHTreeFull(BVHNode* root)
 	return false;
 }
 
-int compactBVHTreeForStacklessTraverse(std::vector<BVHGPUNode>& bvhArray, BVHNode* root, int parent)
+int recursiveCompactBVHTreeForStacklessTraverse(std::vector<BVHGPUNode>& bvhArray, BVHNode* root, int parent)
 {
 	if (!root) return -1;
 	BVHGPUNode node;
@@ -168,8 +159,8 @@ int compactBVHTreeForStacklessTraverse(std::vector<BVHGPUNode>& bvhArray, BVHNod
 
 	int curr = bvhArray.size();
 	bvhArray.emplace_back(node);
-	int left = compactBVHTreeForStacklessTraverse(bvhArray, root->left, curr);
-	int right = compactBVHTreeForStacklessTraverse(bvhArray, root->right, curr);
+	int left = recursiveCompactBVHTreeForStacklessTraverse(bvhArray, root->left, curr);
+	int right = recursiveCompactBVHTreeForStacklessTraverse(bvhArray, root->right, curr);
 	bvhArray[curr].left = left;
 	bvhArray[curr].right = right;
 	return curr;

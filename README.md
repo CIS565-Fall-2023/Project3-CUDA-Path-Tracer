@@ -8,9 +8,21 @@ CUDA Path Tracer
   
 * Tested on: Windows 11, i9-12900HX @ 2.30GHz 16GB, RTX4080 laptop 12GB
 
-  ![](./img/rungholt-dof.png)
+## Showcase
 
-  ![](./img/bunny-dof.png)
+Large `wavefront-obj` scene load and render (with alpha cutoff):
+
+![](./img/rungholt-dof.png)
+
+Metallic Workflow PBR with normal mapping:
+
+![](./img/helmet-pbr.png)
+
+Refraction and reflection:
+
+![](./img/bunny-dof.png)
+
+Sponza:
 
 ![](./img/sponza.png)
 

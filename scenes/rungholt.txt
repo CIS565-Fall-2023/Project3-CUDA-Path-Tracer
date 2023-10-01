@@ -23,18 +23,11 @@ UP          0 1 0
 
 // Model
 OBJECT 0
-model ../scenes/models/rungholt/rungholt.obj
+model fnormal ../scenes/models/rungholt/rungholt.obj
 material -1
 TRANS       0 0 0
 ROTAT       0 0 0
 SCALE       0.1 0.1 0.1
-
-//OBJECT 1
-//geometry cube
-//material 1
-//TRANS       0 50 0
-//ROTAT       0 0 0
-//SCALE       1 1 1
 
 
 SKYBOX

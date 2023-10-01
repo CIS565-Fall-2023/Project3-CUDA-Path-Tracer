@@ -8,6 +8,7 @@ void pathtraceInit(Scene *scene);
 void pathtraceFree(Scene* scene);
 void pathtrace(uchar4 *pbo, int frame, int iteration);
 
+//https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 __host__ __device__ inline glm::vec3 util_postprocess_ACESFilm(glm::vec3 x)
 {
 	float a = 2.51f;

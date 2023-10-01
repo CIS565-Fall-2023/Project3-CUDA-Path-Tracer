@@ -17,10 +17,12 @@ private:
     int loadMaterial(string materialid);
     int loadObject(string objectid);
     int loadCamera();
-    bool loadModel(const string&, int);
+    bool loadModel(const string&, int, bool);
     bool loadGeometry(const string&,int);
-    void loadTexture(const std::string& texturePath, cudaTextureObject_t* texObj, int type);
+    void loadTextureFromFile(const std::string& texturePath, cudaTextureObject_t* texObj, int type);
+    void LoadTextureFromMemory(void* data, int width, int height, int bits, int channels, cudaTextureObject_t* texObj);
     void loadSkybox();
+
 public:
     void buildBVH();
     void buildStacklessBVH();
@@ -33,6 +35,7 @@ public:
     std::vector<glm::ivec3> triangles;
     std::vector<glm::vec3> verticies;
     std::vector<glm::vec2> uvs;
+    std::vector<glm::vec3> normals;
     std::vector<Primitive> primitives;
     std::vector<BVHGPUNode> bvhArray;
     std::vector<MTBVHGPUNode> MTBVHArray;
@@ -40,7 +43,9 @@ public:
     BVHNode* bvhroot = nullptr;
     cudaTextureObject_t skyboxTextureObj = 0;
     int bvhTreeSize = 0;
+    std::vector<char*> gltfTexTmpArrays;
     std::vector<cudaArray*> textureDataPtrs;
     std::unordered_map< std::string, cudaTextureObject_t> strToTextureObj;
     std::vector<std::pair<std::string, int> > textureLoadJobs;//texture path, materialID
+    std::vector <GLTFTextureLoadInfo> gltfTextureLoadJobs;
 };

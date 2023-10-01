@@ -62,9 +62,19 @@ __device__ inline bool util_geomerty_refract(const glm::vec3& wi, const glm::vec
 	return true;
 }
 
-__device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float r)
+__device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float HoV)
 {
-	return f0 + (1.0f - f0) * pow(1.0f - r, 5.0f);
+	return f0 + (1.0f - f0) * pow(1.0f - HoV, 5.0f);
+}
+
+__device__ inline glm::vec3 util_math_fschlick_roughness(glm::vec3 f0, float roughness, float NoV)
+{
+	return f0 + pow(1.0f - NoV, 5.0f) * (glm::max(f0, glm::vec3(1.0f - roughness) - f0));
+}
+
+__device__ inline float util_math_luminance(glm::vec3 col)
+{
+	return 0.299f * col.r + 0.587f * col.g + 0.114f * col.b;
 }
 
 //https://hal.science/hal-01509746/document
@@ -125,10 +135,10 @@ __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::ve
 	}
 }
 
-__device__ glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, float roughness)
+__device__ inline glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, float roughness)
 {
 	float a2 = roughness * roughness;
-	glm::vec3 h = util_math_sample_ggx_vndf(wo, roughness, random);
+	glm::vec3 h = util_math_sample_ggx_vndf(wo, roughness, random);//importance sample
 	*wi = glm::reflect(-wo, h);
 	if ((*wi).z > 0)
 	{
@@ -140,6 +150,29 @@ __device__ glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi
 	}
 	else
 		return glm::vec3(0);
+}
+
+__device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec3& random, float* pdf, glm::vec3& baseColor, float metallic, float roughness)
+{
+	float NoV = util_math_tangent_space_abscos(wo);
+	glm::vec3 F0 = glm::vec3(0.04);
+	F0 = glm::mix(F0, baseColor, metallic);
+	glm::vec3 F = util_math_fschlick_roughness(F0, roughness, NoV);
+	glm::vec3 kS = F;
+	glm::vec3 kD = glm::vec3(1.0f) - kS;
+	kD *= 1.0f - metallic;
+	float lS = util_math_luminance(kS);
+	float lD = util_math_luminance(kD);
+	float w = lS + lD;
+	lS /= w;
+	if (random.x < lS)
+	{
+		return bxdf_microfacet_sample_f(wo, wi, glm::vec2(random.y, random.z), pdf, baseColor, roughness);
+	}
+	else
+	{
+		return bxdf_diffuse_sample_f(wo, wi, glm::vec2(random.y, random.z), pdf, baseColor);
+	}
 }
 
 

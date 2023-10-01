@@ -3,8 +3,7 @@
 #include <string>
 #include <vector>
 #include <cuda_runtime.h>
-#include "glm/glm.hpp"
-
+#include <glm/glm.hpp>
 
 #define USE_BVH 1
 #define MTBVH 1
@@ -71,6 +70,7 @@ struct BVHNode {
     BVHNode* left, * right;
     int startPrim, endPrim;
     BoundingBox bbox;
+    BVHNode() :axis(-1), left(nullptr), right(nullptr), startPrim(-1), endPrim(-1) {}
 };
 
 struct BVHGPUNode
@@ -98,15 +98,29 @@ const int dirs[] = {
 
 
 enum MaterialType {
-    diffuse, frenselSpecular, microfacet, emitting
+    diffuse, frenselSpecular, microfacet, metallicWorkflow, emitting
+};
+
+enum TextureType {
+    color, normal, metallicroughness
+};
+
+struct GLTFTextureLoadInfo {
+    char* buffer;
+    int matIndex;
+    TextureType texType;
+    int width, height;
+    int bits, component;
+    GLTFTextureLoadInfo(char* buffer, int index, TextureType type, int width, int height, int bits, int component) :buffer(buffer), matIndex(index), texType(type), width(width), height(height), bits(bits), component(component){}
 };
 
 struct Material {
     glm::vec3 color = glm::vec3(0);
     float indexOfRefraction = 0;
     float emittance = 0;
+    float metallic = -1.0;
     float roughness = -1.0;
-    cudaTextureObject_t diffuseMap = 0, normalMap = 0;
+    cudaTextureObject_t baseColorMap = 0, normalMap = 0, metallicRoughnessMap = 0;
     MaterialType type = diffuse;
 };
 

@@ -23,7 +23,7 @@ UP          0 1 0
 
 // Model
 OBJECT 0
-model ../scenes/models/sponza/sponza.obj
+model fnormal ../scenes/models/sponza/sponza.obj
 material -1
 TRANS       0 0 10
 ROTAT       0 0 0
