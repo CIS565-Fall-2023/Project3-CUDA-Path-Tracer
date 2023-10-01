@@ -250,7 +250,4 @@ TBVH::TBVH(std::vector<TriangleDetail>& triangles, TBB& tbb)
         setRightMiss(0, 0, face);
         nodes[face][0].miss = -1;
     }
-    std::ofstream fout("../bvh.txt", std::ios::out | std::ios::trunc);
-    printBVH(fout, triangles, 0, 0, nodes);
-    fout.close();
 }

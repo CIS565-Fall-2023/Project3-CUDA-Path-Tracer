@@ -334,6 +334,11 @@ Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transfor
             triangle.normal1 = glm::vec3(normals[v1Id * 3], normals[v1Id * 3 + 1], normals[v1Id * 3 + 2]);
             triangle.normal2 = glm::vec3(normals[v2Id * 3], normals[v2Id * 3 + 1], normals[v2Id * 3 + 2]);
         }
+        else {
+            triangle.normal0 = glm::normalize(glm::cross(triangle.v1 - triangle.v0, triangle.v2 - triangle.v0));
+            triangle.normal1 = triangle.normal0;
+            triangle.normal2 = triangle.normal0;
+        }
         if (uvs) {
             triangle.uv0 = glm::vec2(uvs[v0Id * 2], uvs[v0Id * 2 + 1]);
             triangle.uv1 = glm::vec2(uvs[v1Id * 2], uvs[v1Id * 2 + 1]);
@@ -390,19 +395,27 @@ bool Scene::loadCamera(const tinygltf::Node& node, const glm::mat4& transform)
 }
 
 
-PbrMetallicRoughness Scene::loadPbrMetallicRoughness(const tinygltf::PbrMetallicRoughness& pbrMat)
+std::pair<PbrMetallicRoughness, Material::Type> Scene::loadPbrMetallicRoughness(const tinygltf::PbrMetallicRoughness& pbrMat)
 {
     PbrMetallicRoughness result;
+    auto matType = Material::Type::DIFFUSE;
     result.baseColorFactor = glm::make_vec4(pbrMat.baseColorFactor.data());
-    int textureIndex = pbrMat.baseColorTexture.index;
+    const int textureIndex = pbrMat.baseColorTexture.index;
     if (textureIndex >= 0) {
         result.baseColorTexture = textures[textureIndex];
     }
+    const int metallicRoughnessTextureIndex = pbrMat.metallicRoughnessTexture.index;
+    if (metallicRoughnessTextureIndex >= 0) {
+        result.metallicRoughnessTexture = textures[metallicRoughnessTextureIndex];
+    }
     result.metallicFactor = pbrMat.metallicFactor;
     result.roughnessFactor = pbrMat.roughnessFactor;
+    if (result.metallicFactor != 0.f || result.roughnessFactor != 1.f || pbrMat.metallicRoughnessTexture.index != -1) {
+        matType = Material::Type::PBR;
+    }
     result.metallicRoughnessTexture.index = pbrMat.metallicRoughnessTexture.index;
 
-    return result;
+    return { result, matType };
 }
 
 void Scene::loadExtensions(Material& material, const tinygltf::ExtensionMap& extensionMap)
@@ -416,13 +429,21 @@ void Scene::loadExtensions(Material& material, const tinygltf::ExtensionMap& ext
         }
         else if (extensionName == "KHR_materials_specular") {
             material.type = Material::Type::SPECULAR;
-            material.dielectric.specularColorFactor = glm::vec3(extensionValue.Get("specularFactor").Get<double>());
+            auto data = extensionValue.Get("specularColorFactor").Get<tinygltf::Value::Array>();
+            material.pbrMetallicRoughness.baseColorFactor = glm::vec4(glm::clamp(glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>()), 0.f, 1.f), 1.f);
         }
         else if (extensionName == "KHR_materials_transmission") {
             material.type = Material::Type::DIELECTRIC;
         }
         else if (extensionName == "KHR_materials_emissive_strength") {
             material.emissiveStrength = extensionValue.Get("emissiveStrength").Get<double>();
+        }
+        else if (extensionName == "CUSTOM_materials_metal") {
+            material.type = Material::Type::METAL;
+            auto data = extensionValue.Get("etat").Get<tinygltf::Value::Array>();
+            material.metal.etat = glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>()), 1.f;
+            data = extensionValue.Get("k").Get<tinygltf::Value::Array>();
+            material.metal.k = glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>()), 1.f;
         }
         else {
             std::cerr << extensionName << " not supported." << std::endl;
@@ -438,8 +459,9 @@ int Scene::loadMaterial() {
     for (size_t i = 0; i < gltfMaterials.size(); ++i) {
         const tinygltf::Material& gltfMaterial = gltfMaterials[i];
         Material material;
-        material.pbrMetallicRoughness = loadPbrMetallicRoughness(gltfMaterial.pbrMetallicRoughness);
-
+        auto& [pbrMetallicRoughness, matType] = loadPbrMetallicRoughness(gltfMaterial.pbrMetallicRoughness);
+        material.pbrMetallicRoughness = pbrMetallicRoughness;
+        material.type = matType;
         const auto& emissiveFactor = gltfMaterial.emissiveFactor;
         material.emissiveFactor = glm::make_vec3(emissiveFactor.data());
         if (glm::length2(material.emissiveFactor) > 0.f)
@@ -500,8 +522,12 @@ __host__ TextureInfo Scene::createTextureObj(int textureIndex, int width, int he
         desc = cudaCreateChannelDesc<uchar4>();
     else
         desc = cudaCreateChannelDesc<float4>();
+    cudaError_t cudaError;
     cudaArray_t cuArray;
-    cudaMallocArray(&cuArray, &desc, width, height);
+    cudaError = cudaMallocArray(&cuArray, &desc, width, height);
+    if (cudaError != cudaSuccess) {
+        fprintf(stderr, "CUDA error allocating memory: %s\n", cudaGetErrorString(cudaError));
+    }
     cudaMemcpyToArray(cuArray, 0, 0, image, size * sizeof(T), cudaMemcpyHostToDevice);
 
     struct cudaResourceDesc resDesc;
@@ -520,7 +546,6 @@ __host__ TextureInfo Scene::createTextureObj(int textureIndex, int width, int he
         texDesc.readMode = cudaReadModeElementType;
     texDesc.sRGB = 1;
     texDesc.normalizedCoords = 1;
-    cudaError_t cudaError;
 
     cudaTextureObject_t texObj = 0;
     cudaError = cudaCreateTextureObject(&texObj, &resDesc, &texDesc, nullptr);

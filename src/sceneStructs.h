@@ -49,17 +49,6 @@ private:
     void setRightMiss(int id, int idParent, int face);
 };
 
-enum BsdfSampleType
-{
-    DIFFUSE_REFL = 1,
-    SPEC_REFL = 1 << 1,
-    SPEC_TRANS = 1 << 2,
-    MICROFACET_REFL = 1 << 3,
-    MICROFACET_TRANS = 1 << 4,
-    PLASTIC = 1 << 5,
-    DIFFUSE_TRANS = 1 << 6
-};
-
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
@@ -144,16 +133,27 @@ struct PbrMetallicRoughness {
         bool operator==(const PbrMetallicRoughness&) const;
 };
 
+enum BsdfSampleType
+{
+    DIFFUSE_REFL = 1 << 1,
+    SPEC_REFL = 1 << 2,
+    SPEC_TRANS = 1 << 3,
+    MICROFACET_REFL = 1 << 4,
+    MICROFACET_TRANS = 1 << 5,
+    PLASTIC = 1 << 6,
+    DIFFUSE_TRANS = 1 << 7
+};
+
 struct Material {
     enum Type {
         UNKNOWN = 0,
-        DIFFUSE = 1,
-        DIELECTRIC = 1 << 1,
-        SPECULAR = 1 << 2,
-        METAL = 1 << 3,
-        ROUGH_DIELECTRIC = 1 << 4,
-        PLASTIC = 1 << 5,
-        LIGHT = 1 << 6
+        DIFFUSE = BsdfSampleType::DIFFUSE_REFL,
+        DIELECTRIC = BsdfSampleType::SPEC_REFL | BsdfSampleType::SPEC_TRANS,
+        SPECULAR = BsdfSampleType::SPEC_REFL,
+        METAL = BsdfSampleType::SPEC_REFL | BsdfSampleType::SPEC_TRANS | 1,
+        ROUGH_DIELECTRIC = BsdfSampleType::MICROFACET_REFL | BsdfSampleType::MICROFACET_TRANS,
+        PBR = DIFFUSE | DIELECTRIC,
+        LIGHT = 1 << 7
     };
     uint32_t type = Type::DIFFUSE;
 
@@ -171,7 +171,6 @@ struct Material {
 
     struct Dielectric {
         float eta = 0.f;
-        glm::vec3 specularColorFactor = glm::vec3(0.f);
     }dielectric;
 
     struct Metal {

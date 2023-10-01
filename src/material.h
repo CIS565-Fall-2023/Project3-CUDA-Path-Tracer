@@ -12,6 +12,11 @@ __device__ __inline__ glm::vec3 sampleTexture(cudaTextureObject_t tex, glm::vec2
     return glm::vec3(color.x, color.y, color.z);
 }
 
+__device__ __inline__ float2 texMetallicRoughness(cudaTextureObject_t tex, glm::vec2 const& uv) {
+    auto color = tex2D<float4>(tex, uv.x, uv.y);
+    return float2{ color.z, color.y };
+}
+
 __device__ __inline__ glm::vec2 sampleSphericalMap(glm::vec3 v) {
     glm::vec2 uv = glm::vec2(glm::atan(v.z, v.x), asin(v.y));
     uv *= glm::vec2(0.1591, 0.3183);
@@ -72,8 +77,7 @@ __device__ float fresnelDielectricEval(float cosThetaI, float eta)
     float etaT = eta;
     cosThetaI = glm::clamp(cosThetaI, -1.f, 1.f);
 
-    bool entering = cosThetaI > 0.f;
-    if (!entering)
+    if (cosThetaI < 0.f)
     {
         etaT = 1.;
         etaI = eta;
@@ -89,28 +93,18 @@ __device__ float fresnelDielectricEval(float cosThetaI, float eta)
         ((etaT * cosThetaI) + (etaI * cosThetaT));
     float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) /
         ((etaI * cosThetaI) + (etaT * cosThetaT));
-    float ratio = (Rparl * Rparl + Rperp * Rperp) / 2;
-    return ratio;
+
+    return (Rparl * Rparl + Rperp * Rperp) / 2;
+}
+
+__device__ inline glm::vec3 fresnelSchlick(float cosThetaI, glm::vec3 f0) {
+    return glm::mix(f0, glm::vec3(1.f), powf(1.f - cosThetaI, 5.f));
 }
 
 __device__ glm::vec3 fresnelDieletricConductor(float cosThetaI, glm::vec3 etat, glm::vec3 k)
 {
 
     glm::vec3 etai = glm::vec3(1, 1, 1);
-#if Au
-    glm::vec3 etat = glm::vec3(0.142820060, 0.374143630, 1.43944442);
-    glm::vec3 k = glm::vec3(3.97471833, 2.38065982, 1.59981036);
-#else
-#if Cu
-    glm::vec3 etat = glm::vec3(0.199023, 0.924777, 1.09564);
-    glm::vec3 k = glm::vec3(3.89346, 2.4567, 2.13024);
-#else
-#if Al
-    glm::vec3 etat = glm::vec3(1.64884, 0.881674, 0.518685);
-    glm::vec3 k = glm::vec3(9.18441, 6.27709, 4.81076);
-#endif
-#endif
-#endif
     cosThetaI = glm::clamp(abs(cosThetaI), -1.f, 1.f);
     glm::vec3 eta = etat / etai;
     glm::vec3 etak = k / etai;
@@ -134,20 +128,22 @@ __device__ glm::vec3 fresnelDieletricConductor(float cosThetaI, glm::vec3 etat, 
     return ratio;
 }
 
-__device__ glm::vec3 sample_f_metal(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, Material::Metal metal, glm::vec3 wo, BsdfSample& sample)
+__device__ glm::vec3 sample_f_metal(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, const Material::Metal& metal, glm::vec3 wo, BsdfSample& sample)
 {
     float random = xi.z;
+    const glm::vec3& etat = metal.etat;
+    const glm::vec3& k = metal.k;
     if (random < 0.5)
     {
         glm::vec3 R = sample_f_specular_refl(albedo, nor, wo, sample);
         sample.sampledType = BsdfSampleType::SPEC_REFL | BsdfSampleType::SPEC_TRANS;
-        return 2.f * fresnelDieletricConductor(dot(nor, normalize(sample.wiW)), metal.etat, metal.k) * R;
+        return 2.f * fresnelDieletricConductor(dot(nor, normalize(sample.wiW)), etat, k) * R;
     }
     else
     {
-        glm::vec3 T = sample_f_specular_trans(albedo, nor, glm::length(metal.etat), wo, sample);
+        glm::vec3 T = sample_f_specular_trans(albedo, nor, glm::length(etat), wo, sample);
         sample.sampledType = BsdfSampleType::SPEC_REFL | BsdfSampleType::SPEC_TRANS;
-        return 2.f * (glm::vec3(1.) - fresnelDieletricConductor(dot(nor, normalize(sample.wiW)), metal.etat, metal.k)) * T;
+        return 2.f * (glm::vec3(1.) - fresnelDieletricConductor(dot(nor, normalize(sample.wiW)), etat, k)) * T;
     }
 }
 
@@ -278,9 +274,7 @@ __device__ glm::vec3 f_microfacet_trans(glm::vec3 albedo, glm::vec3 wo, glm::vec
         (cosThetaI * cosThetaO * sqrtDenom * sqrtDenom));
 }
 
-__device__ glm::vec3 sample_f_microfacet_refl(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo,
-
-    float roughness, BsdfSample& sample)
+__device__ glm::vec3 sample_f_microfacet_refl(glm::vec3 albedo, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, float roughness, BsdfSample& sample)
 {
     if (wo.z == 0)
         return glm::vec3(0.f);
@@ -336,10 +330,55 @@ __device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, g
     }
 }
 
+__device__ glm::vec3 sample_f_pbrMetRough(glm::vec3 albedo, const float2& metallicRoughness, const PbrMetallicRoughness& material, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
+{
+    float metallic = metallicRoughness.x, roughness = metallicRoughness.y * metallicRoughness.y;
+
+    glm::vec3 wh = sample_wh(wo, xi, roughness);
+    glm::vec3 f = fresnelSchlick(glm::dot(wh, wo), glm::mix(glm::vec3(.08f), glm::vec3(material.baseColorFactor), metallic));
+
+    if (metallic >= 1.f) {
+        glm::vec3 R;
+        if (roughness == 0.f) {
+            R = sample_f_specular_refl(albedo, nor, wo, sample);
+            sample.pdf = 1.f;
+        }
+        else
+            R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness, sample);
+        return R;
+    }
+
+    float random = xi.z;
+    if (random > 0.5) {
+        glm::vec3 R;
+        if (roughness == 0.f) {
+            sample.pdf = 1.f;
+            R = sample_f_specular_refl(albedo, nor, wo, sample);
+        }
+        else
+            R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness, sample);
+        return 2.f * f * R;
+    }
+    else {
+        glm::vec3 D = sample_f_diffuse(albedo, xi, nor, sample);
+        return 2.f * (1.f - f) * (1 - metallic) * D;
+    }
+}
+
+__device__ float2 getMetallic(const Material& mat, glm::vec2 uv) {
+    float2 metallicRoughness;
+    auto& tex = mat.pbrMetallicRoughness.metallicRoughnessTexture;
+    if (tex.index != -1)
+        metallicRoughness = texMetallicRoughness(tex.cudaTexObj, uv);
+    else
+        metallicRoughness = float2{ (float)mat.pbrMetallicRoughness.metallicFactor,(float)mat.pbrMetallicRoughness.roughnessFactor };
+    return metallicRoughness;
+}
+
 __device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor, glm::vec2 uv)
 {
     glm::vec3 albedo(1.f);
-    if ((mat.type & (Material::Type::PLASTIC | Material::Type::DIFFUSE)) != 0)
+    if ((mat.type == Material::Type::DIFFUSE || (mat.type == Material::Type::PBR)))
     {
         auto& tex = mat.pbrMetallicRoughness.baseColorTexture;
         if (tex.index != -1)
@@ -347,34 +386,15 @@ __device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor, glm::vec2
         else
             albedo = glm::vec3(mat.pbrMetallicRoughness.baseColorFactor);
     }
+    else if (mat.type == Material::Type::METAL) {
+        albedo = glm::vec3(1.f);
+    }
     else if (mat.type == Material::Type::UNKNOWN) {
         albedo = glm::vec3(0.f);
     }
-#if N_TEXTURES
-    if (mat.albedoTex != -1)
-    {
-        albedo *=
-            texture(u_Texsamplers[mat.albedoTex], isect.uv).rgb;
-        albedo.rgb = pow(albedo, glm::vec3(2.2));
-    }
-#endif
     return albedo;
 }
 
-__device__ float computeRoughness(const Material& mat, glm::vec3 nor)
-{
-    float roughness = 0.f;
-    if (mat.type == Material::Type::PLASTIC)
-        roughness = mat.pbrMetallicRoughness.roughnessFactor;
-#if N_TEXTURES
-    if (mat.roughnessTex != -1)
-    {
-        roughness =
-            texture(u_Texsamplers[mat.roughnessTex], isect.uv).r;
-    }
-#endif
-    return roughness;
-}
 
 __device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
 {
@@ -417,7 +437,7 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec2 uv, 
     glm::vec3 wo = WorldToLocal(nor) * woW;
     if (mat.type == Material::Type::ROUGH_DIELECTRIC)
     {
-        return sample_f_rough_dieletric(computeAlbedo(mat, nor, uv), nor, xi, wo, computeRoughness(mat, nor), mat.dielectric.eta, sample);
+        return sample_f_rough_dieletric(computeAlbedo(mat, nor, uv), nor, xi, wo, getMetallic(mat, uv).x, mat.dielectric.eta, sample);
     }
     else if (mat.type == Material::Type::SPECULAR)
     {
@@ -438,40 +458,43 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec2 uv, 
     {
         return sample_f_diffuse(computeAlbedo(mat, nor, uv), xi, nor, sample);
     }
+    else if (mat.type == Material::Type::PBR)
+    {
+        return sample_f_pbrMetRough(computeAlbedo(mat, nor, uv), getMetallic(mat, uv), mat.pbrMetallicRoughness, nor, xi, wo, sample);
+    }
     sample.pdf = -1.f;
     return glm::vec3(0.f);
 }
 
-__device__ float pdf(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
+__device__ float pdf(const Material& mat, glm::vec3 nor, glm::vec2 uv, glm::vec3 woW, glm::vec3 wiW)
 {
     glm::vec3 wo = WorldToLocal(nor) * woW;
     glm::vec3 wi = WorldToLocal(nor) * wiW;
 
-    /*if (wo.z == 0)
+    if (wo.z == 0)
 
         if (mat.type == BsdfSampleType::DIFFUSE_REFL)
         {
             return squareToHemisphereCosinePDF(wi);
         }
         else if (mat.type == BsdfSampleType::SPEC_REFL ||
-            mat.type == BsdfSampleType::SPEC_TRANS ||
-            mat.type == BsdfSampleType::SPEC_GLASS)
+            mat.type == BsdfSampleType::SPEC_TRANS)
         {
             return 0.f;
         }
         else if (mat.type == BsdfSampleType::MICROFACET_REFL)
         {
             glm::vec3 wh = normalize(wo + wi);
-            return trowbridgeReitzPdf(wo, wh, computeRoughness(mat, nor)) /
+            return trowbridgeReitzPdf(wo, wh, getMetallic(mat, uv).y) /
                 (4 * dot(wo, wh));
         }
         else if (mat.type == BsdfSampleType::MICROFACET_TRANS)
         {
-            return pdf_microfacet_trans(wo, wi, mat.eta, computeRoughness(mat, nor));
+            return pdf_microfacet_trans(wo, wi, mat.dielectric.eta, getMetallic(mat, uv).y);
         }
         else
         {
             return 0.f;
-        }*/
+        }
     return 0.f;
 }

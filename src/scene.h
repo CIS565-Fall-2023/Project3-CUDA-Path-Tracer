@@ -45,7 +45,7 @@ private:
         Scene* scene;
     };
     static void loadExtensions(Material& material, const tinygltf::ExtensionMap& extensionMap);
-    PbrMetallicRoughness loadPbrMetallicRoughness(const tinygltf::PbrMetallicRoughness& pbrMat);
+    std::pair<PbrMetallicRoughness, Material::Type> loadPbrMetallicRoughness(const tinygltf::PbrMetallicRoughness& pbrMat);
     Camera& computeCameraParams(Camera& camera)const;
     int loadMaterial();
     bool loadTexture();
