@@ -32,6 +32,8 @@ private:
     unordered_map<string, int> bvhRootIndices;
     unordered_map<string, int> textureIndices;
 
+    unordered_map<int, int> geomIdMap;
+
 public:
     Scene(string filename);
     ~Scene();

@@ -229,7 +229,9 @@ bool RenderImGui()
 	ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
 #endif
 	ImGui::Checkbox("russian roulette", &imguiData->russianRoulette);
+#if BVH_TOGGLE
 	ImGui::Checkbox("use BVH", &imguiData->useBvh);
+#endif
 	shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
 	shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
 

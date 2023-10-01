@@ -239,6 +239,7 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     Ray transformedRay = { ro, rd };
 
     float t;
+#if BVH_TOGGLE
     if (useBvh)
     {
         if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, t, triIdx))
@@ -273,6 +274,12 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
             return -1;
         }
     }
+#else
+    if (!intersectBvh(transformedRay, geom.bvhRootNodeIdx, tris, bvhNodes, t, triIdx))
+    {
+        return -1;
+    }
+#endif
 
     const Triangle& tri = tris[triIdx];
     const Vertex& v0 = tri.v0;
@@ -281,8 +288,7 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
 
     glm::vec3 objSpaceIntersection = ro + rd * t;
     glm::vec3 barycentricPos = barycentric(v0.pos, v1.pos, v2.pos, objSpaceIntersection);
-    glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * v0.nor + barycentricPos.y * v1.nor + barycentricPos.z * v2.nor); // TODO add a toggle for this (smooth shading)
-    //glm::vec3 objSpaceNormal = glm::normalize(glm::cross(v1.pos - v0.pos, v2.pos - v0.pos));
+    glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * v0.nor + barycentricPos.y * v1.nor + barycentricPos.z * v2.nor);
 
     intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objSpaceNormal, 0.f)));

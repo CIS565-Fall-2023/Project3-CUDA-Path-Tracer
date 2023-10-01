@@ -409,86 +409,104 @@ void Scene::bvhSubdivide(BvhNode& node)
 
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
-        cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-        return -1;
-    } else {
-        cout << "Loading Geom " << id << "..." << endl;
-        Geom newGeom;
-        string line;
+    //if (id != geoms.size()) {
+    //    cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
+    //    return -1;
+    //}
 
-        //load object type
-        Utils::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            if (strcmp(line.c_str(), "sphere") == 0) {
-                cout << "Creating new sphere..." << endl;
-                newGeom.type = SPHERE;
-            } else if (strcmp(line.c_str(), "cube") == 0) {
-                cout << "Creating new cube..." << endl;
-                newGeom.type = CUBE;
-            } else if (strcmp(line.c_str(), "mesh") == 0) {
-                string filePath;
-                Utils::safeGetline(fp_in, filePath);
-                string fullPath = basePath + filePath;
-                newGeom.type = MESH;
-                newGeom.bvhRootNodeIdx = loadMesh(fullPath, newGeom.startTriIdx, newGeom.numTris);
+    int newGeomId = geoms.size();
+    geomIdMap[id] = newGeomId;
 
-                cout << "start tri: " << newGeom.startTriIdx << endl;
-                cout << "num tris: " << newGeom.numTris << endl;
-                cout << endl;
-            }
-        }
+    cout << "Loading Geom " << id << "..." << endl;
+    Geom newGeom;
+    string line;
 
-        //link material
-        Utils::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            vector<string> tokens = Utils::tokenizeString(line);
-            newGeom.materialId = atoi(tokens[1].c_str());
-            cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialId << "..." << endl;
-        }
-
-        glm::vec3 translation = glm::vec3(0);
-        glm::vec3 rotation = glm::vec3(0);
-        glm::vec3 scale = glm::vec3(1);
-        int parentIdx = -1;
-
-        //load transformations
-        Utils::safeGetline(fp_in, line);
-        while (!line.empty() && fp_in.good()) {
-            vector<string> tokens = Utils::tokenizeString(line);
-
-            if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-                translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-                rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                if (tokens.size() == 2)
-                {
-                    scale = glm::vec3(atof(tokens[1].c_str()));
-                }
-                else
-                {
-                    scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                }
-            } else if (strcmp(tokens[0].c_str(), "CHILD_OF") == 0) {
-                parentIdx = atoi(tokens[1].c_str());
-            }
-
-            Utils::safeGetline(fp_in, line);
-        }
-
-        glm::mat4 thisGeomTransformMat = Utils::buildTransformationMatrix(translation, rotation, scale);
-        if (parentIdx != -1)
+    //load object type
+    Utils::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good())
+    {
+        if (strcmp(line.c_str(), "sphere") == 0)
         {
-            thisGeomTransformMat = geoms[parentIdx].transform * thisGeomTransformMat;
+            cout << "Creating new sphere..." << endl;
+            newGeom.type = SPHERE;
         }
-        newGeom.transform = thisGeomTransformMat;
-        newGeom.inverseTransform = glm::inverse(newGeom.transform);
-        newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+        else if (strcmp(line.c_str(), "cube") == 0)
+        {
+            cout << "Creating new cube..." << endl;
+            newGeom.type = CUBE;
+        }
+        else if (strcmp(line.c_str(), "mesh") == 0)
+        {
+            string filePath;
+            Utils::safeGetline(fp_in, filePath);
+            string fullPath = basePath + filePath;
+            newGeom.type = MESH;
+            newGeom.bvhRootNodeIdx = loadMesh(fullPath, newGeom.startTriIdx, newGeom.numTris);
 
-        geoms.push_back(newGeom);
-        return 1;
+            cout << "start tri: " << newGeom.startTriIdx << endl;
+            cout << "num tris: " << newGeom.numTris << endl;
+            cout << endl;
+        }
     }
+
+    //link material
+    Utils::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good())
+    {
+        vector<string> tokens = Utils::tokenizeString(line);
+        newGeom.materialId = atoi(tokens[1].c_str());
+        cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialId << "..." << endl;
+    }
+
+    glm::vec3 translation = glm::vec3(0);
+    glm::vec3 rotation = glm::vec3(0);
+    glm::vec3 scale = glm::vec3(1);
+    int parentIdx = -1;
+
+    //load transformations
+    Utils::safeGetline(fp_in, line);
+    while (!line.empty() && fp_in.good())
+    {
+        vector<string> tokens = Utils::tokenizeString(line);
+
+        if (strcmp(tokens[0].c_str(), "TRANS") == 0)
+        {
+            translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "ROTAT") == 0)
+        {
+            rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "SCALE") == 0)
+        {
+            if (tokens.size() == 2)
+            {
+                scale = glm::vec3(atof(tokens[1].c_str()));
+            }
+            else
+            {
+                scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            }
+        }
+        else if (strcmp(tokens[0].c_str(), "CHILD_OF") == 0)
+        {
+            parentIdx = geomIdMap[atoi(tokens[1].c_str())];
+        }
+
+        Utils::safeGetline(fp_in, line);
+    }
+
+    glm::mat4 thisGeomTransformMat = Utils::buildTransformationMatrix(translation, rotation, scale);
+    if (parentIdx != -1)
+    {
+        thisGeomTransformMat = geoms[parentIdx].transform * thisGeomTransformMat;
+    }
+    newGeom.transform = thisGeomTransformMat;
+    newGeom.inverseTransform = glm::inverse(newGeom.transform);
+    newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+    geoms.push_back(newGeom);
+    return 1;
 }
 
 int Scene::loadCamera() {
