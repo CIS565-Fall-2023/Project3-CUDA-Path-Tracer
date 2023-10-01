@@ -20,6 +20,8 @@
 #include "intersections.h"
 #include "interactions.h"
 
+#include <OpenImageDenoise/oidn.h>
+
 #include "toggles.h"
 
 #define ERRORCHECK 1

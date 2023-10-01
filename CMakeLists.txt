@@ -62,6 +62,10 @@ set(GLM_ROOT_DIR "external")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
+# OIDN Setup
+include_directories(oidn-2.0.1.x64.windows/include) # Replace with the path to your OIDN "include" folder
+link_directories(oidn-2.0.1.x64.windows/lib)       # Replace with the path to your OIDN "lib" folder
+
 set(headers
     src/main.h
     src/image.h
@@ -122,5 +126,6 @@ source_group(Sources FILES ${sources})
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
+    OpenImageDenoise
     #stream_compaction  # TODO: uncomment if using your stream compaction
     )

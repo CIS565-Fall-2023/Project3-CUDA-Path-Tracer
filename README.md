@@ -18,6 +18,10 @@
 - glTF mesh loading
 - BVH construction and traversal
 
+### Planned Features
+
+- Denoising
+
 ### Attribution
 
 #### Code
