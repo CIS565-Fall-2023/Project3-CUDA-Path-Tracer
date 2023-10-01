@@ -351,14 +351,15 @@ __device__  float bvhSearch(
 	//}
 	
 
-	__shared__ int arr[BLOCK_SIZE_1D][BVH_GPU_STACK_SIZE];
+	// __shared__ int arr[BLOCK_SIZE_1D][BVH_GPU_STACK_SIZE];
+	int arr[BVH_GPU_STACK_SIZE];
 
 	// int arr[BVH_GPU_STACK_SIZE];
 	int sign = 0;
-	arr[threadId][0] = 0;
+	arr[0] = 0;
 
 	while (sign >= 0) {
-		BoundingBox& bbox = bvh[arr[threadId][sign]];
+		BoundingBox& bbox = bvh[arr[sign]];
 		sign--;
 		glm::vec3 minDiff = bbox.min - ray.origin;
 		glm::vec3 maxDiff = bbox.max - ray.origin;
@@ -406,8 +407,8 @@ __device__  float bvhSearch(
 			}
 			// keep searching
 			else if (sign + 2 < BVH_GPU_STACK_SIZE) {
-				arr[threadId][sign + 1] = bbox.leftId;
-				arr[threadId][sign + 2] = bbox.rightId;
+				arr[sign + 1] = bbox.leftId;
+				arr[sign + 2] = bbox.rightId;
 				sign += 2;
 			}
 			else {
@@ -479,18 +480,69 @@ __global__ void computeIntersectionsBVH(
 
 		int hit_tri_index = -1;
 
-		t = bvhSearch(pathSegment.ray, hit_tri_index,
-			tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside,
-			blockDim.x, threadIdx.x);
+		//t = bvhSearch(pathSegment.ray, hit_tri_index,
+		//	tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside,
+		//	blockDim.x, threadIdx.x);
 
-		if (t > 0.0f && t_min > t)
-		{
-			t_min = t;
-			hit_index = hit_tri_index;
-			hit_geom = false;
-			intersect_point = tmp_intersect;
-			normal = tmp_normal;
+		// float t_min = 1e4;
+
+		// __shared__ int arr[BLOCK_SIZE_1D][BVH_GPU_STACK_SIZE];
+		int arr[BVH_GPU_STACK_SIZE];
+
+		// int arr[BVH_GPU_STACK_SIZE];
+		int sign = 0;
+		arr[0] = 0;
+
+		while (sign >= 0) {
+			BoundingBox& bbox = bvh[arr[sign]];
+			sign--;
+			glm::vec3 minDiff = bbox.min - pathSegment.ray.origin;
+			glm::vec3 maxDiff = bbox.max - pathSegment.ray.origin;
+			bool inside = (minDiff.x * maxDiff.x <= 0 &&
+				minDiff.y * maxDiff.y <= 0 &&
+				minDiff.z * maxDiff.z <= 0);
+			// bool inside = false;
+
+			float bt = (abs(pathSegment.ray.direction[0]) < 1e-5) ? -1.0f : max(-1.0f, min(minDiff.x / pathSegment.ray.direction[0], maxDiff.x / pathSegment.ray.direction[0]));
+			bt = (abs(pathSegment.ray.direction[1]) < 1e-5) ? bt : max(bt, min(minDiff.y / pathSegment.ray.direction[1], maxDiff.y / pathSegment.ray.direction[1]));
+			bt = (abs(pathSegment.ray.direction[2]) < 1e-5) ? bt : max(bt, min(minDiff.z / pathSegment.ray.direction[2], maxDiff.z / pathSegment.ray.direction[2]));
+
+			if (inside || (bt > -1e-3 && bt < t_min))
+			{
+				// reach leaf node of bvh
+				if (bbox.triArrId >= 0) {
+
+					TriangleArray& triIndices = tri_arr[bbox.triArrId];
+					// #pragma unroll
+					for (int j = 1; j < triIndices.triIds[0] + 1; j++) {
+						int ti = triIndices.triIds[j];
+						// if (ti < 0) { break; }
+						glm::vec3 tmp_intersect;
+						glm::vec3 tmp_normal;
+						float t = triangleIntersectionTest(tris[ti], pathSegment.ray, tmp_intersect, tmp_normal, outside);
+						if (t > 0.0f && t_min > t)
+						{
+							t_min = t;
+							hit_index = ti;
+							hit_geom = false;
+							intersect_point = tmp_intersect;
+							normal = tmp_normal;
+						}
+					}
+				}
+				// keep searching
+				else if (sign + 2 < BVH_GPU_STACK_SIZE) {
+					arr[sign + 1] = bbox.leftId;
+					arr[sign + 2] = bbox.rightId;
+					sign += 2;
+				}
+				else {
+					break;
+				}
+			}
 		}
+
+
 
 		if (hit_index == -1 || t < -90.0f)
 		{

@@ -327,11 +327,12 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
     //cout << "box[" << bboxId << "]: "; printVec(bvh[bboxId].min); printVec(bvh[bboxId].max);
     //cout << endl;
 
-    if (rightEnd - leftEnd <= BBOX_TRI_NUM) {
+    if (rightEnd - leftEnd <= BBOX_TRI_NUM - 1) {
         // buld triangle array
         TriangleArray triArrObj;
+        triArrObj.triIds[0] = rightEnd - leftEnd;
         for (int i = 0; i < rightEnd - leftEnd; i++) {
-            triArrObj.triIds[i] = triIds[leftEnd + i];
+            triArrObj.triIds[i + 1] = triIds[leftEnd + i];
         }
 
         triArr.push_back(triArrObj);

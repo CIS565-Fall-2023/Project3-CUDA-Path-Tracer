@@ -6,8 +6,8 @@
 #include "glm/glm.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
-#define BBOX_TRI_NUM 4000
-#define BVH_GPU_STACK_SIZE 40
+#define BBOX_TRI_NUM 1000
+#define BVH_GPU_STACK_SIZE 25
 #define BLOCK_SIZE_1D 64
 
 enum GeomType {
@@ -53,6 +53,7 @@ struct BoundingBox {
     int leftId;
     int rightId;
     int triArrId;
+    // int triIds[BBOX_TRI_NUM];
 
     BoundingBox() : min(), max(), leftId(-1), rightId(-1), triArrId(-1) {}
 
