@@ -23,50 +23,55 @@ __host__ __device__ glm::vec3 sampleMaterial(glm::vec3 intersect,
 
     pdf = 1.0;
     specular = true;
-    if (m.hasReflective > 0.0 && m.hasRefractive > 0.0)
+
+    switch (m.type)
     {
-        return sampleFresnelSpecularMaterial(m, normal, wo, wi, rng);
-    }
-    else if (m.hasReflective > 0.0)
-    {
-        // perfect specular
-        return sampleSpecularReflectMaterial(m, normal, wo, wi);
+        case MaterialType::DIFFUSE:
+		{
+            specular = false;
+            wi = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));
+            return (m.color / PI);
+		}
+        case MaterialType::SPEC_REFL:
+		{
+            // imperfect
+            //float x1 = u01(rng), x2 = u01(rng);
+            //float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
+            //float phi = 2 * PI * x2;
 
-        // imperfect
-        //float x1 = u01(rng), x2 = u01(rng);
-        //float theta = acos(pow(x1, 1.0 / (m.specular.exponent + 1)));
-        //float phi = 2 * PI * x2;
+            //glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
 
-        //glm::vec3 s = glm::vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+            //// sample direction must be transformed to world space
+            //// tangent-space to world-space: local tangent, binormal, and normal at the surface point
+            //glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
+            //glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
 
-        //// sample direction must be transformed to world space
-        //// tangent-space to world-space: local tangent, binormal, and normal at the surface point
-        //glm::vec3 binormal = glm::normalize(glm::cross(normal, tangent));
-        //glm::mat3 TBN = glm::mat3(tangent, binormal, normal);
+            //glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
 
-        //glm::vec3 r = glm::normalize(glm::transpose(TBN) * pathSegment.ray.direction); // world-space to tangent-space
+            //// specular-space to tangent-space
+            //glm::mat3 sampleToTangent;
+            //sampleToTangent[2] = r;
+            //sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
+            //sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
 
-        //// specular-space to tangent-space
-        //glm::mat3 sampleToTangent;
-        //sampleToTangent[2] = r;
-        //sampleToTangent[1] = glm::normalize(glm::vec3(-r.y, r.x, 0.0f));
-        //sampleToTangent[0] = glm::normalize(glm::cross(sampleToTangent[1], sampleToTangent[2]));
+            //// specular-space to world-space
+            //glm::mat3 mat = TBN * sampleToTangent;
 
-        //// specular-space to world-space
-        //glm::mat3 mat = TBN * sampleToTangent;
-
-        //pathSegment.ray.direction = mat * s;
-    }
-    else if (m.hasRefractive > 0.0)
-    {
-        return sampleSpecularTransmissionMaterial(m, normal, wo, wi);
-    }
-    else
-    {
-        // diffuse
-        specular = false;
-        wi = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));
-        return (m.color / PI);
+            //pathSegment.ray.direction = mat * s;
+            return sampleSpecularReflectMaterial(m, normal, wo, wi);
+		}
+        case MaterialType::SPEC_TRANS: 
+        {
+            return sampleSpecularTransmissionMaterial(m, normal, wo, wi);
+        }
+        case MaterialType::SPEC_FRESNEL:
+		{
+            return sampleFresnelSpecularMaterial(m, normal, wo, wi, rng);
+		}
+        case MaterialType::MICROFACET: 
+        {
+            return sampleMicrofacetMaterial(m, normal, wo, wi, pdf, rng);
+        }
     }
 }
 

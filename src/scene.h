@@ -18,6 +18,7 @@ private:
     int loadCamera();
 
     bool loadObj(Geom& geom, const string& objFile);
+    MaterialType judgeMaterialType(float reflectivity, float refractivity, float roughness);
 public:
     Scene(string filename);
     ~Scene();

@@ -23,10 +23,11 @@ enum LightType {
 
 enum MaterialType {
     DIFFUSE = 0,
-    SPECULAR_REFL = 1,
-    SPECULAR_TRANS = 2,
-    SPECULAR_FRES = 3,
+    SPEC_REFL = 1,
+    SPEC_TRANS = 2,
+    SPEC_FRESNEL = 3,
     MICROFACET = 4,
+    PLASTIC = 5
 };
 
 struct Ray {
@@ -72,12 +73,19 @@ struct Material {
         float exponent;
         glm::vec3 color;
     } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
-    float emittance;
+
+    float reflectivity;
+    float refractivity;
+    float roughness;
+
+    float indexOfRefraction; // refraction index, eta
+    float emittance; // light
 
     MaterialType type;
+    // texture maps
+    int albedoTex;
+    int normalTex;
+    int roughnessTex;
 };
 
 struct Camera {

@@ -261,11 +261,12 @@ int Scene::loadMaterial(string materialid) {
     } else {
         cout << "Loading Material " << id << "..." << endl;
         Material newMaterial;
+        newMaterial.roughness = 0.0f; //default
 
         //load static properties
-        for (int i = 0; i < 7; i++) {
-            string line;
-            utilityCore::safeGetline(fp_in, line);
+        string line;
+        utilityCore::safeGetline(fp_in, line);
+        while (!line.empty() && fp_in.good()) {
             vector<string> tokens = utilityCore::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "RGB") == 0) {
                 glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
@@ -276,29 +277,54 @@ int Scene::loadMaterial(string materialid) {
                 glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 newMaterial.specular.color = specColor;
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
-                newMaterial.hasReflective = atof(tokens[1].c_str());
+                newMaterial.reflectivity = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
-                newMaterial.hasRefractive = atof(tokens[1].c_str());
+                newMaterial.refractivity = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
+            } else if (strcmp(tokens[0].c_str(), "ROUGHNESS") == 0) {
+                newMaterial.roughness = atof(tokens[1].c_str());
             }
+            utilityCore::safeGetline(fp_in, line);
         }
 
         // judge material type
-        // TODO: change
-        if (newMaterial.hasReflective > 0.0f && newMaterial.hasRefractive > 0.0f) {
-            newMaterial.type = MaterialType::SPECULAR_FRES;
-        } else if (newMaterial.hasReflective > 0.0f) {
-            newMaterial.type = MaterialType::SPECULAR_REFL;
-		} else if (newMaterial.hasRefractive > 0.0f) {
-			newMaterial.type = MaterialType::SPECULAR_TRANS;
-		} else {
-			newMaterial.type = MaterialType::DIFFUSE;
-		}
+        newMaterial.type = judgeMaterialType(newMaterial.reflectivity, 
+            newMaterial.refractivity, newMaterial.roughness);
 
         materials.push_back(newMaterial);
         return 1;
     }
+}
+
+MaterialType Scene::judgeMaterialType(float reflectivity, float refractivity, float roughness) {
+    if (roughness == 0.0f) {
+        if (reflectivity == 1.0f && refractivity == 1.0f) {
+            // perfect mirror
+            return MaterialType::SPEC_FRESNEL;
+        }
+        else if (reflectivity == 1.0f) {
+            // perfect specular reflect
+            return MaterialType::SPEC_REFL;
+        }
+        else if (refractivity == 1.0f) {
+            // perfect specular transmission
+            return MaterialType::SPEC_TRANS;
+        }
+        else if (reflectivity == 0.0f && refractivity == 0.0f) {
+            // diffuse
+			return MaterialType::DIFFUSE;
+        }
+    }
+    else {
+        if (reflectivity > 0.0f) {
+            // microfacet
+            //TODO: expand microfacet material type
+            return MaterialType::MICROFACET;
+        }
+    }
+
+    return MaterialType::DIFFUSE;
 }
