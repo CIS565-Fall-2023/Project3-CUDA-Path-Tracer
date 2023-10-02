@@ -575,7 +575,6 @@ __global__ void shadeMaterial(
 
 	PathSegment segment = pathSegments[idx];
 	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, settings);
-
 	pathSegments[idx] = segment;
 }
 
