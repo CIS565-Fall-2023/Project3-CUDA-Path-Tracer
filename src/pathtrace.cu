@@ -377,11 +377,11 @@ struct SegmentProcessingSettings
 };
 
 __global__ void computeIntersections(
-	const int depth, 
-	const int num_paths, 
+	int depth, 
+	int num_paths, 
 	const PathSegment* const pathSegments, 
 	const Geom* const geoms,
-	const int geoms_size,
+	int geoms_size,
 	const Triangle* const tris,
 	const BvhNode* const bvhNodes,
 	ShadeableIntersection* intersections,
@@ -399,19 +399,12 @@ __global__ void computeIntersections(
 	float t;
 	float tMin = FLT_MAX;
 
-	//glm::vec3 normal;
-	//glm::vec2 uv;
-	//int triIdx;
-	//int hitGeomIdx = -1;
-
 	ShadeableIntersection newIsect;
 	newIsect.hitGeomIdx = -1;
 
 	glm::vec3 tmp_normal;
 	glm::vec2 tmp_uv;
 	int tmp_triIdx;
-
-	// naive parse through global geoms
 
 	for (int i = 0; i < geoms_size; i++)
 	{
@@ -448,22 +441,14 @@ __global__ void computeIntersections(
 		return;
 	}
 
-	//ShadeableIntersection& isect = intersections[path_index];
-	//isect.hitGeomIdx = hitGeomIdx;
-	//isect.t = tMin;
-	//isect.surfaceNormal = normal;
-	//isect.uv = uv;
-	//isect.materialId = geoms[hitGeomIdx].materialId;
-	//isect.triIdx = triIdx;
-
 	newIsect.t = tMin;
 	newIsect.materialId = geoms[newIsect.hitGeomIdx].materialId;
 	intersections[path_index] = newIsect;
 }
 
 __device__ void processSegment(
-	const int iter,
-	const int idx,
+	int iter,
+	int idx,
 	PathSegment& segment, 
 	ShadeableIntersection& isect,
 	const Geom* const geoms,
@@ -571,8 +556,8 @@ __device__ void processSegment(
 }
 
 __global__ void shadeMaterial(
-	const int iter,
-	const int num_paths,
+	int iter,
+	int num_paths,
 	ShadeableIntersection* shadeableIntersections,
 	PathSegment* pathSegments,
 	const Geom* const geoms,
@@ -651,18 +636,16 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
-	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);
 	const dim3 blocksPerGrid2d(
 		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
-	// 1D block for path tracing
 	const int blockSize1d = 512;
 
 	int depth = 0;
-	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_total_paths = dev_path_end - dev_paths;
+	const PathSegment* dev_path_end = dev_paths + pixelcount;
+	const int num_total_paths = dev_path_end - dev_paths;
 	int num_valid_paths;
 
 	generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
@@ -670,7 +653,6 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	num_valid_paths = num_total_paths;
 
 	while (num_valid_paths > 0) {
-		// tracing
 		dim3 numblocksPathSegmentTracing = (num_valid_paths + blockSize1d - 1) / blockSize1d;
 
 		SegmentProcessingSettings settings;
@@ -686,11 +668,12 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				dev_thrust_intersections_fbc + num_total_paths,
 				dev_thrust_intersections
 			);
+
+			checkCUDAError("thrust copy from fbc intersections");
 		} 
 		else
 #endif
 		{
-			cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 			computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(
 				depth,
 				num_valid_paths,
@@ -740,7 +723,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 				dev_thrust_intersections + num_total_paths,
 				dev_thrust_intersections_fbc
 			);
-			checkCUDAError("first bounce cache");
+			checkCUDAError("thrust copy to fbc intersections");
 			fbcNeedsRefresh = false;
 		}
 #endif
@@ -773,18 +756,17 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		dev_paths,
 		iter
 	);
-
-	checkCUDAError("pathtrace");
-
-	if ((iter - 1) % guiData->denoiseInterval != 0)
-	{
-		return;
-	}
+	checkCUDAError("final gather");
 
 	///////////////////////////////////////////////////////////////////////////
 
 	if (guiData->denoising)
 	{
+		if ((iter - 1) % guiData->denoiseInterval != 0)
+		{
+			return;
+		}
+
 		oidnExecuteFilter(oidnFilter);
 		checkOIDNError();
 	}

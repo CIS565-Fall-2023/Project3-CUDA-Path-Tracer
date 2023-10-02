@@ -131,7 +131,6 @@ void scatterRay(
         diffuseColor = m.diffuse.color;
     }
 
-    glm::vec3 normal;
     if (m.normalMap.textureIdx != -1)
     {
         // http://www.thetenthplanet.de/archives/1180
@@ -163,13 +162,8 @@ void scatterRay(
 
         glm::vec3 normalMapCol = tex2DCustom(textureObjects[m.normalMap.textureIdx], isect.uv);
         glm::vec3 mappedNormal = glm::normalize(2.0f * normalMapCol - 1.0f);
-        normal = glm::normalize(TBN * mappedNormal);
+        isect.surfaceNormal = glm::normalize(TBN * mappedNormal);
     }
-    else
-    {
-        normal = isect.surfaceNormal;
-    }
-    isect.surfaceNormal = normal;
 
     float diffuseLuminance = Utils::luminance(diffuseColor);
     float specularLuminance = Utils::luminance(m.specular.color);
@@ -181,7 +175,7 @@ void scatterRay(
     if (u01(rng) < diffuseChance)
     {
         // diffuse
-        newRay.direction = calculateRandomDirectionInHemisphere(normal, rng); // XXX: make normal face same direction as ray? (e.g. for inside of sphere)
+        newRay.direction = calculateRandomDirectionInHemisphere(isect.surfaceNormal, rng); // XXX: make normal face same direction as ray? (e.g. for inside of sphere)
         pathSegment.color *= diffuseColor / (diffuseChance);
 
         /* 
@@ -194,27 +188,27 @@ void scatterRay(
     {
         if (m.specular.hasReflective > 0 && m.specular.hasRefractive > 0)
         {
-            const float cosTheta = abs(glm::dot(pathSegment.ray.direction, normal));
+            float cosTheta = abs(glm::dot(pathSegment.ray.direction, isect.surfaceNormal));
             float R0 = (1 - m.specular.indexOfRefraction) / (1 + m.specular.indexOfRefraction);
             R0 = R0 * R0;
-            const float fresnel = R0 + (1 - R0) * pow(1.f - cosTheta, 5.f);
+            float fresnel = R0 + (1 - R0) * pow(1.f - cosTheta, 5.f);
 
             if (u01(rng) < fresnel) // implicit multiplication by fresnel
             {
-                applyReflection(pathSegment, newRay, normal, m);
+                applyReflection(pathSegment, newRay, isect.surfaceNormal, m);
             } 
             else
             {
-                applyRefraction(pathSegment, newRay, normal, m);
+                applyRefraction(pathSegment, newRay, isect.surfaceNormal, m);
             }
         } 
         else if (m.specular.hasReflective > 0)
         {
-            applyReflection(pathSegment, newRay, normal, m);
+            applyReflection(pathSegment, newRay, isect.surfaceNormal, m);
         } 
         else if (m.specular.hasRefractive > 0)
         {
-            applyRefraction(pathSegment, newRay, normal, m);
+            applyRefraction(pathSegment, newRay, isect.surfaceNormal, m);
         }
 
         if (glm::dot(newRay.direction, newRay.direction) == 0)
