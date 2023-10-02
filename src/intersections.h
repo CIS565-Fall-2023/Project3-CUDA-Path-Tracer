@@ -35,6 +35,53 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+__host__ __device__ float meshIntersectionTest(Geom m, Triangle* tris, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+    Ray q;
+    q.origin = multiplyMV(m.inverseTransform, glm::vec4(r.origin, 1.0f));
+    q.direction = glm::normalize(multiplyMV(m.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    float tmax = -1e38f;
+    float tmin = 1e38f;
+    glm::vec3 tmin_n;
+    glm::vec3 tmax_n;
+
+    for (size_t i = m.triIdx; i < m.triIdx + m.triCount; i++) {
+        Triangle t = tris[i];
+
+        glm::vec3 P1 = t.vertices[0].pos;
+        glm::vec3 P2 = t.vertices[1].pos;
+        glm::vec3 P3 = t.vertices[2].pos;
+        
+        glm::vec3 pos;
+        if (glm::intersectRayTriangle(q.origin, q.direction, P1, P2, P3, pos)) {
+            if (pos.z < tmin) {
+                tmin = pos.z;
+                tmin_n = t.vertices[0].nor;
+            }
+            if (pos.z > tmax) {
+                tmax = pos.z;
+                tmax_n = t.vertices[0].nor;
+            }
+        }
+    }
+
+    if (tmax >= tmin && tmax > 0) {
+        outside = true;
+        if (tmin <= 0) {
+            tmin = tmax;
+            tmin_n = tmax_n;
+            outside = false;
+        }
+        intersectionPoint = multiplyMV(m.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
+        normal = glm::normalize(multiplyMV(m.invTranspose, glm::vec4(tmin_n, 0.0f)));
+        return glm::length(r.origin - intersectionPoint);
+    }
+    return -1;
+
+
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,

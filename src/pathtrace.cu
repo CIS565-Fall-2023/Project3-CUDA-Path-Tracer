@@ -96,6 +96,7 @@ static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 static ShadeableIntersection* dev_first_pass = NULL;
+static Triangle* dev_tris = NULL;
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
@@ -126,6 +127,9 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_first_pass, pixelcount * sizeof(ShadeableIntersection));
 
+	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
+	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
 	checkCUDAError("pathtraceInit");
 }
 
@@ -135,6 +139,7 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
+	cudaFree(dev_tris);
 	// TODO: clean up any extra device memory you created
 
 	checkCUDAError("pathtraceFree");
@@ -188,6 +193,8 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
+	, Triangle* tris
+	, int tri_size
 	, ShadeableIntersection* intersections
 )
 {
@@ -221,6 +228,9 @@ __global__ void computeIntersections(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
+			else {
+				t = meshIntersectionTest(geom, tris, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
 			// Compute the minimum t from the intersection tests to determine what
@@ -234,11 +244,12 @@ __global__ void computeIntersections(
 			}
 		}
 
+		
 		if (hit_geom_index == -1)
 		{
 			intersections[path_index].t = -1.0f;
 		}
-		else
+		else if (hit_geom_index < geoms_size)
 		{
 			//The ray hits something
 			intersections[path_index].t = t_min;
@@ -419,7 +430,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// clean shading chunks
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d) / blockSize1d;
 
 		// tracing
 		if (depth == 0 && currentlyCaching) {
@@ -432,6 +443,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
+				, dev_tris
+				, hst_scene->tris.size()
 				, dev_intersections
 				);
 			checkCUDAError("trace one bounce");

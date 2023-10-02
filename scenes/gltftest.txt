@@ -111,6 +111,7 @@ SCALE       .01 10 10
 // Sheep
 FILE 1
 glb_dodecahedron.glb
+material 4
 TRANS       -1 4 -1
 ROTAT       0 0 0
 SCALE       3 3 3
