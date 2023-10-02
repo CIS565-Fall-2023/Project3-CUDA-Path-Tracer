@@ -108,15 +108,17 @@ __host__ __device__ float boxIntersectionTest(const Geom& box, const Ray& r, glm
  * @param normal             Output parameter for surface normal.
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
-__host__ __device__ float sphereIntersectionTest(const Geom& sphere, const Ray& r, glm::vec3& normal) {
-    float radius = 0.5f;
+__host__ __device__ float sphereIntersectionTest(const Geom& sphere, const Ray& r, glm::vec3& normal)
+{
+    const float radius = 0.5f;
 
     const glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
     const glm::vec3 rd = glm::normalize(multiplyMV(sphere.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     float vDotDirection = glm::dot(ro, rd);
     float radicand = vDotDirection * vDotDirection - (glm::dot(ro, ro) - powf(radius, 2));
-    if (radicand < 0) {
+    if (radicand < 0)
+    {
         return -1;
     }
 
@@ -126,11 +128,16 @@ __host__ __device__ float sphereIntersectionTest(const Geom& sphere, const Ray& 
     float t2 = firstTerm - squareRoot;
 
     float t = 0;
-    if (t1 < 0 && t2 < 0) {
+    if (t1 < 0 && t2 < 0)
+    {
         return -1;
-    } else if (t1 > 0 && t2 > 0) {
+    }
+    else if (t1 > 0 && t2 > 0)
+    {
         t = min(t1, t2);
-    } else {
+    }
+    else
+    {
         t = max(t1, t2);
     }
 

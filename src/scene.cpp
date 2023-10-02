@@ -650,7 +650,7 @@ int Scene::loadMaterial(string materialId) {
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
                 newMaterial.specular.hasRefractive = atof(tokens[1].c_str());
                 newMaterial.hasBaseColor = true;
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            } else if (strcmp(tokens[0].c_str(), "REFR_IOR") == 0) {
                 newMaterial.specular.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMIT_COL") == 0) {
                 if (tokens.size() == 2) {

@@ -38,7 +38,7 @@ struct Geom
 struct Material 
 {
     struct {
-        glm::vec3 color = glm::vec3(1, 0, 1);
+        glm::vec3 color = glm::vec3(0);
         int textureIdx = -1;
     } diffuse;
     struct {
@@ -46,7 +46,7 @@ struct Material
         glm::vec3 color = glm::vec3(0);
         float hasReflective = 0;
         float hasRefractive = 0;
-        float indexOfRefraction = 1.45;
+        float indexOfRefraction = 1.45f;
     } specular;
     struct {
         glm::vec3 color = glm::vec3(0);
