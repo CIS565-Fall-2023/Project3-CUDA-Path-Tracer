@@ -50,7 +50,11 @@ namespace utilityCore
     extern std::istream& safeGetline(std::istream& is, std::string& t); // Thanks to http://stackoverflow.com/a/6089413
 }
 
-// Functions
+template <typename T>
+__device__ inline constexpr T Sqr(T v) {
+    return v * v;
+}
+
 __host__ __device__ inline float AbsDot(glm::vec3 a, glm::vec3 b)
 {
     return abs(dot(a, b));

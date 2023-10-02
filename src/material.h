@@ -12,9 +12,14 @@ __device__ __inline__ glm::vec3 sampleTexture(cudaTextureObject_t tex, glm::vec2
     return glm::vec3(color.x, color.y, color.z);
 }
 
+__device__ __inline__ glm::vec3 sampleEnvTexture(cudaTextureObject_t tex, glm::vec2 const& uv) {
+    auto color = tex2D<float4>(tex, uv.x, uv.y);
+    return glm::clamp(glm::vec3(color.x, color.y, color.z), 0.f, 1.f);
+}
+
 __device__ __inline__ float2 texMetallicRoughness(cudaTextureObject_t tex, glm::vec2 const& uv) {
     auto color = tex2D<float4>(tex, uv.x, uv.y);
-    return float2{ color.y, color.z };
+    return float2{ color.z, color.y };
 }
 
 __device__ __inline__ glm::vec2 sampleSphericalMap(glm::vec3 v) {
@@ -182,6 +187,7 @@ __device__ glm::vec3 sample_wh(glm::vec3 wo, glm::vec3 xi, float roughness)
     return wh;
 }
 
+// http://graphics.stanford.edu/courses/cs348b-18-spring-content/lectures/12_reflection2/12_reflection2_slides.pdf
 __device__ float trowbridgeReitzD(glm::vec3 wh, float roughness)
 {
     float tan2Theta = Tan2Theta(wh);
@@ -189,24 +195,20 @@ __device__ float trowbridgeReitzD(glm::vec3 wh, float roughness)
         return 0.f;
 
     float cos4Theta = Cos2Theta(wh) * Cos2Theta(wh);
-
-    float e = (Cos2Phi(wh) / (roughness * roughness) +
-        Sin2Phi(wh) / (roughness * roughness)) *
-        tan2Theta;
-    return 1 / (PI * roughness * roughness * cos4Theta * (1 + e) * (1 + e));
+    if (cos4Theta < 1e-16f)
+        return 0;
+    float e = tan2Theta * (Sqr(CosPhi(wh) / roughness) + Sqr(SinPhi(wh) / roughness));
+    return 1 / (PI * roughness * roughness * cos4Theta * Sqr(1 + e));
 }
 
 __device__ float lambda(glm::vec3 w, float roughness)
 {
-    float absTanTheta = abs(TanTheta(w));
-    if (isinf(absTanTheta))
+    float tan2Theta = Tan2Theta(w);
+    if (isinf(tan2Theta))
         return 0.f;
 
-    float alpha = glm::sqrt(Cos2Phi(w) * roughness * roughness +
-        Sin2Phi(w) * roughness * roughness);
-    float alpha2Tan2Theta =
-        (roughness * absTanTheta) * (roughness * absTanTheta);
-    return (-1 + glm::sqrt(1.f + alpha2Tan2Theta)) / 2;
+    float alpha2 = Sqr(Cos2Phi(w) * roughness) + Sqr(Sin2Phi(w) * roughness);
+    return (glm::sqrt(1.f + alpha2 * tan2Theta) - 1) / 2.f;
 }
 
 __device__ float trowbridgeReitzG(glm::vec3 wo, glm::vec3 wi, float roughness)
@@ -214,9 +216,14 @@ __device__ float trowbridgeReitzG(glm::vec3 wo, glm::vec3 wi, float roughness)
     return 1 / (1 + lambda(wo, roughness) + lambda(wi, roughness));
 }
 
+__device__ float trowbridgeReitzG1(glm::vec3 wo, float roughness)
+{
+    return 1 / (1 + lambda(wo, roughness));
+}
+
 __device__ float trowbridgeReitzPdf(glm::vec3 wo, glm::vec3 wh, float roughness)
 {
-    return trowbridgeReitzD(wh, roughness) * AbsCosTheta(wh);
+    return trowbridgeReitzG1(wo, roughness) / AbsCosTheta(wo) * trowbridgeReitzD(wh, roughness) * AbsDot(wo, wh);
 }
 
 __device__ float pdf_microfacet_trans(glm::vec3 wo, glm::vec3 wi, float etaB, float roughness)
@@ -281,10 +288,10 @@ __device__ glm::vec3 sample_f_microfacet_refl(glm::vec3 albedo, glm::vec3 nor, g
     glm::vec3 wh = sample_wh(wo, xi, roughness);
     glm::vec3 wi = reflect(-wo, wh);
     sample.wiW = LocalToWorld(nor) * wi;
-    if (!SameHemisphere(wo, wi))
+    if (wi.z < 0)
         return glm::vec3(0.f);
 
-    sample.pdf = trowbridgeReitzPdf(wo, wh, roughness) / (4 * dot(wo, wh));
+    sample.pdf = trowbridgeReitzPdf(wo, wh, roughness) / (4 * AbsDot(wo, wh));
     return f_microfacet_refl(albedo, wo, wi, roughness);
 }
 
@@ -437,7 +444,7 @@ __device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec2 uv, 
     glm::vec3 wo = WorldToLocal(nor) * woW;
     if (mat.type == Material::Type::ROUGH_DIELECTRIC)
     {
-        return sample_f_rough_dieletric(computeAlbedo(mat, nor, uv), nor, xi, wo, getMetallic(mat, uv).x, mat.dielectric.eta, sample);
+        return sample_f_rough_dieletric(computeAlbedo(mat, nor, uv), nor, xi, wo, getMetallic(mat, uv).y, mat.dielectric.eta, sample);
     }
     else if (mat.type == Material::Type::SPECULAR)
     {

@@ -320,7 +320,7 @@ __global__ void shadeMaterial(
             // This can be useful for post-processing and image compositing.
         }
         else if (enableEnvMap) {
-            pSeg.color += pSeg.throughput * sampleTexture(envMap, sampleSphericalMap(pSeg.ray.direction));
+            pSeg.color += pSeg.throughput * sampleEnvTexture(envMap, sampleSphericalMap(pSeg.ray.direction));
             pSeg.remainingBounces = 0;
         }
         else {
