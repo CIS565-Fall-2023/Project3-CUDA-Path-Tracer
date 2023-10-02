@@ -49,14 +49,30 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 }
 
 __host__ __device__
-thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
+thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth)
+{
 	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
 	return thrust::default_random_engine(h);
 }
 
+__host__ __device__ glm::vec3 ACESFilm(glm::vec3 x)
+{
+	float a = 2.51f;
+	float b = 0.03f;
+	float c = 2.43f;
+	float d = 0.59f;
+	float e = 0.14f;
+	return glm::clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.f, 1.f);
+}
+
+__host__ __device__ glm::vec3 hdrToLdr(glm::vec3 col)
+{
+	return glm::pow(ACESFilm(col), glm::vec3(INVERSE_GAMMA));
+}
+
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-	int iter, glm::vec3* image, bool isNormals) {
+	int iter, glm::vec3* image, bool isHdr, bool isNormals) {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
@@ -64,7 +80,11 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		int index = x + (y * resolution.x);
 		glm::vec3 pix = image[index] / (float) iter;
 
-		if (isNormals)
+		if (isHdr)
+		{
+			pix = hdrToLdr(pix);
+		}
+		else if (isNormals)
 		{
 			pix = (pix + 1.f) / 2.f;
 		}
@@ -464,7 +484,15 @@ __device__ void processSegment(
 
 		if (envMapTextureIdx != -1)
 		{
-			// TODO set color to env map color
+			const glm::vec3 dir = segment.ray.direction;
+			
+			float theta = acosf(dir.y);
+			float phi = atan2f(dir.z, dir.x);
+
+			float u = (phi + PI) * ONE_OVER_TWO_PI;
+			float v = theta * ONE_OVER_PI;
+
+			lightCol = tex2DCustom(textureObjects[envMapTextureIdx], glm::vec2(u, v));
 
 			segment.color *= lightCol;
 		}
@@ -788,21 +816,33 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	///////////////////////////////////////////////////////////////////////////
 
 	glm::vec3* dev_image_ptr;
+	bool isHdr = false;
+	bool showNormals = false;
 	if (guiData->showAlbedo)
 	{
 		dev_image_ptr = dev_first_hit_albedo_accum;
+		isHdr = true;
 	}
 	else if (guiData->showNormals)
 	{
 		dev_image_ptr = dev_first_hit_normals_accum;
+		showNormals = true;
 	}
 	else
 	{
 		dev_image_ptr = guiData->denoising ? dev_image_final : dev_image_raw;
+		isHdr = true;
 	}
 
 	// Send results to OpenGL buffer for rendering
-	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(pbo, cam.resolution, iter, dev_image_ptr, guiData->showNormals);
+	sendImageToPBO<<<blocksPerGrid2d, blockSize2d>>>(
+		pbo, 
+		cam.resolution, 
+		iter, 
+		dev_image_ptr, 
+		isHdr,
+		showNormals
+	);
 
 	// Retrieve image from GPU
 	cudaMemcpy(hst_scene->state.image.data(), dev_image_ptr,

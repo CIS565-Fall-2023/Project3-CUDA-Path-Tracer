@@ -1,0 +1,65 @@
+// ==================================================
+// MATERIALS
+// ==================================================
+
+// warm light
+MATERIAL 0
+EMIT_COL    1 0.945 0.878
+EMIT_STR    5
+
+// diffuse gray
+MATERIAL 1
+DIFF_COL    0.5 0.5 0.5
+
+// freddy main
+MATERIAL 2
+DIFF_COL gltf/freddy/textures/Freddy_Body_baseColor.png
+NORM_MAP gltf/freddy/textures/Freddy_Body_normal.png
+
+// freddy eyes
+MATERIAL 3
+DIFF_COL gltf/freddy/textures/Freddy_Eyes_baseColor.png
+
+// ==================================================
+// CAMERA
+// ==================================================
+
+// Camera
+CAMERA
+RES          800 800
+FOVY         45
+ITERATIONS   5000
+DEPTH        2
+FILE         freddy
+EYE          0 10 10
+LOOKAT       0 10 0
+UP           0 1 0
+LENS_RADIUS  0
+FOCUS_DIST   8
+ENV_MAP      env_maps/lake_pier_4k.hdr
+
+// ==================================================
+// OBJECTS
+// ==================================================
+
+// floor
+OBJECT 0
+cube
+material 1
+TRANS       0 -0.5 0
+ROTAT       0 0 0
+SCALE       100 1 100
+
+OBJECT 2
+mesh
+gltf/freddy/main.gltf
+material 2
+TRANS       0 0 -5
+ROTAT       0 0 0
+SCALE       10 10 10
+
+OBJECT 3
+mesh
+gltf/freddy/eyes.gltf
+material 3
+CHILD_OF 2

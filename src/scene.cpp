@@ -12,8 +12,6 @@
 Scene::Scene(string filename) {
     basePath = filename.substr(0, filename.rfind('/') + 1);
 
-    stbi_ldr_to_hdr_gamma(1.0f);
-
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -596,24 +594,17 @@ int Scene::loadTexture(string filePath)
     texture.host_dataPtr = new float[texture.width * texture.height * 4];
 
     // ensure all textures have 4 channels to simplify texture format logic
-    if (channels < 4)
+    for (int i = 0; i < texture.width * texture.height; ++i)
     {
-        for (int i = 0; i < texture.width * texture.height; ++i)
+        for (int j = 0; j < channels; ++j)
         {
-            for (int j = 0; j < channels; ++j)
-            {
-                texture.host_dataPtr[4 * i + j] = textureData[channels * i + j];
-            }
-
-            for (int j = channels; j < 4; ++j)
-            {
-                texture.host_dataPtr[4 * i + j] = 1.f;
-            }
+            texture.host_dataPtr[4 * i + j] = textureData[channels * i + j];
         }
-    }
-    else
-    {
-        memcpy(texture.host_dataPtr, textureData, texture.width * texture.height * 4 * sizeof(float));
+
+        for (int j = channels; j < 4; ++j)
+        {
+            texture.host_dataPtr[4 * i + j] = 1.f;
+        }
     }
 
     texture.channels = 4;
@@ -621,6 +612,19 @@ int Scene::loadTexture(string filePath)
     stbi_image_free(textureData);
 
     return textureIdx;
+}
+
+glm::vec3 loadColor(const vector<string>& tokens)
+{
+    glm::vec3 color(
+        atof(tokens[1].c_str()),
+        atof(tokens[2].c_str()),
+        atof(tokens[3].c_str())
+    );
+
+    color = glm::pow(color, glm::vec3(2.2f));
+
+    return color;
 }
 
 int Scene::loadMaterial(string materialId) {
@@ -640,13 +644,13 @@ int Scene::loadMaterial(string materialId) {
                 if (tokens.size() == 2) {
                     newMaterial.diffuse.textureIdx = loadTexture(basePath + tokens[1]);
                 } else {
-                    newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                    newMaterial.diffuse.color = loadColor(tokens);
                 }
                 newMaterial.hasBaseColor = true;
             } else if (strcmp(tokens[0].c_str(), "SPEC_ROUGH") == 0) {
                 newMaterial.specular.roughness = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "SPEC_COL") == 0) {
-                newMaterial.specular.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.specular.color = loadColor(tokens);
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.specular.hasReflective = atof(tokens[1].c_str());
                 newMaterial.hasBaseColor = true;
@@ -659,7 +663,7 @@ int Scene::loadMaterial(string materialId) {
                 if (tokens.size() == 2) {
                     newMaterial.emission.textureIdx = loadTexture(basePath + tokens[1]);
                 } else {
-                    newMaterial.emission.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                    newMaterial.emission.color = loadColor(tokens);
                 }
             } else if (strcmp(tokens[0].c_str(), "EMIT_STR") == 0) {
                 newMaterial.emission.strength = atof(tokens[1].c_str());
