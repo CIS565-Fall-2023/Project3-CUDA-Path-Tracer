@@ -406,7 +406,7 @@ __global__ void computeIntersections(
 	glm::vec2 tmp_uv;
 	int tmp_triIdx;
 
-	for (int i = 0; i < geoms_size; i++)
+	for (int i = 0; i < geoms_size; ++i)
 	{
 		const Geom& geom = geoms[i];
 
@@ -641,7 +641,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
-	const int blockSize1d = 512;
+	const int blockSize1d = 768;
 
 	int depth = 0;
 	const PathSegment* dev_path_end = dev_paths + pixelcount;
