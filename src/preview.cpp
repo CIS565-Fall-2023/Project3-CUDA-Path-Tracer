@@ -5,6 +5,7 @@
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_glfw.h"
 #include "ImGui/imgui_impl_opengl3.h"
+#include <glm/gtx/string_cast.hpp>
 
 #include "toggles.h"
 
@@ -224,6 +225,15 @@ bool RenderImGui()
 	ImGui::Text("traced depth %d", imguiData->tracedDepth);
 	ImGui::Text("application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
+	if (ImGui::CollapsingHeader("camera"))
+	{
+		const Camera& camera = getCamera();
+		ImGui::Text("position: %s", glm::to_string(camera.position).c_str());
+		ImGui::Text("look at: %s", glm::to_string(camera.lookAt).c_str());
+		shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
+		shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
+	}
+
 	if (ImGui::CollapsingHeader("toggles"))
 	{
 		ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
@@ -240,12 +250,6 @@ bool RenderImGui()
 	{
 		ImGui::Checkbox("use denoising", &imguiData->denoising);
 		ImGui::SliderInt("denoise interval", &imguiData->denoiseInterval, 1, 10);
-	}
-
-	if (ImGui::CollapsingHeader("depth of field"))
-	{
-		shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
-		shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
 	}
 
 	if (ImGui::CollapsingHeader("debug"))

@@ -143,6 +143,12 @@ struct Camera
     glm::vec2 pixelLength;
     float lensRadius;
     float focusDistance;
+
+    __host__ void move(glm::vec3 d)
+    {
+        this->lookAt += d;
+        this->position += d;
+    }
 };
 
 struct RenderState 
