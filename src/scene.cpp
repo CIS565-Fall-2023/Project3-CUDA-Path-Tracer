@@ -3,6 +3,7 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include "utilities.h"
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -128,6 +129,20 @@ int Scene::loadCamera() {
 
         utilityCore::safeGetline(fp_in, line);
     }
+
+#if DEPTH_OF_FIELD
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        if (strcmp(tokens[0].c_str(), "LENSRADIUS") == 0) {
+            camera.lensRadius = atoi(tokens[1].c_str());
+        }
+        else if (strcmp(tokens[0].c_str(), "FOCALDIST") == 0) {
+            camera.focalLength = atoi(tokens[1].c_str());
+        }
+
+        utilityCore::safeGetline(fp_in, line);
+    }
+#endif
 
     //calculate fov based on resolution
     float yscaled = tan(fovy * (PI / 180));

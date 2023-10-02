@@ -66,6 +66,36 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
+
+__host__ __device__ void lte_diffuse(PathSegment& pathSegment,
+    glm::vec3 normal,
+    const Material& m,
+    thrust::default_random_engine& rng) {
+    pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+    pathSegment.accumCol *= m.color; //bsdf = albedo/PI, pdf = absdot(wi, n)/PI, lambert term = absdot(wi, n). Actual LTE term = (bsdf * lambert)/pdf
+}
+
+__host__ __device__ void lte_specular(PathSegment& pathSegment,
+    glm::vec3 normal,
+    const Material& m) {
+    pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
+    pathSegment.accumCol *= m.specular.color;
+}
+
+__host__ __device__ void lte_spec_diffuse(PathSegment& pathSegment,
+    glm::vec3 normal,
+    const Material& m,
+    thrust::default_random_engine& rng) {
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    if (u01(rng) < 0.5) {
+        lte_diffuse(pathSegment, normal, m, rng);
+    }
+    else {
+        lte_specular(pathSegment, normal, m);
+    }
+    pathSegment.accumCol *= 2.0;
+}
+
 __host__ __device__
 void scatterRay(
         PathSegment & pathSegment,
@@ -73,7 +103,17 @@ void scatterRay(
         glm::vec3 normal,
         const Material &m,
         thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+    pathSegment.remainingBounces--;   
+    if (m.hasReflective) {
+        if (glm::length(m.color) > 0) {
+            lte_spec_diffuse(pathSegment, normal, m, rng);
+        }
+        else {
+            lte_specular(pathSegment, normal, m);
+        }
+    }
+    else {
+        lte_diffuse(pathSegment, normal, m, rng);        
+    }
+    pathSegment.ray.origin = intersect;
 }
