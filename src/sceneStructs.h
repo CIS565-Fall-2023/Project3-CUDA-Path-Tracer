@@ -38,6 +38,7 @@ struct Geom {
 
 enum class MaterialType : uint8_t
 {
+    None,
     Emissive,
     Diffuse,
     Metal,
@@ -55,7 +56,7 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
-    MaterialType type;
+    MaterialType type = MaterialType::None;
     cudaTextureObject_t albedo = 0;
 };
 
@@ -83,7 +84,6 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
-    int refractionCount = 0;
 };
 
 // Use with a corresponding PathSegment to do:
@@ -92,7 +92,7 @@ struct PathSegment {
 struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
-  int materialId;
+  int materialId = -1;
   bool frontFace;
   glm::vec3 point;
   float u;

@@ -107,11 +107,11 @@ void saveImage() {
 
 	// CHECKITOUT
 	img.savePNG(filename);
-	img.saveHDR(filename);  // Save a Radiance HDR file
+	//img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
 void runCuda() {
-	if (camchanged) {
+	if (camchanged || samplePerPixelChanged || depthChanged) {
 		iteration = 0;
 		Camera& cam = renderState->camera;
 		cameraPosition.x = zoom * sin(phi) * sin(theta);
@@ -129,6 +129,8 @@ void runCuda() {
 		cameraPosition += cam.lookAt;
 		cam.position = cameraPosition;
 		camchanged = false;
+		samplePerPixelChanged = false;
+		depthChanged = false;
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -152,10 +154,10 @@ void runCuda() {
 		cudaGLUnmapBufferObject(pbo);
 	}
 	else {
-		/*saveImage();
-		pathtraceFree();
-		cudaDeviceReset();
-		exit(EXIT_SUCCESS);*/
+		//saveImage();
+		//pathtraceFree();
+		//cudaDeviceReset();
+		//exit(EXIT_SUCCESS);
 	}
 }
 
@@ -167,7 +169,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
 		case GLFW_KEY_S:
-			saveImage();
+			//saveImage();
 			break;
 		case GLFW_KEY_SPACE:
 			camchanged = true;

@@ -267,7 +267,8 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r,
 	intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objspaceIntersection, 1.f));
 	normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normalize(cross(E1, E2)), 0.0f)));
 
-	return glm::length(r.origin - intersectionPoint);
+	//return glm::length(r.origin - intersectionPoint);
+    return t;
 }
 
 __device__ inline glm::vec2 sampleHDRMap(glm::vec3 v)
@@ -278,4 +279,3 @@ __device__ inline glm::vec2 sampleHDRMap(glm::vec3 v)
 	uv += 0.5f;
 	return uv;
 }
-

@@ -17,8 +17,10 @@
 class GuiDataContainer
 {
 public:
-    GuiDataContainer() : TracedDepth(0) {}
+    GuiDataContainer() : TracedDepth(0), SamplePerPixel(1), Depth(8) {}
     int TracedDepth;
+	int SamplePerPixel;
+	int Depth;
 };
 
 namespace utilityCore {

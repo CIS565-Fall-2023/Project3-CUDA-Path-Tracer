@@ -14,5 +14,8 @@ Some ideas were inspired by:
  * Sphere Intersection Test
  * Camera Multisampleing Antialiasing with random ray
 
+  [_Ray Tracing in One Weekend_](https://raytracing.github.io/books/RayTracingInOneWeekend.html) including:
+ * Skybox Texture
+
  [Ray-Tracing: Rendering a Triangle](https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html) including:
   * Triangle Intersection Test(Moller-Trumbore algorithm)

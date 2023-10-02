@@ -139,11 +139,7 @@ void scatterRay(
 		glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
 		pathSegment.ray.direction = target - intersect;
 		pathSegment.color *= material.color;
-
-		if (pathSegment.pixelIndex == 477208)
-		{
-			//printf("**************\n");
-		}
+		//pathSegment.color = normal;
 		pathSegment.remainingBounces--;
 	}
     break;
@@ -164,15 +160,7 @@ void scatterRay(
 
 		float refractionIndex = frontFace ? (1.0f / material.indexOfRefraction) : material.indexOfRefraction;
 
-		//glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
-
-		//glm::vec3 refracted = refract(unitDirection, normal, refractionIndex);
-
-		//pathSegment.ray.direction = refracted;
-		//pathSegment.color = glm::vec3(1.0f);
-		//pathSegment.refractionCount++;
-
-		////pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+		//pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
 
 		glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
 		float costTheta = std::fminf(glm::dot(-unitDirection, normal), 1.0f);
@@ -199,103 +187,10 @@ void scatterRay(
 	{
 		float4 color = tex2D<float4>(material.albedo, intersection.u, intersection.v);
 		pathSegment.color = { color.x, color.y, color.z };
+		pathSegment.remainingBounces = 0;
 	}
 	break;
     default:
         break;
     }
-
-	//if (material.emittance > 0.0f) 
- //   {
- //       pathSegment.color *= (material.color * material.emittance);
-	//}
- //   else if (material.hasReflective > 0.0f)
- //   {
- //       float fuzz = 0.0f;
- //       glm::vec3 reflected = glm::reflect(glm::normalize(pathSegment.ray.direction), normal);
- //       pathSegment.ray.direction = reflected + fuzz * random_in_unit_sphere(rng);
-	//	pathSegment.color *= material.color;
- //   }
- //   else if (material.hasRefractive > 0.0f)
-	//{
- //       float refractionIndex = frontFace ? (1.0f / material.indexOfRefraction) : 1.0f;
- //       
- //       glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
- //       float costTheta = std::fminf(glm::dot(-unitDirection, normal), 1.0f);
- //       float sinTheta = std::sqrtf(1.0f - costTheta * costTheta);
-
- //       bool cannotRefract = refractionIndex * sinTheta > 1.0f;
-
- //       glm::vec3 direction;
-
- //       if (cannotRefract || schlick(costTheta, refractionIndex) > u01(rng))
- //       {
- //           //direction = reflect(unitDirection, normal);
- //       }
- //       else
- //       {
- //           direction = refract(unitDirection, normal, refractionIndex);
- //       }
-
- //       pathSegment.ray.direction = direction;
-
-        //printf("%f, %f, %f\n", pathSegment.color.r, pathSegment.color.g, pathSegment.color.b);
-              
-  //      auto ray = pathSegment.ray;
-		//glm::vec3 reflected = glm::reflect(glm::normalize(ray.direction), normal);
-  //      glm::vec3 outwardNormal = glm::vec3(0.0f);
-
-  //      float niOverNt = 0.0f;
-  //      glm::vec3 refracted = glm::vec3(0.0f);
-  //      float reflectProbability = 0.0f;
-  //      float cosine = 0.0f;
-
-  //      float refractionIndex = material.indexOfRefraction;
-
-  //      glm::vec3 direction = ray.direction;
-
-  //      printf("length:%f\n", glm::length(direction));
-
-  //      if (glm::dot(direction, normal) > 0.0f)
-  //      {
-  //          outwardNormal = -normal;
-  //          niOverNt = refractionIndex;
-  //          cosine = glm::dot(direction, normal) / glm::length(direction);
-  //          cosine = std::sqrtf(1.0f - refractionIndex * refractionIndex * (1.0f - cosine * cosine));
-  //      }
-  //      else
-  //      {
-  //          outwardNormal = normal;
-  //          niOverNt = 1.0f / refractionIndex;
-  //          cosine = -glm::dot(direction, normal) / glm::length(direction);
-  //      }
-
-  //      if (refract(ray.direction, outwardNormal, niOverNt, refracted))
-  //      {
-  //          reflectProbability = schlick(cosine, refractionIndex);
-  //      }
-  //      else
-  //      {
-  //          reflectProbability = 1.0f;
-  //      }
-
-  //      float probability = u01(rng);
-
-  //      if (probability < reflectProbability)
-  //      {
-  //          pathSegment.ray.direction = reflected;
-  //      }
-  //      else
-  //      {
-  //          pathSegment.ray.direction = refracted;
-  //      }
- //   }
-	//else
-	//{
-	//	glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
-	//	pathSegment.ray.direction = target - intersect;
-	//	pathSegment.color *= material.color;
-	//}
-
-	//--pathSegment.remainingBounces;
 }

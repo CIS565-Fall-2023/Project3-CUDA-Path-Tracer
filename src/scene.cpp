@@ -63,7 +63,7 @@ int Scene::loadGeom(string objectid) {
 				newGeom.type = MESH;
 				utilityCore::safeGetline(fp_in, line);
                 loadGLTF(line, triangleList);
-
+			
                 isMesh = true;
 			}
         }
@@ -180,8 +180,10 @@ int Scene::loadCamera() {
 
 void Scene::loadTexture(const std::string& path, cudaTextureObject_t* cudaTextureObject, int type)
 {
+    stbi_set_flip_vertically_on_load(true);
+
 	int width, height, channels;
-	if (!type)
+	if (!type) //1 is for sphere texture, 0 is for skybox
 	{
 		unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
 		if (data) {
@@ -275,8 +277,8 @@ void Scene::loadTextures()
     {
         if (material.type == MaterialType::Image)
         {
-			loadTexture("scenes/textures/2k_moon.jpg", &material.albedo, 1);
-            loadTexture("scenes/textures/Newport_Loft_Ref.hdr", &skyboxTextureObject, 0);
+			loadTexture("scenes/textures/2k_earth_daymap.jpg", &material.albedo, 1);
+            loadTexture("scenes/textures/spaichingen_hill_4k.hdr", &skyboxTextureObject, 0);
         }
     }
 }
