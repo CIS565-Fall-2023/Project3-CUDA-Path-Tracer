@@ -32,13 +32,109 @@ Scene::Scene(string filename) {
             }
         }
     }
+    // construct kd tree
+    buildKDTree();
+}
+
+void Scene::calculateAABB(Geom& geom) {
+    if (geom.type == GeomType::CUBE || geom.type == GeomType::SPHERE) {
+        geom.aabb.minPoint = glm::vec3(geom.transform * glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f));
+        geom.aabb.maxPoint = glm::vec3(geom.transform * glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
+    }
+    else {
+        // triangle
+        geom.aabb.minPoint = glm::vec3(FLT_MAX);
+        geom.aabb.maxPoint = glm::vec3(FLT_MIN);
+
+        for (glm::vec3& pos : geom.triangle.position) {
+            glm::vec3 p = glm::vec3(geom.transform * glm::vec4(pos, 1.0f));
+            for (int i = 0; i < 3; ++i) {
+                geom.aabb.minPoint[i] = min(geom.aabb.minPoint[i], p[i]);
+                geom.aabb.maxPoint[i] = max(geom.aabb.maxPoint[i], p[i]);
+			}
+        }
+    }
+    
+    for (int i = 0; i < 3; ++i) {
+        if (geom.aabb.minPoint[i] > geom.aabb.maxPoint[i]) {
+            std::swap(geom.aabb.minPoint[i], geom.aabb.maxPoint[i]);
+        }
+    }
 }
 
 void Scene::buildKDTree() {
     cout << "Building KDTree ..." << endl;
+    
+    std::vector<Geom> tempGeoms(geoms.begin(), geoms.end());
+
+    kdRoot = build(tempGeoms, 0);
+    kdNodes.resize(nodeCount);
+
+    // copy to gpu structure
+    int nodeIndex = 0;
+    createKDAccelNodes(kdRoot, nodeIndex);
+
+    cout << "KDTree complete!" << endl;
 }
 
+KDNode* Scene::build(std::vector<Geom>& geoms, int depth) {
+    int n = geoms.size();
 
+    unsigned int axis = depth % 3; // axis one by one
+    KDNode* node = new KDNode();
+    ++nodeCount;
+    node->axis = axis;
+    node->geoms = geoms;
+
+    for (const Geom& geom : geoms) {
+        for (int axis = 0; axis < 3; ++axis) {
+            node->aabb.minPoint[axis] = min(node->aabb.minPoint[axis], geom.aabb.minPoint[axis]);
+			node->aabb.maxPoint[axis] = max(node->aabb.maxPoint[axis], geom.aabb.maxPoint[axis]);
+        }
+    }
+
+    // minimum number of geoms in a leaf node
+    if (n <= 4) {
+		return node;
+	}
+
+    // sort geoms
+    int mid = n / 2;
+    std::sort(geoms.begin(), geoms.end(), 
+        [axis](const Geom& const a, const Geom& const b) {
+        return a.aabb.maxPoint[axis] + a.aabb.minPoint[axis] < 
+               b.aabb.maxPoint[axis] + b.aabb.minPoint[axis];
+    });
+
+    node->leftChild = build(std::vector<Geom>(geoms.begin(), geoms.begin() + mid), depth + 1);
+    node->rightChild = build(std::vector<Geom>(geoms.begin() + mid, geoms.end()), depth + 1);
+
+    return node;
+}
+
+int Scene::createKDAccelNodes(KDNode* node, int& index) {
+    int cur = index;
+    ++index;
+
+	kdNodes[cur].geomStart = this->sortedGeoms.size();
+    kdNodes[cur].aabb = node->aabb;
+    kdNodes[cur].axis = node->axis;
+
+    if (node->leftChild == nullptr && node->rightChild == nullptr) {
+        // leaf node
+        kdNodes[cur].numGeoms = node->geoms.size();
+		for (const Geom& geom : node->geoms) {
+            this->sortedGeoms.push_back(geom);
+		}
+    } else {
+        // internal node
+        kdNodes[cur].numGeoms = 0;
+		createKDAccelNodes(node->leftChild, index);
+        kdNodes[cur].rightOffset = createKDAccelNodes(node->rightChild, index);
+    }
+
+	return cur + 1;
+}
 
 bool Scene::loadObj(const Geom& geom, const string& objFile) {
     tinyobj::attrib_t attribs;
@@ -56,7 +152,6 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
 
     cout << "Tiny obj load success!" << endl;
    
-
     for (auto& shape : shapes) {
         auto& mesh = shape.mesh;
         for (int i = 0; i < mesh.indices.size(); i += 3) {
@@ -88,9 +183,9 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
             Geom newGeom = geom;
             newGeom.geomId = geoms.size();
             newGeom.triangle = triangle;
-            geoms.push_back(newGeom);
 
-            //triangles.push_back(triangle);
+            calculateAABB(newGeom);
+            geoms.push_back(newGeom);
         }
     }
 
@@ -159,17 +254,8 @@ int Scene::loadGeom(string objectid) {
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
-        // TODO: calculate bounding box
-        /*newGeom.minPoint = glm::vec3(newGeom.transform * glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f));
-        newGeom.maxPoint = glm::vec3(newGeom.transform * glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
-
-        for (int i = 0; i < 3; ++i) {
-            if (newGeom.minPoint[i] > newGeom.maxPoint[i]) {
-                std::swap(newGeom.minPoint[i], newGeom.maxPoint[i]);
-            }
-        }*/
-
         if (newGeom.type != GeomType::MESH) {
+            calculateAABB(newGeom);
             geoms.push_back(newGeom);
         }
         else {
@@ -183,6 +269,7 @@ int Scene::loadGeom(string objectid) {
             Light light;
             light.geom = newGeom;
             light.lightType = lightType;
+
             // TODO: spot light
             lights.push_back(light);
         }

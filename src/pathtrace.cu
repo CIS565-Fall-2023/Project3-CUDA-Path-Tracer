@@ -21,9 +21,11 @@
 #define FIRST_BOUNCE_CACHE 0
 #define ANTI_ALIASING 0
 
-#define NAIVE 0
+#define NAIVE 1
 #define DIRECT_MIS 0
-#define FULL 1
+#define FULL 0
+
+#define USE_KD_TREE 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -105,6 +107,10 @@ static ShadeableIntersection* dev_intersections = NULL;
 static ShadeableIntersection* dev_first_bounce_cache = NULL;
 #endif
 
+#if USE_KD_TREE
+static KDAccelNode* dev_kdNodes = NULL;
+#endif //  USE_KD_TREE
+
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -125,9 +131,15 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
 
+#if USE_KD_TREE
+	cudaMalloc(&dev_geoms, scene->sortedGeoms.size() * sizeof(Geom));
+	cudaMemcpy(dev_geoms, scene->sortedGeoms.data(), scene->sortedGeoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+#else
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+#endif // USE_KD_TREE
 
+	
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
@@ -144,6 +156,12 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
 	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
+	// kd tree
+#if USE_KD_TREE
+	cudaMalloc(&dev_kdNodes, scene->kdNodes.size() * sizeof(KDAccelNode));
+	cudaMemcpy(dev_kdNodes, scene->kdNodes.data(), scene->kdNodes.size() * sizeof(KDAccelNode), cudaMemcpyHostToDevice);
+#endif
+	
 	checkCUDAError("pathtraceInit");
 }
 
@@ -160,6 +178,10 @@ void pathtraceFree() {
 #endif
 
 	cudaFree(dev_lights);
+
+#if USE_KD_TREE
+	cudaFree(dev_kdNodes);
+#endif
 
 	checkCUDAError("pathtraceFree");
 }
@@ -222,34 +244,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-//__device__ bool boundingBoxTest(const Ray* ray, const Geom* geom) {
-//	float min_t = EPSILON;
-//	float max_t = 1000.f;
-//
-//	for (int a = 0; a < 3; a++) {
-//		float o = ray->origin[a];
-//		float invD = 1.0f / ray->direction[a];
-//
-//		float t0 = (geom->aabb.minPoint[a] - o) * invD;
-//		float t1 = (geom->aabb.maxPoint[a] - o) * invD;
-//
-//		if (invD < 0) {
-//			float tmp = t0;
-//			t0 = t1;
-//			t1 = tmp;
-//		}
-//
-//		min_t = fmax(t0, min_t);
-//		max_t = fmin(t1, max_t);
-//
-//		if (max_t <= min_t) {
-//			return false;
-//		}
-//	}
-//
-//	return true;
-//}
-
 
 // TODO:
 // computeIntersections handles generating ray intersections ONLY.
@@ -269,7 +263,29 @@ __global__ void computeIntersections(
 	if (path_index < num_paths)
 	{
 		PathSegment pathSegment = pathSegments[path_index];
+		intersections[path_index].t = FLT_MAX;
 		computeRayIntersection(geoms, geoms_size, pathSegment.ray, intersections[path_index]);
+	}
+}
+
+__global__ void computeIntersectionsFromKDTree(
+	int depth
+	, int num_paths
+	, PathSegment* pathSegments
+	, KDAccelNode* nodes
+	, int node_size
+	, Geom* geoms
+	, ShadeableIntersection* intersections
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths)
+	{
+		PathSegment pathSegment = pathSegments[path_index];
+		intersections[path_index].t = FLT_MAX;
+
+		computeRayIntersectionFromKdTree(geoms, nodes, node_size, pathSegment.ray, intersections[path_index]);
 	}
 }
 
@@ -566,14 +582,26 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #if FIRST_BOUNCE_CACHE
 		if (iter == 1 || depth != 0) {
 
-			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
-				depth
-				, num_paths
-				, dev_paths
-				, dev_geoms
-				, hst_scene->geoms.size()
-				, dev_intersections
-				);
+	#if USE_KD_TREE
+				computeIntersectionsFromKDTree << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth
+					, num_paths
+					, dev_paths
+					, dev_kdNodes
+					, hst_scene->kdNodes.size()
+					, dev_geoms
+					, dev_intersections
+					);
+	#else
+				computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+					depth
+					, num_paths
+					, dev_paths
+					, dev_geoms
+					, hst_scene->geoms.size()
+					, dev_intersections
+					);
+	#endif // USE_KD_TREE
 
 			if (depth == 0) {
 				// cache
@@ -583,6 +611,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			cudaMemcpy(dev_intersections, dev_first_bounce_cache, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
 		}
 #else
+	#if USE_KD_TREE
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
@@ -591,6 +620,25 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, hst_scene->geoms.size()
 			, dev_intersections
 			);
+			/*computeIntersectionsFromKDTree << <numblocksPathSegmentTracing, blockSize1d >> > (
+				  depth
+				, num_paths
+				, dev_paths
+				, dev_kdNodes
+				, hst_scene->kdNodes.size()
+				, dev_geoms
+				, dev_intersections
+				);*/
+	#else
+			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, num_paths
+				, dev_paths
+				, dev_geoms
+				, hst_scene->geoms.size()
+				, dev_intersections
+				);
+	#endif // USE_KD_TREE
 #endif
 
 		depth++;

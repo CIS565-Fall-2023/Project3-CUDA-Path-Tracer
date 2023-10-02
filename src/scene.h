@@ -19,8 +19,11 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
 
+    void calculateAABB(Geom& geom);
     void buildKDTree();
-    KDNode* build(KDNode* node, std::vector<Geom>& geoms, int depth);
+    KDNode* build(std::vector<Geom>& geoms, int depth);
+    int createKDAccelNodes(KDNode* node, int& index);
+
     bool loadObj(const Geom& geom, const string& objFile);
     
 public:
@@ -28,10 +31,13 @@ public:
     ~Scene();
 
     std::vector<Geom> geoms;
+    std::vector<Geom> sortedGeoms;
     //std::vector<Triangle> triangles;
     std::vector<Material> materials;
     std::vector<Light> lights;
 
-    KDNode* kdTreeRoot;
+    KDNode* kdRoot;
+    int nodeCount = 0;
+    std::vector<KDAccelNode> kdNodes;
     RenderState state;
 };

@@ -58,9 +58,9 @@ struct Geom {
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
 
-    // Mesh, triangle start, end
-    /*int triangleStart;
-    int triangleEnd;*/
+    AABB aabb;
+
+    // if type == MESH
     Triangle triangle;
 };
 
@@ -137,12 +137,28 @@ struct ShadeableIntersection {
   int materialId;
 };
 
+// build in CPU
 struct KDNode {
     KDNode* leftChild;
     KDNode* rightChild;
+
     unsigned int axis;
+    std::vector<Geom> geoms;
 
 	AABB aabb;
-    std::vector<Geom> geoms;
-    //std::vector<Triangle> triangles;
+
+    KDNode() : leftChild(nullptr), rightChild(nullptr), axis(0) {
+        aabb.maxPoint = glm::vec3(FLT_MIN);
+        aabb.minPoint = glm::vec3(FLT_MAX);
+    }
+};
+
+struct KDAccelNode{
+    int geomStart;
+    int numGeoms;
+
+    // leftOffset = id + 1
+    int rightOffset;
+    int axis;
+    AABB aabb;
 };

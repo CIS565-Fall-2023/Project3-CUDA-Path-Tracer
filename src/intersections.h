@@ -35,6 +35,35 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+
+__host__ __device__ bool boundingBoxTest(const Ray& ray, const AABB& aabb) {
+    float min_t = EPSILON;
+    float max_t = 1000.f;
+
+    for (int a = 0; a < 3; a++) {
+        float o = ray.origin[a];
+        float invD = 1.0f / ray.direction[a];
+
+        float t0 = (aabb.minPoint[a] - o) * invD;
+        float t1 = (aabb.maxPoint[a] - o) * invD;
+
+        if (invD < 0) {
+            float tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+
+        min_t = fmax(t0, min_t);
+        max_t = fmin(t1, max_t);
+    }
+
+    if (max_t >= min_t && max_t >= 0.0f) {
+        return true;
+    }
+
+    return false;
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,
@@ -217,6 +246,10 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray
         }
     }
 
+    if (intersection.t != FLT_MAX && intersection.t < t_min) {
+		return;
+	}
+
     if (hit_geom_index == -1)
     {
         intersection.t = -1.0f;
@@ -231,3 +264,29 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray
         intersection.surfaceTangent = tangent;
     }
 }
+
+__host__ __device__ void computeRayIntersectionFromKdTree(Geom* geoms, KDAccelNode* nodes, int node_size, Ray ray, ShadeableIntersection& intersection) {
+    int curNodeId = 0;
+    int todo[64]{};
+    int todoOffset = 0;
+    while (curNodeId < node_size)
+    {
+        auto& cur = nodes[curNodeId];
+        if (boundingBoxTest(ray, cur.aabb)) {
+            if (nodes[curNodeId].numGeoms > 0) {
+                // leaf
+                computeRayIntersection(geoms + cur.geomStart, cur.numGeoms,
+                    ray, intersection);
+            }
+            else {
+                // test left, right
+                todo[todoOffset++] = cur.rightOffset;
+                todo[todoOffset++] = curNodeId + 1;
+            }
+        }
+
+        if (todoOffset == 0) break;
+        curNodeId = todo[--todoOffset];
+    }
+}
+
