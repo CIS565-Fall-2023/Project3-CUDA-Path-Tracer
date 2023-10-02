@@ -323,33 +323,37 @@ void Pathtracer::freeTextures()
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
+__global__ void generateRayFromCamera(
+	const Camera cam, 
+	const int iter, 
+	const int traceDepth, 
+	PathSegment* pathSegments)
 {
-	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+	const int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	const int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
 	if (x >= cam.resolution.x || y >= cam.resolution.y) {
 		return;
 	}
 
-	int index = x + (y * cam.resolution.x);
+	const int index = x + (y * cam.resolution.x);
 	PathSegment& segment = pathSegments[index];
-
-	segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
 	thrust::uniform_real_distribution<float> u01(0, 1);
 
-	glm::vec3 noLensDirection = glm::normalize(cam.view
+	const glm::vec3 noLensDirection = glm::normalize(cam.view
 		- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + u01(rng))
 		- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + u01(rng))
 	);
 
+	segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+
 	if (cam.lensRadius > 0)
 	{
-		float z = glm::length(glm::proj(noLensDirection, cam.view));
-		glm::vec3 pFocus = cam.position + (noLensDirection * cam.focusDistance / z);
-		glm::vec2 pLens = cam.lensRadius * ConcentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
+		const float z = glm::length(glm::proj(noLensDirection, cam.view));
+		const glm::vec3 pFocus = cam.position + (noLensDirection * cam.focusDistance / z);
+		const glm::vec2 pLens = cam.lensRadius * ConcentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
 
 		Ray newRay;
 		newRay.origin = cam.position + (pLens.x * cam.right + pLens.y * cam.up);
@@ -373,16 +377,15 @@ struct SegmentProcessingSettings
 };
 
 __global__ void computeIntersections(
-	int depth, 
-	int num_paths, 
-	PathSegment* pathSegments, 
-	Geom* geoms,
-	int geoms_size,
-	Triangle* tris,
-	BvhNode* bvhNodes,
+	const int depth, 
+	const int num_paths, 
+	const PathSegment* const pathSegments, 
+	const Geom* const geoms,
+	const int geoms_size,
+	const Triangle* const tris,
+	const BvhNode* const bvhNodes,
 	ShadeableIntersection* intersections,
-	SegmentProcessingSettings settings
-)
+	const SegmentProcessingSettings settings)
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -408,7 +411,7 @@ __global__ void computeIntersections(
 
 	for (int i = 0; i < geoms_size; i++)
 	{
-		Geom& geom = geoms[i];
+		const Geom& geom = geoms[i];
 
 		if (geom.type == CUBE)
 		{
@@ -459,8 +462,7 @@ __device__ void processSegment(
 	cudaTextureObject_t* textureObjects, 
 	int iter, 
 	int idx, 
-	SegmentProcessingSettings settings
-)
+	SegmentProcessingSettings settings)
 {
 	if (isect.t <= 0.0f)
 	{
