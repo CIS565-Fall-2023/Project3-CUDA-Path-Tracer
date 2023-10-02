@@ -42,8 +42,8 @@ struct Material
         int textureIdx = -1;
     } diffuse;
     struct {
-        float exponent = 0;
         glm::vec3 color = glm::vec3(0);
+        float roughness = 0;
         float hasReflective = 0;
         float hasRefractive = 0;
         float indexOfRefraction = 1.45f;

@@ -640,8 +640,8 @@ int Scene::loadMaterial(string materialId) {
                     newMaterial.diffuse.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 }
                 newMaterial.hasBaseColor = true;
-            } else if (strcmp(tokens[0].c_str(), "SPEC_EX") == 0) {
-                newMaterial.specular.exponent = atof(tokens[1].c_str());
+            } else if (strcmp(tokens[0].c_str(), "SPEC_ROUGH") == 0) {
+                newMaterial.specular.roughness = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "SPEC_COL") == 0) {
                 newMaterial.specular.color = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {

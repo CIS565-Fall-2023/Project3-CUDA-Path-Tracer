@@ -3,7 +3,22 @@
 #include "intersections.h"
 #include "utilities.h"
 
-// CHECKITOUT
+__host__ __device__ glm::vec3 calculateDirectionNotNormal(const glm::vec3 normal)
+{
+    // Find a direction that is not the normal based off of whether or not the
+    // normal's components are all equal to sqrt(1/3) or whether or not at
+    // least one component is less than sqrt(1/3). Learned this trick from
+    // Peter Kutz.
+    glm::vec3 directionNotNormal;
+    if (abs(normal.x) < SQRT_OF_ONE_THIRD) {
+        return glm::vec3(1, 0, 0);
+    } else if (abs(normal.y) < SQRT_OF_ONE_THIRD) {
+        return glm::vec3(0, 1, 0);
+    } else {
+        return glm::vec3(0, 0, 1);
+    }
+}
+
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
  * Used for diffuse lighting.
@@ -17,22 +32,8 @@ glm::vec3 calculateRandomDirectionInHemisphere(
     const float over = sqrt(1 - up * up); // sin(theta)
     const float around = u01(rng) * TWO_PI;
 
-    // Find a direction that is not the normal based off of whether or not the
-    // normal's components are all equal to sqrt(1/3) or whether or not at
-    // least one component is less than sqrt(1/3). Learned this trick from
-    // Peter Kutz.
-
-    glm::vec3 directionNotNormal;
-    if (abs(normal.x) < SQRT_OF_ONE_THIRD) {
-        directionNotNormal = glm::vec3(1, 0, 0);
-    } else if (abs(normal.y) < SQRT_OF_ONE_THIRD) {
-        directionNotNormal = glm::vec3(0, 1, 0);
-    } else {
-        directionNotNormal = glm::vec3(0, 0, 1);
-    }
-
     // Use not-normal direction to generate two perpendicular directions
-    const glm::vec3 perpendicularDirection1 = glm::normalize(glm::cross(normal, directionNotNormal));
+    const glm::vec3 perpendicularDirection1 = glm::normalize(glm::cross(normal, calculateDirectionNotNormal(normal)));
     const glm::vec3 perpendicularDirection2 = glm::normalize(glm::cross(normal, perpendicularDirection1));
 
     return up * normal
@@ -40,19 +41,52 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
-__host__ __device__
-void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m)
+//__device__ glm::vec3 sampleGGXMicrofacetNormal(const float alpha, thrust::default_random_engine& rng)
+//{
+//    thrust::uniform_real_distribution<float> u01(0, 1);
+//    float xi1 = u01(rng);
+//    float xi2 = u01(rng);
+//
+//    float theta = atanf(alpha * sqrtf(xi1) * rsqrtf(1.0f - xi1));
+//    float phi = TWO_PI * xi2;
+//
+//    float sinTheta = sinf(theta);
+//    float cosTheta = cosf(theta);
+//
+//    return glm::vec3(
+//        sinTheta * cosf(phi),
+//        sinTheta * sinf(phi),
+//        cosTheta
+//    );
+//}
+//
+//__device__ glm::vec3 orientVectorToNormal(const glm::vec3 v, const glm::vec3 N)
+//{
+//    const glm::vec3 T = glm::normalize(glm::cross(N, calculateDirectionNotNormal(N)));
+//    const glm::vec3 B = glm::normalize(glm::cross(N, T));
+//    return glm::mat3(T, B, N) * v;
+//}
+
+__device__
+void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng)
 {
     newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
     pathSegment.color *= m.specular.color;
 }
 
-__host__ __device__
-void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m)
+__device__
+void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng)
 {
-    bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
-    newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, 
-        entering ? 1.0f / m.specular.indexOfRefraction : m.specular.indexOfRefraction);
+    if (glm::dot(pathSegment.ray.direction, normal) < 0)
+    {
+        // entering
+        newRay.direction = glm::refract(pathSegment.ray.direction, normal, 1.f / m.specular.indexOfRefraction);
+    }
+    else
+    {
+        // exiting
+        newRay.direction = glm::refract(pathSegment.ray.direction, -normal, m.specular.indexOfRefraction);
+    }
     pathSegment.color *= m.specular.color;
 }
 
@@ -119,7 +153,7 @@ void scatterRay(
     const Triangle* const tris,
     const Material &m,
     const cudaTextureObject_t* const textureObjects,
-    thrust::default_random_engine &rng) 
+    thrust::default_random_engine& rng) 
 {
     glm::vec3 diffuseColor;
     if (m.diffuse.textureIdx != -1)
@@ -195,20 +229,20 @@ void scatterRay(
 
             if (u01(rng) < fresnel) // implicit multiplication by fresnel
             {
-                applyReflection(pathSegment, newRay, isect.surfaceNormal, m);
+                applyReflection(pathSegment, newRay, isect.surfaceNormal, m, rng);
             } 
             else
             {
-                applyRefraction(pathSegment, newRay, isect.surfaceNormal, m);
+                applyRefraction(pathSegment, newRay, isect.surfaceNormal, m, rng);
             }
         } 
         else if (m.specular.hasReflective > 0)
         {
-            applyReflection(pathSegment, newRay, isect.surfaceNormal, m);
+            applyReflection(pathSegment, newRay, isect.surfaceNormal, m, rng);
         } 
         else if (m.specular.hasRefractive > 0)
         {
-            applyRefraction(pathSegment, newRay, isect.surfaceNormal, m);
+            applyRefraction(pathSegment, newRay, isect.surfaceNormal, m, rng);
         }
 
         if (glm::dot(newRay.direction, newRay.direction) == 0)

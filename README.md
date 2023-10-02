@@ -21,10 +21,6 @@
 - BVH construction and traversal
 - Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
 
-### Planned Features
-
-- Use separate CUDA stream for denoising?
-
 ### Attribution
 
 #### Code
