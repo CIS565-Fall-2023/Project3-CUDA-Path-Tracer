@@ -60,6 +60,7 @@ DIFF_COL 0.8941 0.9020 0.6588
 // Camera
 CAMERA
 RES          960 540
+// RES          1920 1080
 FOVY         38
 ITERATIONS   5000
 DEPTH        8

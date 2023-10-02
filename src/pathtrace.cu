@@ -208,9 +208,9 @@ void Pathtracer::initTextures()
 
 		// wasn't working with linear memory so changed to array
 		// https://stackoverflow.com/questions/63408787/texture-object-fetching-in-cuda
-		auto channelDesc = cudaCreateChannelDesc<uchar4>();
+		auto channelDesc = cudaCreateChannelDesc<float4>();
 		cudaMallocArray(&host_textureArrayPtrs[i], &channelDesc, texture.width, texture.height);
-		cudaMemcpy2DToArray(host_textureArrayPtrs[i], 0, 0, texture.host_dataPtr, texture.width * sizeof(uchar4), texture.width * sizeof(uchar4), texture.height, cudaMemcpyHostToDevice);
+		cudaMemcpy2DToArray(host_textureArrayPtrs[i], 0, 0, texture.host_dataPtr, texture.width * sizeof(float4), texture.width * sizeof(float4), texture.height, cudaMemcpyHostToDevice);
 
 		cudaResourceDesc resDesc;
 		memset(&resDesc, 0, sizeof(resDesc));
@@ -220,7 +220,7 @@ void Pathtracer::initTextures()
 		cudaTextureDesc texDesc;
 		memset(&texDesc, 0, sizeof(texDesc));
 		texDesc.filterMode = cudaFilterModeLinear;
-		texDesc.readMode = cudaReadModeNormalizedFloat;
+		texDesc.readMode = cudaReadModeElementType;
 		texDesc.addressMode[0] = cudaAddressModeWrap;
 		texDesc.addressMode[1] = cudaAddressModeWrap;
 		texDesc.normalizedCoords = 1;
@@ -455,17 +455,30 @@ __device__ void processSegment(
 	const Triangle* const tris,
 	const Material* const materials,
 	const cudaTextureObject_t* const textureObjects,
-	const SegmentProcessingSettings settings)
+	const SegmentProcessingSettings settings,
+	int envMapTextureIdx)
 {
 	if (isect.t <= 0.0f)
 	{
+		glm::vec3 lightCol = glm::vec3(0.f);
+
+		if (envMapTextureIdx != -1)
+		{
+			// TODO set color to env map color
+
+			segment.color *= lightCol;
+		}
+		else
+		{
+			segment.color = lightCol;
+		}
+
 		if (segment.bouncesSoFar == 0)
 		{
-			segment.firstHitAlbedo = glm::vec3(0.0f);
+			segment.firstHitAlbedo = lightCol;
 			segment.firstHitNormal = glm::vec3(0.0f);
 		}
 
-		segment.color = glm::vec3(0.0f);
 		segment.remainingBounces = 0;
 		return;
 	}
@@ -564,7 +577,8 @@ __global__ void shadeMaterial(
 	const Triangle* const tris,
 	const Material* const materials,
 	const cudaTextureObject_t* const textureObjects,
-	const SegmentProcessingSettings settings
+	const SegmentProcessingSettings settings,
+	int envMapTextureIdx
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -574,7 +588,7 @@ __global__ void shadeMaterial(
 	}
 
 	PathSegment segment = pathSegments[idx];
-	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, settings);
+	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, settings, envMapTextureIdx);
 	pathSegments[idx] = segment;
 }
 
@@ -709,7 +723,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_tris,
 			dev_materials,
 			dev_textureObjects,
-			settings
+			settings,
+			cam.envMapTextureIdx
 		);
 		checkCUDAError("shade material");
 

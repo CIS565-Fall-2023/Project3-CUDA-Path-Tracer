@@ -12,6 +12,8 @@
 Scene::Scene(string filename) {
     basePath = filename.substr(0, filename.rfind('/') + 1);
 
+    stbi_ldr_to_hdr_gamma(1.0f);
+
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -548,6 +550,8 @@ int Scene::loadCamera() {
             camera.lensRadius = atof(tokens[1].c_str());
         } else if (strcmp(tokens[0].c_str(), "FOCUS_DIST") == 0) {
             camera.focusDistance = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "ENV_MAP") == 0) {
+            camera.envMapTextureIdx = loadTexture(basePath + tokens[1]);
         }
 
         Utils::safeGetline(fp_in, line);
@@ -587,9 +591,9 @@ int Scene::loadTexture(string filePath)
     Texture& texture = textures.back();
 
     int channels;
-    unsigned char* textureData = stbi_load(filePath.c_str(), &texture.width, &texture.height, &channels, NULL);
+    float* textureData = stbi_loadf(filePath.c_str(), &texture.width, &texture.height, &channels, NULL);
 
-    texture.host_dataPtr = new unsigned char [texture.width * texture.height * 4];
+    texture.host_dataPtr = new float[texture.width * texture.height * 4];
 
     // ensure all textures have 4 channels to simplify texture format logic
     if (channels < 4)
@@ -603,13 +607,13 @@ int Scene::loadTexture(string filePath)
 
             for (int j = channels; j < 4; ++j)
             {
-                texture.host_dataPtr[4 * i + j] = 255;
+                texture.host_dataPtr[4 * i + j] = 1.f;
             }
         }
     }
     else
     {
-        memcpy(texture.host_dataPtr, textureData, texture.width * texture.height * 4);
+        memcpy(texture.host_dataPtr, textureData, texture.width * texture.height * 4 * sizeof(float));
     }
 
     texture.channels = 4;

@@ -125,7 +125,7 @@ struct BvhNode
 
 struct Texture
 {
-    unsigned char* host_dataPtr;
+    float* host_dataPtr;
     int width;
     int height;
     int channels;
@@ -143,6 +143,7 @@ struct Camera
     glm::vec2 pixelLength;
     float lensRadius;
     float focusDistance;
+    int envMapTextureIdx = -1;
 
     __host__ void move(glm::vec3 d)
     {
