@@ -2,6 +2,31 @@
 
 #include "sceneStructs.h"
 
+__host__ __device__ glm::vec3 getMaterialColor(
+    const Material& m,
+    const glm::vec3& normal,
+    const glm::vec3& woW,
+    const glm::vec3& wiW,
+    float& pdf) {
+
+    switch (m.type)
+    {
+        case DIFFUSE:
+            pdf = abs(glm::dot(normal, wiW)) / PI;
+		    return m.color / PI;
+        case MICROFACET:
+
+            break;
+        case SPEC_REFL:
+        case SPEC_TRANS:
+        case SPEC_FRESNEL:
+            pdf = 1.0f;
+            return glm::vec3(0.f);
+    }
+
+    return glm::vec3(0.f);
+}
+
 // mat functions
 __host__ __device__ void coordinateSystem(glm::vec3 v1, glm::vec3& v2, glm::vec3& v3) {
     if (abs(v1.x) > abs(v1.y))

@@ -22,7 +22,6 @@ __host__ __device__ glm::vec3 sampleMaterial(glm::vec3 intersect,
     thrust::default_random_engine& rng) {
 
     pdf = 1.0;
-    specular = true;
 
     switch (m.type)
     {
@@ -58,18 +57,22 @@ __host__ __device__ glm::vec3 sampleMaterial(glm::vec3 intersect,
             //glm::mat3 mat = TBN * sampleToTangent;
 
             //pathSegment.ray.direction = mat * s;
+            specular = true;
             return sampleSpecularReflectMaterial(m, normal, wo, wi);
 		}
         case MaterialType::SPEC_TRANS: 
         {
+            specular = true;
             return sampleSpecularTransmissionMaterial(m, normal, wo, wi);
         }
         case MaterialType::SPEC_FRESNEL:
 		{
+            specular = true;
             return sampleFresnelSpecularMaterial(m, normal, wo, wi, rng);
 		}
         case MaterialType::MICROFACET: 
         {
+            specular = false;
             return sampleMicrofacetMaterial(m, normal, wo, wi, pdf, rng);
         }
     }
@@ -82,8 +85,6 @@ __host__ __device__ glm::vec3 sampleLight(
     Light& chosenLight,
     thrust::default_random_engine& rng,
     float& lightPDF,
-    Geom* geoms,
-    int num_geoms,
     Material* materials,
     const Light* lights,
     const int& num_lights) {
@@ -98,7 +99,7 @@ __host__ __device__ glm::vec3 sampleLight(
         case LightType::AREA:
         {
             return sampleAreaLight(chosenLight, intersect, normal, num_lights, wi, lightPDF, 
-                geoms, num_geoms, materials, rng);
+                materials[chosenLight.geom.materialid], rng);
         }
     }
 
@@ -161,7 +162,7 @@ __host__ __device__ glm::vec3 sampleUniformLight(
       glm::vec3 point
     , glm::vec3 normal
     , glm::vec3 tangent
-    , const glm::vec3& wo
+    , const glm::vec3& woW
     , Material* materials
     , Material& material
     , Geom* geoms
@@ -170,41 +171,130 @@ __host__ __device__ glm::vec3 sampleUniformLight(
     , int numLights
     , thrust::default_random_engine& rng
 ) {
-    glm::vec3 Ld(0.0f);
-    // sample light source
-    glm::vec3 wiW;
+    glm::vec3 wiW, Ld(0.0f);
     float lightPdf = 0.0f, scatterPdf = 0.0f;
     bool specular = false;
     Light chosenLight;
+
+    // light part
     glm::vec3 lightColor = sampleLight(point, normal,
-        wiW, chosenLight, rng, lightPdf, geoms, numGeoms, materials, lights, numLights);
+        wiW, chosenLight, rng, lightPdf, materials, lights, numLights);
 
-    glm::vec3 f = sampleMaterial(point, normal, tangent, material, wo, wiW, scatterPdf, specular, rng);
-    f *= abs(dot(wiW, normal));
+    // test light visibility
+    Ray shadowRay;
+    shadowRay.origin = point + 0.001f * wiW;
+    shadowRay.direction = wiW;
+    ShadeableIntersection shadowIntersection;
+    computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
 
-    if (length(lightColor) > 0.0f && !specular) {
-        if (lightPdf > 0.0f && length(f) > 0.0f) {
+    if (lightPdf > 0.0f && length(lightColor) > 0.0f &&
+        shadowIntersection.t > 0.0f && shadowIntersection.geomId == chosenLight.geom.geomId) {
+        // sample bsdf
+        glm::vec3 f = getMaterialColor(material, normal, woW, wiW, scatterPdf);
+        f *= abs(dot(wiW, normal));
+        if (length(f) > 0.0f) {
             Ld += chosenLight.lightType == LightType::AREA ?
-                (f * lightColor * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf :
-                f * lightColor / lightPdf;
+                (lightColor * f * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf :
+                lightColor * f / lightPdf;
         }
     }
 
-    // sample BSDF
-    if (chosenLight.lightType == LightType::AREA) {
+    if (chosenLight.lightType != AREA) {
+        return Ld;
+    }
+
+    // bsdf part
+    glm::vec3 f = sampleMaterial(point, normal, tangent,
+        material, woW, wiW, scatterPdf, specular, rng);
+    f *= abs(dot(wiW, normal));
+
+    if (length(f) > 0.0 && scatterPdf > 0.0) {
         float weight = specular ? 1.0f : powerHeuristic(1, scatterPdf, 1, lightPdf);
 
-        if (scatterPdf > 0.0f && length(f) > 0.0f) {
-            // check visibility
-            Ray shadowRay;
-            shadowRay.origin = point;
-            shadowRay.direction = wiW;
-            ShadeableIntersection shadowIntersection;
-            computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
+        // test bsdf visibility
+        shadowRay.origin = point + 0.001f * wiW;
+        shadowRay.direction = wiW;
 
-            if (shadowIntersection.t > 0.0f && shadowIntersection.materialId == chosenLight.geom.materialid) {
-                Ld += f * lightColor * weight / scatterPdf;
-            }
+        shadowIntersection.t = FLT_MAX;
+        shadowIntersection.geomId = -1;
+        shadowIntersection.materialId = -1;
+        computeRayIntersection(geoms, numGeoms, shadowRay, shadowIntersection);
+
+        if (shadowIntersection.t > 0 && shadowIntersection.geomId == chosenLight.geom.geomId) {
+            Material lightMat = materials[chosenLight.geom.materialid];
+            Ld += f * (lightMat.color * lightMat.emittance) * weight / scatterPdf;
+        }
+    }
+
+    return Ld;
+}
+
+__host__ __device__ glm::vec3 sampleUniformLightFromKDTree(
+    glm::vec3 point
+    , glm::vec3 normal
+    , glm::vec3 tangent
+    , const glm::vec3& woW
+    , Material* materials
+    , Material& material
+    , Geom* geoms
+    , KDAccelNode* nodes
+    , int numNodes
+    , Light* lights
+    , int numLights
+    , thrust::default_random_engine& rng
+) {
+    glm::vec3 wiW, Ld(0.0f);
+    float lightPdf = 0.0f, scatterPdf = 0.0f;
+    bool specular = false;
+    Light chosenLight;
+
+    // light part
+    glm::vec3 lightColor = sampleLight(point, normal,
+        wiW, chosenLight, rng, lightPdf, materials, lights, numLights);
+
+    // test light visibility
+    Ray shadowRay;
+    shadowRay.origin = point + 0.001f * wiW;
+    shadowRay.direction = wiW;
+    ShadeableIntersection shadowIntersection;
+    computeRayIntersectionFromKdTree(geoms, nodes, numNodes, shadowRay, shadowIntersection);
+
+    if (lightPdf > 0.0f && length(lightColor) > 0.0f &&
+        shadowIntersection.t > 0.0f && shadowIntersection.geomId == chosenLight.geom.geomId) {
+        // sample bsdf
+        glm::vec3 f = getMaterialColor(material, normal, woW, wiW, scatterPdf);
+        f *= abs(dot(wiW, normal));
+        if (length(f) > 0.0f) {
+            Ld += chosenLight.lightType == LightType::AREA ?
+                (lightColor * f * powerHeuristic(1, lightPdf, 1, scatterPdf)) / lightPdf :
+                lightColor * f / lightPdf;
+        }
+    }
+
+    if (chosenLight.lightType != AREA) {
+        return Ld;
+    }
+
+    // bsdf part
+    glm::vec3 f = sampleMaterial(point, normal, tangent,
+        material, woW, wiW, scatterPdf, specular, rng);
+    f *= abs(dot(wiW, normal));
+
+    if (length(f) > 0.0 && scatterPdf > 0.0) {
+        float weight = specular ? 1.0f : powerHeuristic(1, scatterPdf, 1, lightPdf);
+
+        // test bsdf visibility
+        shadowRay.origin = point + 0.001f * wiW;
+        shadowRay.direction = wiW;
+
+        shadowIntersection.t = FLT_MAX;
+        shadowIntersection.geomId = -1;
+        shadowIntersection.materialId = -1;
+        computeRayIntersectionFromKdTree(geoms, nodes, numNodes, shadowRay, shadowIntersection);
+
+        if (shadowIntersection.t > 0 && shadowIntersection.geomId == chosenLight.geom.geomId) {
+            Material lightMat = materials[chosenLight.geom.materialid];
+            Ld += f * (lightMat.color * lightMat.emittance) * weight / scatterPdf;
         }
     }
 

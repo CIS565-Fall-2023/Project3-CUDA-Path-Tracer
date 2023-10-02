@@ -74,6 +74,12 @@ void Scene::buildKDTree() {
     int nodeIndex = 0;
     createKDAccelNodes(kdRoot, nodeIndex);
 
+    for (auto& kdNode : kdNodes) {
+        cout << "KDNode: " << kdNode.geomStart << " " << kdNode.numGeoms << " " << kdNode.rightOffset << endl;
+        cout << "AABB: " << glm::to_string(kdNode.aabb.minPoint) << " " << glm::to_string(kdNode.aabb.maxPoint) << endl;
+        cout << endl;
+    }
+
     cout << "KDTree complete!" << endl;
 }
 
@@ -113,27 +119,27 @@ KDNode* Scene::build(std::vector<Geom>& geoms, int depth) {
 }
 
 int Scene::createKDAccelNodes(KDNode* node, int& index) {
+    KDAccelNode& accelNode = kdNodes[index];
+
+    accelNode.aabb = node->aabb;
     int cur = index;
     ++index;
 
-	kdNodes[cur].geomStart = this->sortedGeoms.size();
-    kdNodes[cur].aabb = node->aabb;
-    kdNodes[cur].axis = node->axis;
-
-    if (node->leftChild == nullptr && node->rightChild == nullptr) {
-        // leaf node
-        kdNodes[cur].numGeoms = node->geoms.size();
-		for (const Geom& geom : node->geoms) {
-            this->sortedGeoms.push_back(geom);
-		}
-    } else {
-        // internal node
-        kdNodes[cur].numGeoms = 0;
-		createKDAccelNodes(node->leftChild, index);
-        kdNodes[cur].rightOffset = createKDAccelNodes(node->rightChild, index);
+    if (node->leftChild && node->rightChild) {
+        // interior node
+        accelNode.axis = node->axis;
+        accelNode.numGeoms = 0;
+        createKDAccelNodes(node->leftChild, index);
+        accelNode.rightOffset = createKDAccelNodes(node->rightChild, index);
     }
-
-	return cur + 1;
+    else {
+        accelNode.geomStart = sortedGeoms.size();
+        accelNode.numGeoms = node->geoms.size();
+        for (Geom g : node->geoms) {
+            sortedGeoms.push_back(g);
+        }
+    }
+    return cur;
 }
 
 bool Scene::loadObj(const Geom& geom, const string& objFile) {
@@ -168,8 +174,8 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index],
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 1],
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 2]);
-            triangle.normal = glm::cross(triangle.position[1] - triangle.position[0], 
-                triangle.position[2] - triangle.position[0]);
+            triangle.normal = glm::normalize(glm::cross(triangle.position[1] - triangle.position[0], 
+                triangle.position[2] - triangle.position[0]));
 			//triangle.t0 = glm::vec2(
 			//		attribs.texcoords[2 * mesh.indices[i]],
 			//		attribs.texcoords[2 * mesh.indices[i] + 1]);

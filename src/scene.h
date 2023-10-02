@@ -32,7 +32,6 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Geom> sortedGeoms;
-    //std::vector<Triangle> triangles;
     std::vector<Material> materials;
     std::vector<Light> lights;
 

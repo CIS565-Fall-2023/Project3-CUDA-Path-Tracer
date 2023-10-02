@@ -47,6 +47,7 @@ REFL        1
 REFR        1
 REFRIOR     1.55
 EMITTANCE   0
+ROUGHNESS   0.05
 
 // Camera
 CAMERA
@@ -123,8 +124,8 @@ SCALE       .01 10 10
 // Cat
 OBJECT 7
 obj
-material 4
+material 1
 TRANS       0 0 0
-ROTAT       0 45 0
+ROTAT       0 0 0
 SCALE       25 25 25
 OBJFILE     ../scenes/bunny.obj

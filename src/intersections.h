@@ -56,12 +56,8 @@ __host__ __device__ bool boundingBoxTest(const Ray& ray, const AABB& aabb) {
         min_t = fmax(t0, min_t);
         max_t = fmin(t1, max_t);
     }
-
-    if (max_t >= min_t && max_t >= 0.0f) {
-        return true;
-    }
-
-    return false;
+        
+    return max_t >= min_t && max_t > 0.0f;
 }
 
 // CHECKITOUT
@@ -201,7 +197,7 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
     }
 }
 
-__host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray ray, ShadeableIntersection& intersection) {
+__host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray ray, ShadeableIntersection& intersection) {
     float t;
     glm::vec3 intersect_point;
     glm::vec3 normal;
@@ -216,7 +212,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray
 
     // naive parse through global geoms
 
-    for (int i = 0; i < geoms_size; i++)
+    for (int i = 0; i < numGeoms; i++)
     {
         Geom& geom = geoms[i];
 
@@ -246,7 +242,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray
         }
     }
 
-    if (intersection.t != FLT_MAX && intersection.t < t_min) {
+    if (intersection.t > 0.0f && intersection.t < t_min) {
 		return;
 	}
 
@@ -259,7 +255,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int geoms_size, Ray
         //The ray hits something
         intersection.t = t_min;
         intersection.materialId = geoms[hit_geom_index].materialid;
-        intersection.geomId = hit_geom_index;
+        intersection.geomId = geoms[hit_geom_index].geomId;
         intersection.surfaceNormal = normal;
         intersection.surfaceTangent = tangent;
     }
@@ -269,6 +265,7 @@ __host__ __device__ void computeRayIntersectionFromKdTree(Geom* geoms, KDAccelNo
     int curNodeId = 0;
     int todo[64]{};
     int todoOffset = 0;
+
     while (curNodeId < node_size)
     {
         auto& cur = nodes[curNodeId];
@@ -284,9 +281,12 @@ __host__ __device__ void computeRayIntersectionFromKdTree(Geom* geoms, KDAccelNo
                 todo[todoOffset++] = curNodeId + 1;
             }
         }
-
         if (todoOffset == 0) break;
         curNodeId = todo[--todoOffset];
     }
+
+    if (intersection.t == FLT_MAX) {
+		intersection.t = -1.0f;
+	}
 }
 
