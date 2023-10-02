@@ -12,7 +12,7 @@ CUDA Path Tracer
 
 Wanna play chess?
 
-![](E:\Code\Project3-CUDA-Path-Tracer\img\chess.png)
+![](./img/chess.png)
 
 Large `wavefront-obj` scene load and render (with alpha cutoff):
 
