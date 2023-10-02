@@ -394,14 +394,18 @@ __global__ void computeIntersections(
 		return;
 	}
 
-	PathSegment pathSegment = pathSegments[path_index];
+	const PathSegment& pathSegment = pathSegments[path_index];
 
 	float t;
-	glm::vec3 normal;
-	glm::vec2 uv;
-	int triIdx;
 	float tMin = FLT_MAX;
-	int hitGeomIdx = -1;
+
+	//glm::vec3 normal;
+	//glm::vec2 uv;
+	//int triIdx;
+	//int hitGeomIdx = -1;
+
+	ShadeableIntersection newIsect;
+	newIsect.hitGeomIdx = -1;
 
 	glm::vec3 tmp_normal;
 	glm::vec2 tmp_uv;
@@ -432,37 +436,41 @@ __global__ void computeIntersections(
 		}
 
 		tMin = t;
-		hitGeomIdx = i;
-		normal = tmp_normal;
-		uv = tmp_uv;
-		triIdx = tmp_triIdx;
+		newIsect.hitGeomIdx = i;
+		newIsect.surfaceNormal = tmp_normal;
+		newIsect.uv = tmp_uv;
+		newIsect.triIdx = tmp_triIdx;
 	}
 
-	if (hitGeomIdx == -1)
+	if (newIsect.hitGeomIdx == -1)
 	{
 		intersections[path_index].t = -1.0f;
 		return;
 	}
 
-	ShadeableIntersection& isect = intersections[path_index];
-	isect.hitGeomIdx = hitGeomIdx;
-	isect.t = tMin;
-	isect.surfaceNormal = normal;
-	isect.uv = uv;
-	isect.materialId = geoms[hitGeomIdx].materialId;
-	isect.triIdx = triIdx;
+	//ShadeableIntersection& isect = intersections[path_index];
+	//isect.hitGeomIdx = hitGeomIdx;
+	//isect.t = tMin;
+	//isect.surfaceNormal = normal;
+	//isect.uv = uv;
+	//isect.materialId = geoms[hitGeomIdx].materialId;
+	//isect.triIdx = triIdx;
+
+	newIsect.t = tMin;
+	newIsect.materialId = geoms[newIsect.hitGeomIdx].materialId;
+	intersections[path_index] = newIsect;
 }
 
 __device__ void processSegment(
+	const int iter,
+	const int idx,
 	PathSegment& segment, 
 	ShadeableIntersection& isect,
-	Geom* geoms,
-	Triangle* tris,
-	Material* materials, 
-	cudaTextureObject_t* textureObjects, 
-	int iter, 
-	int idx, 
-	SegmentProcessingSettings settings)
+	const Geom* const geoms,
+	const Triangle* const tris,
+	const Material* const materials,
+	const cudaTextureObject_t* const textureObjects,
+	const SegmentProcessingSettings settings)
 {
 	if (isect.t <= 0.0f)
 	{
@@ -563,15 +571,15 @@ __device__ void processSegment(
 }
 
 __global__ void shadeMaterial(
-	int iter,
-	int num_paths,
+	const int iter,
+	const int num_paths,
 	ShadeableIntersection* shadeableIntersections,
 	PathSegment* pathSegments,
-	Geom* geoms,
-	Triangle* tris,
-	Material* materials,
-	cudaTextureObject_t* textureObjects,
-	SegmentProcessingSettings settings
+	const Geom* const geoms,
+	const Triangle* const tris,
+	const Material* const materials,
+	const cudaTextureObject_t* const textureObjects,
+	const SegmentProcessingSettings settings
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -581,7 +589,7 @@ __global__ void shadeMaterial(
 	}
 
 	PathSegment segment = pathSegments[idx];
-	processSegment(segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, iter, idx, settings);
+	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, settings);
 
 	pathSegments[idx] = segment;
 }
