@@ -111,6 +111,10 @@ int Scene::loadCamera() {
             state.traceDepth = atoi(tokens[1].c_str());
         } else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
             state.imageName = tokens[1];
+        } else if (strcmp(tokens[0].c_str(), "LENS_RADIUS") == 0) {
+            camera.lensRadius = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "FOCAL_DIST") == 0) {
+            camera.focalDistance = atof(tokens[1].c_str());
         }
     }
 

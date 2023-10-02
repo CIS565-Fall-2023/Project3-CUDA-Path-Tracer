@@ -22,6 +22,8 @@
 #define SORT_MATERIAL 1
 #define STREAM_COMPACTION 1
 
+#define DEPTH_OF_FIELD 1
+
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -128,6 +130,27 @@ void pathtraceFree() {
 	checkCUDAError("pathtraceFree");
 }
 
+__host__ __device__ glm::vec2 concentricSampleDisk(const glm::vec2& u) 
+{
+	glm::vec2 uOffset = 2.0f * u - glm::vec2(1.f, 1.f);
+	if (uOffset.x == 0.0 && uOffset.y == 0.0) 
+	{
+		return glm::vec2(0, 0);
+	}
+	float theta, r;
+	if (std::abs(uOffset.x) > std::abs(uOffset.y)) 
+	{
+		r = uOffset.x;
+		theta = PI / 4 * (uOffset.y / uOffset.x);
+	}
+	else 
+	{
+		r = uOffset.y;
+		theta = PI / 2 - PI / 4 * (uOffset.x / uOffset.y);
+	}
+	return r * glm::vec2(std::cos(theta), std::sin(theta));
+}
+
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -153,6 +176,21 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
+
+#if DEPTH_OF_FIELD
+		if (cam.lensRadius > 0.0) 
+		{
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+
+			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
+			float ft = cam.focalDistance / -segment.ray.direction.z;
+			glm::vec3 pFoucs = ft * segment.ray.direction;
+
+			segment.ray.origin += glm::vec3(pLens.x, pLens.y, 0.0f);
+			segment.ray.direction = glm::normalize(pFoucs - glm::vec3(pLens.x, pLens.y, 0.0f));
+		}
+#endif
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;

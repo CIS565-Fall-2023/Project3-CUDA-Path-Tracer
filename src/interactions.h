@@ -98,18 +98,17 @@ void scatterRay(
     else if(m.hasReflective && m.hasRefractive)
     {
         glm::vec3 rayDir = pathSegment.ray.direction;
-        float cosTheta = glm::dot(rayDir, normal);
+        float cosTheta = glm::dot(normal, -rayDir);
         float n1 = 1.0f;
         float n2 = 1.0f;
 
-        if (cosTheta < 0.f) 
+        if (cosTheta >= 0.f) 
         {
             n2 = m.indexOfRefraction;
         }
         else 
         {
             normal = glm::normalize(-normal);
-            cosTheta = glm::dot(rayDir, normal);
             n1 = m.indexOfRefraction;
         }
 
@@ -119,7 +118,7 @@ void scatterRay(
         thrust::uniform_real_distribution<float> u01(0, 1);
         if (u01(rng) >= R) // Refraction
         {
-            glm::vec3 direction = glm::normalize(glm::refract(rayDir, normal, n2 / n1));
+            glm::vec3 direction = glm::normalize(glm::refract(rayDir, normal, n1 / n2));
             pathSegment.ray.origin = intersect + EPSILON * normal;
             pathSegment.ray.direction = direction;
             pathSegment.color *= m.color;         
