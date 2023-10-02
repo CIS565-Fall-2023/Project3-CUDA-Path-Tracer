@@ -24,6 +24,7 @@
 
 #define DEPTH_OF_FIELD 0
 #define ANTIALIASING 1
+#define DIRECT_LIGHTING 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -86,6 +87,7 @@ static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 static ShadeableIntersection* dev_first_bounce = NULL;
+static Geom* dev_lights = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -115,6 +117,8 @@ void pathtraceInit(Scene* scene) {
 	// TODO: initialize any extra device memeory you need
 	cudaMalloc(&dev_first_bounce, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_first_bounce, 0, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Geom));
+	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
 	checkCUDAError("pathtraceInit");
 }
@@ -177,9 +181,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		thrust::uniform_real_distribution<float> u01(0, 1);
 
 #if ANTIALIASING && !CACHE_FIRST_BOUNCE
-		thrust::uniform_real_distribution<float> u0505(-0.5, 0.5);
-		float jitterX = u0505(rng);
-		float jitterY = u0505(rng);
+		float jitterX = u01(rng);
+		float jitterY = u01(rng);
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x + jitterX - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y + jitterY - (float)cam.resolution.y * 0.5f)
@@ -323,6 +326,67 @@ __global__ void kernShadeMaterial(
 			else {
 				scatterRay(curSeg, getPointOnRay(curSeg.ray, intersection.t),
 						intersection.surfaceNormal, material, rng);
+				curSeg.remainingBounces--;
+			}
+			// If there was no intersection, color the ray black.
+			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
+			// used for opacity, in which case they can indicate "no opacity".
+			// This can be useful for post-processing and image compositing.
+		}
+		else {
+			curSeg.color = glm::vec3(0.0f);
+			curSeg.remainingBounces = 0;
+		}
+	}
+}
+
+__global__ void kernShadeMaterialDirectLight(
+	int iter
+	, int num_paths
+	, ShadeableIntersection* shadeableIntersections
+	, PathSegment* pathSegments
+	, Material* materials
+	, Geom* lights
+	, int num_lights
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths)
+	{
+		PathSegment& curSeg = pathSegments[idx];
+		if (curSeg.remainingBounces <= 0) return;
+
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+
+		if (intersection.t > 0.0f) { // if the intersection exists...
+		  // Set up the RNG
+		  // LOOK: this is how you use thrust's RNG! Please look at
+		  // makeSeededRandomEngine as well.
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, curSeg.remainingBounces);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+
+			Material material = materials[intersection.materialId];
+			glm::vec3 materialColor = material.color;
+
+			// If the material indicates that the object was a light, "light" the ray
+			if (material.emittance > 0.0f) {
+				curSeg.color *= (materialColor * material.emittance);
+				curSeg.remainingBounces = 0;
+			}
+			// Otherwise, do some pseudo-lighting computation. This is actually more
+			// like what you would expect from shading in a rasterizer like OpenGL.
+			// TODO: replace this! you should be able to start with basically a one-liner
+			else {
+				scatterRay(curSeg, getPointOnRay(curSeg.ray, intersection.t),
+					intersection.surfaceNormal, material, rng);
+
+				if (curSeg.remainingBounces == 1) 
+				{
+					thrust::uniform_real_distribution<int> u02(0, num_lights - 1);
+					glm::vec3 lightPos = glm::vec3(lights[u02(rng)].transform * glm::vec4(u01(rng), u01(rng), u01(rng), 1.0f));
+					curSeg.ray.direction = glm::normalize(lightPos - curSeg.ray.origin);
+				}
+
 				curSeg.remainingBounces--;
 			}
 			// If there was no intersection, color the ray black.
@@ -494,6 +558,18 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		thrust::device_ptr<PathSegment> psegs(dev_paths);
 		thrust::sort_by_key(isects, isects + num_paths, psegs, materialComparator());	
 #endif
+
+#if DIRECT_LIGHTING
+		kernShadeMaterialDirectLight<<<numblocksPathSegmentTracing, blockSize1d>>>(
+			iter,
+			num_paths,
+			dev_intersections,
+			dev_paths,
+			dev_materials,
+			dev_lights,
+			hst_scene->lights.size()
+			);
+#else
 		kernShadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			iter,
 			num_paths,
@@ -501,6 +577,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials
 			);
+#endif
 
 #if STREAM_COMPACTION
 		PathSegment* new_path_end = thrust::stable_partition(thrust::device, dev_paths,
