@@ -95,6 +95,8 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/tiny_gltf.cc
+    src/tiny_obj_loader.cc
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 

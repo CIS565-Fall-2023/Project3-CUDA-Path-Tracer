@@ -3,6 +3,8 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <tiny_gltf.h>
+#include <tiny_obj_loader.h>
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -186,3 +188,53 @@ int Scene::loadMaterial(string materialid) {
         return 1;
     }
 }
+
+// ObjScene::ObjScene(string filename)
+// {
+//     cout << "Reading scene from " << filename << " ..." << endl;
+//     cout << " " << endl;
+
+//     tinyobj::attrib_t attrib;
+//     std::vector<tinyobj::shape_t> shapes;
+//     std::vector<tinyobj::material_t> materials;
+
+//     // get directory from filename
+//     std::string directory = filename.substr(0, filename.find_last_of('/'));
+//     std::string err;
+//     bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename.c_str(), directory.c_str(), true);
+//     if (!err.empty())
+//     {
+//         std::cerr << err << std::endl;
+//     }
+//     if (!ret)
+//     {
+//         exit(1);
+//     }
+
+
+
+
+// }
+
+// GLTFScene::GLTFScene(string filename) {
+//     string ext = filename.substr(filename.find_last_of(".") + 1);
+//     tinygltf::Model model;
+//     tinygltf::TinyGLTF loader;
+//     string warn, err;
+//     bool ret = false;
+//     if (ext == "gltf") {
+//         ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+//     } else {
+//         ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
+//     }
+//     if (!warn.empty()) {
+//         cout << "WARNING: " << warn << endl;
+//     }
+//     if (!err.empty()) {
+//         cout << "ERROR: " << err << endl;
+//     }
+//     if (!ret) {
+//         cout << "Failed to parse glTF" << endl;
+//         exit(1);
+//     }
+// }

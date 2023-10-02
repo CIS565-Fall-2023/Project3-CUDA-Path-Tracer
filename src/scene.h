@@ -13,14 +13,35 @@ using namespace std;
 class Scene {
 private:
     ifstream fp_in;
-    int loadMaterial(string materialid);
-    int loadGeom(string objectid);
-    int loadCamera();
+    virtual int loadMaterial(string materialid);
+    virtual int loadGeom(string objectid);
+    virtual int loadCamera();
 public:
+    Scene() = default;
     Scene(string filename);
-    ~Scene();
+    virtual ~Scene() = default;
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     RenderState state;
 };
+
+// class ObjScene : public Scene
+// {
+// private:
+//     int loadMaterial(string materialid) override;
+//     int loadGeom(string objectid) override;
+//     int loadCamera() override;
+// public:
+//     ObjScene(string filename);
+// };
+
+// class GLTFScene : public Scene
+// {
+// private:
+//     int loadMaterial(string materialid) override;
+//     int loadGeom(string objectid) override;
+//     int loadCamera() override;
+// public:
+//     GLTFScene(string filename);
+// };

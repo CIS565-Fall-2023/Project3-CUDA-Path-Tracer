@@ -42,7 +42,17 @@ int main(int argc, char** argv) {
 	const char* sceneFile = argv[1];
 
 	// Load scene file
-	scene = new Scene(sceneFile);
+	// check file extension, if gltf, use gltf loader
+	std::string sceneFileString(sceneFile);
+	std::string ext = sceneFileString.substr(sceneFileString.find_last_of(".") + 1);
+	//if (ext == "gltf" || ext == "glb")
+	//{
+	//	scene = new GLTFScene(sceneFile);
+	//}
+	//else
+	{
+		scene = new Scene(sceneFile);
+	}
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
@@ -103,7 +113,7 @@ void saveImage() {
 
 	// CHECKITOUT
 	img.savePNG(filename);
-	//img.saveHDR(filename);  // Save a Radiance HDR file
+	img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
 void runCuda() {
