@@ -1,4 +1,4 @@
-// Metal
+// Glass
 MATERIAL 0
 RGB         0.99 0.99 0.99
 ROUGHNESS   -1.0

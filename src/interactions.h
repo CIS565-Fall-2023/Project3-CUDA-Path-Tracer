@@ -165,7 +165,7 @@ __device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo,
 	float lD = util_math_luminance(kD);
 	float w = lS + lD;
 	lS /= w;
-	if (random.x < lS)
+	if (random.x < lS)//Russian Roulette
 	{
 		return bxdf_microfacet_sample_f(wo, wi, glm::vec2(random.y, random.z), pdf, baseColor, roughness);
 	}

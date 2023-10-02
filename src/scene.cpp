@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp >
 #include <glm/gtx/string_cast.hpp>
 #include <stb_image.h>
 #include <stb_image_write.h>
@@ -9,6 +10,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 #include <unordered_map>
+#include <queue>
 
 #include "scene.h"
 
@@ -179,12 +181,88 @@ void Scene::loadTextureFromFile(const std::string& texturePath, cudaTextureObjec
     }
 }
 
+static void GLTFNodeGetLocalTransform(tinygltf::Node& node, glm::mat4& localTransform)
+{
+    if (node.matrix.size() == 16)
+    {
+        for (int j = 0; j < 4; j++)
+            for (int k = 0; k < 4; k++)
+            {
+                localTransform[k][j] = node.matrix[k + j * 4];
+            }
+    }
+    else
+    {
+        auto& rot = node.rotation;
+        auto& trans = node.translation;
+        auto& scale = node.scale;
+        glm::mat4 transM(1.0f);
+        glm::mat4 rotM(1.0f);
+        glm::mat4 scaleM(1.0f);
+        if (rot.size())
+            rotM = glm::mat4(glm::quat(rot[3], rot[0], rot[1], rot[2]));
+        if (trans.size())
+            transM = glm::translate(transM, glm::vec3(trans[0], trans[1], trans[2]));
+        if (scale.size())
+            scaleM = glm::scale(scaleM, glm::vec3(scale[0], scale[1], scale[2]));
+        localTransform = transM * rotM * scaleM;
+    }
+}
+
+static void GLTFNodetopologicalSort(std::vector<tinygltf::Node>& nodes, std::vector<int>& sortedIdx)
+{
+    std::vector<int> inDegs(nodes.size());
+    std::queue<int> q;
+    for (auto& node : nodes)
+    {
+        for (auto& chld : node.children)
+        {
+            inDegs[chld]++;
+        }
+    }
+    for (int i = 0; i < inDegs.size(); i++)
+    {
+        if (inDegs[i] == 0)
+        {
+            q.emplace(i);
+        }
+    }
+    while (!q.empty())
+    {
+        auto p = q.front(); q.pop();
+        sortedIdx.emplace_back(p);
+        for (auto& chld : nodes[p].children)
+        {
+            inDegs[chld]--;
+            if (inDegs[chld] == 0)
+                q.emplace(chld);
+        }
+    }
+    
+}
+
+static void GLTFNodeGetGlobalTransform(std::vector<tinygltf::Node>& nodes, int curr, std::unordered_map<int, glm::mat4>& rec, glm::mat4 parentTrans = glm::mat4(1.0))
+{
+    auto& node = nodes[curr];
+    glm::mat4 localTrans;
+    GLTFNodeGetLocalTransform(node, localTrans);
+    if (!rec.count(curr))
+    {
+        rec[curr] = parentTrans * localTrans;
+    }
+    else return;
+    for (int& chld : node.children)
+    {
+        GLTFNodeGetGlobalTransform(nodes, chld, rec, rec[curr]);
+    }
+}
 
 //load model using tinyobjloader and tinygltf
 bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNormal)
 {
     cout << "Loading Model " << modelPath << " ..." << endl;
-    if (modelPath.substr(modelPath.size() - 3, 3) == "obj")//load obj
+    string postfix = modelPath.substr(modelPath.find_last_of('.') + 1);
+    if (postfix == "obj")//load obj
     {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> aShapes;
@@ -338,7 +416,12 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
         std::string err;
         std::string warn;
 
-        bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, modelPath.c_str());
+        bool ret;
+        if (postfix == "glb")
+            ret = loader.LoadBinaryFromFile(&model, &err, &warn, modelPath.c_str());
+        else if (postfix == "gltf")
+            ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath.c_str());
+        else assert(0);//unexpected format
 
         if (!warn.empty())  std::cout << "Tiny GLTF Warn: " << warn << std::endl;
 
@@ -392,23 +475,48 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 memcpy(tmpBuffer, &image.image[0], image.image.size());
                 gltfTextureLoadJobs.emplace_back(tmpBuffer, materials.size(), TextureType::normal, image.width, image.height, image.bits, image.component);
             }
+            if (gltfMat.extensions.count("KHR_materials_transmission")|| gltfMat.extensions.count("KHR_materials_volume"))//limited support for translucency
+            {
+                newMat.type = frenselSpecular;
+                //newMat.color = gltfMat.extensions["KHR_materials_volume"].Get("attenuationColor").GetNumberAsDouble();
+                newMat.color = glm::vec3(0.98f);
+                if (gltfMat.extensions.count("KHR_materials_ior"))
+                    newMat.indexOfRefraction = gltfMat.extensions["KHR_materials_ior"].Get("ior").GetNumberAsDouble();
+                else
+                    newMat.indexOfRefraction = 1.5f;
+            }
             materials.emplace_back(newMat);
         }
 
-        int triangleIdxOffset = verticies.size();//each gltf file assume a index starts with 0
+       
+        std::unordered_map<int, glm::mat4> globalTransRec;
+        std::vector<int> sortedIdx;
+        GLTFNodetopologicalSort(model.nodes, sortedIdx);
+
+        for (size_t i = 0; i < model.nodes.size(); ++i)
+        {
+            int curr = sortedIdx[i];
+            GLTFNodeGetGlobalTransform(model.nodes, curr, globalTransRec);
+        }
+        
         int modelStartIdx = objects.size();
+
         for (size_t i = 0; i < model.nodes.size(); ++i) 
         {
             tinygltf::Node& node = model.nodes[i];
             if (node.camera != -1 || node.mesh == -1) continue;//ignore GLTF's camera
             auto& mesh = model.meshes[node.mesh];
+            const glm::mat4& trans = globalTransRec[i];
+            
             for (auto& primtive : mesh.primitives)
             {
+                int triangleIdxOffset = verticies.size();//each gltf primitive assume a index starts with 0
                 assert(primtive.mode == TINYGLTF_MODE_TRIANGLES);
                 Object newModel;
                 newModel.type = TRIANGLE_MESH;
                 newModel.triangleStart = triangles.size();
                 newModel.materialid = primtive.material + matOffset;
+                newModel.Transform.transform = trans;
                 
                 int indicesAccessorIdx = primtive.indices;
                 int positionAccessorIdx = -1, normalAccessorIdx = -1, texcoordAccessorIdx = -1;
@@ -429,27 +537,31 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& indicesAccessor = model.accessors[indicesAccessorIdx];
                 if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_SHORT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
                 {
+                    assert(indicesAccessor.byteOffset == 0);
                     auto& bView = model.bufferViews[indicesAccessor.bufferView];
+                    size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(short);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
-                    for (int i = 0; i < indicesAccessor.count; i+=3)
+                    for (int i = 0; i < indicesAccessor.count; i += 3)
                     {
                         glm::ivec3 tri;
-                        tri.x = *(unsigned short*)(ptr + sizeof(short) * (i + 0)) + triangleIdxOffset;
-                        tri.y = *(unsigned short*)(ptr + sizeof(short) * (i + 1)) + triangleIdxOffset;
-                        tri.z = *(unsigned short*)(ptr + sizeof(short) * (i + 2)) + triangleIdxOffset;
+                        tri.x = *(unsigned short*)(ptr + (i + 0) * stride) + triangleIdxOffset;
+                        tri.y = *(unsigned short*)(ptr + (i + 1) * stride) + triangleIdxOffset;
+                        tri.z = *(unsigned short*)(ptr + (i + 2) * stride) + triangleIdxOffset;
                         triangles.emplace_back(tri);
                     }
                 }
                 else if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
                 {
+                    assert(indicesAccessor.byteOffset == 0);
                     auto& bView = model.bufferViews[indicesAccessor.bufferView];
+                    size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(int);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
-                    for (int i = 0; i < indicesAccessor.count; i++)
+                    for (int i = 0; i < indicesAccessor.count; i += 3)
                     {
                         glm::ivec3 tri;
-                        tri.x = *(unsigned int*)(ptr + sizeof(int) * (i + 0)) + triangleIdxOffset;
-                        tri.y = *(unsigned int*)(ptr + sizeof(int) * (i + 1)) + triangleIdxOffset;
-                        tri.z = *(unsigned int*)(ptr + sizeof(int) * (i + 2)) + triangleIdxOffset;
+                        tri.x = *(unsigned int*)(ptr + (i + 0) * stride) + triangleIdxOffset;
+                        tri.y = *(unsigned int*)(ptr + (i + 1) * stride) + triangleIdxOffset;
+                        tri.z = *(unsigned int*)(ptr + (i + 2) * stride) + triangleIdxOffset;
                         triangles.emplace_back(tri);
                     }
                 }
@@ -460,30 +572,34 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& positionAccessor = model.accessors[positionAccessorIdx];
                 if (positionAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
                 {
+                    assert(positionAccessor.type = TINYGLTF_TYPE_VEC3);
                     auto& bView = model.bufferViews[positionAccessor.bufferView];
+                    size_t stride = bView.byteStride ? bView.byteStride : (positionAccessor.type & 0xF) * sizeof(float);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + positionAccessor.byteOffset;
                     for (int i = 0; i < positionAccessor.count; i++)
                     {
                         glm::vec3 pos;
-                        pos.x = *(float*)(ptr + sizeof(float) * (i * 3 + 0));
-                        pos.y = *(float*)(ptr + sizeof(float) * (i * 3 + 1));
-                        pos.z = *(float*)(ptr + sizeof(float) * (i * 3 + 2));
+                        pos.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
+                        pos.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
+                        pos.z = *(float*)(ptr + (i * stride + sizeof(float) * 2));
                         verticies.emplace_back(pos);
                     }
                 }
                 else assert(0);//unexpected
                 //Load normals
-                auto& normalAccessor = model.accessors[normalAccessorIdx];;
+                auto& normalAccessor = model.accessors[normalAccessorIdx];
                 if (useVertexNormal && normalAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
                 {
+                    assert(normalAccessor.type = TINYGLTF_TYPE_VEC3);
                     auto& bView = model.bufferViews[normalAccessor.bufferView];
+                    size_t stride = bView.byteStride ? bView.byteStride : (normalAccessor.type & 0xF) * sizeof(float);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + normalAccessor.byteOffset;
                     for (int i = 0; i < normalAccessor.count; i++)
                     {
                         glm::vec3 normal;
-                        normal.x = *(float*)(ptr + sizeof(float) * (i * 3 + 0));
-                        normal.y = *(float*)(ptr + sizeof(float) * (i * 3 + 1));
-                        normal.z = *(float*)(ptr + sizeof(float) * (i * 3 + 2));
+                        normal.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
+                        normal.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
+                        normal.z = *(float*)(ptr + (i * stride + sizeof(float) * 2));
                         normals.emplace_back(normal);
                     }
                 }
@@ -494,13 +610,15 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& texcoordAccessor = model.accessors[texcoordAccessorIdx];
                 if (texcoordAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
                 {
+                    assert(texcoordAccessor.type = TINYGLTF_TYPE_VEC2);
                     auto& bView = model.bufferViews[texcoordAccessor.bufferView];
+                    size_t stride = bView.byteStride ? bView.byteStride : (texcoordAccessor.type & 0x7) * sizeof(float);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + texcoordAccessor.byteOffset;
                     for (int i = 0; i < texcoordAccessor.count; i++)
                     {
                         glm::vec2 uv;
-                        uv.x = *(float*)(ptr + sizeof(float) * (i * 2 + 0));
-                        uv.y = *(float*)(ptr + sizeof(float) * (i * 2 + 1));
+                        uv.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
+                        uv.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
                         uvs.emplace_back(uv);
                     }
                 }
@@ -553,12 +671,12 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
 
         modelTrans.transform = utilityCore::buildTransformationMatrix(
             modelTrans.translation, modelTrans.rotation, modelTrans.scale);
-        modelTrans.inverseTransform = glm::inverse(modelTrans.transform);
-        modelTrans.invTranspose = glm::inverseTranspose(modelTrans.transform);
 
         for (int i = modelStartIdx; i != modelEndIdx; i++)
         {
-            objects[i].Transform = modelTrans;
+            objects[i].Transform.transform = modelTrans.transform * objects[i].Transform.transform;
+            objects[i].Transform.inverseTransform = glm::inverse(objects[i].Transform.transform);
+            objects[i].Transform.invTranspose = glm::inverseTranspose(objects[i].Transform.transform);
         }
     }
 
@@ -629,8 +747,8 @@ int Scene::loadObject(string objectid) {
         }
         else//load model
         {
-            assert(tokens, size() == 3);
-            assert(tokens[2] == "vnormal" || tokens[2] == "fnormal");
+            assert(tokens.size() == 3);
+            assert(tokens[1] == "vnormal" || tokens[1] == "fnormal");
             bool use_vertex_normal = tokens[1] == "vnormal";
             loadModel(tokens[2], id, use_vertex_normal);
         }

@@ -22,7 +22,6 @@ private:
     void loadTextureFromFile(const std::string& texturePath, cudaTextureObject_t* texObj, int type);
     void LoadTextureFromMemory(void* data, int width, int height, int bits, int channels, cudaTextureObject_t* texObj);
     void loadSkybox();
-
 public:
     void buildBVH();
     void buildStacklessBVH();

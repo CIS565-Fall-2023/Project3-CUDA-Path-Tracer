@@ -21,7 +21,7 @@ OBJECT 0
 model vnormal ../scenes/models/DamagedHelmet.glb
 material -1
 TRANS       0 0.7 0
-ROTAT       90 0 0
+ROTAT       0 0 0
 SCALE       5 5 5
 
 
