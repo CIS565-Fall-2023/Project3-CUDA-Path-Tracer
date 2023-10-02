@@ -36,8 +36,8 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
 
 __host__ __device__ bool unitBoxIntersection(const Ray& q, float& tmin, float& tmax, glm::vec3& tmin_n, glm::vec3& tmax_n)
 {
-    tmin = -1e38f;
-    tmax = 1e38f;
+    tmin = -FLT_MAX;
+    tmax = FLT_MAX;
     for (int xyz = 0; xyz < 3; ++xyz)
     {
         float qdxyz = 1.f / q.direction[xyz];
@@ -74,8 +74,7 @@ __host__ __device__ bool unitBoxIntersection(const Ray& q, float& tmin, float& t
  * @param normal             Output parameter for surface normal.
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
-__host__ __device__ float boxIntersectionTest(Geom box, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal) {
+__host__ __device__ float boxIntersectionTest(const Geom& box, const Ray& r, glm::vec3 &normal) {
     Ray q;
     q.origin = multiplyMV(box.inverseTransform, glm::vec4(r.origin, 1.0f));
     q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -91,8 +90,10 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
             tmin = tmax;
             tmin_n = tmax_n;
         }
-        intersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
+
+        const glm::vec3 intersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
         normal = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(tmin_n, 0.0f)));
+
         return glm::length(r.origin - intersectionPoint);
     }
     return -1;
@@ -107,9 +108,8 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
  * @param normal             Output parameter for surface normal.
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
-__host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal) {
-    float radius = .5;
+__host__ __device__ float sphereIntersectionTest(const Geom& sphere, const Ray& r, glm::vec3 &normal) {
+    float radius = 0.5f;
 
     glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(sphere.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -138,9 +138,9 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
         t = max(t1, t2);
     }
 
-    glm::vec3 objspaceIntersection = getPointOnRay(rt, t);
+    const glm::vec3 objspaceIntersection = getPointOnRay(rt, t);
 
-    intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
+    const glm::vec3 intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
 
     return glm::length(r.origin - intersectionPoint);
@@ -230,8 +230,8 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c,
     return glm::vec3(u, v, w);
 }
 
-__host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNode* bvhNodes,
-    Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, int& triIdx, bool useBvh)
+__host__ __device__ float meshIntersectionTest(const Geom& geom, Triangle* tris, BvhNode* bvhNodes,
+    Ray r, glm::vec3& normal, glm::vec2& uv, int& triIdx, bool useBvh)
 {
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -286,13 +286,12 @@ __host__ __device__ float meshIntersectionTest(Geom geom, Triangle* tris, BvhNod
     const Vertex& v1 = tri.v1;
     const Vertex& v2 = tri.v2;
 
-    glm::vec3 objSpaceIntersection = ro + rd * t;
-    glm::vec3 barycentricPos = barycentric(v0.pos, v1.pos, v2.pos, objSpaceIntersection);
-    glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * v0.nor + barycentricPos.y * v1.nor + barycentricPos.z * v2.nor);
+    const glm::vec3 objSpaceIntersection = ro + rd * t;
+    const glm::vec3 barycentricPos = barycentric(v0.pos, v1.pos, v2.pos, objSpaceIntersection);
+    const glm::vec3 objSpaceNormal = glm::normalize(barycentricPos.x * v0.nor + barycentricPos.y * v1.nor + barycentricPos.z * v2.nor);
 
-    intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
+    const glm::vec3 intersectionPoint = multiplyMV(geom.transform, glm::vec4(objSpaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objSpaceNormal, 0.f)));
-
     uv = barycentricPos.x * v0.uv + barycentricPos.y * v1.uv + barycentricPos.z * v2.uv;
 
     return glm::length(r.origin - intersectionPoint);

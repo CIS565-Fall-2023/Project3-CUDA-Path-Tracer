@@ -394,14 +394,12 @@ __global__ void computeIntersections(
 	PathSegment pathSegment = pathSegments[path_index];
 
 	float t;
-	glm::vec3 intersect_point;
 	glm::vec3 normal;
 	glm::vec2 uv;
 	int triIdx;
-	float t_min = FLT_MAX;
-	int hit_geom_index = -1;
+	float tMin = FLT_MAX;
+	int hitGeomIdx = -1;
 
-	glm::vec3 tmp_intersect;
 	glm::vec3 tmp_normal;
 	glm::vec2 tmp_uv;
 	int tmp_triIdx;
@@ -414,42 +412,41 @@ __global__ void computeIntersections(
 
 		if (geom.type == CUBE)
 		{
-			t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = boxIntersectionTest(geom, pathSegment.ray, tmp_normal);
 		}
 		else if (geom.type == SPHERE)
 		{
-			t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal);
+			t = sphereIntersectionTest(geom, pathSegment.ray, tmp_normal);
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, tmp_triIdx, settings.useBvh);
+			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_normal, tmp_uv, tmp_triIdx, settings.useBvh);
 		}
 
-		if (t < 0 || t > t_min)
+		if (t < 0 || t > tMin)
 		{
 			continue;
 		}
 
-		t_min = t;
-		hit_geom_index = i;
-		intersect_point = tmp_intersect;
+		tMin = t;
+		hitGeomIdx = i;
 		normal = tmp_normal;
 		uv = tmp_uv;
 		triIdx = tmp_triIdx;
 	}
 
-	if (hit_geom_index == -1)
+	if (hitGeomIdx == -1)
 	{
 		intersections[path_index].t = -1.0f;
 		return;
 	}
 
 	ShadeableIntersection& isect = intersections[path_index];
-	isect.hitGeomIdx = hit_geom_index;
-	isect.t = t_min;
-	isect.materialId = geoms[hit_geom_index].materialId;
+	isect.hitGeomIdx = hitGeomIdx;
+	isect.t = tMin;
 	isect.surfaceNormal = normal;
 	isect.uv = uv;
+	isect.materialId = geoms[hitGeomIdx].materialId;
 	isect.triIdx = triIdx;
 }
 
