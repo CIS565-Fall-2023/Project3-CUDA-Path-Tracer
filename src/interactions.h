@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include <thrust/random.h>
 
 // CHECKITOUT
 /**
@@ -112,15 +113,15 @@ void scatterRay(
             n1 = m.indexOfRefraction;
         }
 
-        float R0 = glm::pow((n1 - n2) / (n1 + n2), 2);
-        float R = R0 + (1 - R0) * glm::pow((1 - cosTheta), 5);
+        float R0 = pow((n1 - n2) / (n1 + n2), 2);
+        float R = R0 + (1.f - R0) * pow((1 - cosTheta), 5);
 
         thrust::uniform_real_distribution<float> u01(0, 1);
         if (u01(rng) >= R) // Refraction
         {
             glm::vec3 direction = glm::normalize(glm::refract(rayDir, normal, n1 / n2));
-            pathSegment.ray.origin = intersect + EPSILON * normal;
             pathSegment.ray.direction = direction;
+            pathSegment.ray.origin = intersect + EPSILON * pathSegment.ray.direction;
             pathSegment.color *= m.color;         
         }
         else // Reflection 

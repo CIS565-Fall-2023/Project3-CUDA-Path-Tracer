@@ -18,11 +18,12 @@
 
 #define ERRORCHECK 1
 
-#define CACHE_FIRST_BOUNCE 1
+#define CACHE_FIRST_BOUNCE 0
 #define SORT_MATERIAL 1
 #define STREAM_COMPACTION 1
 
-#define DEPTH_OF_FIELD 1
+#define DEPTH_OF_FIELD 0
+#define ANTIALIASING 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -172,18 +173,28 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
 		// TODO: implement antialiasing by jittering the ray
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+
+#if ANTIALIASING && !CACHE_FIRST_BOUNCE
+		thrust::uniform_real_distribution<float> u0505(-0.5, 0.5);
+		float jitterX = u0505(rng);
+		float jitterY = u0505(rng);
+		segment.ray.direction = glm::normalize(cam.view
+			- cam.right * cam.pixelLength.x * ((float)x + jitterX - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + jitterY - (float)cam.resolution.y * 0.5f)
+		);
+#else
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
+#endif
 
 #if DEPTH_OF_FIELD
 		if (cam.lensRadius > 0.0) 
 		{
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
-
-			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
+			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(glm::vec2(u01(rng)));
 			float ft = cam.focalDistance / -segment.ray.direction.z;
 			glm::vec3 pFoucs = ft * segment.ray.direction;
 
@@ -191,7 +202,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			segment.ray.direction = glm::normalize(pFoucs - glm::vec3(pLens.x, pLens.y, 0.0f));
 		}
 #endif
-
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
@@ -296,7 +306,7 @@ __global__ void kernShadeMaterial(
 		  // Set up the RNG
 		  // LOOK: this is how you use thrust's RNG! Please look at
 		  // makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, curSeg.remainingBounces);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
 			Material material = materials[intersection.materialId];
@@ -311,11 +321,8 @@ __global__ void kernShadeMaterial(
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-				if(curSeg.remainingBounces > 0)
-					scatterRay(curSeg, getPointOnRay(curSeg.ray, intersection.t),
-							   intersection.surfaceNormal, material, rng);
-				else
-					curSeg.color = glm::vec3(0.0f);
+				scatterRay(curSeg, getPointOnRay(curSeg.ray, intersection.t),
+						intersection.surfaceNormal, material, rng);
 				curSeg.remainingBounces--;
 			}
 			// If there was no intersection, color the ray black.
