@@ -50,7 +50,7 @@ void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& nor
 __host__ __device__
 void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m)
 {
-    const bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
+    bool entering = glm::dot(pathSegment.ray.direction, normal) < 0;
     newRay.direction = glm::refract(pathSegment.ray.direction, entering ? normal : -normal, 
         entering ? 1.0f / m.specular.indexOfRefraction : m.specular.indexOfRefraction);
     pathSegment.color *= m.specular.color;
@@ -58,7 +58,7 @@ void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& nor
 
 __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
 {
-    const glm::vec2 uOffset = 2.f * u - glm::vec2(1);
+    glm::vec2 uOffset = 2.f * u - glm::vec2(1);
 
     if (uOffset.x == 0 && uOffset.y == 0)
     {
@@ -81,9 +81,7 @@ __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
 
 __device__ glm::vec3 tex2DCustom(cudaTextureObject_t tex, glm::vec2 uv)
 {
-    //uchar4 texCol = tex2D<uchar4>(tex, uv.x, uv.y);
-    //return glm::vec3(texCol.x, texCol.y, texCol.z) / 255.f;
-    const float4 texCol = tex2D<float4>(tex, uv.x, uv.y);
+    float4 texCol = tex2D<float4>(tex, uv.x, uv.y);
     return glm::vec3(texCol.x, texCol.y, texCol.z);
 }
 
@@ -142,29 +140,29 @@ void scatterRay(
         const Vertex& v1 = tri.v1;
         const Vertex& v2 = tri.v2;
 
-        const glm::mat4 transform = geoms[isect.hitGeomIdx].transform;
+        glm::mat4 transform = geoms[isect.hitGeomIdx].transform;
 
-        const glm::vec3 v0Pos = multiplyMV(transform, glm::vec4(v0.pos, 1));
-        const glm::vec3 v1Pos = multiplyMV(transform, glm::vec4(v1.pos, 1));
-        const glm::vec3 v2Pos = multiplyMV(transform, glm::vec4(v2.pos, 1));
+        glm::vec3 v0Pos = multiplyMV(transform, glm::vec4(v0.pos, 1));
+        glm::vec3 v1Pos = multiplyMV(transform, glm::vec4(v1.pos, 1));
+        glm::vec3 v2Pos = multiplyMV(transform, glm::vec4(v2.pos, 1));
 
-        const glm::vec3 dp1 = v1Pos - v0Pos;
-        const glm::vec3 dp2 = v2Pos - v0Pos;
-        const glm::vec2 duv1 = v1.uv - v0.uv;
-        const glm::vec2 duv2 = v2.uv - v0.uv;
+        glm::vec3 dp1 = v1Pos - v0Pos;
+        glm::vec3 dp2 = v2Pos - v0Pos;
+        glm::vec2 duv1 = v1.uv - v0.uv;
+        glm::vec2 duv2 = v2.uv - v0.uv;
 
-        const glm::vec3& N = isect.surfaceNormal;
+        glm::vec3 N = isect.surfaceNormal;
 
-        const glm::vec3 dp2perp = glm::cross(dp2, N);
-        const glm::vec3 dp1perp = glm::cross(N, dp1);
-        const glm::vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-        const glm::vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+        glm::vec3 dp2perp = glm::cross(dp2, N);
+        glm::vec3 dp1perp = glm::cross(N, dp1);
+        glm::vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+        glm::vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
-        const float invmax = 1.f / sqrt(max(glm::dot(T, T), glm::dot(B, B)));
-        const glm::mat3 TBN = glm::mat3(T * invmax, B * invmax, N);
+        float invmax = 1.f / sqrt(max(glm::dot(T, T), glm::dot(B, B)));
+        glm::mat3 TBN = glm::mat3(T * invmax, B * invmax, N);
 
-        const glm::vec3 normalMapCol = tex2DCustom(textureObjects[m.normalMap.textureIdx], isect.uv);
-        const glm::vec3 mappedNormal = glm::normalize(2.0f * normalMapCol - 1.0f);
+        glm::vec3 normalMapCol = tex2DCustom(textureObjects[m.normalMap.textureIdx], isect.uv);
+        glm::vec3 mappedNormal = glm::normalize(2.0f * normalMapCol - 1.0f);
         normal = glm::normalize(TBN * mappedNormal);
     }
     else
@@ -173,9 +171,9 @@ void scatterRay(
     }
     isect.surfaceNormal = normal;
 
-    const float diffuseLuminance = Utils::luminance(diffuseColor);
-    const float specularLuminance = Utils::luminance(m.specular.color);
-    const float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
+    float diffuseLuminance = Utils::luminance(diffuseColor);
+    float specularLuminance = Utils::luminance(m.specular.color);
+    float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
 
     thrust::uniform_real_distribution<float> u01(0, 1);
 
@@ -231,6 +229,6 @@ void scatterRay(
         }
     }
 
-    newRay.origin = isectPos + 0.0001f * newRay.direction;
+    newRay.origin = isectPos + EPSILON * newRay.direction;
     pathSegment.ray = newRay;
 }
