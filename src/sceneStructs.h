@@ -28,7 +28,7 @@ struct Geom
     enum GeomType type;
     int materialId;
     int bvhRootNodeIdx; // used only for meshes
-    int startTriIdx;
+    int startTriIdx; // this and numTris are used only if BVH is disabled
     int numTris;
     glm::mat4 transform;
     glm::mat4 inverseTransform;
