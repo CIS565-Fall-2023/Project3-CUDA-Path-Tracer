@@ -25,6 +25,8 @@
 #define DEPTH_OF_FIELD 0
 #define ANTIALIASING 1
 #define DIRECT_LIGHTING 1
+#define MOTION_BLUR 1
+#define MOTION_VELO glm::vec3(0.5, 0.5, 0.0)
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -179,6 +181,11 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		// TODO: implement antialiasing by jittering the ray
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
 		thrust::uniform_real_distribution<float> u01(0, 1);
+
+#if MOTION_BLUR
+		glm::vec3 jiiterVec = u01(rng) * MOTION_VELO;
+		segment.ray.origin += jiiterVec;
+#endif
 
 #if ANTIALIASING && !CACHE_FIRST_BOUNCE
 		float jitterX = u01(rng);
