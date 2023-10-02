@@ -34,7 +34,7 @@
   "geomerties": [
     {
       "type": "obj",
-      "path": "meshes/untitled.obj",
+      "path": "meshes/stanford_bunny.obj",
       "name": "bunny",
       "material": "MatteWhite",
       "translation": [ 0, 0, 0 ],

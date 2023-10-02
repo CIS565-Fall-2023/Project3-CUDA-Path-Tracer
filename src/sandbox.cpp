@@ -12,8 +12,6 @@
 #include "bvh.h"
 #include "cameraController.h"
 
-#include "cudaUtilities.h"
-
 #include "ImGui/imgui.h"
 
 #define JOIN(a, b) a##b
@@ -89,7 +87,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/cornellMesh.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -97,30 +95,11 @@ SandBox::SandBox()
 	cam.Recompute();
 
 	m_PathTracer->Init(m_Scene.get());
-
-	m_GPUScene = mkU<GPUScene>();
-	m_GPUScene->shape_count = m_Scene->m_TriangleIdxs.size();
-	m_GPUScene->material_count = m_Scene->materials.size();
-	
 	BVH bvh;
 	bvh.Create(m_Scene->m_Vertices, m_Scene->m_TriangleIdxs);
-	
-	m_GPUScene->bvh_count = bvh.m_AABBs.size();
 
-	MallocArrayOnCuda<AABB>(m_GPUScene->dev_BVH, bvh.m_AABBs);
-	
-	MallocArrayOnCuda<glm::vec3>(m_GPUScene->dev_vertices, m_Scene->m_Vertices);
-	MallocArrayOnCuda<glm::vec3>(m_GPUScene->dev_normals, m_Scene->m_Normals);
-	MallocArrayOnCuda<glm::vec2>(m_GPUScene->dev_uvs, m_Scene->m_UVs);
-
-	MallocArrayOnCuda<TriangleIdx>(m_GPUScene->dev_triangles, m_Scene->m_TriangleIdxs);
-	cudaMemcpy(bvh.m_AABBs.data(), m_GPUScene->dev_BVH, bvh.m_AABBs.size() * sizeof(AABB), cudaMemcpyDeviceToHost);
-	if (m_Scene->m_EnvironmentMapId >= 0)
-	{
-		m_GPUScene->env_map.m_Texture.m_TexObj = m_Scene->m_Textures[m_Scene->m_EnvironmentMapId].m_TexObj;
-	}
-	std::cout << sizeof(Material) << std::endl;
-	checkCUDAError("Copy array Error");
+	m_GPUScene = mkU<GPUScene>();
+	m_GPUScene->Load(*m_Scene, bvh);
 }
 
 SandBox::~SandBox()

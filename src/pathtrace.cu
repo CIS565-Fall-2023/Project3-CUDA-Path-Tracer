@@ -21,13 +21,15 @@
 #include "rng.h"
 #include "cudaTexture.h"
 
-struct CompactTerminatedPaths {
+struct CopyEndPaths 
+{
 	CPU_GPU bool operator() (const PathSegment& segment) {
-		return !(segment.pixelIndex >= 0 && segment.IsEnd());
+		return segment.IsEnd();
 	}
 };
 
-struct RemoveInvalidPaths {
+struct RemoveEndPaths 
+{
 	CPU_GPU bool operator() (const PathSegment& segment) {
 		return segment.pixelIndex < 0 || segment.IsEnd();
 	}
@@ -38,8 +40,6 @@ CPU_ONLY CudaPathTracer::~CudaPathTracer()
 	// free ptr
 	SafeCudaFree(dev_hdr_img);  // no-op if dev_image is null
 	SafeCudaFree(dev_paths);
-	SafeCudaFree(dev_geoms);
-	SafeCudaFree(dev_materials);
 	SafeCudaFree(dev_intersections);
 
 	if (cuda_pbo_dest_resource)
@@ -47,7 +47,7 @@ CPU_ONLY CudaPathTracer::~CudaPathTracer()
 		UnRegisterPBO();
 	}
 
-	checkCUDAError("CudaPathTracer delete Error!");
+	checkCUDAError("Free cuda pointers Error!");
 }
 
 CPU_ONLY GPU_ONLY thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
@@ -243,13 +243,15 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= num_paths) return;
-
 	__shared__ Material shared_materials[128];
-	if (threadIdx.x < 128 && threadIdx.x < num_materials)
+	if (blockDim.x >= num_materials)
 	{
-		shared_materials[threadIdx.x] = materials[threadIdx.x];
+		if (threadIdx.x < 128 && threadIdx.x < num_materials)
+		{
+			shared_materials[threadIdx.x] = materials[threadIdx.x];
+		}
+		__syncthreads();
 	}
-	__syncthreads();
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	PathSegment segment = pathSegments[idx];
@@ -258,12 +260,16 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 	{
 		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
 		//return;	
-		
-		//Material material = materials[intersection.materialId];
-		const Material& material = shared_materials[intersection.materialId];
+		Material material;
+		if (blockDim.x >= num_materials)
+		{
+			material = materials[intersection.materialId];
+		}
+		else
+		{
+			Material material = shared_materials[intersection.materialId];
+		}
 
-		glm::vec3 materialColor = material.GetAlbedo(intersection.uv);
-		
 		if (material.emittance > 0.f) 
 		{
 			glm::vec3 final_throughput = segment.throughput * material.emittance;
@@ -310,23 +316,15 @@ CPU_ONLY void CudaPathTracer::Init(Scene* scene)
 	cudaMemset(dev_hdr_img, 0, pixelcount * sizeof(glm::vec3));
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
-	cudaMalloc(&dev_terminated_paths, pixelcount * sizeof(PathSegment));
-
-	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
-	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
-	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_end_paths, pixelcount * sizeof(PathSegment));
 
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-	// TODO: initialize any extra device memeory you need
+	thrust_dev_paths_begin = thrust::device_ptr<PathSegment>(dev_paths);
+	thrust_dev_end_paths_bgein = thrust::device_ptr<PathSegment>(dev_end_paths);
 
-	thrust_dev_paths = thrust::device_ptr<PathSegment>(dev_paths);
-	thrust_dev_terminated_paths = thrust::device_ptr<PathSegment>(dev_terminated_paths);
-
-	checkCUDAError("pathtraceInit");
+	checkCUDAError("Create device image error");
 }
 
 CPU_ONLY void CudaPathTracer::GetImage(uchar4* host_image)
@@ -346,14 +344,14 @@ CPU_ONLY void CudaPathTracer::RegisterPBO(unsigned int pbo)
 
 CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 {
-	const int pixelcount = camera.resolution.x * camera.resolution.y;
+	const int pixelcount = resolution.x * resolution.y;
 
 	// TODO: might change to dynamic block size
 	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);
 	const dim3 blocksPerGrid2d(
-		(camera.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
-		(camera.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
+		(resolution.x + blockSize2d.x - 1) / blockSize2d.x,
+		(resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
 	// 1D block for path tracing
 	const int blockSize1d = 128;
@@ -362,9 +360,10 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
-	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_paths = dev_path_end - dev_paths;
 
+	int num_paths = pixelcount;
+
+	thrust::device_ptr<PathSegment> thrust_end_paths_end = thrust_dev_end_paths_bgein;
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
@@ -381,24 +380,26 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 		computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths, dev_intersections, scene);
 		checkCUDAError("Intersection Error");
 		cudaDeviceSynchronize();
-
+		
 		KernelNaiveGI<<<numblocksPathSegmentTracing, blockSize1d >>>(m_Iteration, num_paths, scene.material_count,
-																	 dev_intersections, dev_paths, dev_materials, scene.env_map);
+																	 dev_intersections, dev_paths, scene.dev_materials, scene.env_map);
 		checkCUDAError("NaiveGI Error");
 		cudaDeviceSynchronize();
 
-		if (guiData != nullptr)
-		{
-			guiData->TracedDepth = depth;
-		}
+		// remove terminated segments
+		thrust_end_paths_end = thrust::copy_if(thrust_dev_paths_begin, thrust_dev_paths_begin + num_paths, thrust_end_paths_end, CopyEndPaths());
+		auto remove_ptr = thrust::remove_if(thrust_dev_paths_begin, thrust_dev_paths_begin + num_paths, CopyEndPaths());
+		
+		num_paths = remove_ptr - thrust_dev_paths_begin;
 	}
 
 	// Assemble this iteration and apply it to the image
-	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
+	int num_end_paths = thrust_end_paths_end - thrust_dev_end_paths_bgein;
+	dim3 numBlocksPixels = (num_end_paths + blockSize1d - 1) / blockSize1d;
 
 	float u = 1.f / static_cast<float>(m_Iteration + 1); // used for interpolation between last frame and this frame
 
-	finalGather << <numBlocksPixels, blockSize1d >> > (u, num_paths, dev_hdr_img, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (u, num_end_paths, dev_hdr_img, dev_end_paths);
 	checkCUDAError("Final Gather failed");
 	cudaDeviceSynchronize();
 	///////////////////////////////////////////////////////////////////////////

@@ -5,11 +5,15 @@
 #include "triangle.h"
 #include "environmentMap.h"
 
+class Scene;
+class BVH;
+
 class GPUScene
 {
 public:
 	CPU_ONLY GPUScene()
 		:dev_triangles(nullptr),
+		dev_materials(nullptr),
 		dev_vertices(nullptr),
 		dev_normals(nullptr),
 		dev_uvs(nullptr),
@@ -19,23 +23,17 @@ public:
 		light_count(0)
 	{}
 
-	CPU_GPU Intersection SceneIntersection(const Ray& ray)
+	CPU_GPU Intersection SceneIntersection(const Ray& ray) const
 	{
 		//return NaiveIntersection(ray);
 		return BVHIntersection(ray);
 	}
 
-	CPU_ONLY void FreeDataOnCuda()
-	{
-		SafeCudaFree(dev_triangles);
-		SafeCudaFree(dev_vertices);
-		SafeCudaFree(dev_normals);
-		SafeCudaFree(dev_uvs);
-		SafeCudaFree(dev_BVH);
-	}
+	CPU_ONLY void FreeDataOnCuda();
+	CPU_ONLY void Load(const Scene& scene, const BVH& bvh);
 
 protected:
-	CPU_GPU Intersection NaiveIntersection(const Ray& ray)
+	CPU_GPU Intersection NaiveIntersection(const Ray& ray) const 
 	{
 		Intersection min_intersection;
 		Intersection temp_intersection;
@@ -60,7 +58,7 @@ protected:
 		return min_intersection;
 	}
 
-	CPU_GPU Intersection BVHIntersection(const Ray& ray)
+	CPU_GPU Intersection BVHIntersection(const Ray& ray) const
 	{
 		const glm::vec3 inv_dir(glm::vec3(1.f) / ray.direction);
 		const bool dir_neg[3] = { inv_dir.x < 0, inv_dir.y < 0, inv_dir.z < 0 };
@@ -121,6 +119,7 @@ public:
 	glm::vec3* dev_vertices;
 	glm::vec3* dev_normals;
 	glm::vec2* dev_uvs;
+	Material* dev_materials;
 
 	AABB* dev_BVH;
 

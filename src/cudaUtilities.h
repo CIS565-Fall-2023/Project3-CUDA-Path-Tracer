@@ -4,7 +4,7 @@
 #include<cuda_runtime.h>
 
 template<typename T>
-void MallocArrayOnCuda(T*& dev_array, std::vector<T>& host_array)
+void MallocArrayOnCuda(T*& dev_array, const std::vector<T>& host_array)
 {
 	if (host_array.size() > 0 && !dev_array)
 	{

@@ -32,12 +32,12 @@ public:
 	Geom* dev_geoms = nullptr;
 	Material* dev_materials = nullptr;
 	PathSegment* dev_paths = nullptr;
-	PathSegment* dev_terminated_paths = nullptr;
+	PathSegment* dev_end_paths = nullptr;
 	ShadeableIntersection* dev_intersections = nullptr;
-	struct cudaGraphicsResource* cuda_pbo_dest_resource;
+	struct cudaGraphicsResource* cuda_pbo_dest_resource = nullptr;
 
-	thrust::device_ptr<PathSegment> thrust_dev_paths;
-	thrust::device_ptr<PathSegment> thrust_dev_terminated_paths;
+	thrust::device_ptr<PathSegment> thrust_dev_paths_begin;
+	thrust::device_ptr<PathSegment> thrust_dev_end_paths_bgein;
 
 	glm::ivec2 resolution;
 };
