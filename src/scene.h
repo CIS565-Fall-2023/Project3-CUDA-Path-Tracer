@@ -22,11 +22,13 @@ private:
     void loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials);
 
     char* filename;
-    
+  
+    int partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int splitAxis, int geomCount,
+        const glm::vec3& centroidMin, const glm::vec3& centroidMax);
 
-    int getLongestAxis(const glm::vec3& minBounds, const glm::vec3& maxBounds);
-    float computeBoxSurfaceArea(const glm::vec3& min, const glm::vec3& max);
-    int getBestSplit(std::vector<Geom> geoms, int start, int end);
+    BVHNode* constructBVHTree(std::vector<BVHGeomInfo>& geomInfo, int start, int end,
+        int* totalNodes, std::vector<Geom> orderedGeoms);
+    int flattenBVHTree(BVHNode* node);
     
 
 public:
@@ -37,9 +39,6 @@ public:
     std::vector<Material> materials;
     RenderState state;
 
-    BVHNode* root;
     std::vector<CompactBVH> bvh;
-
-    BVHNode* constructBVH(std::vector<Geom> geoms, int start, int end, const int numLeaves);
-    int flattenBVHTree(BVHNode* node);
+    void buildBVH();
 };

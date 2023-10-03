@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
 	scene = new Scene(sceneFile);
 
 	cout << "Constructing BVH..." << endl;
-	scene->root = scene->constructBVH(scene->geoms, 0, scene->geoms.size(), LEAF_THRESHOLD);
+	scene->root = scene->constructBVHTree(scene->geoms, 0, scene->geoms.size(), LEAF_THRESHOLD);
 	scene->flattenBVHTree(scene->root);
 	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
 

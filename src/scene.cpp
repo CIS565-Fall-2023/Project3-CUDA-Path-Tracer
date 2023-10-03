@@ -314,134 +314,107 @@ void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMater
     cout << "Loaded Obj Material!" << endl;
 }
 
-int Scene::getLongestAxis(const glm::vec3& minBounds, const glm::vec3& maxBounds) {
-    glm::vec3 diff = maxBounds - minBounds;
-
-    if (diff.x > diff.y && diff.x > diff.z) {
-        return 0;
-    }
-    else if (diff.y > diff.z) {
-        return 1;
+int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int splitAxis, int geomCount,
+    const glm::vec3& centroidMin, const glm::vec3& centroidMax) {
+    int mid = -1;
+    if (geomCount <= 4) {
+        // partition geoms into equally sized subset
+        mid = start + (start - end) / 2;
+        std::nth_element(&geomInfo[start], &geomInfo[mid], &geomInfo[end - 1] + 1,
+            [splitAxis](const BVHGeomInfo& a, const BVHGeomInfo& b) {
+                return a.centroid[splitAxis] < b.centroid[splitAxis];
+            });
     }
     else {
-        return 2;
+        // allocate buckets for SAH partition
+        constexpr int nBuckets = 12;
+        struct BucketInfo {
+            int count = 0;
+            glm::vec3 minBound, maxBound;
+        };
+        BucketInfo buckets[nBuckets];
+
+        // initialize bucket info
+        for (int i = start; i < end; ++i) {
+            glm::vec3 offset = geomInfo[i].centroid - centroidMin;
+            if (centroidMax.x > centroidMin.x) offset.x /= centroidMax.x - centroidMin.x;
+            if (centroidMax.y > centroidMin.y) offset.y /= centroidMax.y - centroidMin.y;
+            if (centroidMax.z > centroidMin.z) offset.z /= centroidMax.z - centroidMin.z;
+            
+            int b = nBuckets * offset[splitAxis];
+
+            if (b == nBuckets) b = nBuckets - 1;
+            buckets[b].count++;
+            buckets[b].minBound = glm::min(buckets[b].minBound, geomInfo[i].minBound);
+            buckets[b].maxBound = glm::max(buckets[b].maxBound, geomInfo[i].maxBound);
+        }
+        
+        // compute cost for splitting after each bucket
+        float cost[nBuckets - 1];
+
+        for (int i = 0; i < nBuckets - 1; ++i) {
+
+        }
     }
 }
 
-float Scene::computeBoxSurfaceArea(const glm::vec3& min, const glm::vec3& max) {
-    glm::vec3 diff = max - min;
-    return 2.0f * (diff.x * diff.y + diff.x * diff.z + diff.y * diff.z);
-}
+BVHNode* Scene::constructBVHTree(std::vector<BVHGeomInfo>& geomInfo, int start, int end,
+    int* totalNodes, std::vector<Geom> orderedGeoms) {
+    BVHNode* node = nullptr;
+    (*totalNodes)++;
 
-int Scene::getBestSplit(std::vector<Geom> geoms, int start, int end) {
-    // for prefix sums
-    std::vector<glm::vec3> leftMins(end - start, glm::vec3(FLT_MAX));
-    std::vector<glm::vec3> leftMaxs(end - start, glm::vec3(-FLT_MAX));
-    std::vector<glm::vec3> rightMins(end - start, glm::vec3(FLT_MAX));
-    std::vector<glm::vec3> rightMaxs(end - start, glm::vec3(-FLT_MAX));
-
-    // Compute prefix sums for left splits
-    for (int i = start; i < end - 1; i++) {
-        glm::vec3 geomMin, geomMax;
-        geoms[i].getBounds(geomMin, geomMax);
-        if (i > start) {
-            leftMins[i - start] = glm::min(leftMins[i - start - 1], geomMin);
-            leftMaxs[i - start] = glm::max(leftMaxs[i - start - 1], geomMax);
-        }
-        else {
-            leftMins[i - start] = geomMin;
-            leftMaxs[i - start] = geomMax;
-        }
-    }
-
-    // Compute prefix sums for right splits
-    for (int i = end - 1; i > start; i--) {
-        glm::vec3 geomMin, geomMax;
-        geoms[i].getBounds(geomMin, geomMax);
-        if (i < end - 1) {
-            rightMins[i - start] = glm::min(rightMins[i - start + 1], geomMin);
-            rightMaxs[i - start] = glm::max(rightMaxs[i - start + 1], geomMax);
-        }
-        else {
-            rightMins[i - start] = geomMin;
-            rightMaxs[i - start] = geomMax;
-        }
-    }
-
-    float bestCost = FLT_MAX;
-    int bestSplit = -1;
-
-    for (int i = start; i < end - 1; i++) {
-        float leftArea = computeBoxSurfaceArea(leftMins[i - start], leftMaxs[i - start]);
-        float rightArea = computeBoxSurfaceArea(rightMins[i - start + 1], rightMaxs[i - start + 1]);
-        float cost = leftArea * (i - start + 1) + rightArea * (end - i - 1);
-        if (cost < bestCost) {
-            bestCost = cost;
-            bestSplit = i;
-        }
-    }
-
-    return bestSplit;
-
-}
-
-BVHNode* Scene::constructBVH(std::vector<Geom> geoms, int start, int end, 
-    const int numLeaves) {
-    std::unique_ptr<BVHNode> node = std::make_unique<BVHNode>();
-
-    // compute bounding box for all geoms from start to end
-    glm::vec3 minBounds(FLT_MAX);
-    glm::vec3 maxBounds(-FLT_MAX);  
+    // compute bounding box for all geoms from start to end in BVHNode
+    glm::vec3 minBound(FLT_MAX);
+    glm::vec3 maxBound(-FLT_MAX);  
 
     for (unsigned int i = start; i < end; ++i) {
-        glm::vec3 geomMin, geomMax;
-        geoms[i].getBounds(geomMin, geomMax);
-
-        minBounds = glm::min(minBounds, geomMin);
-        maxBounds = glm::max(maxBounds, geomMax);
+        minBound = glm::min(minBound, geomInfo[i].minBound);
+        maxBound = glm::max(maxBound, geomInfo[i].maxBound);
     }
 
-    node->minBounds = minBounds;
-    node->maxBounds = maxBounds;
+    int geomCount = end - start;
 
     // leaf nodes
-    if (end - start <= numLeaves) { 
-        // leaf node
-        node->isLeafNode = true;
-        node->geomIndex = start;
-        node->numGeoms = end - start; 
-        return node.release();
+    if (geomCount == 1) {
+        int geomIndex = orderedGeoms.size();
+        for (int i = start; i < end; ++i) {
+            int index = geomInfo[i].geomIndex;
+            orderedGeoms.push_back(geoms[index]);
+        }
+        node->initLeaf(geomIndex, geomCount, minBound, maxBound);
+        return node;
+    }
+    else {
+        // compute bounds for centroids, choose split dimension
+        glm::vec3 centroidMin(FLT_MAX), centroidMax(-FLT_MAX);
+        for (int i = start; i < end; ++i) {
+            centroidMin = glm::min(centroidMin, geomInfo[i].centroid);
+            centroidMax = glm::max(centroidMax, geomInfo[i].centroid);
+        }
+        int splitAxis = getLongestAxis(centroidMin, centroidMax);
+
+        // partition geoms into two sets and build children node
+        size_t mid = (start + end) / 2;
+
+        if (centroidMin[splitAxis] == centroidMax[splitAxis]) {
+            // create leaf node
+            int geomIndex = orderedGeoms.size();
+            for (int i = start; i < end; ++i) {
+                int index = geomInfo[i].geomIndex;
+                orderedGeoms.push_back(geoms[index]);
+            }
+            node->initLeaf(geomIndex, geomCount, minBound, maxBound);
+        }
+        else {
+            // partition geoms
+
+            node->initInterior(splitAxis, 
+                constructBVHTree(geomInfo, start, mid, totalNodes, orderedGeoms),
+                constructBVHTree(geomInfo, mid, end, totalNodes, orderedGeoms));
+        }
     }
 
-    // choose the longest axis to split
-    int axis = getLongestAxis(minBounds, maxBounds);
-
-    // sort geoms by their centroids along the chosen axis
-    std::sort(geoms.begin() + start, geoms.begin() + end, [axis](const Geom& a, const Geom& b) {
-        glm::vec3 aMin, aMax, bMin, bMax;
-        a.getBounds(aMin, aMax);
-        b.getBounds(bMin, bMax);
-
-        return 0.5f * (aMin[axis] + aMax[axis]) < 0.5f * (bMin[axis] + bMax[axis]);
-    });
-
-    // compute the best split with SAH cost
-    int bestSplit = getBestSplit(geoms, start, end);
-    if (bestSplit == -1 || bestSplit == start) {
-        // fall backs to midpoint split
-        bestSplit = start + (end - start) / 2; 
-    }
-
-    // Debugging print statements
-    /*std::cout << "Constructing BVH for range: " << start << " to " << end << std::endl;
-    std::cout << "Best split index: " << bestSplit << std::endl;*/
-
-
-    // Recursively construct child nodes
-    node->left = constructBVH(geoms, start, bestSplit, numLeaves);
-    node->right = constructBVH(geoms, bestSplit, end, numLeaves);
-
-    return node.release();
+    return node;
 }
 
 int Scene::flattenBVHTree(BVHNode* node) {
@@ -470,5 +443,21 @@ int Scene::flattenBVHTree(BVHNode* node) {
 
     // Total size of the flattened subtree
     return 1 + leftSize + rightSize;
+}
+
+void Scene::buildBVH() {
+    std::vector<BVHGeomInfo> geomInfo(geoms.size());
+
+    for (size_t i = 0; i < geoms.size(); ++i) {
+        glm::vec3 minBound, maxBound;
+        geoms[i].getBounds(minBound, maxBound);
+        geomInfo[i] = { i, minBound, maxBound };
+    } 
+
+    int totalNodes = 0;
+    std::vector<Geom> orderedGeoms;
+    BVHNode* root = constructBVHTree(geomInfo, 0, geoms.size(), &totoalNodes, orderedGeoms);
+
+    geoms.swap(orderedGeoms);
 }
 

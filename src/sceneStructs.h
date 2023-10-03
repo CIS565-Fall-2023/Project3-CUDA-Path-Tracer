@@ -33,7 +33,7 @@ struct Geom {
         glm::vec3 v2;
     } triangle;
 
-    void Geom::getBounds(glm::vec3& minBounds, glm::vec3& maxBounds) const {
+    Bound getBounds() const {
         glm::vec3 objectSpaceMin;
         glm::vec3 objectSpaceMax;
 
@@ -69,29 +69,90 @@ struct Geom {
             objectSpaceMax
         };
 
-        minBounds = glm::vec3(FLT_MAX);
-        maxBounds = glm::vec3(-FLT_MAX);
+        auto bound = new Bound;
 
         for (int i = 0; i < 8; i++) {
             glm::vec3 worldCorner = glm::vec3(transform * glm::vec4(corners[i], 1.0f));
-            minBounds = glm::min(minBounds, worldCorner);
-            maxBounds = glm::max(maxBounds, worldCorner);
+            bound->unionBound(worldCorner);
+        }
+
+        return *bound;
+    }
+};
+
+struct Bound {
+    glm::vec3 pMin, pMax;
+
+    Bound()
+        : pMin(glm::vec3(FLT_MAX)), pMax(glm::vec3(-FLT_MAX)) {};
+
+    Bound(const glm::vec3& p1, const glm::vec3& p2)
+        : pMin(glm::min(p1, p2)), pMax(glm::max(p1, p2)) {};
+
+    int getLongestAxis() {
+        glm::vec3 diff = pMax - pMin;
+
+        if (diff.x > diff.y && diff.x > diff.z) {
+            return 0;
+        }
+        else if (diff.y > diff.z) {
+            return 1;
+        }
+        else {
+            return 2;
         }
     }
 
+    glm::vec3 offset(const glm::vec3 point) {
+
+    }
+
+    float computeBoxSurfaceArea() {
+        glm::vec3 diff = pMax - pMin;
+        return 2.0f * (diff.x * diff.y + diff.x * diff.z + diff.y * diff.z);
+    }
+
+    Bound unionBound(const glm::vec3& p) {
+        return Bound(glm::min(pMin, p), glm::max(pMax, p));
+    }
+
+    Bound unionBound(const Bound& otherBound) {
+        return Bound(glm::min(pMin, otherBound.pMin), glm::max(pMax, otherBound.pMax));
+    }
+};
+
+
+struct BVHGeomInfo {
+    size_t geomIndex;
+    Bound bound;
+    glm::vec3 centroid;
+
+    BVHGeomInfo(size_t geomIndex, const Bound& bound)
+        : geomIndex(geomIndex), bound(bound),
+          centroid(.5f * bound.pMin + .5f * bound.pMax) {};
 };
 
 struct BVHNode {
-    glm::vec3 minBounds; // minimun bounding box corner
-    glm::vec3 maxBounds; // maximun bounding box corner
-    BVHNode* left;       // left child 
-    BVHNode* right;      // right child
-    int geomIndex;       // index of the geom for leaf node
-    int numGeoms;        // number of geoms in this node
-    bool isLeafNode;     // flag for leaf node 
+    glm::vec3 minBound, maxBound;
+    BVHNode* left, * right;      
+    int splitAxis, geomIndex, geomCount;
     
-    BVHNode() :
-        left(nullptr), right(nullptr), geomIndex(-1), isLeafNode(false) {};
+    void initLeaf(int first, int n, ) {
+        geomIndex = first;
+        geomCount = n;
+        minBound = minBound;
+        maxBound = maxBound;
+        left = right = nullptr;
+    }
+
+    void initInterior(int axis, BVHNode* left, BVHNode* right) {
+        left = left;
+        right = right;
+        minBound = glm::min(left->minBound, right->minBound);
+        maxBound = glm::max(left->minBound, right->maxBound);
+        splitAxis = axis;
+        geomCount = 0;
+    }
 };
 
 struct CompactBVH {
