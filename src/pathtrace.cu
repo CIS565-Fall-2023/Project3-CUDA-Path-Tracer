@@ -72,7 +72,7 @@ __host__ __device__ glm::vec3 hdrToLdr(glm::vec3 col)
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-	int iter, glm::vec3* image, bool isHdr, bool isNormals) {
+	int iter, glm::vec3* image, bool isNormals) {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
@@ -80,13 +80,13 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		int index = x + (y * resolution.x);
 		glm::vec3 pix = image[index] / (float) iter;
 
-		if (isHdr)
-		{
-			pix = hdrToLdr(pix);
-		}
-		else if (isNormals)
+		if (isNormals)
 		{
 			pix = (pix + 1.f) / 2.f;
+		}
+		else
+		{
+			pix = hdrToLdr(pix);
 		}
 
 		glm::ivec3 color;
@@ -816,22 +816,17 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	///////////////////////////////////////////////////////////////////////////
 
 	glm::vec3* dev_image_ptr;
-	bool isHdr = false;
-	bool showNormals = false;
 	if (guiData->showAlbedo)
 	{
 		dev_image_ptr = dev_first_hit_albedo_accum;
-		isHdr = true;
 	}
 	else if (guiData->showNormals)
 	{
 		dev_image_ptr = dev_first_hit_normals_accum;
-		showNormals = true;
 	}
 	else
 	{
 		dev_image_ptr = guiData->denoising ? dev_image_final : dev_image_raw;
-		isHdr = true;
 	}
 
 	// Send results to OpenGL buffer for rendering
@@ -839,9 +834,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		pbo, 
 		cam.resolution, 
 		iter, 
-		dev_image_ptr, 
-		isHdr,
-		showNormals
+		dev_image_ptr,
+		guiData->showNormals
 	);
 
 	// Retrieve image from GPU
