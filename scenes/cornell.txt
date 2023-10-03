@@ -33,8 +33,9 @@ REFL        1
 // glass
 MATERIAL 6
 SPEC_COL    1 1 1
+SPEC_ROUGH  0.01
 REFL        1
-REFR        1
+REFR        0
 REFR_IOR    1.45
 
 // ==================================================

@@ -5,7 +5,7 @@
 
 __host__ __device__ glm::vec3 calculateDirectionNotNormal(const glm::vec3 normal)
 {
-    // Find a direction that is not the normal based off of whether or not the
+    // Find alpha direction that is not the normal based off of whether or not the
     // normal's components are all equal to sqrt(1/3) or whether or not at
     // least one component is less than sqrt(1/3). Learned this trick from
     // Peter Kutz.
@@ -20,7 +20,7 @@ __host__ __device__ glm::vec3 calculateDirectionNotNormal(const glm::vec3 normal
 }
 
 /**
- * Computes a cosine-weighted random direction in a hemisphere.
+ * Computes alpha cosine-weighted random direction in alpha hemisphere.
  * Used for diffuse lighting.
  */
 __host__ __device__
@@ -41,24 +41,162 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
-__device__
-void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng)
+__device__ glm::vec3 L_GGX(const glm::vec3& wo, const float alpha, thrust::default_random_engine& rng)
 {
-    newRay.direction = glm::reflect(pathSegment.ray.direction, normal);
-    pathSegment.color *= m.specular.color;
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float xi1 = u01(rng);
+    float xi2 = u01(rng);
+
+    float cosTheta = 0, phi = TWO_PI * xi1;
+
+    float tanTheta2 = alpha * alpha * xi2 / (1.f - xi2);
+    cosTheta = rsqrtf(1.f + tanTheta2);
+
+    float sinTheta = sqrtf(max(0.f, 1.f - cosTheta * cosTheta));
+
+    glm::vec3 wh = glm::vec3(sinTheta * cosf(phi), sinTheta * sinf(phi), cosTheta);
+    if (glm::dot(wo, wh) < 0) {
+        wh = -wh;
+    }
+
+    return wh;
+}
+
+//__device__ float D_GGX(const glm::vec3 H, const float alpha)
+//{
+//    float a2 = alpha * alpha;
+//    float denom = (a2 - 1.f) * (H.z * H.z) + 1.f;
+//    return a2 / (PI * (denom * denom));
+//}
+
+__device__ float D_GGX(const glm::vec3 H, const float alpha)
+{
+    float cosTheta2 = H.z * H.z;
+    float sinTheta2 = sqrtf(1.f - cosTheta2);
+    float tanTheta2 = sinTheta2 / cosTheta2;
+
+    float cosTheta4 = cosTheta2 * cosTheta2;
+
+    float e = 1.f / (alpha * alpha) * tanTheta2;
+    return 1.f / (PI * alpha * alpha * cosTheta4 * (1 + e) * (1 + e));
+}
+
+//__device__ float lambda_GGX(const float a)
+//{
+//    return (-1.f + sqrtf(1.f + 1.f / (a * a))) * 0.5f;
+//}
+//
+//__device__ float G1_GGX(const glm::vec3 V1, const glm::vec3 V2, const float alpha)
+//{
+//    float dot = glm::dot(V1, V2);
+//    float a = dot / (alpha * sqrtf(1.f - dot * dot));
+//    return 1.f / (1.f + lambda_GGX(a));
+//}
+//
+//__device__ float G2_GGX(const glm::vec3 V, const glm::vec3 L, const glm::vec3 H, const float alpha)
+//{
+//    return 1.f / (1.f + G1_GGX(H, L, alpha) + G1_GGX(H, V, alpha));
+//}
+
+__device__ float lambda_GGX(const glm::vec3 H, const float alpha)
+{
+    float cosTheta2 = H.z * H.z;
+    float sinTheta2 = sqrtf(1.f - cosTheta2);
+    float tanTheta2 = sinTheta2 / cosTheta2;
+
+    float alphaTanTheta2 = alpha * alpha * tanTheta2;
+    return (-1.f + sqrtf(1.f + alphaTanTheta2)) * 0.5f;
+}
+
+__device__ float G2_GGX(const glm::vec3 V, const glm::vec3 L, const glm::vec3 H, const float alpha)
+{
+    return 1.f / (1.f + lambda_GGX(V, alpha) + lambda_GGX(L, alpha));
 }
 
 __device__
-void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng)
+float schlickFresnel(const glm::vec3& V, const glm::vec3& N, const float ior)
 {
-    if (glm::dot(pathSegment.ray.direction, normal) < 0) {
-        // entering
-        newRay.direction = glm::refract(pathSegment.ray.direction, normal, 1.f / m.specular.indexOfRefraction);
-    } else {
-        // exiting
-        newRay.direction = glm::refract(pathSegment.ray.direction, -normal, m.specular.indexOfRefraction);
+    float cosTheta = abs(glm::dot(V, N));
+    float R0 = (1 - ior) / (1 + ior);
+    R0 = R0 * R0;
+    return R0 + (1 - R0) * pow(1.f - cosTheta, 5.f);
+}
+
+__device__
+void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& N, const Material& m, thrust::default_random_engine& rng,
+    bool isSingular)
+{
+    if (isSingular)
+    {
+        if (m.specular.roughness == 0)
+        {
+            newRay.direction = glm::reflect(pathSegment.ray.direction, N);
+            pathSegment.color *= m.specular.color;
+        }
+        else
+        {
+            //const float alpha = 1.62142 * sqrtf(m.specular.roughness);
+            const float alpha = m.specular.roughness;
+
+            const glm::vec3 T = glm::normalize(glm::cross(N, calculateDirectionNotNormal(N)));
+            const glm::vec3 B = glm::normalize(glm::cross(N, T));
+
+            const glm::vec3 V = -glm::vec3(glm::dot(pathSegment.ray.direction, T), glm::dot(pathSegment.ray.direction, B), glm::dot(pathSegment.ray.direction, N));
+            const glm::vec3 H = L_GGX(V, alpha, rng);
+            const glm::vec3 L = -glm::reflect(V, H);
+
+            if (V.z == 0 || L.z == 0 || (H.x == 0 && H.y == 0 && H.z == 0))
+            {
+                pathSegment.color = glm::vec3(0);
+                pathSegment.remainingBounces = 0;
+                return;
+            }
+
+            const float F = schlickFresnel(V, H, m.specular.indexOfRefraction);
+            const float G = G2_GGX(V, L, H, alpha);
+            const float D = D_GGX(H, alpha);
+
+            const float pdf = D * abs(H.z) / (4.f * glm::dot(V, H));
+
+            float R = F * G * D / (4.f * L.z * V.z);
+            R /= pdf;
+
+            newRay.direction = L.x * T + L.y * B + L.z * N;
+            pathSegment.color *= m.specular.color * R;
+        }
     }
+    else
+    {
+        if (m.specular.roughness == 0)
+        {
+            newRay.direction = glm::reflect(pathSegment.ray.direction, N);
+            pathSegment.color *= m.specular.color;
+            float fresnel = schlickFresnel(pathSegment.ray.direction, N, m.specular.indexOfRefraction);
+            pathSegment.color *= fresnel;
+        }
+        else
+        {
+
+        }
+    }
+}
+
+__device__
+void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng,
+    bool isSingular)
+{
     pathSegment.color *= m.specular.color;
+
+    if (isSingular)
+    {
+        if (m.specular.roughness == 0)
+        {
+            float fresnel = schlickFresnel(pathSegment.ray.direction, normal, m.specular.indexOfRefraction);
+            pathSegment.color *= (1 - fresnel);
+        }
+
+        return;
+    }
 }
 
 __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
@@ -91,21 +229,21 @@ __device__ glm::vec3 tex2DCustom(cudaTextureObject_t tex, glm::vec2 uv)
 }
 
 /**
- * Scatter a ray with some probabilities according to the material properties.
- * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
+ * Scatter alpha ray with some probabilities according to the material properties.
+ * For example, alpha diffuse surface scatters in alpha cosine-weighted hemisphere.
  * A perfect specular surface scatters in the reflected ray direction.
  * In order to apply multiple effects to one surface, probabilistically choose
  * between them.
  *
  * The visual effect you want is to straight-up add the diffuse and specular
- * components. You can do this in a few ways. This logic also applies to
+ * components. You can do this in alpha few ways. This logic also applies to
  * combining other types of materias (such as refractive).
  *
- * - Always take an even (50/50) split between a each effect (a diffuse bounce
- *   and a specular bounce), but divide the resulting color of either branch
+ * - Always take an even (50/50) split between alpha each effect (alpha diffuse bounce
+ *   and alpha specular bounce), but divide the resulting color of either branch
  *   by its probability (0.5), to counteract the chance (0.5) of the branch
  *   being taken.
- *   - This way is inefficient, but serves as a good starting point - it
+ *   - This way is inefficient, but serves as alpha good starting point - it
  *     converges slowly, especially for pure-diffuse or pure-specular.
  * - Pick the split based on the intensity of each material color, and divide
  *   branch result by that branch's probability (whatever probability you use).
@@ -193,27 +331,24 @@ void scatterRay(
     {
         if (m.specular.hasReflective > 0 && m.specular.hasRefractive > 0)
         {
-            float cosTheta = abs(glm::dot(pathSegment.ray.direction, isect.surfaceNormal));
-            float R0 = (1 - m.specular.indexOfRefraction) / (1 + m.specular.indexOfRefraction);
-            R0 = R0 * R0;
-            float fresnel = R0 + (1 - R0) * pow(1.f - cosTheta, 5.f);
-
-            if (u01(rng) < fresnel) // implicit multiplication by fresnel
+            if (u01(rng) < 0.5f)
             {
-                applyReflection(pathSegment, newRay, isect.surfaceNormal, m, rng);
+                applyReflection(pathSegment, newRay, isect.surfaceNormal, m, rng, false);
             } 
             else
             {
-                applyRefraction(pathSegment, newRay, isect.surfaceNormal, m, rng);
+                applyRefraction(pathSegment, newRay, isect.surfaceNormal, m, rng, false);
             }
+
+            pathSegment.color *= 2.f;
         } 
         else if (m.specular.hasReflective > 0)
         {
-            applyReflection(pathSegment, newRay, isect.surfaceNormal, m, rng);
+            applyReflection(pathSegment, newRay, isect.surfaceNormal, m, rng, true);
         } 
         else if (m.specular.hasRefractive > 0)
         {
-            applyRefraction(pathSegment, newRay, isect.surfaceNormal, m, rng);
+            applyRefraction(pathSegment, newRay, isect.surfaceNormal, m, rng, true);
         }
 
         if (glm::dot(newRay.direction, newRay.direction) == 0)
