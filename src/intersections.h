@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtx/intersect.hpp>
 
 #include "sceneStructs.h"
 #include "utilities.h"
@@ -46,25 +47,17 @@ __host__ __device__ float3 triangleIntersectionTest(TriangleDetail triangle, Ray
     glm::vec3 v0 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v0, 1.f));
     glm::vec3 v1 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v1, 1.f));
     glm::vec3 v2 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v2, 1.f));
-    glm::vec3 v0v1 = v1 - v0;
-    glm::vec3 v0v2 = v2 - v0;
-    glm::vec3 tvec = r.origin - v0;
-    glm::vec3 pvec = glm::cross(r.direction, v0v2);
-    float det = dot(v0v1, pvec);
-    if (fabs(det) < 1e-5)
-        return { -1,0,0 };
-    glm::vec3 qvec = glm::cross(tvec, v0v1);
-    float invDet = 1.0 / det;
-    float t = dot(qvec, v0v2) * invDet;
-    float t_min = -1e38f;
-    float t_max = 1e38f;
-    if (t >= t_max || t <= t_min)
-        return { -1,0,0 };
-    float u = dot(tvec, pvec) * invDet;
-    float v = dot(r.direction, qvec) * invDet;
-    if (v < 0 || u + v > 1 || u < 0 || u > 1)
-        return { -1,0,0 };
-    return { t, 1 - u - v, u };
+
+    glm::vec3 bary;
+    bool intersect = glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, bary);
+
+    if (!intersect) {
+        return float3{ -1.0f, 0.f, 0.f }; // No intersection
+    }
+    float t = bary.z;
+    if (t < 0.0f || t > 1e38f)
+        return float3{ -1.0f, 0.f, 0.f }; // No intersection
+    return float3{ t, 1 - bary.x - bary.y,bary.x };
 }
 
 __device__ bool intersectTBB(const Ray& ray, const TBB& aabb, float& tmin) {
