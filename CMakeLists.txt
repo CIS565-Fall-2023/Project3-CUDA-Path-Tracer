@@ -81,6 +81,7 @@ file(GLOB H_FILES
     "${PROJECT_SOURCE_DIR}/src/tinyobj/*.h"
     "${PROJECT_SOURCE_DIR}/src/*.h"
     "${PROJECT_SOURCE_DIR}/src/*.hpp"
+    "${PROJECT_SOURCE_DIR}/src/*.cuh"
 )
 list(SORT SRC_FILES)
 list(SORT H_FILES)

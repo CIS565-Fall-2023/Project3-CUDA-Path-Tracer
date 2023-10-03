@@ -7,6 +7,9 @@
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
 #include <device_launch_parameters.h>
+#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -14,7 +17,7 @@
 #include "glm/gtx/norm.hpp"
 #include "utilities.h"
 #include "pathtrace.h"
-#include "intersections.h"
+#include "intersections.h" 
 #include "interactions.h"
 #include "bvh.h"
 
@@ -167,6 +170,7 @@ void PathTracer::pathtraceInit(Scene* scene)
 	this->dev_trigs.malloc(scene->trigs.size(), "Malloc dev_trigs error");
 	cudaMemcpy(this->dev_trigs.get(), scene->trigs.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 	initMeshTransform();
+#if BVH
 	//get transformed triangles to CPU to build BVH tree, triangles will be reordered based on tree
 	std::vector<Triangle> tmp_trig(scene->trigs.size());
 	cudaMemcpy(tmp_trig.data(), this->dev_trigs.get(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyDeviceToHost);
@@ -176,6 +180,7 @@ void PathTracer::pathtraceInit(Scene* scene)
 	cudaMemcpy(this->dev_trigs.get(), tmp_trig.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 	this->dev_bvh.malloc(bvh.size(), "Malloc dev_bvh error");
 	cudaMemcpy(this->dev_bvh.get(), bvh.data(), bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+#endif //BVH
 	
 
 	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
@@ -185,6 +190,7 @@ void PathTracer::pathtraceInit(Scene* scene)
 	this->dev_intersect.malloc(pixelcount, "Malloc dev_intersect error");
 #if CACHE_FIRST_FRAME
 	this->dev_firstIntersect.malloc(pixelcount, "Malloc dev_firstIntersect error");
+	this->dev_firstPaths.malloc(pixelcount, "Malloc dev_firstPath error");
 #endif // CACHE_FIRST_FRAME
 
 	checkCUDAError("pathtraceInit");
@@ -329,7 +335,7 @@ __global__ void computeIntersections(
 			out_intersects[path_index].t = t_min;
 			out_intersects[path_index].bary = bary;
 			out_intersects[path_index].materialId = in_meshs[trig.meshId].materialId;
-			out_intersects[path_index].surfaceNormal = glm::normalize(trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z);
+			out_intersects[path_index].surfaceNormal = trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z;
 		}
 	}
 }
@@ -361,6 +367,7 @@ __global__ void processPBR(
 	Material material = materials[intersect.materialId];
 #if DEBUG
 	seg.color = intersect.surfaceNormal * 0.5f + glm::vec3(0.5);
+	seg.remainingBounces = 0;
 	return;
 #else
 
@@ -437,9 +444,6 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	BVHNode* dev_bvh = this->dev_bvh.get();
 	int num_bvh = this->dev_bvh.size();
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
-	checkCUDAError("generate camera ray");
-
 	thrust::device_ptr<PathSegment> thrust_paths(dev_paths);
 	thrust::device_ptr<PathSegment> thrust_paths_end(dev_paths + pixelcount);
 	thrust::device_ptr<PathSegment> thrust_donePaths(dev_donePaths);
@@ -451,14 +455,17 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	bool iterationComplete = false;
 #if CACHE_FIRST_FRAME
 	ShadeableIntersection* dev_firstIntersect = this->dev_firstIntersect.get();
+	PathSegment* dev_firstPaths = this->dev_firstPaths.get();
 	if (iter == 1) {
+		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_firstPaths);
+		checkCUDAError("generate camera ray");
 		cudaMemset(dev_firstIntersect, 0, pixelcount * sizeof(ShadeableIntersection));
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 #if BVH
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
-			, dev_paths
+			, dev_firstPaths
 			, dev_trigs
 			, dev_meshs
 			, num_trigs
@@ -471,7 +478,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
-			, dev_paths
+			, dev_firstPaths
 			, dev_trigs
 			, dev_meshs
 			, num_trigs
@@ -480,6 +487,9 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		checkCUDAError("trace one bounce");
 #endif //BVH
 	}
+#else
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+	checkCUDAError("generate camera ray");
 #endif // CACHE_FIRST_FRAME
 	while (!iterationComplete) {
 	//   clean shading chunks
@@ -492,6 +502,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 		if (depth == 0) {
 			cudaMemcpy(dev_intersections, dev_firstIntersect, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(dev_paths, dev_firstPaths, pixelcount * sizeof(PathSegment), cudaMemcpyDeviceToDevice);
 		}
 		else
 		{
@@ -602,9 +613,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, dev_materials
 			);
 		depth++;
-#if DEBUG
-		iterationComplete = true;
-#else
+
 #if COMPACTION
 		// * TODO: Stream compact away all of the terminated paths.
 		thrust_donePaths = thrust::copy_if(thrust_paths, thrust_paths_end, thrust_donePaths, is_done());
@@ -614,7 +623,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 #else
 		iterationComplete = depth >= (traceDepth);
 #endif //COMPACTION
-#endif //DEBUG
+
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;

@@ -7,6 +7,8 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
+#include "texture_fetch_functions.h"
+#include "texture.cuh"
 
 using namespace std;
 
@@ -17,11 +19,13 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     int loadMesh(string objectid);
+    int loadTexture(string textureid);
 public:
     Scene(string filename);
     //~Scene();
     std::vector<Mesh> meshs;
     std::vector<Triangle> trigs;
     std::vector<Material> materials;
+    std::vector<CudaTexture> texs;
     RenderState state;
 };

@@ -22,6 +22,8 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    int textureId = -1;
+    int bumpId = -1;
 };
 
 struct Camera {
