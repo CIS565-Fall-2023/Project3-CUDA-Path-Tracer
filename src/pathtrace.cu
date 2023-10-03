@@ -80,6 +80,8 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static ShadeableIntersection* dev_first_bounce_cache = NULL;
 static bool first_bounce_cached = false;
+static Triangle* dev_tris = NULL;
+static BvhNode* dev_bvh_nodes = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -102,6 +104,9 @@ void pathtraceInit(Scene* scene) {
     cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
     cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
+    cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
+    cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
     cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
     cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
@@ -111,6 +116,8 @@ void pathtraceInit(Scene* scene) {
     cudaMalloc(&dev_first_bounce_cache, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_first_bounce_cache, 0, pixelcount * sizeof(ShadeableIntersection));
 
+    cudaMalloc(&dev_bvh_nodes, scene->bvh_nodes.size() * sizeof(BvhNode));
+    cudaMemcpy(dev_bvh_nodes, scene->bvh_nodes.data(), scene->bvh_nodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
     // TODO: initialize any extra device memeory you need
     first_bounce_cached = false;
     checkCUDAError("pathtraceInit");
@@ -120,9 +127,11 @@ void pathtraceFree() {
     cudaFree(dev_image);  // no-op if dev_image is null
     cudaFree(dev_paths);
     cudaFree(dev_geoms);
+    cudaFree(dev_tris);
     cudaFree(dev_materials);
     cudaFree(dev_intersections);
     cudaFree(dev_first_bounce_cache);
+    cudaFree(dev_bvh_nodes);
     // TODO: clean up any extra device memory you created
 
     checkCUDAError("pathtraceFree");
@@ -171,6 +180,9 @@ __global__ void computeIntersections(
     , Geom* geoms
     , int geoms_size
     , ShadeableIntersection* intersections
+    , Triangle* tris
+    , BvhNode* bvh_nodes
+    , int root_node_index
 )
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -188,6 +200,9 @@ __global__ void computeIntersections(
 
         glm::vec3 tmp_intersect;
         glm::vec3 tmp_normal;
+
+        intersect_bvh(tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, root_node_index);
+
 
         // naive parse through global geoms
 
@@ -426,14 +441,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
                 , dev_geoms
                 , hst_scene->geoms.size()
                 , dev_intersections
+                , dev_tris
+                , dev_bvh_nodes
+                , hst_scene->root_node_index
                 );
 #if CACHE_FIRST_BOUNCE
         }
         else
         {
             // For some reason, custom kernel is faster than using cudaMemcpy - cudaMemcpy leads to a decrease in performance
-            cache_intersections << <numblocksPathSegmentTracing, blockSize1d >> > (pixelcount, dev_intersections, dev_first_bounce_cache);
-            //cudaMemcpy(dev_intersections, dev_first_bounce_cache, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+            //cache_intersections << <numblocksPathSegmentTracing, blockSize1d >> > (pixelcount, dev_intersections, dev_first_bounce_cache);
+            cudaMemcpy(dev_intersections, dev_first_bounce_cache, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
         }
 #endif
 
@@ -442,8 +460,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #if CACHE_FIRST_BOUNCE
         if (depth == 0 && !first_bounce_cached)
         {
-            cache_intersections << <numblocksPathSegmentTracing, blockSize1d >> > (pixelcount, dev_first_bounce_cache, dev_intersections);
-            //cudaMemcpy(dev_first_bounce_cache, dev_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
+            //cache_intersections << <numblocksPathSegmentTracing, blockSize1d >> > (pixelcount, dev_first_bounce_cache, dev_intersections);
+            cudaMemcpy(dev_first_bounce_cache, dev_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
             first_bounce_cached = true;
         }
 #endif

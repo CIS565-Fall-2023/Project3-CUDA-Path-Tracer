@@ -1,6 +1,10 @@
 #include "main.h"
 #include "preview.h"
+#include <glm/glm.hpp>
+#include <glm/gtx/intersect.hpp>
 #include <cstring>
+
+#define DEBUG 0
 
 static std::string startTimeString;
 
@@ -27,13 +31,44 @@ int iteration;
 int width;
 int height;
 
+#if DEBUG
+void print_vec3(glm::vec3 v) {
+	std::cout << v.x << " " << v.y << " " << v.z << std::endl;
+}
+
+void test() {
+	// unsure if this all works for world coords
+	glm::vec3 v0(-1, -1, 0);
+	glm::vec3 v1(1, -1, 0);
+	glm::vec3 v2(1, 1, 0);
+	glm::vec3 nor0(-1, 0, -1);
+	glm::vec3 nor1(glm::normalize(glm::vec3(0.5f, -0.5f, 0.0f)));
+	glm::vec3 nor2(1, 0, 1);
+	glm::vec3 ro(0.5, -0.5, 1);
+	glm::vec3 rd(0, 0, -1);
+	glm::vec3 bary;
+
+	bool result = glm::intersectRayTriangle(ro, rd, v0, v1, v2, bary);
+	float bary_w = 1 - bary.x - bary.y;
+	glm::vec3 hit_pos = v0 * bary_w + v1 * bary.x + v2 * bary.y;
+	glm::vec3 nor = glm::normalize(nor0 * bary_w + nor1 * bary.x + nor2 * bary.y);
+	std::cout << rd.x << " " << rd.y << " " << rd.z << std::endl
+		<< result << std::endl
+		<< bary.x << " " << bary.y << " " << bary.z << " "  << bary_w << std::endl;
+	print_vec3(hit_pos);
+	print_vec3(nor);
+
+}
+#endif
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
 
 int main(int argc, char** argv) {
 	startTimeString = currentTimeString();
-
+#if DEBUG
+	test();
+#else
 	if (argc < 2) {
 		printf("Usage: %s SCENEFILE.txt\n", argv[0]);
 		return 1;
@@ -81,6 +116,7 @@ int main(int argc, char** argv) {
 	mainLoop();
 
 	return 0;
+#endif
 }
 
 void saveImage() {

@@ -10,6 +10,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    TRI,
 };
 
 struct Ray {
@@ -75,4 +76,87 @@ struct ShadeableIntersection {
   glm::vec3 surfaceNormal;
   glm::vec3 intersectionPoint;
   int materialId;
+};
+
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 nor;
+};
+
+struct Triangle
+{
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+    glm::vec3 centroid; // Dont forget to calculate this
+};
+
+struct Aabb {
+    glm::vec3 bmin = glm::vec3(FLT_MAX);
+    glm::vec3 bmax = glm::vec3(FLT_MIN);
+
+    void grow(glm::vec3 input) {
+		bmin = glm::min(bmin, input);
+		bmax = glm::max(bmax, input);
+	}
+
+    void grow(const Triangle& tri) {
+		grow(tri.v0.pos);
+		grow(tri.v1.pos);
+		grow(tri.v2.pos);
+	}
+
+    void grow(const Aabb &input) {
+        grow(input.bmin);
+        grow(input.bmax);
+    }
+
+    glm::vec3 extent() const {
+        return bmax - bmin;
+    }
+
+    float surface_area() const
+    {
+        glm::vec3 e = extent() ;
+        return e.x * e.y + e.y * e.z + e.z * e.x;
+    }
+
+    float area()
+    {
+        glm::vec3 diff = bmax - bmin;
+        return (diff.x * diff.y + diff.x * diff.z + diff.y * diff.z);
+    }
+
+    Aabb()
+        : bmin(glm::vec3(FLT_MAX)), bmax(glm::vec3(FLT_MIN))
+		{}
+};
+
+struct BvhNode
+{
+    Aabb aa_bb;
+    uint32_t left_first;
+    uint32_t tri_count;
+
+    BvhNode()
+        : aa_bb(Aabb()), left_first(0), tri_count(0)
+        {}
+
+    BvhNode(uint32_t left_first, uint32_t tri_count)
+        : aa_bb(), left_first(left_first), tri_count(tri_count)
+        {}
+
+    bool is_leaf()
+    {
+        return tri_count > 0;
+    }
+};
+
+#define NUM_BINS 8
+
+struct Bin
+{
+    Aabb bounds;
+    int tri_count = 0;
 };
