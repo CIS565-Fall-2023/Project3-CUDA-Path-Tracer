@@ -18,8 +18,9 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
+#define ANTIALIA 1
+#define DEPTHOFFIELD 1
 #define blockSize 128
-
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -130,6 +131,36 @@ void pathtraceFree() {
 
 	checkCUDAError("pathtraceFree");
 }
+//reference to pbrt book https://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations#ConcentricSampleDisk
+__device__
+glm::vec2 ConcentricSampleDisk(const glm::vec2 u) {
+	glm::vec2 output;
+
+
+	glm::vec2 uOffset = 2.f * u - glm::vec2(1);
+
+	
+	if (uOffset.x == 0 && uOffset.y == 0) {
+		output = glm::vec2(0.f);
+		return output;
+	}
+			
+
+	float theta;
+	float distance;
+	if (std::abs(uOffset.x) > std::abs(uOffset.y)) {
+		distance = uOffset.x;
+		theta = PI/4 * (uOffset.y / uOffset.x);
+	}
+	else {
+		distance = uOffset.y;
+		theta = PI/2 - PI/4 * (uOffset.x / uOffset.y);
+	}
+	return distance * glm::vec2(std::cos(theta), std::sin(theta));
+
+}
+
+
 
 /**
 * Generate PathSegments with rays from the camera through the screen into the
@@ -151,13 +182,41 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
+		float new_x = x;
+		float new_y = y;
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+
 		// TODO: implement antialiasing by jittering the ray
+#if ANTIALIA
+		
+		
+		new_x = (float)x + u01(rng) - 0.5f;
+		new_y = (float)y + u01(rng) - 0.5f;
 
-
+#endif
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * (new_x - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * (new_y - (float)cam.resolution.y * 0.5f)
 		);
+
+		
+//reference to ttps://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models#ProjectiveCamera::focalDistance
+#if DEPTHOFFIELD
+		float cameraLength = 0.5;
+		float focus_distance = 8.0f;
+
+		glm::vec2 random_vec2 = glm::vec2(u01(rng), u01(rng));
+		glm::vec2 Lens = cameraLength * ConcentricSampleDisk(random_vec2);
+		float m_ft = glm::abs(focus_distance / (segment.ray.direction.z));
+		glm::vec3 m_focus = segment.ray.origin + m_ft * segment.ray.direction;
+
+
+		segment.ray.origin = cam.position + cam.up * Lens.y + cam.right * Lens.x;
+		segment.ray.direction = glm::normalize(m_focus - segment.ray.origin);
+
+#endif
+		
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
@@ -202,10 +261,14 @@ __global__ void computeIntersections(
 			if (geom.type == CUBE)
 			{
 				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				pathSegment.outside = outside;
+
 			}
 			else if (geom.type == SPHERE)
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				pathSegment.outside = outside;
+
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -278,8 +341,7 @@ __global__ void shadeBSDFMaterial(
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
 
-				glm::vec3 intersectionPoint = glm::normalize(pathSegments[idx].ray.direction) * intersection.t + pathSegments[idx].ray.origin;
-				scatterRay(pathSegments[idx], intersectionPoint, intersection.surfaceNormal, material, rng);
+				scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray,intersection.t), intersection.surfaceNormal, material, rng);
 
 				pathSegments[idx].remainingBounces -= 1;
 
@@ -330,9 +392,6 @@ __global__ void shadeFakeMaterial(
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-
-
-
 
 				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
 				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
@@ -436,7 +495,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
 	int num_paths = dev_path_end - dev_paths;
-	int temp_path = num_paths;
+	int overall_path = num_paths;
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
@@ -447,10 +506,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 		// tracing
-		dim3 numblocksPathSegmentTracing = (temp_path + blockSize1d - 1) / blockSize1d;
+		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
-			, temp_path
+			, num_paths
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
@@ -459,11 +518,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
 		
-		if (depth >= 8) {
-			iterationComplete = true;
-			
-		}
+		
 		depth++;
+		if (depth >= traceDepth) {
+			iterationComplete = true;
+
+		}
 
 		// TODO:
 		// --- Shading Stage ---
@@ -477,7 +537,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		
 		shadeBSDFMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
-			temp_path,
+			num_paths,
 			dev_intersections,
 			dev_paths,
 			dev_materials,
@@ -487,10 +547,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 
 
-		auto last_ptr = thrust::partition(thrust::device, dev_paths, dev_paths + temp_path, sortByTrue());
+		auto last_ptr = thrust::partition(thrust::device, dev_paths, dev_paths + num_paths, sortByTrue());
 		//auto last_ptr = thrust::remove_if(dev_paths_ptr, dev_paths_ptr + num_paths, RemoveEndedRay());
 		//num_paths = last_ptr - dev_paths;
-		temp_path = last_ptr - dev_paths;
+		num_paths = last_ptr - dev_paths;
+
 		if (last_ptr - dev_paths<=0) {
 
 			iterationComplete = true;
@@ -498,7 +559,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		//iterationComplete = true; // TODO: should be based off stream compaction results.
 
-
+		
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;
@@ -507,9 +568,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (overall_path, dev_image, dev_paths);
 
-	///////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
