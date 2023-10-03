@@ -162,7 +162,7 @@ void scatterRay(
         glm::vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
         glm::vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
-        float invmax = 1.f / sqrt(max(glm::dot(T, T), glm::dot(B, B)));
+        float invmax = rsqrtf(max(glm::dot(T, T), glm::dot(B, B)));
         glm::mat3 TBN = glm::mat3(T * invmax, B * invmax, N);
 
         glm::vec3 normalMapCol = tex2DCustom(textureObjects[m.normalMap.textureIdx], isect.uv);
