@@ -203,12 +203,18 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		);
 
 #if DEPTH_OF_FIELD
-		glm::vec2 pointOnLens = cam.lensRadius * sampleDiscConcentric(glm::vec2(cam.position.x, cam.position.y));//uX(rng), uY(rng)));
+		//Entirely referenced PBRT : https://pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models#TheThinLensModelandDepthofField
 
-		float t = cam.focalLength / segment.ray.direction.z;
-		glm::vec3 pointOnFilm = segment.ray.origin + t * segment.ray.direction;
+		glm::vec2 pointOnLens = cam.lensRadius * sampleDiscConcentric(glm::vec2(uX(rng), uY(rng)));
 
-		segment.ray.origin = glm::vec3(pointOnLens.x, pointOnLens.y, 0);
+		//How I got this t-value?
+		//Eq 1: cam.pos + t * ray.dir = pointOnFilm
+		//Eq 2: (pointOnFilm - focalLength * view).(z-axis) = 0. This is assuming focal pplane to be an XY plane so a dot of its normal with a vector on it will be zero
+		//Solve for t. PBRT equation (presumably) assumes view vector to align with the z axis and the lens to be at the origin
+		float t = (cam.focalLength * cam.view.z - cam.position.z) / segment.ray.direction.z;
+		glm::vec3 pointOnFilm = getPointOnRay(segment.ray, t);
+
+		segment.ray.origin += glm::vec3(pointOnLens.x, pointOnLens.y, 0);
 		segment.ray.direction = glm::normalize(pointOnFilm - segment.ray.origin);
 #endif
 

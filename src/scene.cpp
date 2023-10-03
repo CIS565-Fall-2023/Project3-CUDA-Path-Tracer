@@ -126,23 +126,17 @@ int Scene::loadCamera() {
         } else if (strcmp(tokens[0].c_str(), "UP") == 0) {
             camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
-
-        utilityCore::safeGetline(fp_in, line);
-    }
-
 #if DEPTH_OF_FIELD
-    while (!line.empty() && fp_in.good()) {
-        vector<string> tokens = utilityCore::tokenizeString(line);
-        if (strcmp(tokens[0].c_str(), "LENSRADIUS") == 0) {
-            camera.lensRadius = atoi(tokens[1].c_str());
+        else if (strcmp(tokens[0].c_str(), "LENSRADIUS") == 0) {
+            camera.lensRadius = atof(tokens[1].c_str());
         }
         else if (strcmp(tokens[0].c_str(), "FOCALDIST") == 0) {
-            camera.focalLength = atoi(tokens[1].c_str());
+            camera.focalLength = atof(tokens[1].c_str());
         }
-
+#endif
         utilityCore::safeGetline(fp_in, line);
     }
-#endif
+
 
     //calculate fov based on resolution
     float yscaled = tan(fovy * (PI / 180));
