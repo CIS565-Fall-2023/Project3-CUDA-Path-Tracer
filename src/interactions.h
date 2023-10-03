@@ -41,32 +41,6 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
-//__device__ glm::vec3 sampleGGXMicrofacetNormal(const float alpha, thrust::default_random_engine& rng)
-//{
-//    thrust::uniform_real_distribution<float> u01(0, 1);
-//    float xi1 = u01(rng);
-//    float xi2 = u01(rng);
-//
-//    float theta = atanf(alpha * sqrtf(xi1) * rsqrtf(1.0f - xi1));
-//    float phi = TWO_PI * xi2;
-//
-//    float sinTheta = sinf(theta);
-//    float cosTheta = cosf(theta);
-//
-//    return glm::vec3(
-//        sinTheta * cosf(phi),
-//        sinTheta * sinf(phi),
-//        cosTheta
-//    );
-//}
-//
-//__device__ glm::vec3 orientVectorToNormal(const glm::vec3 v, const glm::vec3 N)
-//{
-//    const glm::vec3 T = glm::normalize(glm::cross(N, calculateDirectionNotNormal(N)));
-//    const glm::vec3 B = glm::normalize(glm::cross(N, T));
-//    return glm::mat3(T, B, N) * v;
-//}
-
 __device__
 void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng)
 {
@@ -77,13 +51,10 @@ void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3& nor
 __device__
 void applyRefraction(PathSegment& pathSegment, Ray& newRay, const glm::vec3& normal, const Material& m, thrust::default_random_engine& rng)
 {
-    if (glm::dot(pathSegment.ray.direction, normal) < 0)
-    {
+    if (glm::dot(pathSegment.ray.direction, normal) < 0) {
         // entering
         newRay.direction = glm::refract(pathSegment.ray.direction, normal, 1.f / m.specular.indexOfRefraction);
-    }
-    else
-    {
+    } else {
         // exiting
         newRay.direction = glm::refract(pathSegment.ray.direction, -normal, m.specular.indexOfRefraction);
     }
