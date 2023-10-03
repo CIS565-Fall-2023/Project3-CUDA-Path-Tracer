@@ -206,6 +206,7 @@ void Scene::bvh_build()
     bvh_update_node_bounds(root_node_index);
     bvh_subdivide(root_node_index);
     bvh_reorder_tris();
+    bvh_in_use = true;
 }
 
 void Scene::bvh_reorder_tris()
@@ -351,5 +352,10 @@ float Scene::bvh_find_best_split(uint32_t node_index, int& axis, float& split_po
         }
     }
     return best_cost;
+}
+
+bool Scene::using_bvh()
+{
+    return bvh_in_use;
 }
 

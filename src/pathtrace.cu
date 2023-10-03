@@ -20,6 +20,8 @@
 #define MATERIAL_SORT 0
 #define CACHE_FIRST_BOUNCE 1
 
+#define MESH_INDEX 0
+
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -183,6 +185,7 @@ __global__ void computeIntersections(
     , Triangle* tris
     , BvhNode* bvh_nodes
     , int root_node_index
+    , bool using_bvh
 )
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -201,33 +204,37 @@ __global__ void computeIntersections(
         glm::vec3 tmp_intersect;
         glm::vec3 tmp_normal;
 
-        intersect_bvh(tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, root_node_index);
-
+        if (using_bvh)
+        {
+            intersect_bvh(geoms[MESH_INDEX], tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, root_node_index);
+        }
 
         // naive parse through global geoms
-
-        for (int i = 0; i < geoms_size; i++)
+        else
         {
-            Geom& geom = geoms[i];
+            for (int i = 0; i < geoms_size; i++)
+            {
+                Geom& geom = geoms[i];
 
-            if (geom.type == CUBE)
-            {
-                t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-            }
-            else if (geom.type == SPHERE)
-            {
-                t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-            }
-            // TODO: add more intersection tests here... triangle? metaball? CSG?
+                if (geom.type == CUBE)
+                {
+                    t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+                }
+                else if (geom.type == SPHERE)
+                {
+                    t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+                }
+                // TODO: add more intersection tests here... triangle? metaball? CSG?
 
-            // Compute the minimum t from the intersection tests to determine what
-            // scene geometry object was hit first.
-            if (t > 0.0f && t_min > t)
-            {
-                t_min = t;
-                hit_geom_index = i;
-                intersect_point = tmp_intersect;
-                normal = tmp_normal;
+                // Compute the minimum t from the intersection tests to determine what
+                // scene geometry object was hit first.
+                if (t > 0.0f && t_min > t)
+                {
+                    t_min = t;
+                    hit_geom_index = i;
+                    intersect_point = tmp_intersect;
+                    normal = tmp_normal;
+                }
             }
         }
 
@@ -444,6 +451,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
                 , dev_tris
                 , dev_bvh_nodes
                 , hst_scene->root_node_index
+                , hst_scene->using_bvh()
                 );
 #if CACHE_FIRST_BOUNCE
         }

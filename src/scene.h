@@ -21,10 +21,12 @@ private:
     void bvh_subdivide(uint32_t node_index);
     float bvh_find_best_split(uint32_t node_index, int &axis, float &split_pos);
     void bvh_reorder_tris();
+    bool bvh_in_use = false;
 public:
     Scene(string filename);
     ~Scene();
 
+    bool using_bvh();
     std::vector<Geom> geoms;
     std::vector<Triangle> tris;
     std::vector<int> tri_indices;

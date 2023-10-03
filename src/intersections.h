@@ -146,7 +146,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 }
 
 
-inline float intersect_aabb(const glm::vec3& ray_origin, const glm::vec3& ray_rec_direction, const Aabb& aa_bb, int curr_t)
+__host__ __device__ inline float intersect_aabb(const glm::vec3& ray_origin, const glm::vec3& ray_rec_direction, const Aabb& aa_bb, int curr_t)
 {
     glm::vec3 bmin = aa_bb.bmin;
     glm::vec3 bmax = aa_bb.bmax;
@@ -180,9 +180,9 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
     float curr_t = FLT_MAX; //Double check what this does
     do
     {
-        if (node->is_leaf())
+        if (node->tri_count > 0) // if BvhNode is leaf
         {
-            for (int i = 0; i < node->tri_count; i++)
+            for (unsigned int i = 0; i < node->tri_count; i++)
             {
                 // get intersection with each triangle
                 Triangle* tri = &tris[node->left_first + i];
@@ -203,7 +203,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
                     // I'm not sure if this is in world coords
                     glm::vec3 intersect_test = tri_v0 * bary_w + tri_v1 * bary.x + tri_v2 * bary.y; 
                     glm::vec3 diff = intersect - intersect_test;
-                    fprintf(stderr, "diff is %f, %f, %f", diff.x, diff.y, diff.z);
+                    printf("diff is %f, %f, %f", diff.x, diff.y, diff.z);
 #endif DEBUG
                     // I'm not sure if this is in world coords
                     normal = glm::normalize(tri->v0.nor * bary_w + tri->v1.nor * bary.x + tri->v2.nor * bary.y);
@@ -230,7 +230,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
             if (dist_1 > dist_2)
             {
                 // swap
-                int temp = dist_1;
+                float temp = dist_1;
                 dist_1 = dist_2;
                 dist_2 = temp;
                 temp = child_1_index;
@@ -257,10 +257,12 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
             }
         }
     } while (stack_ptr != 0); //double check iterations
+    intersect = multiplyMV(geom.transform, glm::vec4(intersect, 1.0f));
+    normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(normal, 0.0f)));
 #if DEBUG
     float length = glm::length(r.origin - intersect);
     float distance =
-        fprintf(stderr, "curr_t is %f, length is %f", curr_t, length);
+        printf("curr_t is %f, length is %f", curr_t, length);
 #endif DEBUG
-    return curr_t; // return distance?
+    return glm::length(ray.origin - intersect); // return distance
 }
