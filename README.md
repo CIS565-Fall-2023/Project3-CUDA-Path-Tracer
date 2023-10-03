@@ -18,6 +18,8 @@
 - Specular refraction
 - Depth of field
 - glTF mesh loading
+  - Diffuse and emission texture loading
+- Environment map lights
 - BVH construction and traversal
 - Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
 
