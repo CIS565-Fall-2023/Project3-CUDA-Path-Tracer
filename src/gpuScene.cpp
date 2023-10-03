@@ -31,8 +31,8 @@ CPU_ONLY void GPUScene::Load(const Scene& scene, const BVH& bvh)
 	
 	checkCUDAError("Load GPU scene Error!");
 
-	if (scene.m_EnvironmentMapId >= 0)
+	if (scene.m_EnvMapTexObj >= 0)
 	{
-		env_map.m_Texture.m_TexObj = scene.m_Textures[scene.m_EnvironmentMapId].m_TexObj;
+		env_map.m_Texture.m_TexObj = scene.m_EnvMapTexObj;
 	}
 }

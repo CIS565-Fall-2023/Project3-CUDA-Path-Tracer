@@ -81,7 +81,6 @@ class SampleBSDF
 public:
 	inline static GPU_ONLY bool Sample(const Material& material,
 									const ShadeableIntersection& intersection,
-									const float& etaA,
 									CudaRNG& rng,
 									BSDFSample& sample)
 	{
@@ -94,7 +93,7 @@ public:
 		}
 		case MaterialType::SpecularReflection:
 		{
-			SpecularReflection(material.GetAlbedo(intersection.uv), intersection, sample);
+			return SpecularReflection(material.GetAlbedo(intersection.uv), intersection, sample);
 		}
 		case MaterialType::Glass:
 		{

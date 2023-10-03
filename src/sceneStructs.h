@@ -241,7 +241,6 @@ struct RenderState {
 
 struct PathSegment {
     Ray ray;
-    float eta = ETA_AIR; // eta of last intermedia
     glm::vec3 throughput{ 1, 1, 1 };
     glm::vec3 radiance{0, 0, 0};
 
@@ -252,7 +251,6 @@ struct PathSegment {
         throughput = glm::vec3(1.f);
         radiance = glm::vec3(0.f);
         pixelIndex = 0;
-        eta = ETA_AIR;
     }
     CPU_GPU void Terminate() { remainingBounces = 0; }
     CPU_GPU bool IsEnd() const { return remainingBounces <= 0; }

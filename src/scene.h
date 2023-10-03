@@ -31,13 +31,15 @@ public:
 
     void ReadObj(const std::string& obj_file_path,
                 unsigned int matrial_id);
+    cudaTextureObject_t LoadTexture(const Json& texture_json, const std::filesystem::path& res_path);
+
 public:
     Scene(const std::filesystem::path& res_path, const std::string& scene_filename);
     ~Scene() = default;
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
-    std::vector<Texture2D> m_Textures;
+    std::vector<uPtr<Texture2D>> m_Textures;
 
     std::vector<glm::vec3> m_Vertices;
     std::vector<glm::vec3> m_Normals;
@@ -46,6 +48,6 @@ public:
     
     std::unordered_map<std::string, unsigned int> m_MaterialMap;
     
-    int m_EnvironmentMapId;
+    cudaTextureObject_t m_EnvMapTexObj;
     RenderState state;
 };

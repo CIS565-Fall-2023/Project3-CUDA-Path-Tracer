@@ -8,7 +8,7 @@ Texture2D::Texture2D()
     m_Width(0), 
     m_Height(0),
     m_TexObj(0),
-    m_TexArray(0)
+    m_TexArray(nullptr)
 {
 }
 

@@ -99,7 +99,7 @@ void ApplyTransform(int start_id, std::vector<glm::vec3>& vertices, int n_start_
 }
 
 Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_filename)
-    : m_EnvironmentMapId(-1)
+    : m_EnvMapTexObj(0)
 {
     std::filesystem::path scene_path(res_path);
     scene_path.append(scene_filename);
@@ -212,17 +212,12 @@ void Scene::LoadEnvironmentMap(const Json& environment_json, const std::filesyst
 {
     std::cout << "Loading Environment Map ..." << std::endl;
 
-    std::string map_str;
-    bool flip_v = false;
-    SafeGet <std::string>(environment_json, "path", map_str);
-    SafeGet <bool>(environment_json, "flip", flip_v);
-    std::filesystem::path texture_path(res_path);
-    texture_path.append(map_str);
-    if (std::filesystem::directory_entry(texture_path).exists())
+    auto tex_obj = LoadTexture(environment_json, res_path);
+    if (tex_obj > 0)
     {
-        m_Textures.emplace_back(texture_path.string(), flip_v);
-        m_EnvironmentMapId = m_Textures.size() - 1;
+        m_EnvMapTexObj = tex_obj;
     }
+    std::cout << "Loading Environment Map Success!" << std::endl;
 }
 
 void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path& res_path)
@@ -244,25 +239,28 @@ void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path
 
         if(material_json[i].contains("albedo map"))
         {
-            material.type = static_cast<MaterialType>(material.type | MaterialType::Albedo_Texture);
-            const Json& albedo_map_json = material_json[i]["albedo map"];
-            std::string map_str;
-            bool flip_v = false;
-            SafeGet <std::string>(albedo_map_json, "path", map_str);
-            SafeGet <bool>(albedo_map_json, "flip", flip_v);
-            std::filesystem::path texture_path(res_path);
-            texture_path.append(map_str);
-            if (std::filesystem::directory_entry(texture_path).exists())
+            auto tex_obj = LoadTexture(material_json[i]["albedo map"], res_path);
+            if (tex_obj > 0)
             {
-                m_Textures.emplace_back(texture_path.string(), flip_v);
-                
-                material.data.textures.albedo_tex.m_TexObj = m_Textures.back().m_TexObj;
+                material.type = static_cast<MaterialType>(material.type | MaterialType::Albedo_Texture);
+                material.data.textures.albedo_tex.m_TexObj = tex_obj;
             }
         }
         else
         {
             SafeGetVec<glm::vec3, float, 3>(material_json[i], "albedo", material.data.values.albedo);
         }
+
+        if (material_json[i].contains("normal map"))
+        {
+            auto tex_obj = LoadTexture(material_json[i]["normal map"], res_path);
+            if (tex_obj > 0)
+            {
+                material.type = static_cast<MaterialType>(material.type | MaterialType::Normal_Texture);
+                material.data.textures.normal_tex.m_TexObj = tex_obj;
+            }
+        }
+
         materials.push_back(std::move(material));
     }
     std::cout << "Loading Materials Success!" << std::endl;
@@ -329,5 +327,25 @@ void Scene::ReadObj(const std::string& obj_file_path,
 
             m_TriangleIdxs.emplace_back(v_id, n_id, uv_id, matrial_id);
         }
+    }
+}
+
+cudaTextureObject_t Scene::LoadTexture(const Json& texture_json, const std::filesystem::path& res_path)
+{
+    std::string tex_str;
+    bool flip_v = false;
+    SafeGet <std::string>(texture_json, "path", tex_str);
+    SafeGet <bool>(texture_json, "flip", flip_v);
+    std::filesystem::path texture_path(res_path);
+    texture_path.append(tex_str);
+    if (std::filesystem::directory_entry(texture_path).exists())
+    {
+        m_Textures.emplace_back(mkU<Texture2D>(texture_path.string(), flip_v));
+        return m_Textures.back()->m_TexObj;
+    }
+    else
+    {
+        printf("Can not find texture with path: %s", texture_path.c_str());
+        return 0;
     }
 }

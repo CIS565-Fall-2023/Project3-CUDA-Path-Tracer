@@ -285,12 +285,11 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
 			BSDFSample bsdf_sample;
 			bsdf_sample.wiW = -segment.ray.direction;
-			if(SampleBSDF::Sample(material, intersection, segment.eta, rng, bsdf_sample))
+			if(SampleBSDF::Sample(material, intersection, rng, bsdf_sample))
 			{
 				// generate new ray
 				pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
 				pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
-				pathSegments[idx].eta = material.eta;
 				--pathSegments[idx].remainingBounces;
 			}
 			else

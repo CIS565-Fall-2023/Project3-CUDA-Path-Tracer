@@ -41,7 +41,19 @@
     {
       "name": "Mirror",
       "type": "SpecularReflection",
-      "albedo": [ 1, 1, 1 ]
+      "albedo": [ 0.5, 0.5, 1 ]
+    },
+    {
+      "name": "whitebubble",
+      "type": "DiffuseReflection",
+      "albedo map": {
+        "path": "textures/whitebubble.jpg",
+        "flip": false
+      },
+      "normal map": {
+        "path": "textures/whitebubbleN.jpg",
+        "flip": false
+      }
     },
     {
       "name": "Glass",
@@ -91,7 +103,7 @@
       "type": "obj",
       "path": "meshes/plane.obj",
       "name": "back wall",
-      "material": "MatteWhite",
+      "material": "whitebubble",
       "translation": [ 0, 2.5, 5 ],
       "rotation": [ -90, 0, 0 ],
       "scale": [ 5, 1, 5 ]
@@ -107,12 +119,12 @@
     },
     {
       "type": "obj",
-      "path": "meshes/untitled.obj",
+      "path": "meshes/stanford_dragon.obj",
       "name": "bunny",
-      "material": "Glass",
-      "translation": [ 0, 1.25, 0 ],
+      "material": "Mirror",
+      "translation": [ 0, 0, 0 ],
       "rotation": [ 0, 0, 0 ],
-      "scale": [ 3, 3, 3 ]
+      "scale": [ 4, 4, 4 ]
     }
   ]
 }
