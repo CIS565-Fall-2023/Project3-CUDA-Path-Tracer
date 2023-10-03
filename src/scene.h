@@ -26,4 +26,7 @@ public:
     std::vector<glm::vec4> textures;
     int triIdx = 0;
     RenderState state;
+
+    std::vector<Geom> lights;
+    int lightNum = 0;
 };

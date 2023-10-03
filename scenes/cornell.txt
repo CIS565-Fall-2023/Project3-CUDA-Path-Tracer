@@ -150,16 +150,16 @@ SCALE       4 4 4
 // cube
 OBJECT 7
 cube
-material 7
+material 3
 TRANS       2 6 -3
 ROTAT       25 45 0
 SCALE       4 4 4
 
 // cube
-OBJECT 8
+OBJECT 9
 cube
-material 3
-TRANS       0 5 4
+material 5
+TRANS       0 5 5
 ROTAT       25 45 0
 SCALE       3 3 3
 

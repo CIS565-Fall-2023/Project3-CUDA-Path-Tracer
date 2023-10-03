@@ -124,7 +124,11 @@ void scatterRay(
         pathSegment.color *= m.color;
     }
 
-    pathSegment.ray.origin = intersect + newDir * 0.001f;
+    glm::vec3 newOrigin = intersect + 0.001f * newDir;
+
+    pathSegment.ray.origin = newOrigin;
     pathSegment.ray.direction = newDir;
+
+    return;
 }
 

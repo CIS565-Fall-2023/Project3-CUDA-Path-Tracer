@@ -10,6 +10,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    LIGHT,
     MESH,
 };
 
@@ -60,7 +61,7 @@ struct Camera {
     glm::vec2 fov;
     glm::vec2 pixelLength;
 
-    float aperture = 2.5;
+    float aperture = 0.;
 };
 
 struct RenderState {
