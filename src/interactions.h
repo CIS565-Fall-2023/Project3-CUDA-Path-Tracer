@@ -88,6 +88,6 @@ void scatterRay(
     else {
         ray = calculateRandomDirectionInHemisphere(normal, rng);
     }
-    pathSegment.ray.direction = glm::normalize(ray);
+    pathSegment.ray.direction = ray;
     pathSegment.ray.origin = intersect;
 }
