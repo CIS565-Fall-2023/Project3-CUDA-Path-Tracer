@@ -29,6 +29,10 @@ __device__ __inline__ glm::vec2 sampleSphericalMap(glm::vec3 v) {
     return uv;
 }
 
+__device__ __inline__ float colorToGreyscale(glm::vec3 col) {
+    return 0.299f * col.r + 0.587f * col.g + 0.114f * col.b;
+}
+
 struct BsdfSample
 {
     glm::vec3 wiW;
@@ -175,7 +179,7 @@ __device__ glm::vec3 sample_wh(glm::vec3 wo, glm::vec3 xi, float roughness)
 
     float cosTheta = 0;
     float phi = TWO_PI * xi[1];
-    float tanTheta2 = roughness * roughness * xi[0] / (1.0f - xi[0]);
+    float tanTheta2 = roughness * roughness * xi[0] / (1.f - xi[0]);
     cosTheta = 1 / glm::sqrt(1 + tanTheta2);
 
     float sinTheta = glm::sqrt(glm::max(0.f, 1.f - cosTheta * cosTheta));
@@ -288,7 +292,7 @@ __device__ glm::vec3 sample_f_microfacet_refl(glm::vec3 albedo, glm::vec3 nor, g
     glm::vec3 wh = sample_wh(wo, xi, roughness);
     glm::vec3 wi = reflect(-wo, wh);
     sample.wiW = LocalToWorld(nor) * wi;
-    if (wi.z < 0)
+    if (!SameHemisphere(wo, wi))
         return glm::vec3(0.f);
 
     sample.pdf = trowbridgeReitzPdf(wo, wh, roughness) / (4 * AbsDot(wo, wh));
@@ -339,36 +343,30 @@ __device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, g
 
 __device__ glm::vec3 sample_f_pbrMetRough(glm::vec3 albedo, const float2& metallicRoughness, const PbrMetallicRoughness& material, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
 {
-    float metallic = metallicRoughness.x, roughness = metallicRoughness.y * metallicRoughness.y;
+    float metallic = metallicRoughness.x, roughness = metallicRoughness.y;
 
     glm::vec3 wh = sample_wh(wo, xi, roughness);
-    glm::vec3 f = fresnelSchlick(glm::dot(wh, wo), glm::mix(glm::vec3(.08f), glm::vec3(material.baseColorFactor), metallic));
-
-    if (metallic >= 1.f) {
+    glm::vec3 F = fresnelSchlick(glm::dot(wh, wo), glm::mix(glm::vec3(.08f), glm::vec3(material.baseColorFactor), metallic));
+    glm::vec3 kS = F;
+    glm::vec3 kD = glm::vec3(1.f) - kS;
+    kD *= 1.f - metallic;
+    float pS = colorToGreyscale(kS);
+    float pD = colorToGreyscale(kD);
+    pS /= (pS + pD);
+    float random = xi.z;
+    if (random < pS) {
         glm::vec3 R;
         if (roughness == 0.f) {
-            R = sample_f_specular_refl(albedo, nor, wo, sample);
             sample.pdf = 1.f;
+            R = sample_f_specular_refl(albedo, nor, wo, sample);
         }
         else
             R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness, sample);
         return R;
     }
-
-    float random = xi.z;
-    if (random > 0.5) {
-        glm::vec3 R;
-        if (roughness == 0.f) {
-            sample.pdf = 1.f;
-            R = sample_f_specular_refl(albedo, nor, wo, sample);
-        }
-        else
-            R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness, sample);
-        return 2.f * f * R;
-    }
     else {
         glm::vec3 D = sample_f_diffuse(albedo, xi, nor, sample);
-        return 2.f * (1.f - f) * (1 - metallic) * D;
+        return D;
     }
 }
 

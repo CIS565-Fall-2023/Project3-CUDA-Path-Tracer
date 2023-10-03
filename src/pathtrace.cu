@@ -297,7 +297,6 @@ __global__ void shadeMaterial(
             // like what you would expect from shading in a rasterizer like OpenGL.
             // TODO: replace this! you should be able to start with basically a one-liner
             else {
-                BsdfSample sample;
                 float ao{ 1.f };
                 if (material.occlusionTexture.index != -1) {
                     auto aoData = tex2D<float4>(material.occlusionTexture.cudaTexObj, intersection.uv.x, intersection.uv.y);
@@ -309,6 +308,7 @@ __global__ void shadeMaterial(
                     nor = glm::normalize(nor) * 2.f - 1.f;
                     nor = glm::normalize((glm::mat3(glm::vec3(intersection.tangent), glm::cross(intersection.surfaceNormal, glm::vec3(intersection.tangent)) * intersection.tangent[3], intersection.surfaceNormal)) * nor);
                 }
+                BsdfSample sample;
                 auto bsdf = ao * sample_f(material, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
                 if (sample.pdf <= 0) {
                     pSeg.remainingBounces = 0;
