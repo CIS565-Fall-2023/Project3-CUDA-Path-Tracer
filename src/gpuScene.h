@@ -23,10 +23,11 @@ public:
 		light_count(0)
 	{}
 
-	CPU_GPU Intersection SceneIntersection(const Ray& ray) const
+	GPU_ONLY Intersection SceneIntersection(const Ray& ray, int thread_id) const
 	{
 		//return NaiveIntersection(ray);
-		return BVHIntersection(ray);
+		return BVHIntersection_Naive(ray);
+		//return BVHIntersection_Shared(ray, thread_id);
 	}
 
 	CPU_ONLY void FreeDataOnCuda();
@@ -57,8 +58,7 @@ protected:
 
 		return min_intersection;
 	}
-
-	CPU_GPU Intersection BVHIntersection(const Ray& ray) const
+	CPU_GPU Intersection BVHIntersection_Naive(const Ray& ray) const
 	{
 		const glm::vec3 inv_dir(glm::vec3(1.f) / ray.direction);
 		const bool dir_neg[3] = { inv_dir.x < 0, inv_dir.y < 0, inv_dir.z < 0 };
@@ -68,10 +68,61 @@ protected:
 		min_intersection.t = 10000.f;
 		min_intersection.shapeId = -1;
 
-		//__shared__ int stack[128][20];
 		AABB current = dev_BVH[0];
-		// stack
-		int next_arr[10];
+		int stack[16];
+		int next = 0;
+
+		while (true)
+		{
+			float k = 20000.f;
+			if (current.Intersection(ray, inv_dir, k))
+			{
+				if (current.m_Data.z > 0)
+				{
+					for (int i = 0; i < current.m_Data.y; ++i)
+					{
+						const glm::ivec3 idx = dev_triangles[current.m_Data.x + i].v_id;
+						const int material_id = dev_triangles[current.m_Data.x + i].material;
+
+						const glm::vec3 vertices[3]{ dev_vertices[idx.x], dev_vertices[idx.y], dev_vertices[idx.z] };
+						if (Triangle::Intersection(ray, vertices, temp_intersection) &&
+							temp_intersection.t < min_intersection.t)
+						{
+							min_intersection = temp_intersection;
+							min_intersection.shapeId = current.m_Data.x + i;
+							min_intersection.materialId = material_id;
+						}
+					}
+					if (next == 0) break;
+					current = dev_BVH[stack[--next]];
+				}
+				else
+				{
+					stack[next++] = (dir_neg[current.m_Data.x] ? (current.m_Data.y + 1) : current.m_Data.y);
+					current = dev_BVH[(dir_neg[current.m_Data.x] ? current.m_Data.y : (current.m_Data.y + 1))];
+				}
+			}
+			else
+			{
+				if (next == 0) break;
+				current = dev_BVH[stack[--next]];
+			}
+		}
+
+		return min_intersection;
+	}
+	GPU_ONLY Intersection BVHIntersection_Shared(const Ray& ray, int thread_id) const
+	{
+		const glm::vec3 inv_dir(glm::vec3(1.f) / ray.direction);
+		const bool dir_neg[3] = { inv_dir.x < 0, inv_dir.y < 0, inv_dir.z < 0 };
+
+		Intersection min_intersection;
+		Intersection temp_intersection;
+		min_intersection.t = 10000.f;
+		min_intersection.shapeId = -1;
+
+		__shared__ int stack[16][128];
+		AABB current = dev_BVH[0];
 		int next = 0;
 		
 		while (true)
@@ -96,18 +147,18 @@ protected:
 						}
 					}
 					if (next == 0) break;
-					current = dev_BVH[next_arr[--next]];
+					current = dev_BVH[stack[--next][thread_id]];
 				}
 				else
 				{
-					next_arr[next++] = (dir_neg[current.m_Data.x] ? (current.m_Data.y + 1) : current.m_Data.y);
+					stack[next++][thread_id] = (dir_neg[current.m_Data.x] ? (current.m_Data.y + 1) : current.m_Data.y);
 					current = dev_BVH[(dir_neg[current.m_Data.x] ?  current.m_Data.y : (current.m_Data.y + 1))];
 				}
 			}
 			else
 			{
 				if (next == 0) break;
-				current = dev_BVH[next_arr[--next]];
+				current = dev_BVH[stack[--next][thread_id]];
 			}
 		}
 

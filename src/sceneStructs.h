@@ -349,7 +349,7 @@ struct TriangleIdx
 
 struct BSDFSample
 {
-    glm::vec3 f;
-    glm::vec3 wiW;
-    float pdf;
+    glm::vec3 f = glm::vec3(0.f);
+    glm::vec3 wiW = glm::vec3(0.f);
+    float pdf = -1.f;
 };

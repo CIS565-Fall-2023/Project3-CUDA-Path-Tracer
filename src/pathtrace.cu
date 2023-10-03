@@ -21,6 +21,8 @@
 #include "rng.h"
 #include "cudaTexture.h"
 
+static constexpr int Compact_Threshold = 2073600;
+
 struct CopyEndPaths 
 {
 	CPU_GPU bool operator() (const PathSegment& segment) {
@@ -144,7 +146,7 @@ __global__ void computeIntersections(int num_paths, PathSegment* pathSegments, S
 
 	if (segment.IsEnd()) return;
 
-	Intersection intersection = scene.SceneIntersection(segment.ray);
+	Intersection intersection = scene.SceneIntersection(segment.ray, threadIdx.x);
 	if (intersection.shapeId >= 0)
 	{
 		ShadeableIntersection shadeable;
@@ -283,13 +285,18 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
 			BSDFSample bsdf_sample;
 			bsdf_sample.wiW = -segment.ray.direction;
-			SampleBSDF::Sample(material, intersection, segment.eta, rng, bsdf_sample);
-
-			// generate new ray
-			pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
-			pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
-			pathSegments[idx].eta = material.eta;
-			--pathSegments[idx].remainingBounces;
+			if(SampleBSDF::Sample(material, intersection, segment.eta, rng, bsdf_sample))
+			{
+				// generate new ray
+				pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
+				pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
+				pathSegments[idx].eta = material.eta;
+				--pathSegments[idx].remainingBounces;
+			}
+			else
+			{
+				pathSegments[idx].Terminate();
+			}
 		}
 	}
 	else
@@ -385,21 +392,31 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 																	 dev_intersections, dev_paths, scene.dev_materials, scene.env_map);
 		checkCUDAError("NaiveGI Error");
 		cudaDeviceSynchronize();
+		if (pixelcount >= Compact_Threshold)
+		{
+			// remove terminated segments
+			thrust_end_paths_end = thrust::copy_if(thrust_dev_paths_begin, thrust_dev_paths_begin + num_paths, thrust_end_paths_end, CopyEndPaths());
+			auto remove_ptr = thrust::remove_if(thrust_dev_paths_begin, thrust_dev_paths_begin + num_paths, CopyEndPaths());
 
-		// remove terminated segments
-		thrust_end_paths_end = thrust::copy_if(thrust_dev_paths_begin, thrust_dev_paths_begin + num_paths, thrust_end_paths_end, CopyEndPaths());
-		auto remove_ptr = thrust::remove_if(thrust_dev_paths_begin, thrust_dev_paths_begin + num_paths, CopyEndPaths());
-		
-		num_paths = remove_ptr - thrust_dev_paths_begin;
+			num_paths = remove_ptr - thrust_dev_paths_begin;
+		}
 	}
 
 	// Assemble this iteration and apply it to the image
-	int num_end_paths = thrust_end_paths_end - thrust_dev_end_paths_bgein;
-	dim3 numBlocksPixels = (num_end_paths + blockSize1d - 1) / blockSize1d;
-
 	float u = 1.f / static_cast<float>(m_Iteration + 1); // used for interpolation between last frame and this frame
+	if (pixelcount >= Compact_Threshold)
+	{
+		int num_end_paths = thrust_end_paths_end - thrust_dev_end_paths_bgein;
+		dim3 numBlocksPixels = (num_end_paths + blockSize1d - 1) / blockSize1d;
 
-	finalGather << <numBlocksPixels, blockSize1d >> > (u, num_end_paths, dev_hdr_img, dev_end_paths);
+		finalGather << <numBlocksPixels, blockSize1d >> > (u, num_end_paths, dev_hdr_img, dev_end_paths);
+	}
+	else
+	{
+		dim3 numBlocksPixels = (num_paths + blockSize1d - 1) / blockSize1d;
+
+		finalGather << <numBlocksPixels, blockSize1d >> > (u, num_paths, dev_hdr_img, dev_paths);
+	}
 	checkCUDAError("Final Gather failed");
 	cudaDeviceSynchronize();
 	///////////////////////////////////////////////////////////////////////////

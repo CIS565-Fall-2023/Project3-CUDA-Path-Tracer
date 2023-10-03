@@ -50,11 +50,6 @@ inline CPU_GPU float SquareToSphereUniformPDF(const glm::vec3& sample)
 	return Inv4Pi;
 }
 
-inline CPU_GPU float SquareToHemisphereCosinePDF(const glm::vec3& sample)
-{
-	return sample.z * InvPi; // cos(theta) / PI
-}
-
 inline CPU_GPU float FresnelDielectric(const float& etaI, 
 									   const float& etaO, 
 									   const float& cosThetaI,
@@ -84,7 +79,7 @@ inline GPU_ONLY void SampleLight()
 class SampleBSDF
 {
 public:
-	inline static GPU_ONLY void Sample(const Material& material,
+	inline static GPU_ONLY bool Sample(const Material& material,
 									const ShadeableIntersection& intersection,
 									const float& etaA,
 									CudaRNG& rng,
@@ -95,24 +90,21 @@ public:
 		{
 		case MaterialType::DiffuseReflection:
 		{
-			DiffuseReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample);
-			break;
+			return DiffuseReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample);
 		}
 		case MaterialType::SpecularReflection:
 		{
 			SpecularReflection(material.GetAlbedo(intersection.uv), intersection, sample);
-			break;
 		}
 		case MaterialType::Glass:
 		{
-			Glass(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
-			break;
+			return Glass(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
 		}
 		}
 	}
 
 protected:
-	inline static GPU_ONLY void DiffuseReflection(const glm::vec3& albedo,
+	inline static GPU_ONLY bool DiffuseReflection(const glm::vec3& albedo,
 												const ShadeableIntersection& intersection,
 												CudaRNG& rng,
 												BSDFSample& sample)
@@ -120,29 +112,31 @@ protected:
 		// woW is stored in sample.wiW
 		if (glm::dot(intersection.normal, sample.wiW) < 0.f)
 		{
-			return;
+			return false;
 		}
-		sample.f	= albedo * InvPi;
+		sample.f	= albedo;
 		sample.wiW	= SquareToHemisphereCosine({ rng.rand(), rng.rand() });
-		sample.pdf	= SquareToHemisphereCosinePDF(sample.wiW);
 		sample.wiW	= glm::normalize(LocalToWorld(intersection.normal) * sample.wiW);
+		sample.pdf	= glm::dot(sample.wiW, intersection.normal);
+		return true;
 	}
 
-	inline static GPU_ONLY void SpecularReflection(const glm::vec3& albedo,
+	inline static GPU_ONLY bool SpecularReflection(const glm::vec3& albedo,
 												const ShadeableIntersection& intersection,
 												BSDFSample& sample)
 	{
 		// woW is stored in sample.wiW
 		if (glm::dot(intersection.normal, sample.wiW) < 0.f)
 		{
-			return;
+			return false;
 		}
 		sample.wiW = glm::normalize(glm::reflect(-sample.wiW, intersection.normal));
 		sample.f = albedo / glm::abs(glm::dot(sample.wiW, intersection.normal));
 		sample.pdf = 1.f;
+		return true;
 	}
 
-	inline static GPU_ONLY void Glass(const glm::vec3& albedo,
+	inline static GPU_ONLY bool Glass(const glm::vec3& albedo,
 									float etaA,
 									float etaB,
 									const ShadeableIntersection& intersection,
@@ -181,5 +175,6 @@ protected:
 			sample.f = albedo / glm::abs(glm::dot(sample.wiW, intersection.normal));
 			sample.pdf = 1.f;
 		}
+		return true;
 	}
 };
