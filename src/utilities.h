@@ -35,7 +35,9 @@ public:
     bool SortByMaterial;
     bool UseBVH;
     bool ACESFilm;
-    bool GammaCorrection;
+    bool NoGammaCorrection;
+    float focalLength;
+    float lensRadius;
 };
 
 namespace utilityCore

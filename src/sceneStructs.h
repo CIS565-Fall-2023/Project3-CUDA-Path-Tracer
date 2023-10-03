@@ -55,7 +55,7 @@ struct Ray {
 };
 
 __device__ static Ray SpawnRay(glm::vec3 pos, glm::vec3 wi) {
-    return Ray{ pos + wi * 0.001f, wi };
+    return Ray{ pos + wi * 0.0001f, wi };
 }
 
 struct Transformation {
@@ -67,15 +67,18 @@ struct Transformation {
 struct TriangleDetail {
     TriangleDetail(Transformation t, int materialid, glm::vec3 v0, glm::vec3 v1, glm::vec3 v2,
         glm::vec3 normal0, glm::vec3 normal1, glm::vec3 normal2,
+        glm::vec4 tangent0, glm::vec4 tangent1, glm::vec4 tangent2,
         glm::vec2 uv0, glm::vec2 uv1, glm::vec2 uv2, int id)
         : t(t), materialid(materialid), v0(v0), v1(v1), v2(v2),
         normal0(normal0), normal1(normal1), normal2(normal2),
+        tangent0(tangent0), tangent1(tangent1), tangent2(tangent2),
         uv0(uv0), uv1(uv1), uv2(uv2), centroid((v0 + v1 + v2)* (1.f / 3.f)),
         tbb(glm::vec3(t.transform* glm::vec4(v0, 1.f)), glm::vec3(t.transform* glm::vec4(v1, 1.f)), glm::vec3(t.transform* glm::vec4(v2, 1.f))), id(id) {}
     Transformation t;
     int materialid;
     glm::vec3 v0, v1, v2;
     glm::vec3 normal0, normal1, normal2;
+    glm::vec4 tangent0, tangent1, tangent2;
     glm::vec3 centroid;
     glm::vec2 uv0, uv1, uv2;
     TBB tbb;
@@ -203,6 +206,8 @@ struct Camera {
     glm::vec3 right;
     glm::vec2 fov;
     glm::vec2 pixelLength;
+    float focalLength;
+    float lensRadius;
 };
 
 struct RenderState {
@@ -233,4 +238,5 @@ struct ShadeableIntersection {
     int materialId;
     glm::vec3 woW;
     glm::vec2 uv;
+    glm::vec4 tangent;
 };

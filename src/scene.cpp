@@ -236,6 +236,8 @@ void Scene::loadSettings() {
 
         nlohmann::json renderStateData = jsonData["RenderState"];
         camera.resolution.y = renderStateData["camera"]["screen height"];
+        camera.focalLength = renderStateData["camera"]["focal length"];
+        camera.lensRadius = renderStateData["camera"]["lens radius"];
         float aspectRatio = renderStateData["camera"]["aspect ratio"];
         camera.resolution.x = aspectRatio * camera.resolution.y;
         camera.position = glm::vec3(renderStateData["camera"]["position"][0],
@@ -253,7 +255,8 @@ void Scene::loadSettings() {
         camera.fov.y = renderStateData["camera"]["fovy"];
         computeCameraParams(camera);
 
-        settings.antiAliasing = renderStateData["antiAliasing"];
+        settings.camSettings.antiAliasing = renderStateData["antiAliasing"];
+        settings.camSettings.dof = renderStateData["dof"];
         renderState.iterations = renderStateData["iterations"];
         renderState.traceDepth = renderStateData["traceDepth"];
         renderState.imageName = renderStateData["imageName"];
@@ -311,12 +314,30 @@ Scene::Mesh::Mesh(const tinygltf::Node& node, const Transformation& transform, S
     }
 }
 
+glm::vec4 computeTangent(const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
+    const glm::vec2& uv0, const glm::vec2& uv1, const glm::vec2& uv2, const glm::vec3& normal) {
+    glm::vec3 dp1 = v1 - v0;
+    glm::vec3 dp2 = v2 - v0;
+    glm::vec2 du1 = uv1 - uv0;
+    glm::vec2 du2 = uv2 - uv0;
+
+    float r = 1.0F / (du1.x * du2.y - du2.x * du1.y);
+    glm::vec3 sdir((du2.y * dp1.x - du1.y * dp2.x) * r, (du2.y * dp1.y - du1.y * dp2.y) * r,
+        (du2.y * dp1.z - du1.y * dp2.z) * r);
+    glm::vec3 tdir((du1.x * dp2.x - du2.x * dp1.x) * r, (du1.x * dp2.y - du2.x * dp1.y) * r,
+        (du1.x * dp2.z - du2.x * dp1.z) * r);
+
+    glm::vec4 tangent = glm::vec4(glm::normalize(sdir - normal * glm::dot(normal, sdir)), glm::dot(glm::cross(normal, sdir), tdir) < 0.f ? -1.f : 1.f);
+    return tangent;
+}
+
 
 Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transformation& t, Scene* s) :scene(s)
 {
     tinygltf::Model* model = s->model;
     auto [positions, posCnt] = getPrimitiveBuffer<float>(model, primitive, "POSITION");
     auto [normals, norCnt] = getPrimitiveBuffer<float>(model, primitive, "NORMAL");
+    auto [tangents, tangCnt] = getPrimitiveBuffer<float>(model, primitive, "TANGENT");
     auto [uvs, uvCnt] = getPrimitiveBuffer<float>(model, primitive, "TEXCOORD_0");
     auto [indices, indCnt] = getIndexBuffer(model, primitive);
     materialid = scene->materials.empty() ? scene->defaultMatId : primitive.material;
@@ -344,9 +365,24 @@ Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transfor
             triangle.uv1 = glm::vec2(uvs[v1Id * 2], uvs[v1Id * 2 + 1]);
             triangle.uv2 = glm::vec2(uvs[v2Id * 2], uvs[v2Id * 2 + 1]);
         }
+        if (tangents) {
+            triangle.tangent0 = glm::make_vec4(&tangents[v0Id * 4]);
+            triangle.tangent1 = glm::make_vec4(&tangents[v1Id * 4]);
+            triangle.tangent2 = glm::make_vec4(&tangents[v2Id * 4]);
+        }
+        else {
+            triangle.tangent0 = computeTangent(triangle.v0, triangle.v1, triangle.v2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.normal0);
+            triangle.tangent1 = computeTangent(triangle.v1, triangle.v2, triangle.v0, triangle.uv1, triangle.uv2, triangle.uv0, triangle.normal1);
+            triangle.tangent2 = computeTangent(triangle.v2, triangle.v0, triangle.v1, triangle.uv2, triangle.uv0, triangle.uv1, triangle.normal2);
+            if (!(glm::dot(glm::vec3(triangle.tangent0), triangle.normal0) < EPSILON && (glm::dot(glm::vec3(triangle.tangent1), triangle.normal1) < EPSILON) && (glm::dot(glm::vec3(triangle.tangent2), triangle.normal2) < EPSILON)))
+                std::cerr << "tangent and normal not vertical" << std::endl;
+        }
         triangle.id = Scene::id++;
         tris.push_back(triangle);
-        s->geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2, triangle.normal0, triangle.normal1, triangle.normal2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.id);
+        s->geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2,
+            triangle.normal0, triangle.normal1, triangle.normal2,
+            triangle.tangent0, triangle.tangent1, triangle.tangent2,
+            triangle.uv0, triangle.uv1, triangle.uv2, triangle.id);
         s->tbb.expand(s->geoms.back().tbb);
     }
 }
@@ -501,6 +537,13 @@ bool Scene::loadTexture() {
     for (int textureIndex = 0; textureIndex < numTextures; textureIndex++) {
         const tinygltf::Texture& texture = model->textures[textureIndex];
 
+        bool isColorTexture = false;
+        for (const auto& mat : model->materials)
+        {
+            if (mat.pbrMetallicRoughness.baseColorTexture.index == textureIndex)
+                isColorTexture = true;
+        }
+
         if (texture.source < 0 || texture.source >= model->images.size()) {
             std::cerr << "Invalid image source for texture." << std::endl;
             return false;
@@ -513,13 +556,13 @@ bool Scene::loadTexture() {
             return false;
         }
 
-        textures.push_back(createTextureObj(textureIndex, image.width, image.height, image.component, image.image.data(), image.image.size()));
+        textures.push_back(createTextureObj(textureIndex, image.width, image.height, image.component, image.image.data(), image.image.size(), isColorTexture));
     }
     return true;
 }
 
 template<typename T>
-__host__ TextureInfo Scene::createTextureObj(int textureIndex, int width, int height, int component, const T* image, size_t size) {
+__host__ TextureInfo Scene::createTextureObj(int textureIndex, int width, int height, int component, const T* image, size_t size, int isSRGB) {
 
     // Allocate CUDA array in device memory
     cudaChannelFormatDesc desc;
@@ -549,7 +592,7 @@ __host__ TextureInfo Scene::createTextureObj(int textureIndex, int width, int he
         texDesc.readMode = cudaReadModeNormalizedFloat;
     else
         texDesc.readMode = cudaReadModeElementType;
-    texDesc.sRGB = 1;
+    texDesc.sRGB = isSRGB;
     texDesc.normalizedCoords = 1;
 
     cudaTextureObject_t texObj = 0;

@@ -160,6 +160,14 @@ void runCuda() {
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (action == GLFW_PRESS) {
 		switch (key) {
+		case GLFW_KEY_Q:
+			camchanged = true;
+			renderState->camera.lookAt += glm::vec3(0, 0.1, 0);
+			break;
+		case GLFW_KEY_E:
+			camchanged = true;
+			renderState->camera.lookAt += glm::vec3(0, -0.1, 0);
+			break;
 		case GLFW_KEY_ESCAPE:
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);

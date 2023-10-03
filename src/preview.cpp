@@ -221,7 +221,9 @@ void RenderImGui()
 	ImGui::Checkbox("Sort By Material", &imguiData->SortByMaterial);
 	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
 	ImGui::Checkbox("Enable ACES Film", &imguiData->ACESFilm);
-	ImGui::Checkbox("Enable Gamma Correction", &imguiData->GammaCorrection);
+	ImGui::Checkbox("Disable Gamma Correction", &imguiData->NoGammaCorrection);
+    ImGui::SliderFloat("Focal Length", &imguiData->focalLength, 0.0f, 5.0f);
+    ImGui::SliderFloat("Lens Radius", &imguiData->lensRadius, 0.0f, 0.001f);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 

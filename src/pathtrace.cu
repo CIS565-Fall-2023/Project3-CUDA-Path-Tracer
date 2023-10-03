@@ -28,7 +28,7 @@ void checkCudaMem(T* d_ptr, int size) {
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-    int iter, glm::vec3* image, bool acesFilm, bool gammaCorrection) {
+    int iter, glm::vec3* image, bool acesFilm, bool NoGammaCorrection) {
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
@@ -38,7 +38,7 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
         if (acesFilm)
             pix = pix * (pix * (pix * 2.51f + 0.03f) + 0.024f) / (pix * (pix * 3.7f + 0.078f) + 0.14f);
 
-        if (gammaCorrection)
+        if (!NoGammaCorrection)
             pix = glm::pow(pix, glm::vec3(1.f / 2.2f));
 
         glm::ivec3 color = glm::ivec3(glm::clamp(pix, 0.f, 1.f) * 255.0f);
@@ -147,7 +147,7 @@ void pathtraceFree() {
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments, bool antiAliasing)
+__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments, Scene::Settings::CameraSettings settings)
 {
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -156,15 +156,16 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
         float ry = 0.f;
         int index = x + (y * cam.resolution.x);
         PathSegment& segment = pathSegments[index];
-        if (antiAliasing) {
-            thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, pathSegments->remainingBounces);
-            thrust::uniform_real_distribution<float> u(-0.5, 0.5);
-            rx = u(rng);
-            ry = u(rng);
-        }
+        thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, pathSegments->remainingBounces);
+        thrust::uniform_real_distribution<float> u(-0.5, 0.5);
+        thrust::uniform_real_distribution<float> u01(0.f, 1.f);
         segment.ray.origin = cam.position;
         segment.color = glm::vec3(0.f);
         segment.throughput = glm::vec3(1.f);
+        if (settings.antiAliasing) {
+            rx = u(rng);
+            ry = u(rng);
+        }
 
         // TODO: implement antialiasing by jittering the ray
         segment.ray.direction = glm::normalize(cam.view
@@ -247,7 +248,11 @@ __global__ void computeIntersections(
             intersections[path_index].pos = getPointOnRay(pathSegment.ray, t_min);
             intersections[path_index].woW = -pathSegment.ray.direction;
             intersections[path_index].surfaceNormal =
-                glm::normalize(glm::vec3(tri.t.invTranspose * glm::vec4(t.y * tri.normal0 + t.z * tri.normal1 + w * tri.normal2, 0.f)));
+                glm::normalize(multiplyMV(tri.t.invTranspose, glm::vec4(t.y * tri.normal0 + t.z * tri.normal1 + w * tri.normal2, 0.f)));
+            glm::vec4 tangent = t.y * tri.tangent0 + t.z * tri.tangent1 + w * tri.tangent2;
+            float tmpTanw = tangent[3];
+            tangent[3] = 0.f;
+            intersections[path_index].tangent = glm::vec4(glm::normalize(multiplyMV(tri.t.invTranspose, tangent)), tmpTanw);
             if (sortByMaterial)
                 materialIndices[path_index] = intersections[path_index].materialId;
         }
@@ -300,8 +305,9 @@ __global__ void shadeMaterial(
                 }
                 glm::vec3 nor = intersection.surfaceNormal;
                 if (material.normalTexture.index != -1) {
-                    float4 normal = tex2D<float4>(material.normalTexture.cudaTexObj, intersection.uv.x, intersection.uv.y);
-                    nor = glm::vec3(normal.x, normal.y, normal.z);
+                    nor = sampleTexture(material.normalTexture.cudaTexObj, intersection.uv);
+                    nor = glm::normalize(nor) * 2.f - 1.f;
+                    nor = glm::normalize((glm::mat3(glm::vec3(intersection.tangent), glm::cross(intersection.surfaceNormal, glm::vec3(intersection.tangent)) * intersection.tangent[3], intersection.surfaceNormal)) * nor);
                 }
                 auto bsdf = ao * sample_f(material, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
                 if (sample.pdf <= 0) {
@@ -348,6 +354,8 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
+    hst_scene->state.camera.focalLength = guiData->focalLength;
+    hst_scene->state.camera.lensRadius = guiData->lensRadius;
     const int traceDepth = hst_scene->state.traceDepth;
     const Camera& cam = hst_scene->state.camera;
     const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -392,7 +400,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
     // TODO: perform one iteration of path tracing
 
-    generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths, hst_scene->settings.antiAliasing);
+    generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths, hst_scene->settings.camSettings);
     checkCUDAError("generate camera ray");
 
     int depth = 0;
@@ -512,7 +520,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
     ///////////////////////////////////////////////////////////////////////////
 
     // Send results to OpenGL buffer for rendering
-    sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image, guiData->ACESFilm, guiData->GammaCorrection);
+    sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image, guiData->ACESFilm, guiData->NoGammaCorrection);
 
     // Retrieve image from GPU
     cudaMemcpy(hst_scene->state.image.data(), dev_image,

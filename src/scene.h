@@ -20,6 +20,7 @@ private:
     struct Triangle {
         glm::vec3 v0, v1, v2;
         glm::vec3 normal0, normal1, normal2;
+        glm::vec4 tangent0, tangent1, tangent2;
         glm::vec2 uv0, uv1, uv2;
         int id;
     };
@@ -56,7 +57,7 @@ private:
     void loadNode(const tinygltf::Node& node);
     bool loadCamera(const tinygltf::Node&, const glm::mat4& transform);
     template<typename T>
-    TextureInfo createTextureObj(int textureIndex, int width, int height, int component, const T* image, size_t size);
+    TextureInfo createTextureObj(int textureIndex, int width, int height, int component, const T* image, size_t size, int isSRGB = 0);
     void createCubemapTextureObj();
     std::vector<cudaArray_t> dev_tex_arrs_vec;
     std::vector<Mesh> meshes;
@@ -71,7 +72,10 @@ public:
         Material defaultMat;
         RenderState defaultRenderState;
         bool readFromFile;
-        bool antiAliasing;
+        struct CameraSettings {
+            bool dof;
+            bool antiAliasing;
+        }camSettings;
         bool envMapEnabled;
     } settings;
     struct Cubemap {
