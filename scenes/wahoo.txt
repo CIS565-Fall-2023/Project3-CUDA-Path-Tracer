@@ -1,5 +1,6 @@
 // Emissive material (light)
 MATERIAL 0
+texture 0
 RGB         1 1 1
 SPECEX      0
 SPECRGB     0 0 0
@@ -7,6 +8,9 @@ REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   5
+
+TEXTURE 0
+wahoo.bmp
 
 // Camera
 CAMERA

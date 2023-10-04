@@ -2,6 +2,7 @@
 #include "application.h"
 #include <cstring>
 #include <glm/gtx/intersect.hpp>
+#include "cuda_runtime.h"
 //#include "interactions.h"
 //-------------------------------
 //-------------MAIN--------------
@@ -24,9 +25,10 @@ int main(int argc, char** argv) {
 	//}
 
 	string sceneFilePath = SCENE_PATH;
-	sceneFilePath += "refract.txt";
+	sceneFilePath += "wahoo.txt";
 
 	auto& app = Application::getInstance();
+
 	app.loadScene(sceneFilePath.c_str());
 	app.run();
 

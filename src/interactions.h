@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include "cuda_runtime.h"
 
 // CHECKITOUT
 /**
@@ -191,9 +192,14 @@ void scatterRay(
 __device__ glm::vec3 getBSDF(
 	glm::vec3 wi
 	, glm::vec3 wo
-	, glm::vec3 norm
+	, glm::vec2 uv
 	, Material material
+	, cudaTextureObject_t* texs
 ) {
+	if (material.textureId != -1) {
+		float4 color = tex2D<float4>(texs[material.textureId], uv.x, uv.y);
+		return glm::vec3(color.x, color.y, color.z);
+	}
 	if (material.hasRefractive && glm::dot(wi,wo) < 0) {
 		return material.color;
 	}

@@ -149,7 +149,6 @@ int Scene::loadTexture(string textureid)
     else
     {
         cout << "Loading Texture " << id << "..." << endl;
-        CudaTexture tex;
         string line;
 
         //load object type
@@ -159,8 +158,7 @@ int Scene::loadTexture(string textureid)
 
         if (!line.empty() && fp_in.good()) {
             filename += line;
-            tex.LoadTexture(filename);
-            texs.push_back(tex);
+            texs.push_back(CudaTexture(filename));
         }
         return 1;
     }

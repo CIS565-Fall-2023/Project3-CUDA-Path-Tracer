@@ -20,6 +20,7 @@ private:
 	CudaMemory<PathSegment> dev_firstPaths;
 	CudaMemory<BVHNode> dev_bvh;
 	CudaMemory<int> dev_materialId;
+	CudaMemory<cudaTextureObject_t> dev_texObjs;
 	int doneOffset = 0;
 	PathTracer(const PathTracer& _pathtracer);
 	PathTracer& operator=(const PathTracer& _pathtracer);

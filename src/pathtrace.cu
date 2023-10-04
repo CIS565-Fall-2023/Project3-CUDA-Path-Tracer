@@ -22,7 +22,7 @@
 #include "bvh.h"
 
 #define ERRORCHECK 1
-#define DEBUG 0
+#define DEBUG 1
 #define GATHER 1
 #define BVH 1
 #define COMPACTION 1
@@ -151,18 +151,16 @@ void PathTracer::pathtraceInit(Scene* scene)
 
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
-
+	
 	this->dev_img.malloc(pixelcount, "Malloc dev_img error");
 	cudaMemset(this->dev_img.get(), 0, pixelcount * sizeof(glm::vec3));
 	
 	this->dev_path.malloc(pixelcount, "Malloc dev_path error");
-#if COMPACTION
-	this->dev_donePaths.malloc(pixelcount, "Malloc dev_donePath error");
-#endif // COMPACTION
-#if  MATERIAL_SORT
-	this->dev_materialId.malloc(pixelcount, "Malloc path material id error");
-#endif // MATERIAL_SORT
 
+	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
+	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+
+	this->dev_intersect.malloc(pixelcount, "Malloc dev_intersect error");
 
 	this->dev_geoms.malloc(scene->meshs.size(), "Malloc dev_mesh error");
 	cudaMemcpy(this->dev_geoms.get(), scene->meshs.data(), scene->meshs.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
@@ -170,6 +168,14 @@ void PathTracer::pathtraceInit(Scene* scene)
 	this->dev_trigs.malloc(scene->trigs.size(), "Malloc dev_trigs error");
 	cudaMemcpy(this->dev_trigs.get(), scene->trigs.data(), scene->trigs.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 	initMeshTransform();
+
+	this->dev_texObjs.malloc(scene->texs.size(), "Malloc dev_texObjs error");
+	std::vector<cudaTextureObject_t> texObjs;
+	for (auto& texObj : scene->texs) {
+		texObjs.push_back(texObj.m_texObj);
+	}
+	cudaMemcpy(this->dev_texObjs.get(), texObjs.data(), texObjs.size() * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+
 #if BVH
 	//get transformed triangles to CPU to build BVH tree, triangles will be reordered based on tree
 	std::vector<Triangle> tmp_trig(scene->trigs.size());
@@ -181,13 +187,12 @@ void PathTracer::pathtraceInit(Scene* scene)
 	this->dev_bvh.malloc(bvh.size(), "Malloc dev_bvh error");
 	cudaMemcpy(this->dev_bvh.get(), bvh.data(), bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
 #endif //BVH
-	
-
-	this->dev_mat.malloc(scene->materials.size(), "Malloc material error");
-	cudaMemcpy(this->dev_mat.get(), scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
-	
-
-	this->dev_intersect.malloc(pixelcount, "Malloc dev_intersect error");
+#if COMPACTION
+	this->dev_donePaths.malloc(pixelcount, "Malloc dev_donePath error");
+#endif // COMPACTION
+#if  MATERIAL_SORT
+	this->dev_materialId.malloc(pixelcount, "Malloc path material id error");
+#endif // MATERIAL_SORT
 #if CACHE_FIRST_FRAME
 	this->dev_firstIntersect.malloc(pixelcount, "Malloc dev_firstIntersect error");
 	this->dev_firstPaths.malloc(pixelcount, "Malloc dev_firstPath error");
@@ -248,9 +253,9 @@ __global__ void computeIntersections(
 			//The ray hits something
 			const Triangle& trig = in_trigs[hit_trig_index];
 			out_intersects[path_index].t = t_min;
-			out_intersects[path_index].bary = bary;
 			out_intersects[path_index].materialId = in_meshs[trig.meshId].materialId;
 			out_intersects[path_index].surfaceNormal = glm::normalize(trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z);
+			out_intersects[path_index].surfaceUV = trig.v1.uv * bary.x + trig.v2.uv * bary.y + trig.v3.uv * bary.z;
 		}
 	}
 }
@@ -333,9 +338,9 @@ __global__ void computeIntersections(
 			//The ray hits something
 			const Triangle& trig = in_trigs[hit_trig_index];
 			out_intersects[path_index].t = t_min;
-			out_intersects[path_index].bary = bary;
 			out_intersects[path_index].materialId = in_meshs[trig.meshId].materialId;
-			out_intersects[path_index].surfaceNormal = trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z;
+			out_intersects[path_index].surfaceNormal = glm::normalize(trig.v1.normal * bary.x + trig.v2.normal * bary.y + trig.v3.normal * bary.z);
+			out_intersects[path_index].surfaceUV = trig.v1.uv * bary.x + trig.v2.uv * bary.y + trig.v3.uv * bary.z;
 		}
 	}
 }
@@ -347,6 +352,7 @@ __global__ void processPBR(
 	, ShadeableIntersection* intersections
 	, PathSegment* pathSegments
 	, Material* materials
+	, cudaTextureObject_t* textures
 )
 {
 	int path_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -366,7 +372,8 @@ __global__ void processPBR(
 	}
 	Material material = materials[intersect.materialId];
 #if DEBUG
-	seg.color = intersect.surfaceNormal * 0.5f + glm::vec3(0.5);
+	//seg.color = intersect.surfaceNormal * 0.5f + glm::vec3(0.5);
+	seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
 	seg.remainingBounces = 0;
 	return;
 #else
@@ -391,6 +398,8 @@ __global__ void processPBR(
 	glm::vec3 wo = -seg.ray.direction;
 
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth);
+
+
 	if (!sampleRay(wo, intersect.surfaceNormal, material, rng, pdf, seg.ray.direction)) {
 		//this is a ray need to be discarded
 		seg.remainingBounces = 0;
@@ -401,7 +410,7 @@ __global__ void processPBR(
 	//fix strange artifact
 	seg.ray.origin += 0.01f * seg.ray.direction;
 
-	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceNormal, material);
+	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceUV, material,textures);
 	//           albedo           absdot
 	seg.color *= (bsdf * glm::clamp(abs(glm::dot(intersect.surfaceNormal, seg.ray.direction)), 0.f, 1.f) / pdf);
 	
@@ -443,6 +452,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	glm::vec3* dev_image = this->dev_img.get();
 	BVHNode* dev_bvh = this->dev_bvh.get();
 	int num_bvh = this->dev_bvh.size();
+	cudaTextureObject_t* dev_texObjs = this->dev_texObjs.get();
 
 	thrust::device_ptr<PathSegment> thrust_paths(dev_paths);
 	thrust::device_ptr<PathSegment> thrust_paths_end(dev_paths + pixelcount);
@@ -611,6 +621,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, dev_intersections
 			, dev_paths
 			, dev_materials
+			, dev_texObjs
 			);
 		depth++;
 

@@ -6,14 +6,16 @@ const GLuint VS_UV_HANDLE = 1;
 static float zoom, theta, phi;
 static glm::vec3 ogLookAt;
 
-Application::Application(){
-	m_guiData = make_unique<GuiDataContainer>();
-	m_tracer = make_unique<PathTracer>();
-	//init();
+Application::Application()
+	:m_width(100),m_height(100)
+{
+	init();
 }
 
 bool Application::init()
 {
+	m_guiData = make_unique<GuiDataContainer>();
+	m_tracer = make_unique<PathTracer>();
 	glfwSetErrorCallback([](int error, const char* msg){
 		fprintf(stderr, "%s\n", msg);
 	});
@@ -21,23 +23,22 @@ bool Application::init()
 	if (!glfwInit()) {
 		exit(EXIT_FAILURE);
 	}
-
+	
 	m_window = glfwCreateWindow(m_width, m_height, "CIS 565 Path Tracer", NULL, NULL);
 	if (!m_window) {
 		glfwTerminate();
 		return false;
 	}
 	glfwMakeContextCurrent(m_window);
-	initCallbacks();
-
+	
 	// Set up GL context
 	glewExperimental = GL_TRUE;
 	if (glewInit() != GLEW_OK) {
 		return false;
 	}
 	printf("Opengl Version:%s\n", glGetString(GL_VERSION));
+	
 	//Set up ImGui
-
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	auto io = &ImGui::GetIO(); (void)io;
@@ -45,12 +46,12 @@ bool Application::init()
 	ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 	ImGui_ImplOpenGL3_Init("#version 120");
 
-	// Initialize other stuff
-	initVAO();
-	initTextures();
+	initCallbacks();
 	initCuda();
+	initOutputTexture();
+	initVAO();
 	initPBO();
-	initCamera();
+	
 	GLuint passthroughProgram = initShader();
 
 	glUseProgram(passthroughProgram);
@@ -61,7 +62,7 @@ bool Application::init()
 	return true;
 }
 
-void Application::initTextures()
+void Application::initOutputTexture()
 {
     glGenTextures(1, &m_imgId);
     glBindTexture(GL_TEXTURE_2D, m_imgId);
@@ -85,17 +86,30 @@ void Application::initPBO()
 
 	// Allocate data for the buffer. 4-channel 8-bit image
 	glBufferData(GL_PIXEL_UNPACK_BUFFER, size_tex_data, NULL, GL_DYNAMIC_COPY);
+	{
+		cudaError_t err = cudaGetLastError();
+		if (cudaSuccess != err) {
+			fprintf(stderr, "Cuda error: %s: %s.\n", "before", cudaGetErrorString(err));
+			exit(EXIT_FAILURE);
+		}
+	}
 	cudaGLRegisterBufferObject(m_pbo);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err) {
+		fprintf(stderr, "Cuda error: %s: %s.\n", "register", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+	}
+	//cudaGraphicsGLRegisterBuffer()
 }
 
 void Application::initCuda()
 {
-	cudaGLSetGLDevice(0);
+	cudaSetDevice(0);
 
 	// Clean up on program exit
 	atexit([] {
 		Application& app = Application::getInstance();
-		app.cleanupCuda();
+		app.cleanupGL();
 	});
 }
 
@@ -117,20 +131,19 @@ void Application::initVAO()
 
 	GLushort indices[] = { 0, 1, 3, 3, 1, 2 };
 
-	GLuint vertexBufferObjID[3];
-	glGenBuffers(3, vertexBufferObjID);
+	glGenBuffers(3, m_vertBuff);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObjID[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vertBuff[0]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glVertexAttribPointer(VS_POS_HANDLE, 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(VS_POS_HANDLE);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObjID[1]);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vertBuff[1]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(texcoords), texcoords, GL_STATIC_DRAW);
 	glVertexAttribPointer(VS_UV_HANDLE, 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(VS_UV_HANDLE);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexBufferObjID[2]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vertBuff[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 }
 
@@ -218,6 +231,22 @@ void Application::initCamera()
 	updateCameraView();
 }
 
+void Application::resizeWindow(int width, int height)
+{
+	if (m_window == nullptr) {
+		std::cout << "window uninitialized" << std::endl;
+	}
+	std::cout << "resize window" << std::endl;
+	m_width = width;
+	m_height = height;
+	glfwSetWindowSize(m_window, m_width, m_height);
+	glViewport(0, 0, m_width, m_height);
+	cleanupGL();
+	initOutputTexture();
+	initVAO();
+	initPBO();
+}
+
 GLuint Application::initShader()
 {
 	const char* attribLocations[] = { "Position", "Texcoords" };
@@ -232,18 +261,16 @@ GLuint Application::initShader()
 	return program;
 }
 
-void Application::deleteTexture(GLuint* tex)
-{
-	glDeleteTextures(1, tex);
-	*tex = (GLuint)NULL;
-}
-
 void Application::deletePBO(GLuint* pbo)
 {
 	if (pbo) {
 		// unregister this buffer object with CUDA
 		cudaGLUnregisterBufferObject(*pbo);
-
+		cudaError_t err = cudaGetLastError();
+		if (cudaSuccess != err) {
+			fprintf(stderr, "Cuda error: %s: %s.\n", "unregister", cudaGetErrorString(err));
+			exit(EXIT_FAILURE);
+		}
 		glBindBuffer(GL_ARRAY_BUFFER, *pbo);
 		glDeleteBuffers(1, pbo);
 
@@ -251,13 +278,20 @@ void Application::deletePBO(GLuint* pbo)
 	}
 }
 
-void Application::cleanupCuda()
+void Application::cleanupGL()
 {
 	if (m_pbo) {
 		deletePBO(&m_pbo);
 	}
+	if (m_vertBuff[0]) {
+		glDeleteBuffers(3, m_vertBuff);
+		m_vertBuff[0] = (GLuint)NULL;
+		m_vertBuff[1] = (GLuint)NULL;
+		m_vertBuff[2] = (GLuint)NULL;
+	}
 	if (m_imgId) {
-		deleteTexture(&m_imgId);
+		glDeleteTextures(1, &m_imgId);
+		m_imgId = (GLuint)NULL;
 	}
 }
 
@@ -400,15 +434,18 @@ Application& Application::getInstance()
 	return instance;
 }
 
+Application::~Application()
+{
+	cleanupGL();
+}
+
 void Application::loadScene(const char* path)
 {
 	m_scene = make_unique<Scene>(path);
 	m_iteration = 0;
 	Camera& cam = getCamera();
-	m_width = cam.resolution.x;
-	m_height = cam.resolution.y;
-	init();
-	
+	initCamera();
+	resizeWindow(cam.resolution.x, cam.resolution.y);
 }
 
 void Application::run()

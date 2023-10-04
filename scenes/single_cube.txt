@@ -8,8 +8,12 @@ REFR        0
 REFRIOR     0
 EMITTANCE   5
 
+TEXTURE 0
+green.bmp
+
 // Diffuse white
 MATERIAL 1
+texture 0
 RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     0 0 0
