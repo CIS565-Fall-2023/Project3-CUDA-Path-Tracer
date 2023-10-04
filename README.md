@@ -11,17 +11,24 @@
 
 ### Features
 
-- Basic path tracer with lambert and specular reflection
-- Toggleable option to sort rays by material type
-- Toggleable first bounce cache
-- Russian roulette path termination
-- Specular refraction
-- Depth of field
-- glTF mesh loading
-  - Diffuse and emission texture loading
-- Environment map lights
-- BVH construction and traversal
-- Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
+- BRDFs
+  - Lambertian shading
+  - Specular reflection
+  - Specular refraction
+- Performance options
+  - Toggleable option to sort rays by material type
+  - Toggleable first bounce cache
+  - Russian roulette path termination
+- Scene building tools
+  - glTF mesh loading
+    - Diffuse and emission texture loading
+  - Environment map lights
+  - BVH construction and traversal
+- Other features
+  - Depth of field
+  - Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
+
+Note that there is also code for microfacet reflection and refraction but it is currently not working properly.
 
 ### Attribution
 

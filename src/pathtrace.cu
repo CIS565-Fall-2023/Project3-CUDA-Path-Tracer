@@ -639,7 +639,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image,
 	if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
 	{
 		image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);
-		printf("found a nan");
+		printf("found a nan\n");
 	}
 	else
 	{
