@@ -4,6 +4,7 @@
 #include <vector>
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
+#include "bound.h"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
@@ -69,104 +70,57 @@ struct Geom {
             objectSpaceMax
         };
 
-        auto bound = new Bound;
+        Bound bound;
 
         for (int i = 0; i < 8; i++) {
             glm::vec3 worldCorner = glm::vec3(transform * glm::vec4(corners[i], 1.0f));
-            bound->unionBound(worldCorner);
+            bound = bound.unionBound(worldCorner);
         }
 
-        return *bound;
+        return bound;
     }
 };
-
-struct Bound {
-    glm::vec3 pMin, pMax;
-
-    Bound()
-        : pMin(glm::vec3(FLT_MAX)), pMax(glm::vec3(-FLT_MAX)) {};
-
-    Bound(const glm::vec3& p1, const glm::vec3& p2)
-        : pMin(glm::min(p1, p2)), pMax(glm::max(p1, p2)) {};
-
-    int getLongestAxis() {
-        glm::vec3 diff = pMax - pMin;
-
-        if (diff.x > diff.y && diff.x > diff.z) {
-            return 0;
-        }
-        else if (diff.y > diff.z) {
-            return 1;
-        }
-        else {
-            return 2;
-        }
-    }
-
-    glm::vec3 offset(const glm::vec3 point) {
-
-    }
-
-    float computeBoxSurfaceArea() {
-        glm::vec3 diff = pMax - pMin;
-        return 2.0f * (diff.x * diff.y + diff.x * diff.z + diff.y * diff.z);
-    }
-
-    Bound unionBound(const glm::vec3& p) {
-        return Bound(glm::min(pMin, p), glm::max(pMax, p));
-    }
-
-    Bound unionBound(const Bound& otherBound) {
-        return Bound(glm::min(pMin, otherBound.pMin), glm::max(pMax, otherBound.pMax));
-    }
-};
-
 
 struct BVHGeomInfo {
     size_t geomIndex;
-    Bound bound;
+    Bound bounds;
     glm::vec3 centroid;
 
-    BVHGeomInfo(size_t geomIndex, const Bound& bound)
-        : geomIndex(geomIndex), bound(bound),
-          centroid(.5f * bound.pMin + .5f * bound.pMax) {};
+    BVHGeomInfo(size_t geomIndex, const Bound& bounds)
+        : geomIndex(geomIndex), bounds(bounds),
+          centroid(.5f * bounds.pMin + .5f * bounds.pMax) {};
 };
 
 struct BVHNode {
-    glm::vec3 minBound, maxBound;
+    Bound bounds;
     BVHNode* left, * right;      
     int splitAxis, geomIndex, geomCount;
     
-    void initLeaf(int first, int n, ) {
+    void initLeaf(int first, int n, const Bound& bound) {
         geomIndex = first;
         geomCount = n;
-        minBound = minBound;
-        maxBound = maxBound;
+        bounds = bound;
         left = right = nullptr;
     }
 
-    void initInterior(int axis, BVHNode* left, BVHNode* right) {
-        left = left;
-        right = right;
-        minBound = glm::min(left->minBound, right->minBound);
-        maxBound = glm::max(left->minBound, right->maxBound);
+    void initInterior(int axis, BVHNode* leftChild, BVHNode* rightChild) {
+        left = leftChild;
+        right = rightChild;
+        bounds = leftChild->bounds.unionBound(rightChild->bounds);
         splitAxis = axis;
         geomCount = 0;
     }
 };
 
-struct CompactBVH {
-    glm::vec3 minBounds;
-    glm::vec3 maxBounds;
+struct LinearBVHNode {
+    Bound bounds;
     union {
         int geomIndex;        // offset to the geometry for leaf nodes;
         int rightChildOffset; // offset to the right child 
     };
-    int geomStartIndex;     
-    int geomEndIndex;
-
-    CompactBVH() :
-        geomStartIndex(-1), geomEndIndex(-1) {};
+    uint16_t geomCount;    // 0 -> interior node
+    uint8_t axis;          // interior node: xyz
+    uint8_t pad[1];        // ensure 32 byte total size
 };
 
 struct Material {

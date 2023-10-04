@@ -25,10 +25,6 @@ using namespace std;
 //-------------------------------
 //----------PATH TRACER----------
 //-------------------------------
-#define USE_BVH 1
-#if USE_BVH
-const int LEAF_THRESHOLD = 12;
-#endif
 
 extern Scene* scene;
 extern int iteration;

@@ -186,29 +186,29 @@ __host__ __device__ void swap(float& a, float& b) {
     b = temp;
 }
 
-__host__ __device__ bool intersectBVHNode(const Ray& ray, const CompactBVH& node) {
-    float txmin = (node.minBounds.x - ray.origin.x) / ray.direction.x;
-    float txmax = (node.maxBounds.x - ray.origin.x) / ray.direction.x;
-
-    if (txmin > txmax) swap(txmin, txmax);
-
-    float tymin = (node.minBounds.y - ray.origin.y) / ray.direction.y;
-    float tymax = (node.maxBounds.y - ray.origin.y) / ray.direction.y;
-
-    if (tymin > tymax) swap(tymin, tymax);
-
-    float tzmin = (node.minBounds.z - ray.origin.z) / ray.direction.z;
-    float tzmax = (node.maxBounds.z - ray.origin.z) / ray.direction.z;
-
-    if (tzmin > tzmax) swap(tzmin, tzmax);
-
-    // Check for overlap in the intervals found for each axis
-    float tmin = fmaxf(fmaxf(txmin, tymin), tzmin);
-    float tmax = fminf(fminf(txmax, tymax), tzmax);
-
-    // If the intervals don't overlap, return false
-    if (tmin > tmax)
-        return false;
-
-    return true;
-}
+//__host__ __device__ bool intersectBVHNode(const Ray& ray, const LinearBVHNode& node) {
+//    //float txmin = (node.minBounds.x - ray.origin.x) / ray.direction.x;
+//    //float txmax = (node.maxBounds.x - ray.origin.x) / ray.direction.x;
+//
+//    //if (txmin > txmax) swap(txmin, txmax);
+//
+//    //float tymin = (node.minBounds.y - ray.origin.y) / ray.direction.y;
+//    //float tymax = (node.maxBounds.y - ray.origin.y) / ray.direction.y;
+//
+//    //if (tymin > tymax) swap(tymin, tymax);
+//
+//    //float tzmin = (node.minBounds.z - ray.origin.z) / ray.direction.z;
+//    //float tzmax = (node.maxBounds.z - ray.origin.z) / ray.direction.z;
+//
+//    //if (tzmin > tzmax) swap(tzmin, tzmax);
+//
+//    //// Check for overlap in the intervals found for each axis
+//    //float tmin = fmaxf(fmaxf(txmin, tymin), tzmin);
+//    //float tmax = fminf(fminf(txmax, tymax), tzmax);
+//
+//    //// If the intervals don't overlap, return false
+//    //if (tmin > tmax)
+//    //    return false;
+//
+//    //return true;
+//}

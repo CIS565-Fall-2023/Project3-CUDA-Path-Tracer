@@ -71,6 +71,7 @@ set(headers
     src/pathtrace.h
     src/scene.h
     src/sceneStructs.h
+    src/bound.h
     src/preview.h
     src/utilities.h
     src/ImGui/imconfig.h
@@ -97,6 +98,7 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/bound.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
