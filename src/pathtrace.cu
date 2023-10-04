@@ -103,6 +103,8 @@ static glm::ivec3* dev_triangles = NULL;
 static glm::vec3* dev_vertices = NULL;
 static glm::vec2* dev_uvs = NULL;
 static glm::vec3* dev_normals = NULL;
+static glm::vec3* dev_tangents = NULL;
+static float* dev_fsigns = NULL;
 static PathSegment* dev_paths1 = NULL;
 static PathSegment* dev_paths2 = NULL;
 static ShadeableIntersection* dev_intersections1 = NULL;
@@ -145,6 +147,16 @@ void pathtraceInit(Scene* scene) {
 			cudaMalloc(&dev_normals, scene->normals.size() * sizeof(glm::vec3));
 			cudaMemcpy(dev_normals, scene->normals.data(), scene->normals.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
 		}
+		if (scene->tangents.size())
+		{
+			cudaMalloc(&dev_tangents, scene->tangents.size() * sizeof(glm::vec3));
+			cudaMemcpy(dev_tangents, scene->tangents.data(), scene->tangents.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+		}
+		if (scene->fSigns.size())
+		{
+			cudaMalloc(&dev_fsigns, scene->fSigns.size() * sizeof(float));
+			cudaMemcpy(dev_fsigns, scene->fSigns.data(), scene->fSigns.size() * sizeof(float), cudaMemcpyHostToDevice);
+		}
 	}
 #if MTBVH
 	cudaMalloc(&dev_mtbvhArray, scene->MTBVHArray.size() * sizeof(MTBVHGPUNode));
@@ -182,6 +194,14 @@ void pathtraceFree(Scene* scene) {
 		if (scene->normals.size())
 		{
 			cudaFree(dev_normals);
+		}
+		if (scene->tangents.size())
+		{
+			cudaFree(dev_tangents);
+		}
+		if (scene->fSigns.size())
+		{
+			cudaFree(dev_fsigns);
 		}
 	}
 	cudaFree(dev_primitives);
@@ -393,11 +413,14 @@ __device__ inline bool util_bvh_leaf_intersect(const Primitive* primitives,
 	const  glm::vec3* modelVertices, 
 	const  glm::vec2* modelUVs,
 	const glm::vec3* modelNormals, 
+	const glm::vec3* modelTangents,
+	const float* modelFsigns,
 	const Ray& ray, 
 	ShadeableIntersection* intersection
 )
 {
-	glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord;
+	glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord, tmp_tangent;
+	float tmp_fsign;
 	glm::vec2	tmp_uv;
 	bool intersected = false;
 	float t = -1.0;
@@ -414,17 +437,22 @@ __device__ inline bool util_bvh_leaf_intersect(const Primitive* primitives,
 			const glm::vec3& v1 = modelVertices[tri[1]];
 			const glm::vec3& v2 = modelVertices[tri[2]];
 			t = triangleIntersectionTest(obj.Transform, v0, v1, v2, ray, tmp_intersect, tmp_normal, tmp_baryCoord);
-			const glm::vec2& uv0 = modelUVs[tri[0]];
-			const glm::vec2& uv1 = modelUVs[tri[1]];
-			const glm::vec2& uv2 = modelUVs[tri[2]];
-			tmp_uv = uv0 * tmp_baryCoord[0] + uv1 * tmp_baryCoord[1] + uv2 * tmp_baryCoord[2];
-			if (modelNormals)
+			if (modelNormals && modelUVs)
 			{
 				const glm::vec3& n0 = modelNormals[tri[0]];
 				const glm::vec3& n1 = modelNormals[tri[1]];
 				const glm::vec3& n2 = modelNormals[tri[2]];
 				tmp_normal = n0 * tmp_baryCoord[0] + n1 * tmp_baryCoord[1] + n2 * tmp_baryCoord[2];
 				tmp_normal = glm::vec3(obj.Transform.invTranspose * glm::vec4(tmp_normal, 0.0));//TODO: precompute transformation
+				const glm::vec2& uv0 = modelUVs[tri[0]];
+				const glm::vec2& uv1 = modelUVs[tri[1]];
+				const glm::vec2& uv2 = modelUVs[tri[2]];
+				tmp_uv = uv0 * tmp_baryCoord[0] + uv1 * tmp_baryCoord[1] + uv2 * tmp_baryCoord[2];
+				const glm::vec3& t0 = modelTangents[tri[0]];
+				const glm::vec3& t1 = modelTangents[tri[1]];
+				const glm::vec3& t2 = modelTangents[tri[2]];
+				tmp_tangent = t0 * tmp_baryCoord[0] + t1 * tmp_baryCoord[1] + t2 * tmp_baryCoord[2];
+				tmp_tangent = glm::vec3(obj.Transform.invTranspose * glm::vec4(tmp_tangent, 0.0));
 			}
 		}
 		else if (obj.type == CUBE)
@@ -442,6 +470,8 @@ __device__ inline bool util_bvh_leaf_intersect(const Primitive* primitives,
 			intersection->materialId = obj.materialid;
 			intersection->worldPos = tmp_intersect;
 			intersection->surfaceNormal = tmp_normal;
+			intersection->surfaceTangent = tmp_tangent;
+			intersection->fsign = tmp_fsign;
 			intersection->uv = tmp_uv;
 			intersected = true;
 		}
@@ -465,6 +495,8 @@ __global__ void compute_intersection_bvh_stackless(
 	, const glm::vec3* modelVertices
 	, const glm::vec2* modelUVs
 	, const glm::vec3* modelNormals
+	, const glm::vec3* modelTangents
+	, const float* modelFsigns
 	, cudaTextureObject_t skyboxTex
 	, const Primitive* primitives
 	, const BVHGPUNode* bvhArray
@@ -514,7 +546,7 @@ __global__ void compute_intersection_bvh_stackless(
 			else if (util_bvh_is_leaf(bvhArray, curr))
 			{
 				int start = bvhArray[curr].startPrim, end = bvhArray[curr].endPrim;
-				if (util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, modelNormals, pathSegment.ray, &tmpIntersection))
+				if (util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, modelNormals, modelTangents, modelFsigns, pathSegment.ray, &tmpIntersection))
 				{
 					intersected = true;
 				}
@@ -540,7 +572,7 @@ __global__ void compute_intersection_bvh_stackless(
 			else if (util_bvh_is_leaf(bvhArray, curr))
 			{
 				int start = bvhArray[curr].startPrim, end = bvhArray[curr].endPrim;
-				if (util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, modelNormals, pathSegment.ray, &tmpIntersection))
+				if (util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, modelNormals, modelTangents, modelFsigns, pathSegment.ray, &tmpIntersection))
 				{
 					intersected = true;
 				}
@@ -582,6 +614,8 @@ __global__ void compute_intersection_bvh_stackless_mtbvh(
 	, const glm::vec3* modelVertices
 	, const glm::vec2* modelUVs
 	, const glm::vec3* modelNormals
+	, const glm::vec3* modelTangents
+	, const float* modelFsigns
 	, cudaTextureObject_t skyboxTex
 	, const Primitive* primitives
 	, const MTBVHGPUNode* bvhArray
@@ -616,7 +650,7 @@ __global__ void compute_intersection_bvh_stackless_mtbvh(
 			if (currArray[curr].startPrim != -1)//leaf node
 			{
 				int start = currArray[curr].startPrim, end = currArray[curr].endPrim;
-				bool intersect = util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, modelNormals, ray, &tmpIntersection);
+				bool intersect = util_bvh_leaf_intersect(primitives, start, end, objects, modelTriangles, modelVertices, modelUVs, modelNormals, modelTangents, modelFsigns, ray, &tmpIntersection);
 				intersected = intersected || intersect;
 			}
 			curr = currArray[curr].hitLink;
@@ -666,7 +700,7 @@ __global__ void scatter_on_intersection(
 	Material material = materials[intersection.materialId];
 	glm::vec3 materialColor = material.color;
 #if VIS_NORMAL
-	image[pathSegments[idx].pixelIndex] += (intersection.surfaceNormal + glm::vec3(1.0)) * 0.5f;
+	image[pathSegments[idx].pixelIndex] += (glm::normalize(intersection.surfaceNormal));
 	rayValid[idx] = 0;
 	return;
 #endif
@@ -687,14 +721,24 @@ __global__ void scatter_on_intersection(
 			nMap.x = nMapCol.x;
 			nMap.y = nMapCol.y;
 			nMap.z = nMapCol.z;
-			//image[pathSegments[idx].pixelIndex] += (nMap);
-			//rayValid[idx] = 0;
+			nMap=glm::pow(nMap, glm::vec3(1 / 2.2f));
+			nMap = nMap * 2.0f - 1.0f;
+			nMap = glm::normalize(nMap);
 		}
+		
 		glm::vec3 N = glm::normalize(intersection.surfaceNormal);
 		glm::vec3 B, T;
-		util_math_get_TBN(N, &T, &B);
-		N = glm::normalize(T * nMap.x + B * nMap.y + N * nMap.z);
-		util_math_get_TBN(N, &T, &B);
+		if (material.normalMap != 0)
+		{
+			T = intersection.surfaceTangent;
+			T = glm::normalize(T - N * glm::dot(N, T));
+			B = glm::cross(N, T);
+			N = glm::normalize(T * nMap.x + B * nMap.y + N * nMap.z);
+		}
+		else
+		{
+			util_math_get_TBN_pixar(N, &T, &B);
+		}
 		glm::mat3 TBN(T, B, N);
 		glm::vec3 wo = glm::transpose(TBN) * (-woInWorld);
 		wo = glm::normalize(wo);
@@ -897,6 +941,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_vertices
 			, dev_uvs
 			, dev_normals
+			, dev_tangents
+			, dev_fsigns
 			, hst_scene->skyboxTextureObj
 			, dev_primitives
 			, dev_mtbvhArray
@@ -917,6 +963,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_vertices
 			, dev_uvs
 			, dev_normals
+			, dev_tangents
 			, hst_scene->skyboxTextureObj
 			, dev_primitives
 			, dev_bvhArray

@@ -11,8 +11,8 @@
 #define TONEMAPPING 1
 #define DOF_ENABLED 1
 #define BACKGROUND_COLOR_MULT 1.0f
-#define SCATTER_ORIGIN_OFFSETMULT 0.0001f
-#define BOUNDING_BOX_EXPAND 0.00001f
+#define SCATTER_ORIGIN_OFFSETMULT 0.00001f
+#define BOUNDING_BOX_EXPAND 0.001f
 #define ALPHA_CUTOFF 0.01f
 #define STOCHASTIC_SAMPLING 1
 #define MAX_ITER 10
@@ -158,6 +158,8 @@ struct PathSegment {
 struct ShadeableIntersection {
     float t = -1.0;
     glm::vec3 surfaceNormal = glm::vec3(0.0);
+    glm::vec3 surfaceTangent = glm::vec3(0.0);
+    float fsign = 1.0;
     glm::vec3 worldPos = glm::vec3(0.0);
     int materialId = -1;
     glm::vec2 uv = glm::vec2(0.0);

@@ -9,6 +9,7 @@
 #include <tiny_gltf.h>
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
+#include <mikktspace.h>
 #include <unordered_map>
 #include <queue>
 
@@ -188,7 +189,7 @@ static void GLTFNodeGetLocalTransform(tinygltf::Node& node, glm::mat4& localTran
         for (int j = 0; j < 4; j++)
             for (int k = 0; k < 4; k++)
             {
-                localTransform[k][j] = node.matrix[k + j * 4];
+                localTransform[j][k] = node.matrix[k + j * 4];
             }
     }
     else
@@ -256,6 +257,71 @@ static void GLTFNodeGetGlobalTransform(std::vector<tinygltf::Node>& nodes, int c
         GLTFNodeGetGlobalTransform(nodes, chld, rec, rec[curr]);
     }
 }
+
+int MikkTSpaceGetNumFaces(const SMikkTSpaceContext* pContext)
+{
+    MikkTSpaceHelper* helperStruct = (MikkTSpaceHelper*)pContext->m_pUserData;
+    auto& obj = helperStruct->scene->objects[helperStruct->i];
+    return obj.triangleEnd - obj.triangleStart;
+}
+
+int MikkTSpaceGetNumVerticesOfFace(const SMikkTSpaceContext* pContext, const int iFace) {
+    // return the number of vertices for the i'th face.
+    return 3;
+}
+
+void MikkTSpaceGetPosition(const SMikkTSpaceContext* pContext, float fvPosOut[], const int iFace, const int iVert) {
+    // fill fvPosOut with the position of vertex iVert of face iFace
+    MikkTSpaceHelper* helperStruct = (MikkTSpaceHelper*)pContext->m_pUserData;
+    auto scene = helperStruct->scene;
+    auto& obj = scene->objects[helperStruct->i];
+    int triIdx = obj.triangleStart + iFace;
+    auto& tri = scene->triangles[triIdx];
+    auto& pos = helperStruct->scene->verticies[tri[iVert]];
+    fvPosOut[0] = pos[0];
+    fvPosOut[1] = pos[1];
+    fvPosOut[2] = pos[2];
+}
+
+void MikkTSpaceGetNormal(const SMikkTSpaceContext* pContext, float fvNormOut[], const int iFace, const int iVert) {
+    // fill fvNormOut with the normal of vertex iVert of face iFace
+    MikkTSpaceHelper* helperStruct = (MikkTSpaceHelper*)pContext->m_pUserData;
+    auto scene = helperStruct->scene;
+    auto& obj = scene->objects[helperStruct->i];
+    int triIdx = obj.triangleStart + iFace;
+    auto& tri = scene->triangles[triIdx];
+    auto& norm = scene->normals[tri[iVert]];
+    fvNormOut[0] = norm[0];
+    fvNormOut[1] = norm[1];
+    fvNormOut[2] = norm[2];
+}
+
+void MikkTSpaceGetTexCoord(const SMikkTSpaceContext* pContext, float fvTexcOut[], const int iFace, const int iVert) {
+    // fill fvTexcOut with the texture coordinate of vertex iVert of face iFace
+    MikkTSpaceHelper* helperStruct = (MikkTSpaceHelper*)pContext->m_pUserData;
+    auto scene = helperStruct->scene;
+    auto& obj = scene->objects[helperStruct->i];
+    int triIdx = obj.triangleStart + iFace;
+    auto& tri = scene->triangles[triIdx];
+    auto& uv = scene->uvs[tri[iVert]];
+    fvTexcOut[0] = uv[0];
+    fvTexcOut[1] = uv[1];
+}
+
+void MikkTSpaceSetTSpaceBasic(const SMikkTSpaceContext* pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert) {
+    // store the tangent and sign to your mesh vertex
+    MikkTSpaceHelper* helperStruct = (MikkTSpaceHelper*)pContext->m_pUserData;
+    auto scene = helperStruct->scene;
+    auto& obj = scene->objects[helperStruct->i];
+    int triIdx = obj.triangleStart + iFace;
+    auto& tri = scene->triangles[triIdx];
+    auto& tangent = scene->tangents[tri[iVert]];
+    tangent[0] = fvTangent[0];
+    tangent[1] = fvTangent[1];
+    tangent[2] = fvTangent[2];
+    scene->fSigns[tri[iVert]] = fSign;
+}
+
 
 //load model using tinyobjloader and tinygltf
 bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNormal)
@@ -433,7 +499,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
             return -1;
         }
         int matOffset = materials.size();
-
+        //load materials
         for (size_t i = 0; i < model.materials.size(); i++)
         {
             Material newMat;
@@ -475,7 +541,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 memcpy(tmpBuffer, &image.image[0], image.image.size());
                 gltfTextureLoadJobs.emplace_back(tmpBuffer, materials.size(), TextureType::normal, image.width, image.height, image.bits, image.component);
             }
-            if (gltfMat.extensions.count("KHR_materials_transmission")|| gltfMat.extensions.count("KHR_materials_volume"))//limited support for translucency
+            if (gltfMat.extensions.count("KHR_materials_transmission")|| gltfMat.extensions.count("KHR_materials_volume")||gltfMat.alphaMode=="BLEND")//limited support for translucency
             {
                 newMat.type = frenselSpecular;
                 //newMat.color = gltfMat.extensions["KHR_materials_volume"].Get("attenuationColor").GetNumberAsDouble();
@@ -624,7 +690,51 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 }
                 else assert(0);//unexpected
                 assert(verticies.size() == uvs.size());
+                if (useVertexNormal)
+                {
+                    fSigns.resize(normals.size());
+                    tangents.resize(normals.size());
+                    SMikkTSpaceInterface interface = {
+                        MikkTSpaceGetNumFaces,
+                        MikkTSpaceGetNumVerticesOfFace,
+                        MikkTSpaceGetPosition,
+                        MikkTSpaceGetNormal,
+                        MikkTSpaceGetTexCoord,
+                        MikkTSpaceSetTSpaceBasic,
+                        NULL,  // setTSpace. Can be NULL.
+                    };
+                    MikkTSpaceHelper helperStruct;
+                    helperStruct.i = objects.size() - 1;
+                    helperStruct.scene = this;
+                    SMikkTSpaceContext context = {
+                        &interface,
+                        &helperStruct,  
+                    };
+                    genTangSpaceDefault(&context);
+                    /*for (int i = newModel.triangleStart; i != newModel.triangleEnd; i++)
+                    {
+                        auto& tri = triangles[i];
+                        glm::vec3 e1 = verticies[tri[1]] - verticies[tri[0]];
+                        glm::vec3 e2 = verticies[tri[2]] - verticies[tri[0]];
+                        glm::vec2 dUV1 = uvs[tri[1]] - uvs[tri[0]];
+                        glm::vec2 dUV2 = uvs[tri[2]] - uvs[tri[0]];
+                        dUV1.y = -dUV1.y;
+                        dUV2.y = -dUV2.y;
+                        float inv = 1 / (dUV1.x * dUV2.y - dUV2.x * dUV1.y);
+                        glm::vec3 tangent;
+                        tangent.x = inv * (dUV2.y * e1.x - dUV1.y * e2.x);
+                        tangent.y = inv * (dUV2.y * e1.y - dUV1.y * e2.y);
+                        tangent.z = inv * (dUV2.y * e1.z - dUV1.y * e2.z);
+                        tangents[tri[0]] += tangent;
+                        tangents[tri[1]] += tangent;
+                        tangents[tri[2]] += tangent;
+                    }
+                    for (int i = tangentsStart; i != tangentsEnd; i++)
+                    {
+                        tangents[i] = glm::normalize(tangents[i]);
+                    }*/
 
+                }
             }
         }
         int modelEndIdx = objects.size();
@@ -682,6 +792,8 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
 
     return true;
 }
+
+
 
 bool Scene::loadGeometry(const string& type, int objectid)
 {

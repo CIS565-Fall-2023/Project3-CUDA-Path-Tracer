@@ -97,7 +97,7 @@ set(sources
     src/preview.cpp
     src/utilities.cpp
     src/bvh.cpp
-	
+	src/mikktspace/mikktspace.c
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
       src/ImGui/imgui_draw.cpp 

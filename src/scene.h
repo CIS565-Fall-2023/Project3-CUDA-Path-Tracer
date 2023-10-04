@@ -35,6 +35,8 @@ public:
     std::vector<glm::vec3> verticies;
     std::vector<glm::vec2> uvs;
     std::vector<glm::vec3> normals;
+    std::vector<glm::vec3> tangents;
+    std::vector<float> fSigns;
     std::vector<Primitive> primitives;
     std::vector<BVHGPUNode> bvhArray;
     std::vector<MTBVHGPUNode> MTBVHArray;
@@ -47,4 +49,10 @@ public:
     std::unordered_map< std::string, cudaTextureObject_t> strToTextureObj;
     std::vector<std::pair<std::string, int> > textureLoadJobs;//texture path, materialID
     std::vector <GLTFTextureLoadInfo> gltfTextureLoadJobs;
+};
+
+struct MikkTSpaceHelper
+{
+    Scene* scene;
+    int i;
 };
