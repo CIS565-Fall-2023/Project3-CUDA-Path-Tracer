@@ -34,6 +34,7 @@ NORM_MAP    gltf/evangelion/textures/amogus/normal.png
 MATERIAL 5
 // DIFF_COL    gltf/evangelion/textures/amogus/diffuse_2.png
 SPEC_COL    1 1 1
+SPEC_ROUGH  0.3
 REFL        1
 REFR        1
 SPEC_IOR    1.45
@@ -54,6 +55,11 @@ MATERIAL 8
 EMIT_COL    gltf/evangelion/textures/fog.png
 EMIT_STR    0.05
 
+// buildings
+MATERIAL 9
+DIFF_COL    gltf/evangelion/textures/jsplacement/color_2k.png
+NORM_MAP    gltf/evangelion/textures/jsplacement/normal_2k.png
+
 // ==================================================
 // CAMERA
 // ==================================================
@@ -71,6 +77,7 @@ UP           0 1 0
 LENS_RADIUS  0
 FOCUS_DIST   20
 ENV_MAP      env_maps/kloppenheim_02_puresky_4k.hdr
+ENV_MAP_STR  2
 
 // ==================================================
 // OBJECTS
@@ -139,3 +146,10 @@ OBJECT 8
 mesh
 gltf/evangelion/fog.glb
 material 8
+TRANS    0 -3 0
+
+// buildings
+OBJECT 9
+mesh
+gltf/evangelion/buildings.glb
+material 9

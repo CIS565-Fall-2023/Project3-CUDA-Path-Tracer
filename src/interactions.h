@@ -153,9 +153,9 @@ void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3 N, c
     }
 
     /*
-    For this function and applyRefraction(), the microfacet code is not working correctly. The effect doesn't look too bad
-    when roughness is included, but it doesn't match other path tracers like Cycles in Blender. I'm leaving it here in case
-    I ever decide to try to fix it (unlikely).
+    NOTE: For this function and applyRefraction(), the microfacet code is not working correctly. The effect doesn't look too bad
+    when roughness is included, but it doesn't match other path tracers like Cycles in Blender. I'm leaving it here in case I ever 
+    decide to try to fix it (unlikely).
     */
 
     const float alpha = m.specular.roughness * m.specular.roughness;

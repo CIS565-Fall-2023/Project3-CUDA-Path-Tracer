@@ -490,7 +490,8 @@ __device__ void processSegment(
 	const Material* const materials,
 	const cudaTextureObject_t* const textureObjects,
 	const SegmentProcessingSettings settings,
-	int envMapTextureIdx)
+	int envMapTextureIdx,
+	float envMapStrength)
 {
 	if (isect.t <= 0.0f)
 	{
@@ -506,7 +507,7 @@ __device__ void processSegment(
 			float u = (phi + PI) * ONE_OVER_TWO_PI;
 			float v = theta * ONE_OVER_PI;
 
-			lightCol = tex2DCustom3(textureObjects[envMapTextureIdx], glm::vec2(u, v));
+			lightCol = tex2DCustom3(textureObjects[envMapTextureIdx], glm::vec2(u, v)) * envMapStrength;
 
 			segment.color *= lightCol;
 		}
@@ -585,7 +586,8 @@ __global__ void shadeMaterial(
 	const Material* const materials,
 	const cudaTextureObject_t* const textureObjects,
 	const SegmentProcessingSettings settings,
-	int envMapTextureIdx
+	int envMapTextureIdx,
+	float envMapStrength
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -595,7 +597,8 @@ __global__ void shadeMaterial(
 	}
 
 	PathSegment segment = pathSegments[idx];
-	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, textureObjects, settings, envMapTextureIdx);
+	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, 
+		textureObjects, settings, envMapTextureIdx, envMapStrength);
 	pathSegments[idx] = segment;
 }
 
@@ -731,7 +734,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			dev_textureObjects,
 			settings,
-			cam.envMapTextureIdx
+			cam.envMapTextureIdx,
+			cam.envMapStrength
 		);
 		checkCUDAError("shade material");
 

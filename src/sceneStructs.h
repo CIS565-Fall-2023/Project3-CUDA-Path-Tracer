@@ -144,6 +144,7 @@ struct Camera
     float lensRadius;
     float focusDistance;
     int envMapTextureIdx = -1;
+    float envMapStrength = 1.f;
 
     __host__ void move(glm::vec3 d)
     {

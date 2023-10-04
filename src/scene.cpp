@@ -550,6 +550,8 @@ int Scene::loadCamera() {
             camera.focusDistance = atof(tokens[1].c_str());
         } else if (strcmp(tokens[0].c_str(), "ENV_MAP") == 0) {
             camera.envMapTextureIdx = loadTexture(basePath + tokens[1]);
+        } else if (strcmp(tokens[0].c_str(), "ENV_MAP_STR") == 0) {
+            camera.envMapStrength = atof(tokens[1].c_str());
         }
 
         Utils::safeGetline(fp_in, line);
