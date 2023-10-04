@@ -44,6 +44,12 @@ glm::vec3 calculateRandomDirectionInHemisphere(
 
 __host__ __device__
 float schlickFresnel(float cosTheta, float eta1, float eta2) {
+    if (cosTheta < 0.0f) {
+        // Ray is exiting the material, swap the indices
+        std::swap(eta1, eta2);
+        cosTheta = -cosTheta;
+    }
+
     float r0 = glm::pow((eta1 - eta2) / (eta1 + eta2), 2.0f);
     return r0 + (1.0f - r0) * glm::pow(1.0f - cosTheta, 5.0f);
 }
@@ -77,47 +83,44 @@ __host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersec
     glm::vec3 normal, const Material& m, thrust::default_random_engine& rng) {
 
     thrust::uniform_real_distribution<float> u01(0, 1);
-    glm::vec3 incomingDirection = pathSegment.ray.direction;
+    glm::vec3 incomingDirection = glm::normalize(pathSegment.ray.direction);
 
-    // Diffuse reflection
-    /*pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-    pathSegment.color *= m.color;*/
+    float cosTheta = glm::clamp(glm::dot(-incomingDirection, normal), -1.0f, 1.0f);
 
     // Decide scatter type based on material properties
-    if (u01(rng) < 0.5f || !m.hasReflective) {
+    if (m.hasRefractive) {
+        float eta = (cosTheta > 0) ? m.indexOfRefraction : 1.0f / m.indexOfRefraction;
+        glm::vec3 refracted = glm::refract(incomingDirection, normal, eta);
+        float fresnelEffect = schlickFresnel(cosTheta, 1.0f, m.indexOfRefraction);
+
+        if (u01(rng) < fresnelEffect || glm::length(refracted) == 0.0f) {
+            // Reflect
+            pathSegment.ray.direction = glm::reflect(incomingDirection, normal);
+            pathSegment.color *= m.specular.color; // specular reflection color
+        }
+        else {
+            // Refract (Specular Transmission)
+            pathSegment.ray.direction = refracted;
+            pathSegment.color *= m.specular.color; // specular transmission color
+        }
+    }
+    else if (m.hasReflective) {
+        // Imperfect specular reflection
+        glm::vec3 perfectReflect = glm::reflect(incomingDirection, normal);
+        pathSegment.ray.direction = glm::mix(perfectReflect,
+            calculateRandomDirectionInHemisphere(normal, rng),
+            m.specular.exponent); // Assuming exponent defines imperfection
+        pathSegment.color *= m.specular.color;
+    }
+    else {
         // Diffuse reflection
         pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
         pathSegment.color *= m.color;
     }
-    else if (m.hasReflective && !m.hasRefractive) {
-        // Pure specular reflection
-        pathSegment.ray.direction = glm::reflect(incomingDirection, normal);
-        pathSegment.color *= m.specular.color;
-    }
-    else if (m.hasRefractive) {
-        float eta = m.indexOfRefraction;
-        if (glm::dot(incomingDirection, normal) > 0) {
-            // Exiting the material
-            normal = -normal;
-            eta = 1.0f / eta;
-        }
 
-        glm::vec3 refracted = glm::refract(incomingDirection, normal, eta);
-        float cosTheta = glm::dot(incomingDirection, normal);
-        float fresnelEffect = schlickFresnel(cosTheta, 1.0f, eta);
-
-        // Decide between reflection and refraction based on Fresnel effect
-        if (u01(rng) < fresnelEffect || glm::length(refracted) == 0.0f) {
-            pathSegment.ray.direction = glm::reflect(incomingDirection, normal);
-        }
-        else {
-            pathSegment.ray.direction = refracted;
-        }
-        pathSegment.color *= m.color;
-    }
-
-    pathSegment.ray.origin = intersect + STEP_SIZE * pathSegment.ray.direction; 
+    pathSegment.ray.origin = intersect + STEP_SIZE * pathSegment.ray.direction;
     pathSegment.remainingBounces--;
 }
+
 
 

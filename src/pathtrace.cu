@@ -27,6 +27,14 @@
 
 #define CACHE_FIRST_BOUNCE 0
 #define SORT_RAY_BY_MATERIAL 1
+#define USE_DOF 1
+
+#if CACHE_FIRST_BOUNCE
+#define USE_STOCHASTIC_SAMPLING 0
+#else
+#define USE_STOCHASTIC_SAMPLING 1
+#endif
+
 
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #if ERRORCHECK
@@ -181,22 +189,47 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
 
-		segment.ray.origin = cam.position;
+		// segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		thrust::uniform_real_distribution<float> u01(0, 1);
 
 #if CACHE_FIRST_BOUNCE
 		float jitterX = 0.0f, jitterY = 0.0f;
 #else
-		// antialiasing by jittering the ray
-		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
-		thrust::uniform_real_distribution<float> u01(0, 1);
+		// Create stratified samples within the pixel
+		// square root of the number of samples
+		int sqrtSamples = 2;
+		float invSqrtSamples = 1.0f / sqrtSamples;
+		int sampleX = x % sqrtSamples;
+		int sampleY = y % sqrtSamples;
 
-		float jitterX = u01(rng), jitterY = u01(rng);
-#endif 
-		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + jitterX)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + jitterY)
-		);
+		float jitterX = (sampleX + u01(rng)) * invSqrtSamples;
+		float jitterY = (sampleY + u01(rng)) * invSqrtSamples;
+#endif
+		// Calculate point P on the image plane
+		glm::vec3 pixelOffset = -cam.right * cam.pixelLength.x *
+			((float)x - (float)cam.resolution.x * 0.5f + jitterX) -
+			cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + jitterY);
+		glm::vec3 P = cam.position + cam.view + pixelOffset;
+
+#if USE_DOF
+		// Calculate the focal point on the focal plane
+		glm::vec3 toFocalPointDirection = glm::normalize(P - cam.position);
+		float t = cam.focalDistance / glm::dot(toFocalPointDirection, cam.view);
+		glm::vec3 focalPoint = cam.position + toFocalPointDirection * t;
+
+		// Sample a point within the lens (aperture)
+		float angle = u01(rng) * 2.0f * PI;
+		float radius = sqrtf(u01(rng)) * cam.aperture * 0.5f;
+		glm::vec3 lensSample = cam.position + cam.right * cos(angle) * radius + cam.up * sin(angle) * radius;
+
+		segment.ray.origin = lensSample;
+		segment.ray.direction = glm::normalize(focalPoint - lensSample);
+#else
+		segment.ray.origin = cam.position;
+		segment.ray.direction = glm::normalize(P - cam.position);
+#endif
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
@@ -504,6 +537,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 		if (CACHE_FIRST_BOUNCE && depth == 0) {
 			if (iter == 1) {
+				cout << "Using CACHE_FIRST_BOUNCE..." << endl;
+				cout << "Not Appling Stochastic Sample" << endl;
+				cout << "" << endl;
 #if USE_BVH
 				computeIntersectionsBVH << <numblocksPathSegmentTracing, blockSize1d >> > (
 					depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections,

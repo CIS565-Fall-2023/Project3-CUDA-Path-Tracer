@@ -58,7 +58,8 @@ FILE        cube
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
-
+APERTURE    0.5
+FOCALDISTANCE 20.0
 
 // Ceiling light
 OBJECT 0
@@ -112,6 +113,14 @@ SCALE       .01 10 10
 OBJECT 6
 obj
 material 4
-TRANS       -1 4 -1
+TRANS       1 4 1
 ROTAT       60 60 -90
+SCALE       3 3 3
+
+// Sphere
+OBJECT 7
+sphere
+material 4
+TRANS       -1 4 -1
+ROTAT       0 0 0
 SCALE       3 3 3
