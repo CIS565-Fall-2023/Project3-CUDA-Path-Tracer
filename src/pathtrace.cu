@@ -211,7 +211,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		//Eq 1: cam.pos + t * ray.dir = pointOnFilm
 		//Eq 2: (pointOnFilm - focalLength * view).(z-axis) = 0. This is assuming focal pplane to be an XY plane so a dot of its normal with a vector on it will be zero
 		//Solve for t. PBRT equation (presumably) assumes view vector to align with the z axis and the lens to be at the origin
-		float t = (cam.focalLength * cam.view.z - cam.position.z) / segment.ray.direction.z;
+		float t = cam.focalLength * glm::dot(cam.view, cam.view)/glm::dot(segment.ray.direction, cam.view);// (cam.focalLength * cam.view.z - cam.position.z) / segment.ray.direction.z;
 		glm::vec3 pointOnFilm = getPointOnRay(segment.ray, t);
 
 		segment.ray.origin += glm::vec3(pointOnLens.x, pointOnLens.y, 0);

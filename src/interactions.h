@@ -82,6 +82,28 @@ __host__ __device__ void lte_specular(PathSegment& pathSegment,
     pathSegment.accumCol *= m.specular.color;
 }
 
+__host__ __device__ void lte_transmissive(PathSegment& pathSegment,
+    glm::vec3 normal,
+    const Material& m) {
+    float eta;
+    if (glm::dot(-pathSegment.ray.direction, normal) >= 0) {
+        eta = 1.f / m.indexOfRefraction;
+    }
+    else {
+        eta = m.indexOfRefraction;
+        normal *= -1.f;
+    }
+    pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, eta);
+
+    if (glm::length(pathSegment.ray.direction) == 0) { //Total Internal Reflection
+        lte_specular(pathSegment, normal, m);
+        pathSegment.accumCol = glm::vec3(0.f);
+    }
+    else {
+        pathSegment.accumCol *= m.specular.color;
+    }
+}
+
 __host__ __device__ void lte_spec_diffuse(PathSegment& pathSegment,
     glm::vec3 normal,
     const Material& m,
@@ -112,8 +134,11 @@ void scatterRay(
             lte_specular(pathSegment, normal, m);
         }
     }
+    else if (m.hasRefractive) {
+        lte_transmissive(pathSegment, normal, m);
+    }
     else {
         lte_diffuse(pathSegment, normal, m, rng);        
     }
-    pathSegment.ray.origin = intersect;
+    pathSegment.ray.origin = intersect + 0.01f * pathSegment.ray.direction;
 }
