@@ -11,12 +11,16 @@ EMITTANCE   5
 TEXTURE 0
 green.bmp
 
+TEXTURE 1
+154_norm.JPG
+
 BACKGROUND
 Footprint_Court_2k.hdr
 
 // Diffuse white
 MATERIAL 1
 texture 0
+bump 1
 RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     0 0 0

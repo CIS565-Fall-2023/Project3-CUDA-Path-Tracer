@@ -289,11 +289,11 @@ __global__ void computeIntersections(
 		glm::vec3 bary; // for interpolation
 		glm::vec3 tmp_bary;
 		int hit_trig_index = -1;
-		int needToVisit[33];
+		int needToVisit[32];
 		int stackTop = 0;
 		needToVisit[0] = 0;
 
-		while (stackTop >= 0 && stackTop < 33) {
+		while (stackTop >= 0 && stackTop < 32) {
 			int idxToVis = needToVisit[stackTop--];
 			BVHNode node = in_bvh[idxToVis];
 			bool hit = AABBIntersectionTest(seg.ray.origin, seg.ray.direction, node.boundingBox,t);
@@ -383,9 +383,13 @@ __global__ void processPBR(
 		return;
 	}
 	Material material = materials[intersect.materialId];
+	glm::vec3 normal = intersect.surfaceNormal;
+	if (material.bumpId!=-1) {
+		normal = tangentToWorld(normal) * texture2D(intersect.surfaceUV, textures[material.bumpId]);
+	}
 #if DEBUG
-	//seg.color = intersect.surfaceNormal * 0.5f + glm::vec3(0.5);
-	seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
+	seg.color = normal * 0.5f + glm::vec3(0.5);
+	//seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
 	seg.remainingBounces = 0;
 	return;
 #else
