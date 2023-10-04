@@ -11,6 +11,8 @@
 
 ## Introduction
 
+TODO
+
 ## Features
 
 ### BRDFs
@@ -35,7 +37,7 @@ Note that this project also has code for microfacet reflection and refraction bu
 
 <img src="img/other/freddy_final.png" width="33%"><img src="img/other/freddy_albedo.png" width="33%"><img src="img/other/freddy_normals.png" width="33%">
 
-These images show, from left to right:
+Using [tinygltf](https://github.com/syoyo/tinygltf). The above images show, from left to right:
 - Final render
 - Albedo (base color)
 - Normals (with normal map applied)
@@ -62,17 +64,34 @@ Using a thin lens camera model.
 
 <img src="img/other/backrooms_20_spp.png" width="50%"><img src="img/other/backrooms_20_spp_denoised.png" width="50%"/>
 
-Using [Intel Open Image Denoise](https://www.openimagedenoise.org/). Both images were taken after 20 samples per pixel (~8 seconds), but the image on the right uses denoising.
+Using [Intel Open Image Denoise](https://www.openimagedenoise.org/). Left is raw output and right is denoised. Both images were taken after 20 samples per pixel (~8 seconds).
 
 ## Performance Analysis
 
+TODO
+
 ### BVH
+
+TODO
+
+### Partition rays
+
+TODO
+
+- Stream compaction helps most after a few bounces. Print and plot the effects of stream compaction within a single iteration (i.e. the number of unterminated rays after each bounce) and evaluate the benefits you get from stream compaction.
+- Compare scenes which are open (like the given cornell box) and closed (i.e. no light can escape the scene). Again, compare the performance effects of stream compaction! Remember, stream compaction only affects rays which terminate, so what might you expect?
 
 ### Sort rays by material type
 
+TODO
+
 ### First bounce cache
 
+TODO
+
 ### Russian roulette path termination
+
+TODO
 
 ## Bloopers
 
