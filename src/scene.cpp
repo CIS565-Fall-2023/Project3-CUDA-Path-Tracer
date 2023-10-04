@@ -575,7 +575,7 @@ int Scene::loadCamera() {
     return 1;
 }
 
-int Scene::loadTexture(string filePath)
+int Scene::loadTexture(string filePath, bool isNormals)
 {
     if (textureIndices.find(filePath) != textureIndices.end())
     {
@@ -587,6 +587,15 @@ int Scene::loadTexture(string filePath)
     int textureIdx = textures.size();
     textures.emplace_back();
     Texture& texture = textures.back();
+
+    if (isNormals)
+    {
+        stbi_ldr_to_hdr_gamma(1.f);
+    }
+    else
+    {
+        stbi_ldr_to_hdr_gamma(2.2f);
+    }
 
     int channels;
     float* textureData = stbi_loadf(filePath.c_str(), &texture.width, &texture.height, &channels, NULL);
@@ -668,7 +677,7 @@ int Scene::loadMaterial(string materialId) {
             } else if (strcmp(tokens[0].c_str(), "EMIT_STR") == 0) {
                 newMaterial.emission.strength = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "NORM_MAP") == 0) {
-                newMaterial.normalMap.textureIdx = loadTexture(basePath + tokens[1]);
+                newMaterial.normalMap.textureIdx = loadTexture(basePath + tokens[1], true);
             }
 
             Utils::safeGetline(fp_in, line);

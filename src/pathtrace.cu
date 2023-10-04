@@ -440,7 +440,7 @@ __global__ void computeIntersections(
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_normal, tmp_uv, tmp_triIdx, settings.useBvh);
+			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_normal, tmp_uv, tmp_triIdx, tMin, settings.useBvh);
 		}
 
 		if (t < 0 || t > tMin)

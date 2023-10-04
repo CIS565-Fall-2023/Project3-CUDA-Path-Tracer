@@ -166,7 +166,6 @@ __host__ __device__ bool intersectBvh(const glm::vec3& ro, const glm::vec3& rd, 
     int stack[32]; // assume BVH depth doesn't exceed 32
     int stackPtr = 0;
     stack[stackPtr++] = nodeIdx;
-    t = FLT_MAX;
     triIdx = -1;
 
     const glm::vec3 rdR = 1.f / rd;
@@ -234,12 +233,12 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c,
 }
 
 __host__ __device__ float meshIntersectionTest(const Geom& geom, const Triangle* const tris, const BvhNode* const bvhNodes,
-    const Ray& r, glm::vec3& normal, glm::vec2& uv, int& triIdx, const bool useBvh)
+    const Ray& r, glm::vec3& normal, glm::vec2& uv, int& triIdx, float tMinInit, const bool useBvh)
 {
     const glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     const glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
-    float t;
+    float t = tMinInit;
 #if BVH_TOGGLE
     if (useBvh)
     {
@@ -250,7 +249,6 @@ __host__ __device__ float meshIntersectionTest(const Geom& geom, const Triangle*
     }
     else
     {
-        t = FLT_MAX;
         triIdx = -1;
 
         for (int i = geom.startTriIdx; i < geom.startTriIdx + geom.numTris; ++i)

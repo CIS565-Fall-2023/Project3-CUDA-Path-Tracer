@@ -27,7 +27,7 @@ private:
     float bvhFindBestSplitPlane(BvhNode& node, int& axis, float& splitPos, AABB& leftChildBox, AABB& rightChildBox);
     void bvhSubdivide(BvhNode& node);
 
-    int loadTexture(string filePath);
+    int loadTexture(string filePath, bool isNormals = false);
 
     unordered_map<string, int> bvhRootIndices;
     unordered_map<string, int> textureIndices;

@@ -37,7 +37,7 @@ public:
 #endif
     bool russianRoulette{ true };
     bool useBvh{ true };
-    bool denoising{ false };
+    bool denoising{ true };
     int denoiseInterval{ 3 };
 
     float lensRadius{ 0.f };
