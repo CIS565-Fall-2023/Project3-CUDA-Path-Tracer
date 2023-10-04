@@ -14,6 +14,7 @@
 #include "scene.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
+#include "glm/common.hpp"
 #include "utilities.h"
 #include "pathtrace.h"
 #include "intersections.h"
@@ -74,6 +75,44 @@ struct sortByMaterialId
 		return isect1.materialId < isect2.materialId;
 	}
 };
+
+// Sample square to disc concentric
+__host__ __device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi) {
+	float theta, radius;
+
+	// Map values to [-1,1]
+	glm::vec2 s = (2.0f * xi) - glm::vec2(1.0f);
+	if (s.x == 0 && s.y == 0)
+	{
+		// we don't really need to do this check since our sampled points will rarely, if ever, be at the very origin
+		// but the book does it, and this makes the center of the "grid" appear properly, so I'm doing this here too
+		return glm::vec3(0, 0, 0);
+	}
+
+	if (glm::abs(s.x) > glm::abs(s.y))
+	{
+		radius = s.x;
+		theta = PI_OVER_4 * (s.y / s.x);   // pi/4 * s.y/s.x
+	}
+	else
+	{
+		radius = s.y;
+		theta = PI_OVER_2 - (PI_OVER_4 * (s.x / s.y));
+	}
+
+	return glm::vec3(cos(theta) * radius, sin(theta) * radius, 0);
+}
+
+/// <summary>
+/// Transforms the point from local camera space to world space
+/// </summary>
+/// <param name="cam"></param>
+/// <returns></returns>
+__host__ __device__ void cameraToWorld(glm::vec3 &p, const Camera& cam)
+{
+	glm::mat3 rot = glm::mat3(cam.right, cam.up, cam.view);
+	p = cam.position + rot * p;
+}
 
 #pragma endregion
 
@@ -188,13 +227,31 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		// randomly offset the ray directions slightly for anti-aliasing
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
 		thrust::uniform_real_distribution<float> u01(0, 1);
+
+		// jitter for AA
 		float xOffset = u01(rng);
 		float yOffset = u01(rng);
 
-		segment.ray.direction = glm::normalize(cam.view
+		glm::vec3 dir = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x + xOffset - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y + yOffset - (float)cam.resolution.y * 0.5f)
 		);
+
+		if (cam.apertureSize > 0.0f)	// thin-lens model
+		{
+			// ray-plane intersection
+			float focalT = cam.focalLength * glm::dot(cam.view, cam.view) / glm::dot(dir, cam.view);
+			glm::vec3 focalPt = cam.position + focalT * dir;
+
+			glm::vec3 ptOnLens = cam.apertureSize * squareToDiskConcentric(glm::vec2(u01(rng), u01(rng)));	// random point in lens in local camera space
+			
+			cameraToWorld(ptOnLens, cam);	// convert pt to world space
+
+			segment.ray.origin = ptOnLens;
+			dir = glm::normalize(focalPt - ptOnLens);
+		}
+
+		segment.ray.direction = dir;
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
