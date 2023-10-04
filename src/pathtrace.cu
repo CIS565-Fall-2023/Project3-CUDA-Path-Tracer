@@ -131,7 +131,7 @@ __global__ void transformTriangles(int num_trigs, Mesh* in_meshs, Triangle* out_
 
 void PathTracer::initMeshTransform()
 {
-	cout << "Transform triangles based on transformation matrix" << endl;
+	//cout << "Transform triangles based on transformation matrix" << endl;
 	int blockSize1d = 128;
 	int N = dev_trigs.size();
 	dim3 numblocksTransformTrigs = (N + blockSize1d - 1) / blockSize1d;
@@ -175,6 +175,11 @@ void PathTracer::pathtraceInit(Scene* scene)
 		texObjs.push_back(texObj.m_texObj);
 	}
 	cudaMemcpy(this->dev_texObjs.get(), texObjs.data(), texObjs.size() * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+
+	if (scene->envTexId != -1) {
+		hasEnvMap = true;
+		envMap = scene->texs[scene->envTexId].m_texObj;
+	}
 
 #if BVH
 	//get transformed triangles to CPU to build BVH tree, triangles will be reordered based on tree
@@ -353,6 +358,8 @@ __global__ void processPBR(
 	, PathSegment* pathSegments
 	, Material* materials
 	, cudaTextureObject_t* textures
+	, cudaTextureObject_t envMapTex
+	, bool hasEnvMap
 )
 {
 	int path_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -366,7 +373,12 @@ __global__ void processPBR(
 	--seg.remainingBounces;
 	if (intersect.t <= 0.) // no intersection
 	{
-		seg.color = glm::vec3(0.f);
+		if (hasEnvMap) {
+			seg.color *= getEnvLight(seg.ray.direction, envMapTex);
+		}
+		else {
+			seg.color = glm::vec3(0.f);
+		}
 		seg.remainingBounces = 0;
 		return;
 	}
@@ -622,6 +634,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 			, dev_paths
 			, dev_materials
 			, dev_texObjs
+			, envMap 
+			, hasEnvMap
 			);
 		depth++;
 

@@ -20,6 +20,7 @@ private:
     int loadCamera();
     int loadMesh(string objectid);
     int loadTexture(string textureid);
+    int loadEnvMap();
 public:
     Scene(string filename);
     //~Scene();
@@ -27,5 +28,6 @@ public:
     std::vector<Triangle> trigs;
     std::vector<Material> materials;
     std::vector<CudaTexture> texs;
+    int envTexId = -1;
     RenderState state;
 };

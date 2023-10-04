@@ -263,7 +263,7 @@ GLuint Application::initShader()
 
 void Application::deletePBO(GLuint* pbo)
 {
-	if (pbo) {
+	if (*pbo) {
 		// unregister this buffer object with CUDA
 		cudaGLUnregisterBufferObject(*pbo);
 		cudaError_t err = cudaGetLastError();

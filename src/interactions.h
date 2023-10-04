@@ -177,6 +177,14 @@ __device__ bool sampleRay(
 	return false;
 }
 
+__device__ glm::vec3 texture2D(
+	glm::vec2 uv
+	, cudaTextureObject_t tex
+) {
+	float4 color = tex2D<float4>(tex, uv.x, uv.y);
+	return glm::vec3(color.x, color.y, color.z);
+}
+
 __host__ __device__
 void scatterRay(
 	PathSegment& pathSegment,
@@ -197,8 +205,7 @@ __device__ glm::vec3 getBSDF(
 	, cudaTextureObject_t* texs
 ) {
 	if (material.textureId != -1) {
-		float4 color = tex2D<float4>(texs[material.textureId], uv.x, uv.y);
-		return glm::vec3(color.x, color.y, color.z);
+		return texture2D(uv, texs[material.textureId]);
 	}
 	if (material.hasRefractive && glm::dot(wi,wo) < 0) {
 		return material.color;
@@ -207,4 +214,12 @@ __device__ glm::vec3 getBSDF(
 		return material.specular.color;
 	}
 	return material.color * INV_PI;
+}
+
+__device__ glm::vec3 getEnvLight(
+	glm::vec3 wi
+	, cudaTextureObject_t envMap
+) {
+	glm::vec2 uv = glm::vec2(atan2f(wi.z, wi.x), asin(wi.y)) * glm::vec2(0.1591, 0.3183) + 0.5f;
+	return texture2D(uv, envMap);
 }

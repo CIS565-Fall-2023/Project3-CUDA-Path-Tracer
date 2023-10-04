@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
 	//}
 
 	string sceneFilePath = SCENE_PATH;
-	sceneFilePath += "wahoo.txt";
+	sceneFilePath += "single_cube.txt";
 
 	auto& app = Application::getInstance();
 

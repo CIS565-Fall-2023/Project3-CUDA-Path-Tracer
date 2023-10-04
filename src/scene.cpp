@@ -31,6 +31,9 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
                 loadTexture(tokens[1]);
                 cout << " " << endl;
+            } else if (strcmp(tokens[0].c_str(), "BACKGROUND") == 0) {
+                loadEnvMap();
+                cout << " " << endl;
             }
         }
     }
@@ -163,6 +166,23 @@ int Scene::loadTexture(string textureid)
         return 1;
     }
     return 0;
+}
+
+int Scene::loadEnvMap()
+{
+    cout << "Loading Environment Map ..." << endl;
+    string line;
+
+    //load object type
+    utilityCore::safeGetline(fp_in, line);
+    string filename = ROOT_PATH;
+    filename += "/textures/";
+    this->envTexId = texs.size();
+    if (!line.empty() && fp_in.good()) {
+        filename += line;
+        texs.push_back(CudaTexture(filename));
+    }
+    return 1;
 }
 
 //int Scene::loadGeom(string objectid) {

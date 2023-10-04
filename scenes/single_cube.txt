@@ -11,6 +11,9 @@ EMITTANCE   5
 TEXTURE 0
 green.bmp
 
+BACKGROUND
+Footprint_Court_2k.hdr
+
 // Diffuse white
 MATERIAL 1
 texture 0

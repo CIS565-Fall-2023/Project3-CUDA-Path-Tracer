@@ -20,7 +20,9 @@ private:
 	CudaMemory<PathSegment> dev_firstPaths;
 	CudaMemory<BVHNode> dev_bvh;
 	CudaMemory<int> dev_materialId;
-	CudaMemory<cudaTextureObject_t> dev_texObjs;
+	CudaMemory<cudaTextureObject_t> dev_texObjs;// this is an array, we need to read an array directly on device
+	cudaTextureObject_t envMap;//this is only a unsigned long, we don't need to copy it to device
+	bool hasEnvMap = false;
 	int doneOffset = 0;
 	PathTracer(const PathTracer& _pathtracer);
 	PathTracer& operator=(const PathTracer& _pathtracer);
