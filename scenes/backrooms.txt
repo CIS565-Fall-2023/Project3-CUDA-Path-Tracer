@@ -20,7 +20,7 @@ NORM_MAP gltf/freddy/textures/Freddy_Body_normal.png
 MATERIAL 3
 DIFF_COL gltf/freddy/textures/Freddy_Eyes_baseColor.png
 EMIT_COL gltf/freddy/textures/Freddy_Eyes_emissive.jpeg
-EMIT_STR 0.4
+EMIT_STR 0.2
 
 // chair
 MATERIAL 4
