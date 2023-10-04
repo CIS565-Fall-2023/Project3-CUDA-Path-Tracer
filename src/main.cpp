@@ -34,7 +34,7 @@ int height;
 
 int main(int argc, char** argv) {
 	std::cout << "sleeping..." << std::endl;
-    sleep(2);
+    sleep(3);
     std::cout << "awake!" << std::endl;
 	startTimeString = currentTimeString();
 

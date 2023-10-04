@@ -4,12 +4,13 @@
 #include <vector>
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
+#include "glm/gtc/quaternion.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
 enum GeomType {
     SPHERE,
-    CUBE,
+    CUBE
 };
 
 struct Ray {
@@ -22,6 +23,17 @@ struct Geom {
     int materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
+    glm::vec3 scale;
+    glm::mat4 transform;
+    glm::mat4 inverseTransform;
+    glm::mat4 invTranspose;
+};
+
+struct Mesh {
+    std::vector<float> vertices;
+    std::vector<unsigned short> indices;
+    glm::vec3 translation;
+    glm::quat rotation;
     glm::vec3 scale;
     glm::mat4 transform;
     glm::mat4 inverseTransform;
