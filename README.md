@@ -10,7 +10,7 @@ CUDA Path Tracer
 
 ## Showcase
 
-Wanna play chess?
+Wanna play chess? 
 
 ![](./img/chess.png)
 
