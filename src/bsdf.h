@@ -68,14 +68,17 @@ __device__ float microfacetBSDF_G(const glm::vec3 & wo, const glm::vec3 & wi, co
 
 __device__ float microfacetBSDF_D(const glm::vec3 & h, const float alpha) {
     float alpha_square = alpha * alpha;
-    float cos_theta_h_square = h.z * h.z;
-    float tan_theta_h_square = 1.0f / (cos_theta_h_square)-1.0f;
-    return exp(-tan_theta_h_square / alpha_square) / (PI * alpha_square * cos_theta_h_square * cos_theta_h_square);
+    auto tan2Theta = Tan2Theta(h);
+    if (glm::isinf(tan2Theta)) return 0.;
+    auto cos4Theta = Cos2Theta(h) * Cos2Theta(h);
+	return exp(-tan2Theta / alpha_square) 
+        / (PI * alpha_square * cos4Theta);
 }
 
 template<typename T>
 __device__ T Schlick(const T & R0, float cos_theta) {
-	return R0 + (1.0f - R0) * pow(1.0f - cos_theta, 5.0f);
+    auto pow5 = [](float v) { return (v * v) * (v * v) * v; };
+    return R0 + (1.0f - R0) * pow5(1.0f - cos_theta);
 }
 
 __device__ float roughnessToAlpha(float roughness) {
@@ -85,9 +88,9 @@ __device__ float roughnessToAlpha(float roughness) {
         0.0171201f * x * x * x + 0.000640711f * x * x * x * x;
 }
 
-__device__ glm::vec3 microfacetBSDF_F(const glm::vec3& h, const float ior, const glm::vec3 & baseColor, const float metallic) {
-    auto F0 = glm::mix(glm::vec3(0.04f), baseColor, metallic);
-    return Schlick(F0, h.z);
+__device__ glm::vec3 microfacetBSDF_F(const glm::vec3& h, const glm::vec3 & wo, const glm::vec3 & baseColor, const float metallic) {
+    auto F0 = glm::mix(glm::vec3(0.08f), baseColor, metallic);
+    return Schlick(F0, glm::dot(wo, h));
     //if (metallic > 0.1f) {
     //    auto F0 = glm::mix(glm::vec3(0.4f), baseColor, metallic);
     //    return Schlick(F0, h.z);
@@ -129,14 +132,31 @@ __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& w
         else {
             metallicRoughness = glm::vec2(bsdfStruct.metallicFactor, bsdfStruct.roughnessFactor);
         }
-        auto F = microfacetBSDF_F(normalize(wi + wo), bsdfStruct.ior, baseColor, metallicRoughness.x);
-        auto alpha = roughnessToAlpha(metallicRoughness.y);
-        auto D = microfacetBSDF_D(normalize(wi + wo), alpha);
+        //auto alpha = roughnessToAlpha(metallicRoughness.y);
+        auto alpha = metallicRoughness.y * metallicRoughness.y;
+        auto h = glm::normalize(wi + wo);
+        auto D = microfacetBSDF_D(h, alpha);
         auto G = microfacetBSDF_G(wo, wi, alpha);
-        auto result = baseColor * F * D * G / (4.0f * wo.z * wi.z);
-        //printf("F: %f, D: %f, G: %f\n", F, D, G);
-        //printf("result: %f, %f, %f\n", result.x, result.y, result.z);
-        return result;
+        auto F = microfacetBSDF_F(h, wo, baseColor, metallicRoughness.x);
+        //if (metallicRoughness.x < 0.99f) printf("h: %f %f %f kS: %f %f %f kD:%f %f %f metallic:%f\n", normalize(wi + wo).x, normalize(wi + wo).y, normalize(wi + wo).z, kS.x, kS.y, kS.z, kD.x, kD.y, kD.z, metallicRoughness.x);
+        auto denominator = 4.0f * wo.z * wi.z + EPSILON;
+        //auto specular = F * D * G / denominator;
+        //auto kS = metallicRoughness.x;
+        //auto kD = 1.0f - kS;
+        //auto specular = kS * F * D * G / denominator;
+        //auto diffuse  = kD * INV_PI;
+        //auto result = baseColor * (diffuse + specular);
+        //auto result = baseColor * specular;
+        //auto result = baseColor * diffuse;
+        //return (baseColor * F* D* G/denominator);
+        //return baseColor * INV_PI;
+        auto diffuse = baseColor * INV_PI * (1.f - metallicRoughness.x);
+        auto specular = glm::vec3(G * D / denominator);
+        return glm::mix(diffuse, specular, F);
+        //printf("baseColor: %f %f %f\n", baseColor.x, baseColor.y, baseColor.z);
+
+        //return baseColor;
+        //return result;
         //return baseColor * INV_PI;
     case EMISSIVE:
         return bsdfStruct.emissiveFactor * bsdfStruct.strength;
@@ -159,23 +179,56 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
     case MICROFACET:
         // Uniform sampling for now
         // TODO: Add importance sampling
-        wi = hemiSphereRandomSample(rng, pdf);
-        return f(bsdfStruct, wo, wi, uv);
 
-        auto s = hemiSphereRandomSample(rng, pdf);
-        float alpha = roughnessToAlpha(bsdfStruct.roughnessFactor);
-        auto theta_h = atan(sqrt(-alpha * alpha * log(1 - s.x)));
-        auto phi_h = 2 * PI * s.y;
-        glm::vec3 h(sin(theta_h) * cos(phi_h), sin(theta_h) * sin(phi_h), cos(theta_h));
-        auto proj = dot(wo, h) * h;
-        wi = 2.0f * proj - wo;
-        if (wi.z < 0) return glm::vec3();
+        //wi = hemiSphereRandomSample(rng, pdf);
+        //return f(bsdfStruct, wo, wi, uv);
 
-        auto p_theta = 2 * sin(theta_h) * exp(-pow(tan(theta_h) / alpha, 2)) / (alpha * alpha * pow(cos(theta_h), 3));
-        auto p_phi = 1. / (2 * PI);
-        auto p_h = p_theta * p_phi / sin(theta_h);
-        *pdf = p_h / (4 * dot(wi, h));
-        
+        thrust::uniform_real_distribution<float> u01(0, 1);
+        bsdfStruct.roughnessFactor = glm::max(bsdfStruct.roughnessFactor, EPSILON);
+        float alpha = bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor;
+        glm::vec3 wi_diffuse;
+        float pdf_diffuse;
+        wi_diffuse = hemiSphereRandomSample(rng, &pdf_diffuse);
+
+        //glm::vec2 u(u01(rng), u01(rng));
+        ////float alpha = roughnessToAlpha(bsdfStruct.roughnessFactor);
+        //float logSample = glm::log(1 - u[0]);
+        //if (glm::isinf(logSample)) logSample = 0;
+        //float tanTheta2 = -alpha * alpha * logSample;
+        //float phi = u[1] * 2 * PI;
+        //float cosTheta = 1 / sqrt(1 + tanTheta2);
+        //float sinTheta = sqrt(1 - cosTheta * cosTheta);
+        //glm::vec3 _wh(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+        ////if (wh.z * wo.z < 0) wh = -wh;
+        //wi = glm::reflect(-wo, _wh);
+        //auto d = glm::dot(wo, _wh);
+        //*pdf = 1.0f;
+        //if (d < 0) return glm::vec3(0.0f, 0.0f, 1.0f);
+        //auto _h = glm::normalize(wi + wo);
+  //      if (abs(glm::distance(_h, _wh)) > 1e-3) {
+	 //       printf("h: %f %f %f wh: %f %f %f wo: %f %f %f wi:%f %f %f\n", _h.x, _h.y, _h.z, _wh.x, _wh.y, _wh.z, wo.x, wo.y, wo.z, wi.x, wi.y, wi.z);
+		//}
+        glm::vec3 wh;
+        if (u01(rng) > (1.f / (2.f - bsdfStruct.metallicFactor))) {
+            wi = wi_diffuse;
+            wh = glm::normalize(wi + wo);
+        }
+        else {
+            glm::vec2 u(u01(rng), u01(rng));
+            //float alpha = roughnessToAlpha(bsdfStruct.roughnessFactor);
+            float logSample = glm::log(1 - u[0]);
+            if (glm::isinf(logSample)) logSample = 0;
+            float tanTheta2 = -alpha * alpha * logSample;
+            float phi = u[1] * 2 * PI;
+            float cosTheta = 1 / sqrt(1 + tanTheta2);
+            float sinTheta = sqrt(glm::max(0.0f, 1 - cosTheta * cosTheta));
+            wh = glm::vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+            auto d = glm::dot(wo, wh);
+            *pdf = 1.0f;
+            if (d < 0) return glm::vec3();
+            wi = glm::reflect(-wo, wh);
+        }
+        *pdf = glm::mix(pdf_diffuse, microfacetBSDF_D(wh, alpha) * wh.z / (4 * glm::dot(wo, wh)), 1.f / (2.f - bsdfStruct.metallicFactor));
         return f(bsdfStruct, wo, wi, uv);
         
     case EMISSIVE:

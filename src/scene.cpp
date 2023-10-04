@@ -63,8 +63,10 @@ void Scene::initBSDFs() {
             }
             //bsdf = new EmissionBSDF(strength * glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]));
         }
-		else if (material.pbrMetallicRoughness.baseColorTexture.index >= 0) {
-			//bsdf = new DiffuseBSDF(glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]));
+		//else if (material.pbrMetallicRoughness.baseColorTexture.index >= 0 || material.pbrMetallicRoughness.metallicFactor > EPSILON) {
+		////	//bsdf = new DiffuseBSDF(glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]));
+		//}
+        else {
 			bsdfStruct.bsdfType = MICROFACET;
 			bsdfStruct.reflectance = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]);
 			bsdfStruct.baseColorTextureID = material.pbrMetallicRoughness.baseColorTexture.index;
@@ -73,14 +75,12 @@ void Scene::initBSDFs() {
             bsdfStruct.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
             bsdfStruct.ior = 1.5f;
 			bsdfStructs.push_back(bsdfStruct);
-		}
-        else {
-            //bsdf = new DiffuseBSDF(glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]));
-            bsdfStruct.bsdfType = DIFFUSE;
-            bsdfStruct.reflectance = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]);
-            bsdfStruct.baseColorTextureID = material.pbrMetallicRoughness.baseColorTexture.index;
-            bsdfStruct.metallicRoughnessTextureID = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
-            bsdfStructs.push_back(bsdfStruct);
+
+            //bsdfStruct.bsdfType = DIFFUSE;
+            //bsdfStruct.reflectance = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]);
+            //bsdfStruct.baseColorTextureID = material.pbrMetallicRoughness.baseColorTexture.index;
+            //bsdfStruct.metallicRoughnessTextureID = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+            //bsdfStructs.push_back(bsdfStruct);
         }
         //bsdfs.push_back(bsdf);
 
@@ -110,6 +110,12 @@ void Scene::initTextures()
         {
         case GLTFDataType::GLTF_DATA_TYPE_UNSIGNED_BYTE:
             textureData = image.image;
+            break;
+        case GLTFDataType::GLTF_DATA_TYPE_UNSIGNED_SHORT:
+            for (size_t i = 0; i < image.image.size(); i++)
+            {
+                textureData.push_back(static_cast<unsigned char>(image.image[i]));
+            }
             break;
         default:
             /* Unsupported data type! */

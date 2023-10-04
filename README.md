@@ -153,6 +153,11 @@ Scene with 1k faces
 - [x] Camera 
     - [x] Antialiasing
 
+10.1-10.2
+Try to refactor camera
+- Failed. gltf seems to have a really ambiguous definition of camera.
+
+10.3
 - [ ] Denoising
     - [x] OpenImage Denoiser built
         - CPU only for now

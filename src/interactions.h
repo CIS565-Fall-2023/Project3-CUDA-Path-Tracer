@@ -24,18 +24,47 @@ void make_coord_space(glm::mat3x3& o2w, glm::vec3 n) {
     o2w[2] = z;
 }
 
+__host__ __device__ glm::vec2 concentricSampleDisk(const glm::vec2& u) {
+    glm::vec2 uOffset = 2.f * u - glm::vec2(1, 1);
+    if (uOffset.x == 0 && uOffset.y == 0) return glm::vec2(0, 0);
+    float theta, r;
+    //if (abs(uOffset.x) > abs(uOffset.y)) {
+	   // r = uOffset.x;
+	   // theta = PI_OVER4 * (uOffset.y / uOffset.x);
+    //}
+    //else {
+	   // r = uOffset.y;
+	   // theta = PI_OVER2 - PI_OVER4 * (uOffset.x / uOffset.y);
+    //}
+    r = glm::sqrt(u[0]);
+    theta = TWO_PI * u[1];
+    return r * glm::vec2(cos(theta), sin(theta));
+}
+
 __host__ __device__
-glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float * pdf) {
+glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float* pdf) {
     thrust::uniform_real_distribution<float> u01(0, 1);
 
-    float Xi1 = u01(rng);
-    float Xi2 = u01(rng);
-
-    float r = sqrt(Xi1);
-    float phi = 2. * PI * Xi2;
-    *pdf = sqrt(1 - r) * INV_PI;
-    return glm::vec3(r * cos(phi), r * sin(phi), sqrt(1 - Xi1));
+    glm::vec2 u(u01(rng), u01(rng));
+    glm::vec2 d(concentricSampleDisk(u));
+    float z = sqrt(glm::max(0.0f, 1.0f - d.x * d.x - d.y * d.y));
+    *pdf = INV_PI * z;
+    return glm::vec3(d.x, d.y, z);
 }
+
+
+//__host__ __device__
+//glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float * pdf) {
+//    thrust::uniform_real_distribution<float> u01(0, 1);
+//
+//    float Xi1 = u01(rng);
+//    float Xi2 = u01(rng);
+//
+//    float r = sqrt(Xi1);
+//    float phi = 2. * PI * Xi2;
+//    *pdf = sqrt(1 - r) * INV_PI;
+//    return glm::vec3(r * cos(phi), r * sin(phi), sqrt(1 - Xi1));
+//}
 
 // CHECKITOUT
 /**

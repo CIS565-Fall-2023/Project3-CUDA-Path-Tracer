@@ -93,7 +93,11 @@ static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
-static Scene * pa = new Scene("..\\scenes\\pathtracer_test_microfacet.glb");
+
+/* TODO: Solve the weird shiny line in the empty room! */
+//static Scene* pa = new Scene("..\\scenes\\pathtracer_empty_room.glb");
+
+static Scene * pa = new Scene("..\\scenes\\pathtracer_bunny.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -158,16 +162,18 @@ void pathtraceInitBeforeMainLoop() {
 	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
 
 	cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
+	checkCUDAError("cudaMalloc textures invalid!");
 	unsigned char* dev_texture_data = nullptr;
 	for (int i = 0; i < textureSize; i++)
 	{
 		cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
 		cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
 		initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
+		printf("Loaded Texture %d\n", i);
+		checkCUDAError("initDeviceTextures");
 	}
 
 
-	checkCUDAError("initDeviceTextures");
 
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
@@ -273,7 +279,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
 		thrust::random::uniform_real_distribution<float> u01(0,1);
-		glm::vec2 jitter(u01(rng)-0.5f, u01(rng)-0.5f);
+		glm::vec2 jitter(u01(rng) - 0.5f, u01(rng) - 0.5f);
+		//glm::vec2 jitter(u01(rng), u01(rng));
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x + jitter[0] - (float)cam.resolution.x * 0.5f)
@@ -388,17 +395,19 @@ __global__ void shadeBSDF(
 				}
 				//return;
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
-				glm::vec3 L_direct;
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 				glm::vec3 wi;
+				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
+				float cosineTerm = abs(wi.z);
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
+				glm::vec3 L_direct;
 				/* Estimate one bounce direct lighting */
 				int n_sample = 10;
 				int n_valid_sample = 0;
 				for (size_t i = 0; i < n_sample; i++)
 				{
-					sample_f(bsdfStruct, wo, wi, &pdf, rng);
+					sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
 					float cosineTerm = abs(wi.z);
 					Ray one_bounce_ray;
 					one_bounce_ray.direction = o2w * wi;
@@ -423,16 +432,18 @@ __global__ void shadeBSDF(
 
 				float one_over_n = 1.0f / (n_valid_sample + 1);
 				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
-#endif //  ONE_BOUNCE_DIRECT_LIGHTINIG
-				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
-				float cosineTerm = abs(wi.z);
-#if ONE_BOUNCE_DIRECT_LIGHTINIG
 				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
 #else
 				pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 #endif			
-				pathSegment.ray.origin = intersect;
+				//if (bsdfStructs[intersection.materialId].bsdfType == MICROFACET) {
+				//	pathSegment.color = glm::vec3(1.0f, 0.0f, 0.0f);
+				//}
+				//else {
+				//	pathSegment.color = glm::vec3(0.0f, 0.0f, 1.0f);
+				//}
 				pathSegment.ray.direction = o2w * wi;
+				pathSegment.ray.origin = intersect + 1e-3f * pathSegment.ray.direction;
 				pathSegment.remainingBounces--;
 			}
 			// If there was no intersection, color the ray black.
@@ -637,7 +648,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_bvhNodes,
 			bvh->nodes.size()
 			);
-
+		cudaDeviceSynchronize();
 		checkCUDAError("shadeMaterial failed\n");
 		// Use dev_paths for compaction result
 		// check if compacted dev_intersections has zero element, if it is, then iteraionComplete should be true.

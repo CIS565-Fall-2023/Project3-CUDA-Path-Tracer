@@ -34,17 +34,15 @@ __host__ __device__ glm::vec3 getPointOnRay(Ray r, float t) {
     return r.origin + (t - .0001f) * glm::normalize(r.direction);
 }
 
-
 __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableIntersection* isect) {
-
     //glm::vec3 e1, e2, h, s, q;
-    //e1 = p2 - p1;
-    //e2 = p3 - p1;
+    //e1 = tri.p2 - tri.p1;
+    //e2 = tri.p3 - tri.p1;
     //h = glm::cross(r.direction, e2);
     //float a = glm::dot(e1, h);
     //if (a > -EPSILON && a < EPSILON) return false;
     //float f = 1.0f / a;
-    //s = r.origin - p1;
+    //s = r.origin - tri.p1;
     //if (a < 0.0f) {
     //    a = -a;
     //    s = -s;
@@ -62,9 +60,9 @@ __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableInterse
     //{
     //    r.max_t = t;
     //    isect->t = t;
-    //    isect->materialId = materialID;
+    //    isect->materialId = tri.materialID;
     //    isect->intersectionPoint = r.origin + r.direction * t;
-    //    isect->surfaceNormal = glm::normalize((1.0f-u-v)* n1 + u * n2 + v*n3);
+    //    isect->surfaceNormal = glm::normalize((1.0f-u-v)* tri.n1 + u * tri.n2 + v*tri.n3);
     //    return true;
     //} // this means that there is a line intersection
     //else return false;
@@ -82,6 +80,7 @@ __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableInterse
             isect->intersectionPoint = r.at(t);
             isect->uv = (1.0f - bary.x - bary.y) * tri.uv1 + bary.x * tri.uv2 + bary.y * tri.uv3;
             isect->surfaceNormal = glm::normalize((1.0f - bary.x - bary.y) * tri.n1 + bary.x * tri.n2 + bary.y * tri.n3);
+            isect->bary = glm::vec2(bary);
    //         if (tri.normalTextureID != -1) {
 			//	isect->surfaceNormal = sampleTextureRGB(*tri.normalTexture, isect->uv);
 			//}
