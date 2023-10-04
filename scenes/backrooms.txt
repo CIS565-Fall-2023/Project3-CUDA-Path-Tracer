@@ -62,7 +62,7 @@ CAMERA
 // RES          960 540
 RES          1920 1080
 FOVY         38
-ITERATIONS   5000
+ITERATIONS   20
 DEPTH        8
 FILE         backrooms
 EYE          -11.39 9.44 7.82

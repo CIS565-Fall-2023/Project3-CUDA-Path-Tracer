@@ -27,7 +27,7 @@ Basic Lambertian shading, shown here in a Cornell box scene.
 
 Perfect specular reflection and refraction, shown in the same Cornell box scene as above.
 
-Note that this project also has code for microfacet reflection and refraction but it currently does not work properly.
+Note that this project also has code for microfacet reflection and refraction but it currently does not work properly. The render on the right at the top of the page does use a roughness value of 0.3 (for the transparent character) but the calculations aren't entirely accurate even if the effect looks cool.
 
 ### Scene building tools
 
@@ -42,7 +42,13 @@ These images show, from left to right:
 
 #### Environment map lights
 
+<img src="img/other/freddy_env_map.png" width="50%">
+
 #### BVH construction and traversal
+
+The [above scene](#environment-map-lights) renders at 26.4 FPS using a BVH and 2.9 FPS without a BVH. The mesh has 16,682 triangles and it takes about 11.5 ms to construct the BVH.
+
+More detailed performance analysis is given [below](#bvh).
 
 ### Other features
 
@@ -54,17 +60,45 @@ Using a thin lens camera model.
 
 #### Denoising
 
-Using [Intel Open Image Denoise](https://www.openimagedenoise.org/).
+<img src="img/other/backrooms_20_spp.png" width="50%"><img src="img/other/backrooms_20_spp_denoised.png" width="50%"/>
+
+Using [Intel Open Image Denoise](https://www.openimagedenoise.org/). Both images were taken after 20 samples per pixel (~8 seconds), but the image on the right uses denoising.
 
 ## Performance Analysis
 
-### Individual features
+### BVH
 
-#### Sort rays by material type
+### Sort rays by material type
 
-#### First bounce cache
+### First bounce cache
 
-#### Russian roulette path termination
+### Russian roulette path termination
+
+## Bloopers
+
+<img src="img/cool_renders/002_sorting_intersections.png" width="50%">
+
+This appeared when I sorted intersections by material ID without also sorting the path segments in tandem.
+
+<img src="img/cool_renders/005_idk.png" width="50%">
+
+Really not sure where this came from, but it appeared while I was working on the first bounce cache.
+
+<img src="img/cool_renders/011_monkey_attempt_1.png" width="50%">
+
+Evil monkey.
+
+<img src="img/cool_renders/016_idk.png" width="50%">
+
+Seems like the monkey exploded?
+
+<img src="img/cool_renders/019_monkey_broke.png" width="50%">
+
+The monkey is empty inside, just like me after spending two weeks on this assignment.
+
+<img src="img/cool_renders/023_freddy_artifacts.png" width="50%">
+
+🤨 (I was trying to fix the shading artifacts on the eye sockets.)
 
 ## Attribution
 
