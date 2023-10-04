@@ -26,3 +26,4 @@
 026 - backrooms with denoising (with albedo and normals auxiliary inputs)
 027 - backrooms AOVs
 028 - forgot that I changed default diffuse color to magenta
+029 - backrooms final render

@@ -169,6 +169,7 @@ struct PathSegment
     int bouncesSoFar;
     int remainingBounces;
 
+    bool needsFirstHitData;
     glm::vec3 firstHitAlbedo;
     glm::vec3 firstHitNormal;
 };

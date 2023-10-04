@@ -1,6 +1,6 @@
 # CUDA Path Tracer
 
-![](img/cool_renders/027_backrooms_final.png)
+![](img/cool_renders/029_backrooms_final.png)
 
 **University of Pennsylvania, CIS 5650: GPU Programming and Architecture, Project 2**
 
@@ -28,7 +28,7 @@
   - Depth of field
   - Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
 
-Note that there is also code for microfacet reflection and refraction but it is currently not working properly.
+Note that there is also code for microfacet reflection and refraction but it currently does not work properly.
 
 ### Attribution
 
@@ -45,3 +45,5 @@ Note that there is also code for microfacet reflection and refraction but it is 
 - Hair: https://sketchfab.com/3d-models/anime-style-short-hair-c396587aee6a4e63a6476c1400b613eb
 - Human character: https://www.mixamo.com/
 - Backrooms: https://sketchfab.com/3d-models/simple-backrooms-b7e72135d97b4c81b6c135413e6e2168
+- Among Us crewmate: https://sketchfab.com/3d-models/among-us-astronaut-clay-20b591de51eb4fc3a4c5a4d40c6011d5
+- Rei plush: https://sketchfab.com/3d-models/rei-ayanami-plushie-0bda564e1d804c2f84950cec57db15d3

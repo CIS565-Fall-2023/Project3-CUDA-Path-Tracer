@@ -1,0 +1,141 @@
+// ==================================================
+// MATERIALS
+// ==================================================
+
+// sand
+MATERIAL 0
+DIFF_COL    gltf/evangelion/textures/sand/Ground033_2K-JPG_Color.jpg
+NORM_MAP    gltf/evangelion/textures/sand/Ground033_2K-JPG_NormalDX.jpg
+
+// ocean
+MATERIAL 1
+SPEC_COL    0.7 0.25 0
+REFL        1
+SPEC_IOR    1.45
+NORM_MAP    gltf/evangelion/textures/waves_normal.jpg
+
+// mountains
+MATERIAL 2
+DIFF_COL    0.1 0.1 0.1
+
+// amogus emissive
+MATERIAL 3
+DIFF_COL    gltf/evangelion/textures/amogus/diffuse_2.png
+EMIT_COL    gltf/evangelion/textures/amogus/emission.png
+EMIT_STR    1
+NORM_MAP    gltf/evangelion/textures/amogus/normal.png
+
+// amogus regular 1
+MATERIAL 4
+DIFF_COL    gltf/evangelion/textures/amogus/diffuse_1.png
+NORM_MAP    gltf/evangelion/textures/amogus/normal.png
+
+// amogus regular 2
+MATERIAL 5
+// DIFF_COL    gltf/evangelion/textures/amogus/diffuse_2.png
+SPEC_COL    1 1 1
+REFL        1
+REFR        1
+SPEC_IOR    1.45
+NORM_MAP    gltf/evangelion/textures/amogus/normal.png
+
+// rei plush
+MATERIAL 6
+EMIT_COL    gltf/evangelion/textures/rei_plush_diffuse.png
+EMIT_STR    2
+
+// background
+MATERIAL 7
+EMIT_COL    gltf/evangelion/textures/background.png
+EMIT_STR    1.5
+
+// fog
+MATERIAL 8
+EMIT_COL    gltf/evangelion/textures/fog.png
+EMIT_STR    0.05
+
+// ==================================================
+// CAMERA
+// ==================================================
+
+CAMERA
+RES          540 675
+// RES          1020 1350
+FOVY         19.5
+ITERATIONS   5000
+DEPTH        8
+FILE         evangelion
+EYE          0 4 -20
+LOOKAT       0 4 0
+UP           0 1 0
+LENS_RADIUS  0
+FOCUS_DIST   20
+ENV_MAP      env_maps/kloppenheim_02_puresky_4k.hdr
+
+// ==================================================
+// OBJECTS
+// ==================================================
+
+// sand
+OBJECT 0
+mesh
+gltf/evangelion/sand.glb
+material 0
+
+// ocean
+OBJECT 1
+mesh
+gltf/evangelion/ocean.glb
+material 1
+
+// mountains
+OBJECT 2
+mesh
+gltf/evangelion/mountains.glb
+material 2
+TRANS    -20 0 0
+
+// amogus in the back
+// OBJECT 3
+mesh
+gltf/evangelion/amogus.glb
+material 3
+TRANS    -80 -15 495
+ROTAT    75 195 90
+SCALE    120
+
+// asukamogus
+OBJECT 4
+mesh
+gltf/evangelion/amogus.glb
+material 4
+TRANS    1.2 1 0
+ROTAT    0 -15 0
+SCALE    1.5
+
+// shinjimogus
+OBJECT 5
+mesh
+gltf/evangelion/amogus.glb
+material 5
+TRANS    -1.2 1 0
+ROTAT    0 15 0
+SCALE    1.5
+
+// rei plush
+OBJECT 6
+mesh
+gltf/evangelion/rei_plush.glb
+material 6
+
+// background
+OBJECT 7
+mesh
+gltf/evangelion/background.glb
+material 7
+
+// fog
+OBJECT 8
+mesh
+gltf/evangelion/fog.glb
+material 8

@@ -72,13 +72,17 @@ __host__ __device__ glm::vec3 hdrToLdr(glm::vec3 col)
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-	int iter, glm::vec3* image, bool isNormals) {
+	int iter, glm::vec3* image, bool isNormals, bool average) {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		glm::vec3 pix = image[index] / (float) iter;
+		glm::vec3 pix = image[index];
+		if (average)
+		{
+			pix /= (float)iter;
+		}
 
 		if (isNormals)
 		{
@@ -132,6 +136,7 @@ static thrust::device_ptr<ShadeableIntersection> dev_thrust_intersections_fbc = 
 #endif
 
 static OIDNDevice oidnDevice;
+static OIDNFilter oidnFilterAlbedo;
 static OIDNFilter oidnFilter;
 
 static OIDNBuffer oidnColorBuf;
@@ -278,6 +283,13 @@ void Pathtracer::initOIDN()
 	oidnSetFilterInt(oidnFilter, "quality", OIDN_QUALITY_BALANCED);
 	oidnCommitFilter(oidnFilter);
 
+	oidnFilterAlbedo = oidnNewFilter(oidnDevice, "RT");
+	oidnSetFilterImage(oidnFilterAlbedo, "color", oidnAlbedoBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
+	oidnSetFilterImage(oidnFilterAlbedo, "output", oidnAlbedoBuf, OIDN_FORMAT_FLOAT3, cam.resolution.x, cam.resolution.y, 0, 0, 0);
+	oidnSetFilterBool(oidnFilterAlbedo, "hdr", true);
+	oidnSetFilterInt(oidnFilterAlbedo, "quality", OIDN_QUALITY_BALANCED);
+	oidnCommitFilter(oidnFilterAlbedo);
+
 	checkOIDNError();
 }
 
@@ -310,6 +322,7 @@ void Pathtracer::free() {
 	cudaFree(dev_first_hit_normals_accum);
 	cudaFree(dev_first_hit_normals);
 
+	oidnReleaseFilter(oidnFilterAlbedo);
 	oidnReleaseFilter(oidnFilter);
 	oidnReleaseDevice(oidnDevice);
 
@@ -388,6 +401,7 @@ __global__ void generateRayFromCamera(
 	segment.pixelIndex = index;
 	segment.bouncesSoFar = 0;
 	segment.remainingBounces = traceDepth;
+	segment.needsFirstHitData = true;
 }
 
 struct SegmentProcessingSettings
@@ -492,7 +506,7 @@ __device__ void processSegment(
 			float u = (phi + PI) * ONE_OVER_TWO_PI;
 			float v = theta * ONE_OVER_PI;
 
-			lightCol = tex2DCustom(textureObjects[envMapTextureIdx], glm::vec2(u, v));
+			lightCol = tex2DCustom3(textureObjects[envMapTextureIdx], glm::vec2(u, v));
 
 			segment.color *= lightCol;
 		}
@@ -501,10 +515,11 @@ __device__ void processSegment(
 			segment.color = lightCol;
 		}
 
-		if (segment.bouncesSoFar == 0)
+		if (segment.needsFirstHitData)
 		{
 			segment.firstHitAlbedo = lightCol;
 			segment.firstHitNormal = glm::vec3(0.0f);
+			segment.needsFirstHitData = false;
 		}
 
 		segment.remainingBounces = 0;
@@ -515,43 +530,6 @@ __device__ void processSegment(
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, segment.bouncesSoFar + 1);
 
 	Material m = materials[isect.materialId];
-
-	// not sure if this approach is fully correct but it does seem to allow for materials to have both diffuse and emissive components
-	bool skippedEmission = false;
-	if (m.emission.strength > 0)
-	{
-		if (m.hasBaseColor && u01(rng) < 0.5)
-		{
-			skippedEmission = true;
-		}
-		else
-		{
-			glm::vec3 emissionColor;
-			if (m.emission.textureIdx != -1)
-			{
-				emissionColor = tex2DCustom(textureObjects[m.emission.textureIdx], isect.uv);
-			}
-			else
-			{
-				emissionColor = m.emission.color;
-			}
-
-			segment.color *= emissionColor * m.emission.strength;
-			if (m.hasBaseColor)
-			{
-				segment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
-			}
-
-			if (segment.bouncesSoFar == 0)
-			{
-				segment.firstHitAlbedo = segment.color;
-				segment.firstHitNormal = isect.surfaceNormal;
-			}
-
-			segment.remainingBounces = 0;
-			return;
-		}
-	} 
 	
 	scatterRay(
 		segment,
@@ -564,21 +542,22 @@ __device__ void processSegment(
 		rng
 	);
 
-	if (skippedEmission)
-	{
-		segment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
-	}
-
-	if (segment.bouncesSoFar == 0)
-	{
-		segment.firstHitAlbedo = segment.color;
-		segment.firstHitNormal = isect.surfaceNormal;
-	}
 	++segment.bouncesSoFar;
 
-	if (--segment.remainingBounces == 0)
+	if (--segment.remainingBounces <= 0)
 	{
-		segment.color = glm::vec3(0.0f);
+		if (segment.remainingBounces < 0)
+		{
+			segment.color = glm::vec3(0.0f);
+		}
+
+		if (segment.needsFirstHitData)
+		{
+			segment.firstHitAlbedo = segment.color;
+			segment.firstHitNormal = isect.surfaceNormal;
+			segment.needsFirstHitData = false;
+		}
+
 		return;
 	}
 
@@ -809,6 +788,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			return;
 		}
 
+		oidnExecuteFilter(oidnFilterAlbedo);
 		oidnExecuteFilter(oidnFilter);
 		checkOIDNError();
 	}
@@ -816,17 +796,19 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	///////////////////////////////////////////////////////////////////////////
 
 	glm::vec3* dev_image_ptr;
+	bool average = false;
 	if (guiData->showAlbedo)
 	{
-		dev_image_ptr = dev_first_hit_albedo_accum;
+		dev_image_ptr = dev_first_hit_albedo;
 	}
 	else if (guiData->showNormals)
 	{
-		dev_image_ptr = dev_first_hit_normals_accum;
+		dev_image_ptr = dev_first_hit_normals;
 	}
 	else
 	{
 		dev_image_ptr = guiData->denoising ? dev_image_final : dev_image_raw;
+		average = true;
 	}
 
 	// Send results to OpenGL buffer for rendering
@@ -835,7 +817,8 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		cam.resolution, 
 		iter, 
 		dev_image_ptr,
-		guiData->showNormals
+		guiData->showNormals,
+		average
 	);
 
 	// Retrieve image from GPU

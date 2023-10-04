@@ -288,10 +288,16 @@ __host__ __device__ glm::vec2 ConcentricSampleDisk(const glm::vec2& u)
     return r * glm::vec2(cos(theta), sin(theta));
 }
 
-__device__ glm::vec3 tex2DCustom(cudaTextureObject_t tex, glm::vec2 uv)
+__device__ glm::vec3 tex2DCustom3(cudaTextureObject_t tex, glm::vec2 uv)
 {
     float4 texCol = tex2D<float4>(tex, uv.x, uv.y);
     return glm::vec3(texCol.x, texCol.y, texCol.z);
+}
+
+__device__ glm::vec4 tex2DCustom4(cudaTextureObject_t tex, glm::vec2 uv)
+{
+    float4 texCol = tex2D<float4>(tex, uv.x, uv.y);
+    return glm::vec4(texCol.x, texCol.y, texCol.z, texCol.w);
 }
 
 /**
@@ -330,14 +336,89 @@ void scatterRay(
     const cudaTextureObject_t* const textureObjects,
     thrust::default_random_engine& rng)
 {
+    thrust::uniform_real_distribution<float> u01(0, 1);
+
     glm::vec3 diffuseColor;
     if (m.diffuse.textureIdx != -1)
     {
-        diffuseColor = tex2DCustom(textureObjects[m.diffuse.textureIdx], isect.uv);
+#if DIFFUSE_ALPHA
+        glm::vec4 texCol = tex2DCustom4(textureObjects[m.diffuse.textureIdx], isect.uv);
+
+        float alpha = texCol.a;
+        if (u01(rng) < alpha)
+        {
+            diffuseColor = glm::vec3(texCol);
+            pathSegment.color /= fmax(alpha, EPSILON);
+        }
+        else
+        {
+            Ray newRay;
+            newRay.direction = pathSegment.ray.direction;
+            newRay.origin = isectPos + EPSILON * newRay.direction;
+            pathSegment.ray = newRay;
+            pathSegment.color /= fmax(1.f - alpha, EPSILON);
+            return;
+        }
+#else
+        diffuseColor = tex2DCustom3(textureObjects[m.diffuse.textureIdx], isect.uv);
+#endif
     }
     else
     {
         diffuseColor = m.diffuse.color;
+    }
+
+    // not sure if this approach is fully correct but it does seem to allow for materials to have both diffuse and emissive components
+    if (m.emission.strength > 0)
+    {
+        if (m.hasBaseColor && u01(rng) < 0.5)
+        {
+            pathSegment.color *= 2.f;
+        }
+        else
+        {
+            glm::vec3 emissionColor;
+            if (m.emission.textureIdx != -1)
+            {
+                glm::vec4 texCol = tex2DCustom4(textureObjects[m.emission.textureIdx], isect.uv);
+
+                float alpha = texCol.a;
+                if (u01(rng) < alpha)
+                {
+                    emissionColor = glm::vec3(texCol);
+                    pathSegment.color /= fmax(alpha, EPSILON);
+                }
+                else
+                {
+                    Ray newRay;
+                    newRay.direction = pathSegment.ray.direction;
+                    newRay.origin = isectPos + EPSILON * newRay.direction;
+                    pathSegment.ray = newRay;
+                    pathSegment.color /= fmax(1.f - alpha, EPSILON);
+                    return;
+                }
+            }
+            else
+            {
+                emissionColor = m.emission.color;
+            }
+
+            pathSegment.color *= emissionColor * m.emission.strength;
+            if (m.hasBaseColor)
+            {
+                pathSegment.color *= 2.0f; // multiply by 2 to compensate for 50% chance
+            }
+
+            if (pathSegment.needsFirstHitData)
+            {
+                pathSegment.firstHitAlbedo = pathSegment.color;
+                pathSegment.firstHitNormal = isect.surfaceNormal;
+                pathSegment.needsFirstHitData = false;
+            }
+
+            pathSegment.remainingBounces = 1;
+            return;
+        }
     }
 
     if (m.normalMap.textureIdx != -1)
@@ -369,7 +450,7 @@ void scatterRay(
         float invmax = rsqrtf(max(glm::dot(T, T), glm::dot(B, B)));
         glm::mat3 TBN = glm::mat3(T * invmax, B * invmax, N);
 
-        glm::vec3 normalMapCol = tex2DCustom(textureObjects[m.normalMap.textureIdx], isect.uv);
+        glm::vec3 normalMapCol = tex2DCustom3(textureObjects[m.normalMap.textureIdx], isect.uv);
         glm::vec3 mappedNormal = glm::normalize(2.0f * normalMapCol - 1.0f);
         isect.surfaceNormal = glm::normalize(TBN * mappedNormal);
     }
@@ -378,14 +459,12 @@ void scatterRay(
     float specularLuminance = Utils::luminance(m.specular.color);
     float diffuseChance = diffuseLuminance / (diffuseLuminance + specularLuminance); // XXX: bad if both luminances are 0 (pure black material)
 
-    thrust::uniform_real_distribution<float> u01(0, 1);
-
     Ray newRay;
     if (u01(rng) < diffuseChance)
     {
         // diffuse
         newRay.direction = calculateRandomDirectionInHemisphere(isect.surfaceNormal, rng); // XXX: make normal face same direction as ray? (e.g. for inside of sphere)
-        pathSegment.color *= diffuseColor / (diffuseChance);
+        pathSegment.color *= diffuseColor / fmax(diffuseChance, EPSILON);
 
         /*
         disabled because lambert term is canceled out by the PDF
@@ -419,14 +498,20 @@ void scatterRay(
 
         if (glm::dot(newRay.direction, newRay.direction) == 0)
         {
-            pathSegment.color = glm::vec3(0);
             pathSegment.remainingBounces = 0;
             return;
         }
         else
         {
-            pathSegment.color /= (1 - diffuseChance);
+            pathSegment.color /= fmax(1 - diffuseChance, EPSILON);
         }
+    }
+
+    if (pathSegment.needsFirstHitData)
+    {
+        pathSegment.firstHitAlbedo = pathSegment.color;
+        pathSegment.firstHitNormal = isect.surfaceNormal;
+        pathSegment.needsFirstHitData = false;
     }
 
     newRay.origin = isectPos + EPSILON * newRay.direction;
