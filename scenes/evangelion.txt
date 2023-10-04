@@ -65,8 +65,8 @@ NORM_MAP    gltf/evangelion/textures/jsplacement/normal_2k.png
 // ==================================================
 
 CAMERA
-RES          540 675
-// RES          1020 1350
+// RES          540 675
+RES          1080 1350
 FOVY         19.5
 ITERATIONS   5000
 DEPTH        8

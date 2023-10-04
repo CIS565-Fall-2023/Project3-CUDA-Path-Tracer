@@ -617,18 +617,20 @@ __global__ void finalGather(int nPaths, glm::vec3* image,
 
 	PathSegment iterationPath = iterationPaths[index];
 
+	glm::vec3 col = glm::clamp(iterationPath.color, 0.f, 10.f);
+
 #if DEBUG_NAN_MAGENTA
-	if (isnan(iterationPath.color.x) || isnan(iterationPath.color.y) || isnan(iterationPath.color.z))
+	if (isnan(col.x) || isnan(col.y) || isnan(col.z))
 	{
 		image[iterationPath.pixelIndex] = glm::vec3(1, 0, 1);
 		printf("found a nan\n");
 	}
 	else
 	{
-		image[iterationPath.pixelIndex] += iterationPath.color;
-}
+		image[iterationPath.pixelIndex] += col;
+	}
 #else
-	image[iterationPath.pixelIndex] += iterationPath.color;
+	image[iterationPath.pixelIndex] += col;
 #endif
 
 	float mult = 1 / (float)iter;
