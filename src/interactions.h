@@ -47,6 +47,8 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+#pragma region microfacet (not working currently)
+
 __device__ float cosSquaredTheta(const glm::vec3 w)
 {
     return w.z * w.z;
@@ -129,6 +131,8 @@ __device__ glm::vec3 sampleH_GGX(const glm::vec3 wo, const float alpha, thrust::
     return wh;
 }
 
+#pragma endregion
+
 __device__
 void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3 N, const Material& m, thrust::default_random_engine& rng,
     bool isSingular)
@@ -147,6 +151,12 @@ void applyReflection(PathSegment& pathSegment, Ray& newRay, const glm::vec3 N, c
 
         return;
     }
+
+    /*
+    For this function and applyRefraction(), the microfacet code is not working correctly. The effect doesn't look too bad
+    when roughness is included, but it doesn't match other path tracers like Cycles in Blender. I'm leaving it here in case
+    I ever decide to try to fix it (unlikely).
+    */
 
     const float alpha = m.specular.roughness * m.specular.roughness;
 
