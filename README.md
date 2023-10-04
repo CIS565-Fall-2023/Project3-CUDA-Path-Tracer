@@ -2,43 +2,60 @@
 
 <img src="img/cool_renders/029_backrooms_final.png" width="64%"/><img src="img/cool_renders/030_evangelion_final.png" width="28.8%"/>
 
-**University of Pennsylvania, CIS 5650: GPU Programming and Architecture, Project 2**
+**University of Pennsylvania, CIS 5650: GPU Programming and Architecture, Project 3**
 
 * Aditya Gupta
   * [Website](http://adityag1.com/), [GitHub](https://github.com/AdityaGupta1), [LinkedIn](https://www.linkedin.com/in/aditya-gupta1/), [3D renders](https://www.instagram.com/sdojhaus/)
 * Tested on: Windows 10, i7-10750H @ 2.60GHz 16GB, NVIDIA GeForce RTX 2070 8GB (personal laptop)
   * Compute capability: 7.5
 
-### Features
+## Introduction
 
-- BRDFs
-  - Lambertian shading
-  - Specular reflection
-  - Specular refraction
-- Performance options
-  - Toggleable option to sort rays by material type
-  - Toggleable first bounce cache
-  - Russian roulette path termination
-- Scene building tools
-  - glTF mesh loading
-    - Diffuse and emission texture loading
-  - Environment map lights
-  - BVH construction and traversal
-- Other features
-  - Depth of field
-  - Denoising using [Intel Open Image Denoise](https://www.openimagedenoise.org/)
+## Features
+
+### BRDFs
+
+#### Lambertian shading
+
+#### Specular reflection and refraction
 
 Note that there is also code for microfacet reflection and refraction but it currently does not work properly.
 
-### Attribution
+### Performance options
 
-#### Code
+#### Sort rays by material type
+
+#### First bounce cache
+
+#### Russian roulette path termination
+
+### Scene building tools
+
+#### glTF mesh loading
+
+Includes diffuse and emission texture loading.
+
+#### Environment map lights
+
+#### BVH construction and traversal
+
+### Other features
+
+#### Depth of field
+
+#### Denoising
+
+Using [Intel Open Image Denoise](https://www.openimagedenoise.org/).
+
+## Attribution
+
+### Code
 
 - BVH tutorial: https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
 - Barycentric coordinates: https://gamedev.stackexchange.com/questions/23743/whats-the-most-efficient-way-to-find-barycentric-coordinates/23745#23745
 - Normal map: http://www.thetenthplanet.de/archives/1180
 
-#### Models
+### Models
 
 - Freddy Fazbear: https://sketchfab.com/3d-models/fnaf-ar-freddy-fazbear-f6e019333d694cbfbb2f3fbc9e791763
 - Chair: https://sketchfab.com/3d-models/metal-folding-chair-c4428a7f4a2f472689a914a3373befc3

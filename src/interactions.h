@@ -326,7 +326,7 @@ __device__ glm::vec4 tex2DCustom4(cudaTextureObject_t tex, glm::vec2 uv)
  * You may need to change the parameter list for your purposes!
  */
 __device__
-void scatterRay(
+bool scatterRay(
     PathSegment& pathSegment,
     ShadeableIntersection& isect,
     const glm::vec3& isectPos,
@@ -357,7 +357,7 @@ void scatterRay(
             newRay.origin = isectPos + EPSILON * newRay.direction;
             pathSegment.ray = newRay;
             pathSegment.color /= fmax(1.f - alpha, EPSILON);
-            return;
+            return false;
         }
 #else
         diffuseColor = tex2DCustom3(textureObjects[m.diffuse.textureIdx], isect.uv);
@@ -395,7 +395,7 @@ void scatterRay(
                     newRay.origin = isectPos + EPSILON * newRay.direction;
                     pathSegment.ray = newRay;
                     pathSegment.color /= fmax(1.f - alpha, EPSILON);
-                    return;
+                    return false;
                 }
             }
             else
@@ -416,8 +416,8 @@ void scatterRay(
                 pathSegment.needsFirstHitData = false;
             }
 
-            pathSegment.remainingBounces = 1;
-            return;
+            pathSegment.remainingBounces = 0;
+            return true;
         }
     }
 
@@ -499,7 +499,7 @@ void scatterRay(
         if (glm::dot(newRay.direction, newRay.direction) == 0)
         {
             pathSegment.remainingBounces = 0;
-            return;
+            return false;
         }
         else
         {
@@ -516,4 +516,5 @@ void scatterRay(
 
     newRay.origin = isectPos + EPSILON * newRay.direction;
     pathSegment.ray = newRay;
+    return false;
 }

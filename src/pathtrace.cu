@@ -532,7 +532,7 @@ __device__ void processSegment(
 
 	Material m = materials[isect.materialId];
 	
-	scatterRay(
+	bool wasEmission = scatterRay(
 		segment,
 		isect,
 		getPointOnRay(segment.ray, isect.t),
@@ -544,10 +544,10 @@ __device__ void processSegment(
 	);
 
 	++segment.bouncesSoFar;
-
+	
 	if (--segment.remainingBounces <= 0)
 	{
-		if (segment.remainingBounces < 0)
+		if (!wasEmission)
 		{
 			segment.color = glm::vec3(0.0f);
 		}
