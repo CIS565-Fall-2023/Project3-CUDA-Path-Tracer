@@ -7,7 +7,19 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+__host__ __device__ glm::vec3 checkerBoard(const glm::vec2 uv, float scale = 8.f) {
+    glm::vec2 scaled_uv = scale * uv;
+    return (int(scaled_uv.x) + int(scaled_uv.y)) % 2 == 0 ? glm::vec3(0.f) : glm::vec3(1.f);
+}
+
 __device__ __inline__ glm::vec3 sampleTexture(cudaTextureObject_t tex, glm::vec2 const& uv) {
+    auto color = tex2D<float4>(tex, uv.x, uv.y);
+    return glm::vec3(color.x, color.y, color.z);
+}
+
+__device__ __inline__ glm::vec3 sampleColorTexture(cudaTextureObject_t tex, glm::vec2 const& uv, bool isProcedural, float scale) {
+    if (isProcedural)
+        return checkerBoard(uv, scale);
     auto color = tex2D<float4>(tex, uv.x, uv.y);
     return glm::vec3(color.x, color.y, color.z);
 }
@@ -380,14 +392,14 @@ __device__ float2 getMetallic(const Material& mat, glm::vec2 uv) {
     return metallicRoughness;
 }
 
-__device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor, glm::vec2 uv)
+__device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor, glm::vec2 uv, bool isProcedural, float scale)
 {
     glm::vec3 albedo(1.f);
     if ((mat.type == Material::Type::DIFFUSE || (mat.type == Material::Type::PBR)))
     {
         auto& tex = mat.pbrMetallicRoughness.baseColorTexture;
         if (tex.index != -1)
-            albedo = sampleTexture(tex.cudaTexObj, uv);
+            albedo = sampleColorTexture(tex.cudaTexObj, uv, isProcedural, scale);
         else
             albedo = glm::vec3(mat.pbrMetallicRoughness.baseColorFactor);
     }
@@ -437,35 +449,36 @@ __device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::v
     return glm::vec3(1, 0, 1);
 }
 
-__device__ glm::vec3 sample_f(const Material& mat, glm::vec3 nor, glm::vec2 uv, glm::vec3 woW, glm::vec3 xi, BsdfSample& sample)
+__device__ glm::vec3 sample_f(const Material& mat, bool isProcedural, float scale, glm::vec3 nor, glm::vec2 uv, glm::vec3 woW, glm::vec3 xi, BsdfSample& sample)
 {
     glm::vec3 wo = WorldToLocal(nor) * woW;
+    glm::vec3 albedo = computeAlbedo(mat, nor, uv, isProcedural, scale);
     if (mat.type == Material::Type::ROUGH_DIELECTRIC)
     {
-        return sample_f_rough_dieletric(computeAlbedo(mat, nor, uv), nor, xi, wo, getMetallic(mat, uv).y, mat.dielectric.eta, sample);
+        return sample_f_rough_dieletric(albedo, nor, xi, wo, getMetallic(mat, uv).y, mat.dielectric.eta, sample);
     }
     else if (mat.type == Material::Type::SPECULAR)
     {
         sample.pdf = 1.;
-        return sample_f_specular_refl(computeAlbedo(mat, nor, uv), nor, wo, sample);
+        return sample_f_specular_refl(albedo, nor, wo, sample);
     }
     else if (mat.type == Material::Type::METAL)
     {
         sample.pdf = 1.;
-        return sample_f_metal(computeAlbedo(mat, nor, uv), nor, xi, mat.metal, wo, sample);
+        return sample_f_metal(albedo, nor, xi, mat.metal, wo, sample);
     }
     else if (mat.type == Material::Type::DIELECTRIC)
     {
         sample.pdf = 1.;
-        return sample_f_glass(computeAlbedo(mat, nor, uv), nor, xi, mat.dielectric.eta, wo, sample);
+        return sample_f_glass(albedo, nor, xi, mat.dielectric.eta, wo, sample);
     }
     else if (mat.type == Material::Type::DIFFUSE)
     {
-        return sample_f_diffuse(computeAlbedo(mat, nor, uv), xi, nor, sample);
+        return sample_f_diffuse(albedo, xi, nor, sample);
     }
     else if (mat.type == Material::Type::PBR)
     {
-        return sample_f_pbrMetRough(computeAlbedo(mat, nor, uv), getMetallic(mat, uv), mat.pbrMetallicRoughness, nor, xi, wo, sample);
+        return sample_f_pbrMetRough(albedo, getMetallic(mat, uv), mat.pbrMetallicRoughness, nor, xi, wo, sample);
     }
     sample.pdf = -1.f;
     return glm::vec3(0.f);

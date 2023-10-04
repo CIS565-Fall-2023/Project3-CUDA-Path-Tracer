@@ -87,7 +87,7 @@ Transformation& recomputeTransform(Transformation& t) {
 Scene::Scene(std::string filename)
 {
     loadSettings();
-    if (settings.readFromFile)
+    if (settings.trSettings.readFromFile)
         filename = settings.gltfPath;
     std::cout << "Reading scene from " << filename << " ..." << std::endl;
     std::cout << " " << std::endl;
@@ -108,7 +108,7 @@ Scene::Scene(std::string filename)
     loadScene();
     tbvh = TBVH(geoms, tbb);
     if (cameras.empty()) {
-        cameras.push_back(settings.defaultRenderState.camera);
+        cameras.push_back(settings.trSettings.defaultRenderState.camera);
     }
     auto& camera = cameras[0];
     state.camera = camera;
@@ -116,7 +116,7 @@ Scene::Scene(std::string filename)
     int arraylen = camera.resolution.x * camera.resolution.y;
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
-    if (settings.envMapEnabled)
+    if (settings.trSettings.envMapEnabled)
         loadEnvMap();
 }
 
@@ -170,7 +170,7 @@ void Scene::loadNode(const tinygltf::Node& node)
 int Scene::loadScene()
 {
     RenderState& state = this->state;
-    state = settings.defaultRenderState;
+    state = settings.trSettings.defaultRenderState;
     geoms.clear();
     int num_tex = loadTexture();
     int num_mat = loadMaterial();
@@ -182,7 +182,7 @@ int Scene::loadScene()
         loadNode(node);
     }
     if (num_mat == 0) {
-        materials.push_back(settings.defaultMat);
+        materials.push_back(settings.trSettings.defaultMat);
     }
 
     return 1;
@@ -231,12 +231,12 @@ void Scene::loadSettings() {
         nlohmann::json jsonData;
         fileStream >> jsonData;
 
-        RenderState& renderState = settings.defaultRenderState;
+        RenderState& renderState = settings.trSettings.defaultRenderState;
         Camera& camera = renderState.camera;
-        Material& defaultMat = settings.defaultMat;
-        settings.readFromFile = jsonData["GLTF"]["from file"];
+        Material& defaultMat = settings.trSettings.defaultMat;
+        settings.trSettings.readFromFile = jsonData["GLTF"]["from file"];
         settings.gltfPath = jsonData["GLTF"]["path"];
-        settings.envMapEnabled = jsonData["environmentMap"]["on"];
+        settings.trSettings.envMapEnabled = jsonData["environmentMap"]["on"];
         settings.envMapFilename = jsonData["environmentMap"]["path"];
 
         nlohmann::json renderStateData = jsonData["RenderState"];
@@ -266,7 +266,10 @@ void Scene::loadSettings() {
         renderState.traceDepth = renderStateData["traceDepth"];
         renderState.imageName = renderStateData["imageName"];
 
+        settings.trSettings.isProcedural = jsonData["procedural"]["on"];
+        settings.trSettings.scale = jsonData["procedural"]["scale"];
         nlohmann::json materialsData = jsonData["Materials"];
+
         if (!materialsData.empty()) {
             defaultMat.type = materialsData[0]["type"];
             defaultMat.emissiveFactor = glm::vec3(materialsData[0]["emissiveFactor"][0],
@@ -456,7 +459,7 @@ Camera& Scene::computeCameraParams(Camera& camera)const
 bool Scene::loadCamera(const tinygltf::Node& node, const glm::mat4& transform)
 {
     std::cout << "Loading Camera ..." << std::endl;
-    Camera camera = settings.defaultRenderState.camera;
+    Camera camera = settings.trSettings.defaultRenderState.camera;
     const tinygltf::Camera& gltfCamera = model->cameras[node.camera];
     if (node.translation.size() == 3)
         camera.position = glm::vec3(transform * glm::vec4(glm::make_vec3(node.translation.data()), 1.0f));
@@ -585,7 +588,7 @@ int Scene::loadMaterial() {
 
 bool Scene::loadTexture() {
     int numTextures = model->textures.size();
-    int totalNumTextures = numTextures + (settings.envMapEnabled ? 1 : 0);
+    int totalNumTextures = numTextures + (settings.trSettings.envMapEnabled ? 1 : 0);
     dev_tex_arrs_vec.resize(totalNumTextures);
     cuda_tex_vec.resize(totalNumTextures);
 

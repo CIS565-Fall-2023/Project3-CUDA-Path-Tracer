@@ -275,7 +275,7 @@ __global__ void shadeMaterial(
     , PathSegment* pathSegments
     , Material* materials
     , cudaTextureObject_t envMap
-    , bool enableEnvMap
+    , Scene::Settings::TransferableSettings settings
 )
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -317,7 +317,7 @@ __global__ void shadeMaterial(
                     nor = glm::normalize((glm::mat3(glm::vec3(intersection.tangent), glm::cross(intersection.surfaceNormal, glm::vec3(intersection.tangent)) * intersection.tangent[3], intersection.surfaceNormal)) * nor);
                 }
                 BsdfSample sample;
-                auto bsdf = ao * sample_f(material, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
+                auto bsdf = ao * sample_f(material, settings.isProcedural, settings.scale, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
                 if (sample.pdf <= 0) {
                     pSeg.remainingBounces = 0;
                     pSeg.pixelIndex = -1;
@@ -333,7 +333,7 @@ __global__ void shadeMaterial(
             // used for opacity, in which case they can indicate "no opacity".
             // This can be useful for post-processing and image compositing.
         }
-        else if (enableEnvMap) {
+        else if (settings.envMapEnabled) {
             pSeg.color += pSeg.throughput * sampleEnvTexture(envMap, sampleSphericalMap(pSeg.ray.direction));
             pSeg.remainingBounces = 0;
         }
@@ -499,8 +499,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
             dev_paths,
             dev_materials,
             hst_scene->envMapTexture.cudaTexObj,
-            hst_scene->settings.envMapEnabled
-            );
+            hst_scene->settings.trSettings);
         depth++;
         // gather valid terminated paths
         dev_paths_terminated_end = thrust::remove_copy_if(dev_paths_thrust, dev_paths_thrust + num_paths, dev_paths_terminated_end,

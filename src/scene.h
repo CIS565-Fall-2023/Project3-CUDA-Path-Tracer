@@ -69,14 +69,18 @@ public:
         const std::string filename = "Settings.json";
         std::string envMapFilename;
         std::string gltfPath;
-        Material defaultMat;
-        RenderState defaultRenderState;
-        bool readFromFile;
+        struct TransferableSettings {
+            Material defaultMat;
+            RenderState defaultRenderState;
+            bool readFromFile;
+            bool envMapEnabled;
+            bool isProcedural;
+            float scale;
+        }trSettings;
         struct CameraSettings {
             bool dof;
             bool antiAliasing;
         }camSettings;
-        bool envMapEnabled;
     } settings;
     struct Cubemap {
         cudaTextureObject_t texObj;
