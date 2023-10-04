@@ -29,6 +29,22 @@
       "name": "MatteGreen",
       "type": "DiffuseReflection",
       "albedo": [ 0.14, 0.45, 0.091 ]
+    },
+    {
+      "name": "Mirror",
+      "type": "SpecularReflection",
+      "albedo": [ 0.5, 0.5, 1 ]
+    },
+    {
+      "name": "Glass",
+      "type": "Glass",
+      "albedo": [ 0.4, 1.0, 0.5 ],
+      "eta": 1.55
+    },
+    {
+      "name": "subsurface",
+      "type": "SubsurfaceScattering",
+      "albedo": [ 1.0, 1.0, 1.0 ]
     }
   ],
   "geomerties": [
@@ -36,14 +52,14 @@
       "type": "obj",
       "path": "meshes/stanford_bunny.obj",
       "name": "bunny",
-      "material": "MatteWhite",
+      "material": "Glass",
       "translation": [ 0, 0, 0 ],
       "rotation": [ 0, 180, 0 ],
-      "scale": [ 4, 4, 4 ]
+      "scale": [ 2, 2, 2 ]
     }
   ],
-  "environment map":{
-    "path": "env_maps/small_apartment_1.hdr",
+  "environment map": {
+    "path": "env_maps/kloppenheim_02_puresky_24k.hdr",
     "flip": true
   }
 }

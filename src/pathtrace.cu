@@ -119,7 +119,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	{
 		int index = x + (y * cam.resolution.x);
 		PathSegment segment;
-		
+		segment.Reset();
+
 		CudaRNG rng(iter, index, 0);
 
 		segment.ray = cam.CastRay({x + rng.rand(), y + rng.rand()});
@@ -238,10 +239,11 @@ __global__ void finalGather(float u, int nPaths, glm::vec3* image, PathSegment* 
 }
 
 // Naive BSDF sample only
-__global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
+__global__ void KernelNaiveGI(const int iteration, const int num_paths, const int num_materials,
 							ShadeableIntersection* shadeableIntersections,
 							PathSegment* pathSegments,
-							Material* materials, EnvironmentMap env_map)
+							const Material* materials, EnvironmentMap env_map, 
+							const UniformMaterialData u_data)
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= num_paths) return;
@@ -257,6 +259,28 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	PathSegment segment = pathSegments[idx];
+
+	if (segment.mediaId >= 0)
+	{
+		CudaRNG rng(iteration, idx, segment.remainingBounces);
+		//float weight = 10.0f;
+		
+		float distance = -glm::log(rng.rand()) / u_data.ss_scatter_coeffi;
+		//printf("distance: %f\n", distance);
+		float pdf = glm::exp(-u_data.ss_scatter_coeffi * distance);
+		glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * distance);
+		if (distance < 1000.f)
+		{
+			if (distance < intersection.t)
+			{
+				Ray ray(segment.ray.origin + segment.ray.direction * distance, SquareToSphereUniform({ rng.rand(), rng.rand() }));
+				ray.direction = glm::normalize(ray.direction);
+				pathSegments[idx].ray = ray;
+				pathSegments[idx].throughput *= transmission * pdf;
+				return;
+			}
+		}
+	}
 
 	if (intersection.materialId >= 0)
 	{
@@ -291,6 +315,11 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 				pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
 				pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
 				--pathSegments[idx].remainingBounces;
+
+				if (MaterialType::Glass == material.type)
+				{
+					pathSegments[idx].mediaId = 1;
+				}
 			}
 			else
 			{
@@ -302,9 +331,8 @@ __global__ void KernelNaiveGI(int iteration, int num_paths, int num_materials,
 	{
 		if (env_map.Valid())
 		{
-			pathSegments[idx].radiance = segment.throughput * glm::clamp(env_map.Get(segment.ray.direction), 0.f, 1000.f);
+			pathSegments[idx].radiance = segment.throughput * glm::clamp(env_map.Get(segment.ray.direction), 0.f, 200.f);
 		}
-		
 		pathSegments[idx].Terminate();
 	}
 }
@@ -348,7 +376,9 @@ CPU_ONLY void CudaPathTracer::RegisterPBO(unsigned int pbo)
 	checkCUDAError("Get PBO pointer Error");
 }
 
-CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
+CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, 
+									 const Camera& camera,
+									 const UniformMaterialData& data)
 {
 	const int pixelcount = resolution.x * resolution.y;
 
@@ -362,7 +392,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (camera, m_Iteration, 8, dev_paths);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (camera, m_Iteration, 20, dev_paths);
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
@@ -374,7 +404,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 8 && num_paths > 0) 
+	while (depth < 20 && num_paths > 0) 
 	{
 		depth++;
 
@@ -388,7 +418,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene, const Camera& camera)
 		cudaDeviceSynchronize();
 		
 		KernelNaiveGI<<<numblocksPathSegmentTracing, blockSize1d >>>(m_Iteration, num_paths, scene.material_count,
-																	 dev_intersections, dev_paths, scene.dev_materials, scene.env_map);
+																	 dev_intersections, dev_paths, scene.dev_materials, scene.env_map, data);
 		checkCUDAError("NaiveGI Error");
 		cudaDeviceSynchronize();
 		if (pixelcount >= Compact_Threshold)

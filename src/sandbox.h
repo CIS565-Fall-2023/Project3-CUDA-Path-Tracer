@@ -7,6 +7,7 @@ class Scene;
 class RenderState;
 class CameraController;
 class GPUScene;
+class UniformMaterialData;
 
 class SandBox
 {
@@ -31,6 +32,7 @@ public:
 	uPtr<CudaPathTracer> m_PathTracer;
 	uPtr< CameraController> m_CameraController;
 	uPtr<GPUScene> m_GPUScene;
+	uPtr<UniformMaterialData> m_UniformData;
 
 	std::string m_StartTimeString;
 };

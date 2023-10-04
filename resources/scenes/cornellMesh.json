@@ -120,8 +120,8 @@
     {
       "type": "obj",
       "path": "meshes/stanford_dragon.obj",
-      "name": "bunny",
-      "material": "Mirror",
+      "name": "dragon",
+      "material": "Glass",
       "translation": [ 0, 0, 0 ],
       "rotation": [ 0, 0, 0 ],
       "scale": [ 4, 4, 4 ]

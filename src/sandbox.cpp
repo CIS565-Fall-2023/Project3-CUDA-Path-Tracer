@@ -76,7 +76,8 @@ void AddCornellBox_Triangles(std::vector<glm::vec3>& vertices, std::vector<glm::
 }
 
 SandBox::SandBox()
-	:m_PathTracer(mkU<CudaPathTracer>())
+	:m_PathTracer(mkU<CudaPathTracer>()),
+	 m_UniformData(mkU<UniformMaterialData>(1.f, glm::vec3(1.f)))
 {
 	m_StartTimeString = currentTimeString();
 
@@ -87,7 +88,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/cornellMesh.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -144,6 +145,15 @@ void SandBox::DrawImGui()
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 		ImGui::End();
 	}
+	{
+		bool changed = false;
+		ImGui::Begin("Uniform Material Param");
+		changed |= ImGui::DragFloat("Scatter Coefficient", &m_UniformData->ss_scatter_coeffi, 0.2f, 0.2f, 15.f);
+		changed |= ImGui::ColorEdit3("Scatter Coefficient", &m_UniformData->ss_absorption_coeffi[0]);
+		
+		if (changed) m_PathTracer->Reset();
+		ImGui::End();
+	}
 }
 
 void SandBox::Run()
@@ -152,7 +162,7 @@ void SandBox::Run()
 	{
 		SaveImage(m_Scene->state.imageName.c_str());
 	}
-	m_PathTracer->Render(*m_GPUScene, m_Scene->state.camera);
+	m_PathTracer->Render(*m_GPUScene, m_Scene->state.camera, *m_UniformData);
 }
 
 void SandBox::SaveImage(const char* name)

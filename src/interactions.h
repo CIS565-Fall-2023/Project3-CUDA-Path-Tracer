@@ -71,11 +71,6 @@ inline CPU_GPU void Refract(const glm::vec3& dir,
 	wiW = glm::normalize(eta * dir + (eta * cosThetaI - cosThetaO) * normal);
 }
 
-inline GPU_ONLY void SampleLight()
-{
-
-}
-
 class SampleBSDF
 {
 public:
@@ -98,6 +93,10 @@ public:
 		case MaterialType::Glass:
 		{
 			return Glass(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
+		}
+		case MaterialType::SubsurfaceScattering:
+		{
+			return SubsurfaceScattering(material.GetAlbedo(intersection.uv), 0, intersection, rng, sample);
 		}
 		}
 	}
@@ -175,5 +174,14 @@ protected:
 			sample.pdf = 1.f;
 		}
 		return true;
+	}
+
+	inline static GPU_ONLY bool SubsurfaceScattering(const glm::vec3& albedo, 
+													float alpha,
+													const ShadeableIntersection& intersection,
+													CudaRNG& rng,
+													BSDFSample& sample)
+	{
+		return false;
 	}
 };

@@ -57,7 +57,8 @@ enum MaterialType : unsigned int
     DiffuseReflection   = 1,
     SpecularReflection  = Specular | 2,
     Specularrefraction  = Specular | 3,
-    Glass               = Specular | 4
+    Glass               = Specular | 4,
+    SubsurfaceScattering= 5
 };
 
 #define TryStr2Type(str, type) if(str == #type) { return MaterialType::type;}
@@ -71,12 +72,9 @@ inline MaterialType StringToMaterialType(const std::string& str)
     TryStr2Type(str, SpecularReflection);
     TryStr2Type(str, Specularrefraction);
     TryStr2Type(str, Glass);
+    TryStr2Type(str, SubsurfaceScattering);
     
     return MaterialType::None;
-}
-CPU_GPU inline bool AlbedoTexture(const MaterialType& type)
-{
-    return (type & MaterialType::Albedo_Texture) > 0;
 }
 
 struct Material 
@@ -246,11 +244,13 @@ struct PathSegment {
 
     int pixelIndex;
     int remainingBounces;
+    int mediaId;
     CPU_GPU void Reset() 
     {
         throughput = glm::vec3(1.f);
         radiance = glm::vec3(0.f);
         pixelIndex = 0;
+        mediaId = -1;
     }
     CPU_GPU void Terminate() { remainingBounces = 0; }
     CPU_GPU bool IsEnd() const { return remainingBounces <= 0; }
@@ -350,4 +350,10 @@ struct BSDFSample
     glm::vec3 f = glm::vec3(0.f);
     glm::vec3 wiW = glm::vec3(0.f);
     float pdf = -1.f;
+};
+
+struct UniformMaterialData
+{
+    float ss_scatter_coeffi;
+    glm::vec3 ss_absorption_coeffi;
 };

@@ -23,7 +23,9 @@ public:
 		cudaGraphicsUnregisterResource(cuda_pbo_dest_resource);
 	}
 
-	CPU_ONLY void Render(GPUScene& scene, const Camera& camera);
+	CPU_ONLY void Render(GPUScene& scene, 
+						const Camera& camera,
+						const UniformMaterialData& data);
 public:
 	int m_Iteration;
 	
