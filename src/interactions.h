@@ -93,12 +93,14 @@ void scatterRay(
 #endif
 #if DIFFUSE_ONLY
         sampled_direction = calculateRandomDirectionInHemisphere(normal, rng);
+        pathSegment.color *= (m.color);
 #endif
 #if REFLECTIVE_ONLY
     }
 #endif
 #if BOTH
-    if (m.hasReflective && (u01(rng) > 0.7))
+    // use specular.factor here instead of rng for mesh
+    if (m.hasReflective && (u01(rng) > 0.07))
     {
         /*sampled_direction = u01(rng) > 0.8 ? glm::reflect(pathSegment.ray.direction, normal) 
                                            : calculateRandomDirectionInHemisphere(normal, rng);*/
@@ -112,10 +114,5 @@ void scatterRay(
 	}
 #endif
     pathSegment.ray.direction = glm::normalize(sampled_direction);
-    pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
-}
-
-__host__ __device__
-float bsdf_diffuse(glm::vec3 normal, glm::vec3 lightDir) {
-	return glm::dot(normal, lightDir) / PI;
+    pathSegment.ray.origin = intersect + 0.015f * pathSegment.ray.direction;
 }

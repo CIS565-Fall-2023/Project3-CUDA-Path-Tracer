@@ -2,10 +2,15 @@
 #include "scene.h"
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
-#include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <cmath>
 
+#define EMISSIVE_FACTOR 1.5f
+
 Scene::Scene(string filename) {
+    //std::string file = filename.substr(filename.rfind('/') + 1);
+    //fprintf(stderr, "filename is %s\n", filename.c_str());
+    //fprintf(stderr, "file is %s\n", file.c_str());
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -14,23 +19,298 @@ Scene::Scene(string filename) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
     }
-    while (fp_in.good()) {
-        string line;
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
-                loadMaterial(tokens[1]);
-                cout << " " << endl;
-            } else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
-                loadGeom(tokens[1]);
-                cout << " " << endl;
-            } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
-                loadCamera();
-                cout << " " << endl;
+    if (fp_in.good() && !strcmp(strrchr(fname, '.'), ".gltf"))
+    {
+        load_gltf(filename);
+    }
+    else
+    {
+        while (fp_in.good()) {
+            string line;
+            utilityCore::safeGetline(fp_in, line);
+            if (!line.empty()) {
+                vector<string> tokens = utilityCore::tokenizeString(line);
+                if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
+                    loadMaterial(tokens[1]);
+                    cout << " " << endl;
+                }
+                else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
+                    loadGeom(tokens[1]);
+                    cout << " " << endl;
+                }
+                else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
+                    loadCamera();
+                    cout << " " << endl;
+                }
             }
         }
     }
+}
+
+bool Scene::gltf_load_materials(const tinygltf::Model &model)
+{
+    materials = std::vector<Material>();
+    for (const auto& material : model.materials)
+    {
+        Material new_material;
+        new_material.color = glm::vec3(static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[0]),
+                                       static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[1]), 
+                                       static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]));
+        new_material.specular.exponent = 1.0f / material.pbrMetallicRoughness.roughnessFactor;
+        new_material.specular.factor = material.pbrMetallicRoughness.metallicFactor;
+        new_material.specular.color = new_material.color;
+        new_material.hasReflective = (material.pbrMetallicRoughness.metallicFactor > 0.0f) ? 1.0f : 0.0f;
+        new_material.hasRefractive = 0.0f;
+        new_material.indexOfRefraction = 0.0f;
+        new_material.emittance = (material.emissiveFactor.empty()) ? 0.0f : EMISSIVE_FACTOR; // hard coded emissive for now
+        materials.push_back(new_material);
+    }
+    return true; // make it void?
+}
+
+// currently not using bvh here
+bool Scene::load_gltf(string filename)
+{
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    string err;
+    string warn;
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+
+    if (!warn.empty()) {
+		fprintf(stderr, "warn1: %s \n", warn.c_str());
+	}
+
+    if (!err.empty()) {
+        fprintf(stderr, "Err1: %s\n", err.c_str());
+    }
+
+    if (!ret) {
+        fprintf(stderr, "Failed to parse glTF\n");
+        return false;
+    }
+
+    //for (int i = 0; i < model.bufferViews.size(); i++)
+    //{
+    //    const tinygltf::BufferView& bufferView = model.bufferViews[i];
+    //    // no support for sparse accessors at the moment
+    //    const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+    //}
+    if (model.scenes.size() <= 0)
+    {
+        fprintf(stderr, "No valid scenes\n");
+        return false;
+    }
+    // for now, load one scene
+    int display_scene = model.defaultScene > -1 ? model.defaultScene : 0;
+    const tinygltf::Scene& scene = model.scenes[display_scene];
+    std::array<std::string, 2> const supported_attributes = {
+        "POSITION",
+        "NORMAL"
+        //TEXCOORD?
+    };
+    gltf_load_materials(model);
+    //materials = std::vector<Material>();
+    //for (const auto& material : model.materials)
+    //{
+    //    Material new_material;
+    //    new_material.color = glm::vec3(static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[0]),
+    //        static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[1]),
+    //        static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]));
+    //    new_material.specular.exponent = 1.0f / material.pbrMetallicRoughness.roughnessFactor;
+    //    new_material.specular.factor = material.pbrMetallicRoughness.metallicFactor;
+    //    new_material.specular.color = new_material.color;
+    //    new_material.hasReflective = (material.pbrMetallicRoughness.metallicFactor > 0.0f) ? 1.0f : 0.0f;
+    //    new_material.hasRefractive = 0.0f;
+    //    new_material.indexOfRefraction = 0.0f;
+    //    new_material.emittance = (material.emissiveFactor.empty()) ? 0.0f : EMISSIVE_FACTOR; // hard coded emissive for now
+    //    materials.push_back(new_material);
+    //}
+
+    for (int i = 0; i < scene.nodes.size(); i++)
+    {
+        tinygltf::Node node = model.nodes[scene.nodes[i]];
+        if (node.mesh < 0)
+        {
+            continue;
+        }
+        const tinygltf::Mesh& mesh = model.meshes[node.mesh];
+
+
+        // construct mesh and get transforms
+        Geom new_mesh;
+        new_mesh.type = MESH;
+        glm::mat4 transformation_matrix = glm::mat4();
+        glm::quat rotation_quat;
+
+        if (node.matrix.size() == 16)
+        {
+            for (int i = 0; i < 16; i++) {
+                transformation_matrix[i / 4][i % 4] = static_cast<float>(node.matrix[i]);
+            }
+            glm::decompose(transformation_matrix, new_mesh.scale, rotation_quat, new_mesh.translation, glm::vec3(), glm::vec4());
+        }
+        else
+        {
+            if (!node.translation.empty())
+            {
+                new_mesh.translation = glm::vec3(static_cast<float>(node.translation[0]), 
+                                                  static_cast<float>(node.translation[1]), 
+                                                  static_cast<float>(node.translation[2]));
+            }
+            if (!node.rotation.empty())
+            {
+                rotation_quat = glm::quat(static_cast<float>(node.rotation[3]),
+                                     static_cast<float>(node.rotation[0]),
+                                     static_cast<float>(node.rotation[1]),
+                                     static_cast<float>(node.rotation[2]));
+            }
+            if (!node.scale.empty())
+            {
+                new_mesh.scale = glm::vec3(static_cast<float>(node.scale[0]),
+                                            static_cast<float>(node.scale[1]),
+                                            static_cast<float>(node.scale[2]));
+            }
+		}
+        new_mesh.rotation = glm::eulerAngles(rotation_quat);
+        // TODO: link material
+        for (const auto& primitive : mesh.primitives)
+        {
+            // initialize to nullptrs
+            std::array<tinygltf::Accessor*, 2> accessors = {};
+            std::array<tinygltf::BufferView*, 2> bufferViews = {};
+            std::array<tinygltf::Buffer*, 2> buffers = {};
+            std::array<float*, 2> data = {};
+
+            for (int i = 0; i < supported_attributes.size(); i++)
+            {
+                if (primitive.attributes.find(supported_attributes[i]) != primitive.attributes.end())
+                {
+                    const int index = primitive.attributes.at(supported_attributes[i]);
+                    accessors[i] = &model.accessors[index];
+                    bufferViews[i] = &model.bufferViews[accessors[i]->bufferView];
+                    buffers[i] = &model.buffers[bufferViews[i]->buffer];
+                    data[i] = reinterpret_cast<float*>(&(buffers[i]->data[accessors[i]->byteOffset + bufferViews[i]->byteOffset]));
+                }
+            }
+            // Assume each mesh is one material right now
+            if (primitive.material >= 0)
+            {
+                new_mesh.materialid = static_cast<int>(primitive.material);
+            }
+            //if (primitive.attributes.find("POSITION") != primitive.attributes.end())
+            //{
+            //    const int pos_index = primitive.attributes.at("POSITION");
+            //    const tinygltf::Accessor& pos_accessor = model.accessors[pos_index];
+            //    const tinygltf::BufferView& pos_bufferView = model.bufferViews[accessor.bufferView];
+            //    const tinygltf::Buffer& pos_buffer = model.buffers[bufferView.buffer];
+            //    const float* pos_data = reinterpret_cast<const float*>(&(buffer.data[accessor.byteOffset + bufferView.byteOffset]));
+            //
+            // not using indices
+            if (primitive.indices < 0)
+            {
+                int pos_accessor_index = std::find(supported_attributes.begin(), supported_attributes.begin(), "POSITION") - supported_attributes.begin();
+                for (int i = 0; i < (accessors[pos_accessor_index])->count; i += 3)
+                {
+                    Triangle tri;
+                    for (int j = 0; j < supported_attributes.size(); j++)
+                    {
+                        if (accessors[j] == nullptr)
+                        {
+                            continue;
+                        }
+                        float* attribute_data = data[j];
+                        if (supported_attributes[j] == "TEXCOORD_0")
+                        {
+                            // UV coords
+                        }
+                        else
+                        {
+                            glm::vec3 vec_0 = glm::vec3(attribute_data[i * 3], attribute_data[i * 3 + 1], attribute_data[i * 3 + 2]);
+                            glm::vec3 vec_1 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
+                            glm::vec3 vec_2 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
+
+                            if (supported_attributes[j] == "POSITION")
+                            {
+                                tri.v0.pos = vec_0;
+                                tri.v1.pos = vec_1;
+                                tri.v2.pos = vec_2;
+                                tri.centroid = (vec_0 + vec_1 + vec_2) * 0.333333333333f;
+
+                            }
+                            else if (supported_attributes[j] == "NORMAL")
+                            {
+                                tri.v0.nor = vec_0;
+                                tri.v1.nor = vec_1;
+                                tri.v2.nor = vec_2;
+                            }
+                        }
+                    }
+                    // For now assume that each mesh is one material
+                    //tri.materialid = static_cast<int>(primitive.material);
+                    tris.push_back(tri);
+                }
+            }
+            // using indices
+            else
+            {
+                const tinygltf::Accessor& index_accessor = model.accessors[primitive.indices];
+                const tinygltf::BufferView& index_bufferView = model.bufferViews[index_accessor.bufferView];
+                const tinygltf::Buffer& index_buffer = model.buffers[index_bufferView.buffer];
+                // assuming 16 bit indices - may need to change
+                const uint16_t* index_data = reinterpret_cast<const uint16_t*>(&(index_buffer.data[index_accessor.byteOffset + index_bufferView.byteOffset]));
+                for (int i = 0; i < index_accessor.count; i += 3)
+                {
+
+                    Triangle tri;
+                    int index_0 = index_data[i];
+                    int index_1 = index_data[i + 1];
+                    int index_2 = index_data[i + 2];
+
+                    for (int j = 0; j < supported_attributes.size(); j++)
+                    {
+                        if (accessors[j] == nullptr)
+                        {
+                            continue;
+                        }
+                        float* attribute_data = data[j];
+                        if (supported_attributes[j] == "TEXCOORD_0")
+                        {
+
+                        }
+                        else
+                        {
+                            glm::vec3 vec_0 = glm::vec3(attribute_data[index_0 * 3], attribute_data[index_0 * 3 + 1], attribute_data[index_0 * 3 + 2]);
+                            glm::vec3 vec_1 = glm::vec3(attribute_data[index_1 * 3], attribute_data[index_1 * 3 + 1], attribute_data[index_1 * 3 + 2]);
+                            glm::vec3 vec_2 = glm::vec3(attribute_data[index_2 * 3], attribute_data[index_2 * 3 + 1], attribute_data[index_2 * 3 + 2]);
+
+                            if (supported_attributes[j] == "POSITION")
+                            {
+                                tri.v0.pos = vec_0;
+                                tri.v1.pos = vec_1;
+                                tri.v2.pos = vec_2;
+                                tri.centroid = (vec_0 + vec_1 + vec_2) * 0.333333333333f;
+
+                            }
+                            else if (supported_attributes[j] == "NORMAL")
+                            {
+                                tri.v0.nor = vec_0;
+                                tri.v1.nor = vec_1;
+                                tri.v2.nor = vec_2;
+                            }
+                        }
+                    }
+                    tris.push_back(tri);
+                }
+            }
+        }
+        new_mesh.transform = utilityCore::buildTransformationMatrix(
+            new_mesh.translation, new_mesh.rotation, new_mesh.scale);
+        new_mesh.inverseTransform = glm::inverse(new_mesh.transform);
+        new_mesh.invTranspose = glm::inverseTranspose(new_mesh.transform);
+        geoms.push_back(new_mesh);
+    }
+    return true; // look at this
 }
 
 int Scene::loadGeom(string objectid) {
@@ -227,9 +507,9 @@ void Scene::bvh_reorder_tris()
 void Scene::bvh_update_node_bounds(uint32_t node_index)
 {
     BvhNode& node = bvh_nodes[node_index];
-    node.aa_bb.bmin = glm::vec3(INT_MAX);
-    node.aa_bb.bmax = glm::vec3(INT_MIN);
-    for (int first = node.left_first, i = 0; i < node.tri_count; i++)
+    node.aa_bb.bmin = glm::vec3(FLT_MAX);
+    node.aa_bb.bmax = glm::vec3(FLT_MIN);
+    for (unsigned int first = node.left_first, i = 0; i < node.tri_count; i++)
     {
         Triangle& leaf_tri = tris[first + i];
         node.aa_bb.grow(leaf_tri);
@@ -301,7 +581,7 @@ float Scene::bvh_find_best_split(uint32_t node_index, int& axis, float& split_po
         // Optimize bounding box to be defined by centroids
         float bounds_min = FLT_MAX;
         float bounds_max = FLT_MIN;
-        for (int i = 0; i < node.tri_count; i++)
+        for (unsigned int i = 0; i < node.tri_count; i++)
         {
             Triangle& tri = tris[tri_indices[node.left_first + i]];
             bounds_min = min(bounds_min, tri.centroid[a]);
@@ -314,7 +594,7 @@ float Scene::bvh_find_best_split(uint32_t node_index, int& axis, float& split_po
         // Populate bins with triangles
         Bin bins[NUM_BINS];
         float scale = NUM_BINS / (bounds_max - bounds_min);
-        for (int i = 0; i < node.tri_count; i++)
+        for (unsigned int i = 0; i < node.tri_count; i++)
         {
             Triangle& tri = tris[tri_indices[node.left_first + i]];
 			int bin_index = min(NUM_BINS - 1, (int)((tri.centroid[a] - bounds_min) * scale));

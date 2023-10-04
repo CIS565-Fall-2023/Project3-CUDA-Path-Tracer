@@ -145,8 +145,37 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
+__host__ __device__ float meshIntersectionTest(Geom mesh, Ray ray, Triangle* tris,
+    glm::vec3& intersect, glm::vec3& normal, bool& outside, int tris_size)
+{
+    Ray r;
+    r.origin = multiplyMV(mesh.inverseTransform, glm::vec4(ray.origin, 1.0f));
+    r.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(ray.direction, 0.0f)));
+    float curr_t = FLT_MAX; //Double check what this does
 
-__host__ __device__ inline float intersect_aabb(const glm::vec3& ray_origin, const glm::vec3& ray_rec_direction, const Aabb& aa_bb, int curr_t)
+    for (int i = 0; i < tris_size; i++)
+    {
+        Triangle tri = tris[i];
+		glm::vec3 tri_v0 = tri.v0.pos;
+		glm::vec3 tri_v1 = tri.v1.pos;
+		glm::vec3 tri_v2 = tri.v2.pos;
+		glm::vec3 bary;
+        if (glm::intersectRayTriangle(r.origin, r.direction, tri_v0, tri_v1, tri_v2, bary) && (bary.z < curr_t))
+        {
+			float bary_w = 1.0f - bary.x - bary.y;
+            intersect = getPointOnRay(r, bary.z);
+			//intersect = bary.x * tri_v0 + bary.y * tri_v1 + bary_w * tri_v2; //try w = 1 - (u + v) here
+			normal = glm::normalize(bary.x * tri.v0.nor + bary.y * tri.v1.nor + bary_w * tri.v2.nor);
+            curr_t = bary.z;
+		}
+	}
+    intersect = multiplyMV(mesh.transform, glm::vec4(intersect, 1.0f));
+    normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
+    return glm::length(ray.origin - intersect);
+}
+
+
+__host__ __device__ inline float intersect_aabb(const glm::vec3& ray_origin, const glm::vec3& ray_rec_direction, const Aabb& aa_bb, float curr_t)
 {
     glm::vec3 bmin = aa_bb.bmin;
     glm::vec3 bmax = aa_bb.bmax;
@@ -172,8 +201,8 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
     int stack[64];
     int stack_ptr = 0;
     Ray r = ray;
-    r.origin = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
-    r.direction = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
+    r.origin = multiplyMV(geom.inverseTransform, glm::vec4(ray.origin, 1.0f));
+    r.direction = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(ray.direction, 0.0f)));
     glm::vec3 ray_origin = r.origin;
     glm::vec3 ray_rec_direction = 1.0f / r.direction;
     glm::vec3 ray_direction = r.direction;
@@ -260,9 +289,8 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
     intersect = multiplyMV(geom.transform, glm::vec4(intersect, 1.0f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(normal, 0.0f)));
 #if DEBUG
-    float length = glm::length(r.origin - intersect);
-    float distance =
-        printf("curr_t is %f, length is %f", curr_t, length);
+    float length = glm::length(ray.origin - intersect);
+    printf("curr_t is %f, length is %f", curr_t, length);
 #endif DEBUG
     return glm::length(ray.origin - intersect); // return distance
 }

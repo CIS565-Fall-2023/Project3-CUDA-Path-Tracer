@@ -11,11 +11,26 @@ enum GeomType {
     SPHERE,
     CUBE,
     TRI,
+    MESH
 };
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+};
+
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 nor;
+};
+
+struct Triangle
+{
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+    glm::vec3 centroid; // Dont forget to calculate this
 };
 
 struct Geom {
@@ -27,12 +42,16 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+    uint32_t root_node_index = 0; // can remove? maybe not
+    uint32_t nodes_used = 0;
 };
+
 
 struct Material {
     glm::vec3 color;
     struct {
         float exponent;
+        float factor;
         glm::vec3 color;
     } specular;
     float hasReflective;
@@ -78,18 +97,12 @@ struct ShadeableIntersection {
   int materialId;
 };
 
-struct Vertex
-{
-    glm::vec3 pos;
-    glm::vec3 nor;
-};
 
-struct Triangle
-{
-    Vertex v0;
-    Vertex v1;
-    Vertex v2;
-    glm::vec3 centroid; // Dont forget to calculate this
+struct Mesh : Geom {
+    std::vector<Triangle> tris;
+    std::vector<int> tri_indices;
+    uint32_t root_node_index = 0;
+    uint32_t nodes_used = 0;
 };
 
 struct Aabb {

@@ -7,6 +7,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
+#include "tinygltf/tiny_gltf.h"
 
 using namespace std;
 
@@ -22,6 +23,9 @@ private:
     float bvh_find_best_split(uint32_t node_index, int &axis, float &split_pos);
     void bvh_reorder_tris();
     bool bvh_in_use = false;
+    bool load_gltf(string filename);
+    bool gltf_load_materials(const tinygltf::Model &model);
+    std::string basePath;
 public:
     Scene(string filename);
     ~Scene();

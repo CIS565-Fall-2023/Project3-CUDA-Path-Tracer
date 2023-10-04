@@ -1,8 +1,12 @@
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "main.h"
 #include "preview.h"
 #include <glm/glm.hpp>
 #include <glm/gtx/intersect.hpp>
 #include <cstring>
+
 
 #define DEBUG 0
 
