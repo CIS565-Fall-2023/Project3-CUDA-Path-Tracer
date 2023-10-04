@@ -207,7 +207,7 @@ struct Camera {
     glm::vec2 fov;
     glm::vec2 pixelLength;
     float focalLength;
-    float lensRadius;
+    float apertureSize;
 };
 
 struct RenderState {

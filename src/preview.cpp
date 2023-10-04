@@ -14,6 +14,7 @@ GLFWwindow* window;
 GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
+bool valChanged = false;
 
 std::string currentTimeString() {
 	time_t now;
@@ -203,17 +204,19 @@ void RenderImGui()
 	static float f = 0.0f;
 	static int counter = 0;
 
-	ImGui::Begin("Path Tracer Analytics");                  // Create a window called "Hello, world!" and append into it.
-	
+	float oldFocalLength = imguiData->focalLength;
+	float oldApertureSize = imguiData->apertureSize;
+	ImGui::Begin("Path Tracer Analytics");				  // Create a window called "Hello, world!" and append into it.
+
 	// LOOK: Un-Comment to check the output window and usage
-	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-	//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+	//ImGui::Text("This is some useful text.");			   // Display some text (you can use a format strings too)
+	//ImGui::Checkbox("Demo Window", &show_demo_window);	  // Edit bools storing our window open/close state
 	//ImGui::Checkbox("Another Window", &show_another_window);
 
-	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);			// Edit 1 float using a slider from 0.0f to 1.0f
 	//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
-	//if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+	//if (ImGui::Button("Button"))							// Buttons return true when clicked (most widgets return true when edited/activated)
 	//	counter++;
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
@@ -222,8 +225,8 @@ void RenderImGui()
 	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
 	ImGui::Checkbox("Enable ACES Film", &imguiData->ACESFilm);
 	ImGui::Checkbox("Disable Gamma Correction", &imguiData->NoGammaCorrection);
-    ImGui::SliderFloat("Focal Length", &imguiData->focalLength, 0.0f, 5.0f);
-    ImGui::SliderFloat("Lens Radius", &imguiData->lensRadius, 0.0f, 0.001f);
+	ImGui::SliderFloat("Focal Length", &imguiData->focalLength, 0.0f, 8.0f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
+	ImGui::SliderFloat("Lens Radius", &imguiData->apertureSize, 0.000f, 0.01f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 
@@ -231,6 +234,9 @@ void RenderImGui()
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+	if (imguiData->focalLength != oldFocalLength || imguiData->apertureSize != oldApertureSize) {
+		valChanged = true;
+	}
 }
 
 bool MouseOverImGuiWindow()
@@ -238,9 +244,19 @@ bool MouseOverImGuiWindow()
 	return mouseOverImGuiWinow;
 }
 
+bool ValueChanged()
+{
+	return valChanged;
+}
+
+void ResetValueChanged()
+{
+	valChanged = false;
+}
+
 void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
-		
+
 		glfwPollEvents();
 
 		runCuda();
@@ -256,7 +272,7 @@ void mainLoop() {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
 		// VAO, shader program, and texture already bound
-		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
 		// Render ImGui Stuff
 		RenderImGui();

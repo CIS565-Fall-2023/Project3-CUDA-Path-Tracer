@@ -186,8 +186,14 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	if (ValueChanged()) {
+		camchanged = true;
+		ResetValueChanged();
+	}
 	if (MouseOverImGuiWindow())
 	{
+		renderState->camera.focalLength = guiData->focalLength;
+		renderState->camera.apertureSize = guiData->apertureSize;
 		return;
 	}
 	leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);

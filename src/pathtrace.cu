@@ -170,8 +170,16 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
         // TODO: implement antialiasing by jittering the ray
         segment.ray.direction = glm::normalize(cam.view
             - cam.right * cam.pixelLength.x * ((float)x + rx - (float)cam.resolution.x * 0.5f)
-            - cam.up * cam.pixelLength.y * ((float)y + ry - (float)cam.resolution.y * 0.5f)
-        );
+            - cam.up * cam.pixelLength.y * ((float)y + ry - (float)cam.resolution.y * 0.5f));
+        if (settings.dof) {
+            glm::vec3 forward = glm::cross(cam.up, cam.right);
+            float t = cam.focalLength / AbsDot(segment.ray.direction, forward);
+            glm::vec3 randPt = cam.apertureSize * squareToDiskConcentric(glm::vec2(u01(rng), u01(rng)));
+            glm::vec3 tmpRayOrigin = cam.position + randPt.x * cam.right + randPt.y * cam.up;
+            glm::vec3 focusPoint = segment.ray.origin + t * segment.ray.direction;
+            segment.ray.direction = glm::normalize(focusPoint - tmpRayOrigin);
+            segment.ray.origin = tmpRayOrigin;
+        }
 
         segment.pixelIndex = index;
         segment.remainingBounces = traceDepth;
@@ -354,8 +362,6 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
-    hst_scene->state.camera.focalLength = guiData->focalLength;
-    hst_scene->state.camera.lensRadius = guiData->lensRadius;
     const int traceDepth = hst_scene->state.traceDepth;
     const Camera& cam = hst_scene->state.camera;
     const int pixelcount = cam.resolution.x * cam.resolution.y;

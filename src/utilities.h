@@ -37,7 +37,7 @@ public:
     bool ACESFilm;
     bool NoGammaCorrection;
     float focalLength;
-    float lensRadius;
+    float apertureSize;
 };
 
 namespace utilityCore

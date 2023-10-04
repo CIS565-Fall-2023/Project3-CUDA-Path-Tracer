@@ -242,7 +242,7 @@ void Scene::loadSettings() {
         nlohmann::json renderStateData = jsonData["RenderState"];
         camera.resolution.y = renderStateData["camera"]["screen height"];
         camera.focalLength = renderStateData["camera"]["focal length"];
-        camera.lensRadius = renderStateData["camera"]["lens radius"];
+        camera.apertureSize = renderStateData["camera"]["aperture size"];
         float aspectRatio = renderStateData["camera"]["aspect ratio"];
         camera.resolution.x = aspectRatio * camera.resolution.y;
         camera.position = glm::vec3(renderStateData["camera"]["position"][0],
