@@ -13,6 +13,7 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
+#include "device_launch_parameters.h"
 
 #define ERRORCHECK 1
 
@@ -273,6 +274,40 @@ __global__ void shadeFakeMaterial(
 	}
 }
 
+// the true shader
+__global__ void shadeMaterial(
+	int depth, // must be passed in for random seeding
+	int iter,
+	int num_paths,
+	ShadeableIntersection* shadeableIntersections,
+	PathSegment* pathSegments,
+	Material* materials
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx >= num_paths) {
+		// not a valid path
+		return;
+	}
+
+	ShadeableIntersection intersection = shadeableIntersections[idx];
+
+	if (intersection.t <= 0.0f) {
+		// no intersection color as black
+		pathSegments[idx].color = glm::vec3(0.0f);
+		// mark this path as terminated
+		pathSegments[idx].remainingBounces = 0;
+		return;
+	}
+
+	// there is a valid intersection
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
+	Material material = materials[intersection.materialId];
+	Ray ray_in = pathSegments[idx].ray;
+	glm::vec3 intersection_point = ray_in.origin + ray_in.direction * intersection.t;
+	scatterRay(pathSegments[idx], intersection_point, intersection.surfaceNormal, material, rng);
+}
+
 // Add the current iteration's output to the overall image
 __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
 {
@@ -352,7 +387,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+		computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(
 			depth
 			, num_paths
 			, dev_paths
@@ -373,14 +408,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
 
-		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
+		shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
+			depth,
 			iter,
 			num_paths,
 			dev_intersections,
 			dev_paths,
 			dev_materials
 			);
-		iterationComplete = true; // TODO: should be based off stream compaction results.
+		iterationComplete = depth == 20; // TODO: should be based off stream compaction results.
 
 		if (guiData != NULL)
 		{

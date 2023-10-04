@@ -73,7 +73,50 @@ void scatterRay(
         glm::vec3 normal,
         const Material &m,
         thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+  // TODO: implement this.
+  // A basic implementation of pure-diffuse shading will just call the
+  // calculateRandomDirectionInHemisphere defined above.
+
+  // check if the pathSegment is at the max depth
+  if (pathSegment.remainingBounces == 0) {
+    //pathSegment.color = glm::vec3(0.0f);
+    return;
+  }
+
+  // not at max depth, decrement
+  pathSegment.remainingBounces--;
+
+  // check if this segment hits a light
+  if (m.emittance > 0.0f) {
+    pathSegment.color *= m.color * m.emittance;
+    // ray premature ending at a light source
+    pathSegment.remainingBounces = 0;
+    return;
+  }
+
+  // PURE REFLECTIVE
+  if (m.hasReflective) {
+    glm::vec3 ray_out = glm::reflect(pathSegment.ray.direction, normal);
+    pathSegment.ray.direction = ray_out;
+    pathSegment.ray.origin = intersect + ray_out * 0.0001f;
+    pathSegment.color *= m.color;
+    return;
+  }
+
+  // PURE DIFFUSIVE
+  // randomize a cosine-weighted ray out
+  glm::vec3 ray_out = calculateRandomDirectionInHemisphere(normal, rng);
+
+  // calculate the light term coming from ray_out
+  float lightTerm = glm::abs(glm::dot(ray_out, normal));
+
+  // calculate BSDF and PDF of this reflection sample
+  float lambertian_bsdf = 1.0f / PI;
+  float lambertian_pdf = lightTerm / PI;
+
+  // update pathSegment
+  pathSegment.ray.direction = ray_out;
+  // prevent shadow acne by lifting origin off the surface for a bit
+  pathSegment.ray.origin = intersect + ray_out * 0.0001f;
+  pathSegment.color *= m.color * lightTerm * lambertian_bsdf / lambertian_pdf;
 }
