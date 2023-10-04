@@ -3,6 +3,8 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -51,6 +53,17 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
+            }
+            else if (strcmp(line.c_str(), "mesh") == 0)
+            {
+                cout << "Creating new mesh..." << endl;
+                newGeom.type = MESH;
+                utilityCore::safeGetline(fp_in, line);              
+                vector<string> tokens = utilityCore::tokenizeString(line); 
+                hasMesh = true;
+                if (loadOBJ(tokens[0], newGeom) != 1) {
+                    cout << "loadOBJ Failed." << endl;
+                }
             }
         }
 
@@ -185,4 +198,50 @@ int Scene::loadMaterial(string materialid) {
         materials.push_back(newMaterial);
         return 1;
     }
+}
+
+int Scene::loadOBJ(string filePath, Geom& mesh) {
+    tinyobj::ObjReader reader;
+    reader.ParseFromFile(filePath);
+    auto& attrib = reader.GetAttrib();
+    auto& shapes = reader.GetShapes();
+
+    AABB aabb;
+    aabb.max = glm::vec3(FLT_MIN);
+    aabb.min = glm::vec3(FLT_MAX);
+
+    mesh.triIdx = triangles.size();
+    int triCnt = 0;
+    for (int i = 0; i < shapes.size(); i++)
+    {
+        Triangle t;
+        int faceSize = shapes[i].mesh.material_ids.size();
+        auto& indices = shapes[i].mesh.indices;
+        for (int j = 0; j < faceSize; j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                int idx = indices[3 * j + k].vertex_index;
+                t.v[k] = glm::vec3(attrib.vertices[3 * idx + 0], attrib.vertices[3 * idx + 1], attrib.vertices[3 * idx + 2]);
+                aabb.min = glm::min(aabb.min, t.v[k]);
+                aabb.max = glm::max(aabb.max, t.v[k]);
+
+                if (attrib.normals.size() > 0)
+                {
+                    int idx_n = indices[3 * j + k].normal_index;
+                    t.n[k] = glm::vec3(attrib.normals[3 * idx_n + 0], attrib.normals[3 * idx_n + 1], attrib.normals[3 * idx_n + 2]);        
+                }
+                if (attrib.texcoords.size() > 0)
+                {
+                    int idx_t = indices[3 * j + k].texcoord_index;
+                    t.uv[k] = glm::vec2(attrib.texcoords[2 * idx_t + 0], attrib.texcoords[2 * idx_t + 1]);
+                }
+            }
+            triangles.push_back(t);
+            triCnt++;
+        }
+    }
+    mesh.aabb = aabb;
+    mesh.triCnt = triCnt;
+    return 1;
 }

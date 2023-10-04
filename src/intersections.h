@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtx/intersect.hpp>
-
+#include <iostream>
 #include "sceneStructs.h"
 #include "utilities.h"
 
@@ -141,4 +141,79 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     }
 
     return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__
+bool boundingBoxIntersectionTest(AABB aabb, Ray q)
+{
+    float tmin = -1e38f;
+    float tmax = 1e38f;
+    for (int i = 0; i < 3; i++) {
+        float d = q.direction[i];
+        float t1 = (aabb.min[i] - q.origin[i]) / d;
+        float t2 = (aabb.max[i] - q.origin[i]) / d;
+        float tempMin = glm::min(t1, t2);
+        float tempMax = glm::max(t1, t2);
+        if (tempMin > 0 && tempMin > tmin) {
+            tmin = tempMin;
+        }
+        if (tempMax < tmax) {
+            tmax = tempMax;
+        }
+    }
+
+    if (tmax >= tmin && tmax > 0) {       
+        return true;
+    }
+
+    return false;
+}
+
+__host__ __device__ float objIntersectionTest(Geom mesh, Ray r, Triangle* triangles,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
+{
+    Ray q;
+    q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+    q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    
+    if (!boundingBoxIntersectionTest(mesh.aabb, q)) {
+        return -1;
+    }
+
+    float tmin = 1e38f;
+    int endIdx = mesh.triIdx + mesh.triCnt;
+    bool hasIntersection = false;
+    for (int i = mesh.triIdx; i < endIdx ; i++)
+    {
+        Triangle triangle = triangles[i];
+        glm::vec3 baryPos;
+        glm::vec3 objspaceIntersection;
+        if (glm::intersectRayTriangle(q.origin, q.direction,
+            triangle.v[0], triangle.v[1], triangle.v[2], baryPos))
+        {
+            objspaceIntersection = (1 - baryPos[0] - baryPos[1]) * triangle.v[0] +
+                baryPos[0] * triangle.v[1] + baryPos[1] * triangle.v[2];
+
+            float t = glm::length(objspaceIntersection - q.origin);
+            if (t < tmin)
+            {
+                tmin = t;
+                glm::vec3 a = triangle.v[1] - triangle.v[0];
+                glm::vec3 b = triangle.v[2] - triangle.v[0];
+                glm::vec3 localNorm = glm::normalize(glm::cross(a, b));
+                outside = glm::dot(localNorm, q.direction) < 0;
+                intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objspaceIntersection, 1.f));
+                normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(localNorm, 0.f)));
+                hasIntersection = true;
+            }          
+        }
+    }
+
+    if (hasIntersection)
+    {
+        return tmin;
+    }
+    
+    return -1;
 }
