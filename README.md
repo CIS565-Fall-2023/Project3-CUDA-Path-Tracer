@@ -1,15 +1,6 @@
 # CUDA Path Tracer
 
-<table width="100%" border="0">
-  <tr>
-    <td width="64%" style="padding: 0; border: 0; padding-right: 5px">
-      <img src="img/cool_renders/029_backrooms_final.png" width="100%"/>
-    </td>
-    <td width="36%" style="padding: 0; border: 0;">
-      <img src="img/cool_renders/030_evangelion_final.png" width="80%"/>
-    </td>
-  </tr>
-</table>
+<img src="img/cool_renders/029_backrooms_final.png" width="64%"/><img src="img/cool_renders/030_evangelion_final.png" width="28.8%"/>
 
 **University of Pennsylvania, CIS 5650: GPU Programming and Architecture, Project 2**
 
