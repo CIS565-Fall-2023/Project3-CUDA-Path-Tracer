@@ -114,10 +114,10 @@ TRANS       -2 2 -1
 ROTAT       0 45 0
 SCALE       2 7 2
 
-// Box 1
+// Box 2
 OBJECT 7
 cube
 material 1
-TRANS       2 1 2
+TRANS       2 1 1
 ROTAT       0 60 0
 SCALE       2 7 2

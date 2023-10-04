@@ -17,23 +17,28 @@
 
 #### Lambertian shading
 
+<img src="img/other/cornell_lambert.png" width="50%">
+
+Basic Lambertian shading, shown here in a Cornell box scene.
+
 #### Specular reflection and refraction
 
-Note that there is also code for microfacet reflection and refraction but it currently does not work properly.
+<img src="img/other/cornell_specular.png" width="50%">
 
-### Performance options
+Perfect specular reflection and refraction, shown in the same Cornell box scene as above.
 
-#### Sort rays by material type
-
-#### First bounce cache
-
-#### Russian roulette path termination
+Note that this project also has code for microfacet reflection and refraction but it currently does not work properly.
 
 ### Scene building tools
 
 #### glTF mesh loading
 
-Includes diffuse and emission texture loading.
+<img src="img/other/freddy_final.png" width="33%"><img src="img/other/freddy_albedo.png" width="33%"><img src="img/other/freddy_normals.png" width="33%">
+
+These images show, from left to right:
+- Final render
+- Albedo (base color)
+- Normals (with normal map applied)
 
 #### Environment map lights
 
@@ -43,9 +48,23 @@ Includes diffuse and emission texture loading.
 
 #### Depth of field
 
+<img src="img/other/dof.png" width="50%">
+
+Using a thin lens camera model.
+
 #### Denoising
 
 Using [Intel Open Image Denoise](https://www.openimagedenoise.org/).
+
+## Performance Analysis
+
+### Individual features
+
+#### Sort rays by material type
+
+#### First bounce cache
+
+#### Russian roulette path termination
 
 ## Attribution
 

@@ -94,7 +94,7 @@ void saveImage() {
 	filename = ss.str();
 
 	// CHECKITOUT
-	img.savePNG(filename);
+	img.savePNG(filename, guiData->showNormals);
 	//img.saveHDR(filename);  // Save a Radiance HDR file
 }
 

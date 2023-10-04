@@ -1,6 +1,6 @@
 #pragma once
 
-#define DEBUG_NAN_MAGENTA 1
+#define DEBUG_NAN_MAGENTA 0
 #define DEBUG_PRINT_BVH 0
 
 #define FIRST_BOUNCE_CACHE 0
