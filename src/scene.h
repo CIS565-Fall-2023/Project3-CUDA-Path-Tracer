@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
@@ -12,36 +13,22 @@ using namespace std;
 
 class Scene {
 private:
+    string scene_filename;
     ifstream fp_in;
-    virtual int loadMaterial(string materialid);
-    virtual int loadGeom(string objectid);
-    virtual int loadCamera();
+    int loadMaterial(string materialid);
+    int loadGeom(string objectid);
+    int loadCamera();
 public:
-    Scene() = default;
     Scene(string filename);
-    virtual ~Scene() = default;
+    ~Scene() = default;
 
     std::vector<Geom> geoms;
+    std::vector<Vertex> vertices;
+    // std::vector<float> vertices;  // 'v'
+    // std::vector<float> normals;   // 'vn'
+    // std::vector<float> texcoords; // 'vt'
+    std::vector<Mesh> meshes;
     std::vector<Material> materials;
+    std::unordered_map<string, int> material_map;
     RenderState state;
 };
-
-// class ObjScene : public Scene
-// {
-// private:
-//     int loadMaterial(string materialid) override;
-//     int loadGeom(string objectid) override;
-//     int loadCamera() override;
-// public:
-//     ObjScene(string filename);
-// };
-
-// class GLTFScene : public Scene
-// {
-// private:
-//     int loadMaterial(string materialid) override;
-//     int loadGeom(string objectid) override;
-//     int loadCamera() override;
-// public:
-//     GLTFScene(string filename);
-// };

@@ -6,7 +6,7 @@ LENSRADIUS      0
 FOCALDISTANCE   0
 ITERATIONS      5000
 DEPTH           8
-FILE            cornell-glass
+FILE            cornell-metal
 EYE             0 5 10.5
 LOOKAT          0 5 0
 UP              0 1 0
@@ -22,7 +22,7 @@ EMITTANCE   5
 
 // Diffuse white
 MATERIAL diffuse_white
-RGB        .98 .98 .98 1
+RGB        .98 .98 .98
 METALLIC    0
 ROUGHNESS   1
 IOR         1.5
@@ -31,7 +31,7 @@ EMITTANCE   0
 
 // Diffuse red
 MATERIAL diffuse_red
-RGB        .85 .35 .35 1
+RGB        .85 .35 .35
 METALLIC    0
 ROUGHNESS   1
 IOR         1.5
@@ -56,31 +56,31 @@ IOR         1.5
 OPACITY     1
 EMITTANCE   0
 
-// Glass
-MATERIAL glass_matte
-RGB         .98 .98 .98
-METALLIC    0
+// Aluminum
+MATERIAL aluminum
+RGB         .90 .90 .90
+METALLIC    1
 ROUGHNESS   0.3
 IOR         1.5
-OPACITY     0
+OPACITY     1
 EMITTANCE   0
 
-// Glass
-MATERIAL glass_flat
-RGB         .98 .98 .98
-METALLIC    0
-ROUGHNESS   0.1
+// Titanium
+MATERIAL titanium
+RGB         .55 .55 .50
+METALLIC    1
+ROUGHNESS   0.6
 IOR         1.5
-OPACITY     0
+OPACITY     1
 EMITTANCE   0
 
-// Glass
-MATERIAL glass_glossy
+// Stainless Steel
+MATERIAL stainless_steel
 RGB         .98 .98 .98
-METALLIC    0
-ROUGHNESS   0.01
+METALLIC    1
+ROUGHNESS   0.025
 IOR         1.5
-OPACITY     0
+OPACITY     1
 EMITTANCE   0
 
 // Ceiling light
@@ -134,47 +134,23 @@ SCALE       .01 10 10
 // Sphere 1
 OBJECT 6
 sphere
-material glass_matte
-TRANS       -3 5 2
+material aluminum
+TRANS       -3 5 -2
 ROTAT       0 0 0
 SCALE       3 3 3
-
-// Cube 1
-OBJECT 7
-cube
-material diffuse_blue
-TRANS       -3 5 -3
-ROTAT       0 0 0
-SCALE       1 10 1
 
 // Sphere 2
-OBJECT 8
+OBJECT 7
 sphere
-material glass_flat
-TRANS       0 5 2
+material titanium
+TRANS       0 5 -2
 ROTAT       0 0 0
 SCALE       3 3 3
-
-// Cube 2
-OBJECT 9
-cube
-material diffuse_green
-TRANS       0 5 -3
-ROTAT       0 0 0
-SCALE       1 10 1
 
 // Sphere 3
-OBJECT 10
+OBJECT 8
 sphere
-material glass_glossy
-TRANS       3 5 2
+material stainless_steel
+TRANS       3 5 -2
 ROTAT       0 0 0
 SCALE       3 3 3
-
-// Cube 3
-OBJECT 11
-cube
-material diffuse_red
-TRANS       3 5 -3
-ROTAT       0 0 0
-SCALE       1 10 1

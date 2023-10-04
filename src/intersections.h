@@ -143,24 +143,29 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-__host__ __device__
-float triangleIntersectionTest(Geom triangle, Ray r,
-    glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside)
-{
-    // glm::vec3 baryPosition;
-    // float t;
-    // bool intersected = glm::intersectRayTriangle(
-    //     r.origin, r.direction, v0, v1, v2, baryPosition);
-    // if (!intersected)
-    //     return -1;
+__host__ __device__ float meshIntersectionTest(Geom mesh, Mesh* meshes, Vertex* vertices, Ray r,
+        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
+    float t_min = FLT_MAX;
+    for (int meshidx = mesh.meshidx; meshidx < mesh.meshidx + mesh.meshcnt; meshidx++) {
+        Mesh m = meshes[meshidx];
+        Vertex v0 = vertices[m.v[0]];
+        Vertex v1 = vertices[m.v[1]];
+        Vertex v2 = vertices[m.v[2]];
 
-    // t = baryPosition.z;
-    // baryPosition.z = 1 - baryPosition.x - baryPosition.y;
-    // intersectionPoint = multiplyMV(triangle.transform, glm::vec4{baryPosition, 1});
-    // normal = glm::normalize(multiplyMV(triangle.invTranspose, glm::vec4{baryPosition, 0}));
-    // outside = glm::dot(normal, r.direction) < 0;
-    // if (!outside)
-    //     normal = -normal;
-    // return glm::length(r.origin - intersectionPoint);
-    return -1;
+        glm::vec3 baryPosition;
+
+        if (glm::intersectRayTriangle(r.origin, r.direction, v0.position, v1.position, v2.position, baryPosition)) {
+            glm::vec3 point = (1 - baryPosition.x - baryPosition.y) * v0.position +
+                              baryPosition.x * v1.position +
+                              baryPosition.y * v2.position;
+            float t = glm::length(r.origin - point);
+            if (t > 0.0f && t < t_min) {
+                t_min = t;
+                intersectionPoint = point;
+                normal = m.normal;
+                outside = glm::dot(r.direction, normal) < 0;
+            }
+        }
+    }
+    return t_min;
 }

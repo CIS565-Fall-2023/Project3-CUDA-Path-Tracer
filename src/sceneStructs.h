@@ -20,8 +20,9 @@ struct Ray {
 
 struct Geom {
     enum GeomType type;
+    int meshidx;
+    int meshcnt;
     int materialid;
-    // int meshid[3];
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -30,15 +31,24 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
+struct Vertex {
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 texcoord;
+};
+
+struct Mesh {
+    int v[3];
+    glm::vec3 normal;
+    int materialid;
+};
+
 struct Material {
-    glm::vec3 color;
-    struct {
-        float exponent;
-        glm::vec3 color;
-    } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
+    glm::vec3 albedo;
+    float roughness;
+    float metallic;
+    float ior;
+    float opacity;
     float emittance;
 };
 
@@ -51,6 +61,8 @@ struct Camera {
     glm::vec3 right;
     glm::vec2 fov;
     glm::vec2 pixelLength;
+    float lensRadius;
+    float focalDistance;
 };
 
 struct RenderState {
