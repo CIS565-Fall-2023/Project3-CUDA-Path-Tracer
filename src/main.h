@@ -25,7 +25,6 @@ using namespace std;
 //-------------------------------
 //----------PATH TRACER----------
 //-------------------------------
-
 extern Scene* scene;
 extern int iteration;
 

@@ -5,7 +5,6 @@
 #include <glm/gtx/string_cast.hpp>
 #include "Mesh/objLoader.h"
 
-const int LEAF_SIZE = 1;
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << "..." << endl;
@@ -72,7 +71,7 @@ int Scene::loadGeom(string objectid) {
 
                 ObjLoader objLoader;
 
-                if (objLoader.Load("../scenes/teapot.obj")) {
+                if (objLoader.Load("../scenes/cube.obj")) {
                     loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
                     printf("Triangle Size: %d\n", tempTriangles.size());
                 }
@@ -333,7 +332,7 @@ int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end
     }
     else {
         // allocate buckets for SAH partition
-        constexpr int nBuckets = 12;
+        // constexpr int nBuckets = 12;
         struct BucketInfo {
             int count = 0;
             Bound bounds;
@@ -415,7 +414,7 @@ BVHNode* Scene::constructBVHTree(std::vector<BVHGeomInfo>& geomInfo, int start, 
     // leaf nodes
     if (geomCount <= LEAF_SIZE) {
         int geomIndex = orderedGeoms.size();
-        printf("Leaf Node Index: %d\n", geomIndex);
+        // printf("Leaf Node Index: %d\n", geomIndex);
         for (int i = start; i < end; ++i) {
             int index = geomInfo[i].geomIndex;
             orderedGeoms.push_back(geoms[index]);
@@ -483,8 +482,6 @@ void Scene::buildBVH() {
         Bound bounds = geoms[i].getBounds();
         geomInfo.push_back(BVHGeomInfo(i, bounds));
     } 
-
-    printf("Geom Info Size: %d\n", geomInfo.size());
     
     int totalNodes = 0;
     std::vector<Geom> orderedGeoms;
@@ -492,12 +489,16 @@ void Scene::buildBVH() {
 
     printf("TotalNodes: %d\n", totalNodes);
 
+    cout << "" << endl;
+
     geoms.swap(orderedGeoms);
 
     bvh.resize(totalNodes);
     int offset = 0;
     flattenBVHTree(root, &offset);
 
+#if DEBUG_BVH
+    // for debugging
     cout << "" << endl;
     printf("Dubugging for first root:\n");
     printf("Root\n");
@@ -515,6 +516,6 @@ void Scene::buildBVH() {
     printf("Min Bounds: (%f, %f, %f)\n", minBounds[0], minBounds[1], minBounds[2]);
     printf("Max Bounds: (%f, %f, %f)\n", maxBounds[0], maxBounds[1], maxBounds[2]);
     cout << "" << endl;
-
+#endif
 }
 

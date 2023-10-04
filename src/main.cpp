@@ -28,12 +28,6 @@ int iteration;
 int width;
 int height;
 
-#define USE_BVH 0
-#if USE_BVH
-const int LEAF_SIZE = 12;
-#endif
-
-
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
@@ -52,7 +46,9 @@ int main(int argc, char** argv) {
 
 	// Load scene file
 	scene = new Scene(sceneFile);
-
+#if USE_BVH
+	scene->buildBVH();
+#if DEBUG_BVH
 	cout << "Constructing BVH..." << endl;
 	scene->buildBVH();
 	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
@@ -71,7 +67,8 @@ int main(int argc, char** argv) {
 
 		cout << "" << endl;
 	}
-
+#endif
+#endif
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
 

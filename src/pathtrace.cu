@@ -19,7 +19,8 @@
 #include "main.h"
 
 #define ERRORCHECK 1
-#define DEBUG_OBJ_LOADER 1
+#define DEBUG_OBJ_LOADER 0
+#define PRINT_DEPTH 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -270,97 +271,102 @@ __global__ void computeIntersections(
 	}
 }
 
-//__global__ void computeIntersectionsBVH(
-//	int depth, int num_paths, PathSegment* pathSegments, Geom* geoms, 
-//	int geoms_size, ShadeableIntersection* intersections, LinearBVHNode* bvh, int bvh_size) {
-//
-//	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
-//
-//	if (path_index < num_paths) {
-//
-//		PathSegment pathSegment = pathSegments[path_index];
-//
-//		float t;
-//		glm::vec3 intersect_point;
-//		glm::vec3 normal;
-//		float t_min = FLT_MAX;
-//		int hit_geom_index = -1;
-//		bool outside = true;
-//
-//		glm::vec3 tmp_intersect;
-//		glm::vec3 tmp_normal;
-//
-//		// BVH traversal
-//		int stack[64];
-//		int stack_ptr = 0;
-//		stack[stack_ptr++] = 0;
-//
-//		// bfs
-//		while (stack_ptr > 0) {
-//			int node_index = stack[--stack_ptr];
-//
-//			if (node_index < bvh_size) {
-//				auto& boundingVol = bvh[node_index];
-//
-//				if (intersectBVHNode(pathSegment.ray, boundingVol)) {
-//					if (boundingVol.geomStartIndex != -1) {   // hit the leaf node
-//						int start = boundingVol.geomStartIndex, end = boundingVol.geomEndIndex;
-//
-//						for (int i = start; i < end; ++i) {
-//							auto& geom = geoms[i];
-//
-//							if (geom.type == CUBE)
-//							{
-//								t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-//							}
-//							else if (geom.type == SPHERE)
-//							{
-//								t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-//							}
-//							else if (geom.type == TRIANGLE) {
-//								t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-//							}
-//
-//							// Compute the minimum t from the intersection tests to determine what
-//							// scene geometry object was hit first.
-//							if (t > 0.0f && t_min > t)
-//							{
-//								t_min = t;
-//								hit_geom_index = i;
-//								intersect_point = tmp_intersect;
-//								normal = tmp_normal;
-//							}
-//						}	
-//					}	
-//					else {
-//						// internal node, append the right child first,
-//						// and then left child
-//						if (node_index + boundingVol.rightChildOffset < bvh_size &&
-//							boundingVol.rightChildOffset > 0) {
-//							stack[stack_ptr++] = node_index + boundingVol.rightChildOffset;
-//						}
-//
-//						if (node_index + 1 < bvh_size) {
-//							stack[stack_ptr++] = node_index + 1;
-//						}
-//					}
-//				}
-//			}
-//		}
-//
-//		if (hit_geom_index == -1)
-//		{
-//			intersections[path_index].t = -1.0f;
-//		}
-//		else
-//		{
-//			//The ray hits something
-//			intersections[path_index].t = t_min;
-//			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
-//			intersections[path_index].surfaceNormal = normal;
-//		}
-//	}
-//}
+__global__ void computeIntersectionsBVH(
+	int depth, int num_paths, PathSegment* pathSegments, Geom* geoms, 
+	int geoms_size, ShadeableIntersection* intersections, LinearBVHNode* bvh, int bvh_size) {
+
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths) {
+
+		PathSegment pathSegment = pathSegments[path_index];
+
+		float t;
+		glm::vec3 intersect_point;
+		glm::vec3 normal;
+		float t_min = FLT_MAX;
+		int hit_geom_index = -1;
+		bool outside = true;
+
+		glm::vec3 tmp_intersect;
+		glm::vec3 tmp_normal;
+
+		// BVH traversal
+		int dirIsNeg[3] = { 1 / pathSegment.ray.direction.x < 0, 
+							1 / pathSegment.ray.direction.y < 0,
+						    1 / pathSegment.ray.direction.z < 0};
+
+		int currentNodeIdx = 0, toVisitOffset = 0;
+		int nodesToVisit[64];
+
+		// bfs
+		while (true) {
+			if (currentNodeIdx < bvh_size) {
+				auto& bvhNode = bvh[currentNodeIdx];
+
+				if (intersectBVHNode(pathSegment.ray, bvhNode)) {
+					if (bvhNode.geomCount > 0) {   // hit the leaf node
+						int start = bvhNode.geomIndex, end = start + bvhNode.geomCount;
+
+						for (int i = start; i < end; ++i) {
+							auto& geom = geoms[i];
+
+							if (geom.type == CUBE)
+							{
+								t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+							}
+							else if (geom.type == SPHERE)
+							{
+								t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+							}
+							else if (geom.type == TRIANGLE) {
+								t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+							}
+
+							// Compute the minimum t from the intersection tests to determine what
+							// scene geometry object was hit first.
+							if (t > 0.0f && t_min > t)
+							{
+								t_min = t;
+								hit_geom_index = i;
+								intersect_point = tmp_intersect;
+								normal = tmp_normal;
+							}
+						}	
+						if (toVisitOffset == 0) break;
+						currentNodeIdx = nodesToVisit[--toVisitOffset];
+					}	
+					else {
+						if (dirIsNeg[bvhNode.axis]) {
+							nodesToVisit[toVisitOffset++] = currentNodeIdx + 1;
+							currentNodeIdx = bvhNode.rightChildOffset;
+						}
+						else {
+							nodesToVisit[toVisitOffset++] = bvhNode.rightChildOffset;
+							currentNodeIdx = currentNodeIdx + 1;
+						}
+					}
+				}
+				else {
+					if (toVisitOffset == 0) break;
+					currentNodeIdx = nodesToVisit[--toVisitOffset];
+				}
+			}
+		}
+
+		if (hit_geom_index == -1)
+		{
+			intersections[path_index].t = -1.0f;
+		}
+		else
+		{
+			//The ray hits something
+			intersections[path_index].t = t_min;
+			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+			intersections[path_index].surfaceNormal = normal;
+		}
+	}
+}
 
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
@@ -535,8 +541,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 		depth++;
 
-		/*printf("Depth: %d\n", depth);
-		printf("Num of Paths: %d\n", num_paths);*/
+#if PRINT_DEPTH
+		printf("Depth: %d\n", depth);
+		printf("Num of Paths: %d\n", num_paths);
+#endif
 
 #if DEBUG_OBJ_LOADER
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (

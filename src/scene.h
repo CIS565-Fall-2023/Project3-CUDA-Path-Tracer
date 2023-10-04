@@ -10,6 +10,13 @@
 #include "bound.h"
 #include "Mesh/tiny_obj_loader.h"
 
+#define USE_BVH 1
+#if USE_BVH
+const int LEAF_SIZE = 2;
+const int nBuckets = 12;
+#endif
+#define DEBUG_BVH 0
+
 using namespace std;
 
 class Scene {
