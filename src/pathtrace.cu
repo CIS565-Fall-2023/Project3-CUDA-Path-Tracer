@@ -24,6 +24,9 @@
 #define NAIVE 0
 #define DIRECT_MIS 0
 #define FULL 1
+#define RUSSIAN_ROULETTE 1
+
+#define SUB_SCATTERING 0
 
 #define USE_KD_TREE 1
 
@@ -249,6 +252,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
+		segment.russianRouletteThres = traceDepth - 3;
 	}
 }
 
@@ -519,10 +523,22 @@ __global__ void shadeFull(
 				
 			// Sample BSDF
 			scatterRay(cur, point, intersection.surfaceNormal, intersection.surfaceTangent, material, rng);
-
+			 
 			// TODO: subsurface scattering
 
-			// TODO: russian roulette
+			// russian roulette
+#if RUSSIAN_ROULETTE
+			if (cur.remainingBounces < cur.russianRouletteThres) {
+				float p = max(cur.throughput.x, max(cur.throughput.y, cur.throughput.z));
+				thrust::uniform_real_distribution<float> u01(0, 1);
+				if (u01(rng) > p) {
+					cur.remainingBounces = 0; // terminate path
+					return;
+				}
+
+				cur.throughput *= 1.0f / p;
+			}
+#endif
 		}
 		else {
 			if ((cur.isFromCamera || cur.isSpecularBounce) && envmap != NULL) {

@@ -1,10 +1,10 @@
 ENVIRONMENT_MAP ../scenes/hdr/Tropical_Beach_3k.hdr
 
 MATERIAL 0
-RGB         .98 .98 .98
+RGB         .13 .63 .38
 SPECEX      0
-SPECRGB     .98 .98 .98
-REFL        1
+SPECRGB     .13 .63 .38
+REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
@@ -27,6 +27,6 @@ obj
 material 0
 TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       2 2 2
-OBJFILE     ../scenes/obj/bunny.obj
+SCALE       50 50 50
+OBJFILE     ../scenes/obj/dragon.obj
 

@@ -26,8 +26,7 @@ enum MaterialType {
     SPEC_REFL = 1,
     SPEC_TRANS = 2,
     SPEC_FRESNEL = 3,
-    MICROFACET = 4,
-    PLASTIC = 5
+    MICROFACET = 4
 };
 
 struct Ray {
@@ -119,6 +118,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    int russianRouletteThres;
 
     glm::vec3 throughput;
 
