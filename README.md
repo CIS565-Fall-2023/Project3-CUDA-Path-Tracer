@@ -89,7 +89,7 @@ TODO
 
 TODO
 
-This option exists for performance comparisons but does not make sense to use for actual renders because it doesn't play nice with antialiasing.
+This option exists for performance comparisons but does not make sense to use for actual renders because it doesn't play nice with anti-aliasing or depth of field.
 
 - Provide performance benefit analysis across different max ray depths.
 

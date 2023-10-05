@@ -196,7 +196,7 @@ void Pathtracer::init(Scene* scene) {
 	dev_thrust_intersections = thrust::device_pointer_cast(dev_intersections);
 
 #if FIRST_BOUNCE_CACHE
-	cudaMalloc(&dev_intersections_fbc, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_intersections_fbc, pixelCount * sizeof(ShadeableIntersection));
 	dev_thrust_intersections_fbc = thrust::device_pointer_cast(dev_intersections_fbc);
 #endif
 

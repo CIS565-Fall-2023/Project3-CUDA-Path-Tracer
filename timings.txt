@@ -67,11 +67,51 @@ with: 685.6 ms/frame
 First bounce cache
 ==================================================
 
+the numbers on the left represent max ray depth
+
 Open
 ----------
+without
+1: 60.2 ms/frame
+2: 95.5 ms/frame 
+3: 103.1 ms/frame
+4: 108.1 ms/frame
+5: 110.4 ms/frame
+6: 111.9 ms/frame
+7: 112.7 ms/frame
+8: 113.5 ms/frame
+
+with
+1: 
+2: 
+3: 
+4: 
+5: 
+6: 
+7: 
+8: 
 
 Closed
 ----------
+without
+1: 92.2 ms/frame
+2: 211.3 ms/frame
+3: 320.6 ms/frame
+4: 422.8 ms/frame
+5: 430.1 ms/frame
+6: 434.2 ms/frame
+7: 435.3 ms/frame
+8: 436.8 ms/frame
+
+with
+1: 73.9 ms/frame
+2: 190.6 ms/frame
+3: 300.7 ms/frame
+4: 398.1 ms/frame
+5: 405.3 ms/frame
+6: 408.5 ms/frame
+7: 410.5 ms/frame
+8: 412.3 ms/frame
 
 ==================================================
 Russian roulette path termination
