@@ -133,7 +133,7 @@ SCALE       .01 10 10
 // Cube (OBJ)
 OBJECT suzanne
 mesh obj/Suzanne.obj
-material glass_glossy
+material stainless_steel
 TRANS       0 5 0
 ROTAT       0 30 0
 SCALE       2.5 2.5 2.5
