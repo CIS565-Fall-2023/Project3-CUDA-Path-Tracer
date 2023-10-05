@@ -191,40 +191,14 @@ struct Camera {
     glm::vec3 right;
     float fovy;
     glm::vec2 pixelLength;
+    float lenRadius = 0.f;
+    float focalDistance = 1.f;
 
     CPU_ONLY void Recompute() 
     {
         forward = glm::normalize(ref - position);
         right = glm::normalize(glm::cross(forward, {0, 1, 0}));
         up = glm::normalize(glm::cross(right, forward));
-    }
-    CPU_GPU Ray CastRay(const glm::vec2& p)
-    {
-        glm::vec2 ndc = 2.f * p / glm::vec2(resolution); 
-        ndc.x = 1.f - ndc.x;
-        ndc.y = 1.f - ndc.y;
-
-        float aspect = static_cast<float>(resolution.x) / static_cast<float>(resolution.y);
-
-        // point in camera space
-        float radian = glm::radians(fovy * 0.5f);
-        glm::vec3 p_camera = glm::vec3(
-            ndc.x * glm::tan(radian) * aspect,
-            ndc.y * glm::tan(radian),
-            1.f
-        );
-
-        Ray ray(glm::vec3(0), p_camera);
-
-        // transform to world space
-        ray.origin = position + ray.origin.x * right + ray.origin.y * up;
-        ray.direction = glm::normalize(
-            ray.direction.z * forward +
-            ray.direction.y * up +
-            ray.direction.x * right
-        );
-
-        return ray;
     }
 };
 

@@ -13,7 +13,6 @@
 #include <json.hpp>
 
 typedef nlohmann::json Json;
-
 namespace std
 {
     namespace filesystem
@@ -24,10 +23,14 @@ namespace std
 
 class Scene {
 public:
-    void LoadGeoms(const Json& geometry_json, const std::filesystem::path& res_path);
-    void LoadMaterials(const Json& material_json, const std::filesystem::path& res_path);
-    void LoadCamera(const Json& camera_json);
-    void LoadEnvironmentMap(const Json& environment_json, const std::filesystem::path& res_path);
+    void FreeScene();
+
+    void LoadSceneFromJSON(const std::filesystem::path& scene_path, const std::filesystem::path& res_path);
+
+    void LoadGeomsFromJSON(const Json& geometry_json, const std::filesystem::path& res_path);
+    void LoadMaterialsFromJSON(const Json& material_json, const std::filesystem::path& res_path);
+    void LoadCameraFromJSON(const Json& camera_json);
+    void LoadEnvironmentMapFromJSON(const Json& environment_json, const std::filesystem::path& res_path);
 
     void ReadObj(const std::string& obj_file_path,
                 unsigned int matrial_id);
@@ -37,7 +40,6 @@ public:
     Scene(const std::filesystem::path& res_path, const std::string& scene_filename);
     ~Scene() = default;
 
-    std::vector<Geom> geoms;
     std::vector<Material> materials;
     std::vector<uPtr<Texture2D>> m_Textures;
 
@@ -45,6 +47,7 @@ public:
     std::vector<glm::vec3> m_Normals;
     std::vector<glm::vec2> m_UVs;
     std::vector<TriangleIdx> m_TriangleIdxs;
+    std::vector<glm::i16vec4> m_Indices;
     
     std::unordered_map<std::string, unsigned int> m_MaterialMap;
     

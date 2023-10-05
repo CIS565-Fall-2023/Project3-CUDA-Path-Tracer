@@ -109,7 +109,30 @@ Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_fil
         throw;
     }
     
-    std::cout << "Reading scene from " << scene_path.string() << " ..." << std::endl;
+    if (scene_path.extension().string() == ".json")
+    {
+        LoadSceneFromJSON(scene_path, res_path);
+    }
+}
+
+void Scene::FreeScene()
+{
+    materials.clear();
+    m_Textures.clear();
+    m_Vertices.clear();
+    m_Normals.clear();
+    m_UVs.clear();
+    m_TriangleIdxs.clear();
+    m_MaterialMap.clear();
+    m_EnvMapTexObj = 0;
+    state = RenderState();
+}
+
+void Scene::LoadSceneFromJSON(const std::filesystem::path& scene_path, const std::filesystem::path& res_path)
+{
+    FreeScene();
+
+    std::cout << "Reading scene from Json: " << scene_path.string() << " ..." << std::endl;
 
     std::ifstream fp_in(scene_path);
 
@@ -120,15 +143,15 @@ Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_fil
 
     std::filesystem::path scene_res_path(res_path);
 
-    if (scene_json.contains("camera")) LoadCamera(scene_json["camera"]);
-    if (scene_json.contains("materials")) LoadMaterials(scene_json["materials"], scene_res_path);
-    if (scene_json.contains("geomerties")) LoadGeoms(scene_json["geomerties"], scene_res_path);
-    if (scene_json.contains("environment map")) LoadEnvironmentMap(scene_json["environment map"], scene_res_path);
+    if (scene_json.contains("camera")) LoadCameraFromJSON(scene_json["camera"]);
+    if (scene_json.contains("materials")) LoadMaterialsFromJSON(scene_json["materials"], scene_res_path);
+    if (scene_json.contains("geomerties")) LoadGeomsFromJSON(scene_json["geomerties"], scene_res_path);
+    if (scene_json.contains("environment map")) LoadEnvironmentMapFromJSON(scene_json["environment map"], scene_res_path);
 
-    std::cout << "Reading scene success!"<< std::endl;
+    std::cout << "Reading scene success!" << std::endl;
 }
 
-void Scene::LoadGeoms(const Json& geometry_json, const std::filesystem::path& res_path)
+void Scene::LoadGeomsFromJSON(const Json& geometry_json, const std::filesystem::path& res_path)
 {
     std::cout << "Loading Geometry ..." << std::endl;
     for (unsigned int i = 0; i < geometry_json.size(); ++i)
@@ -191,7 +214,7 @@ void Scene::LoadGeoms(const Json& geometry_json, const std::filesystem::path& re
     std::cout << "Loading Geomerties Success!" << std::endl;
 }
 
-void Scene::LoadCamera(const Json& camera_json) 
+void Scene::LoadCameraFromJSON(const Json& camera_json) 
 {
     std::cout << "Loading Camera ..." << std::endl;
     RenderState &state = this->state;
@@ -208,7 +231,7 @@ void Scene::LoadCamera(const Json& camera_json)
     std::cout << "Loading Camera Success!" << std::endl;
 }
 
-void Scene::LoadEnvironmentMap(const Json& environment_json, const std::filesystem::path& res_path)
+void Scene::LoadEnvironmentMapFromJSON(const Json& environment_json, const std::filesystem::path& res_path)
 {
     std::cout << "Loading Environment Map ..." << std::endl;
 
@@ -220,7 +243,7 @@ void Scene::LoadEnvironmentMap(const Json& environment_json, const std::filesyst
     std::cout << "Loading Environment Map Success!" << std::endl;
 }
 
-void Scene::LoadMaterials(const Json& material_json, const std::filesystem::path& res_path)
+void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesystem::path& res_path)
 {
     std::cout << "Loading Materials ..." << std::endl;
     for (unsigned int i = 0; i < material_json.size(); ++i)

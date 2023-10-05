@@ -77,7 +77,7 @@ void AddCornellBox_Triangles(std::vector<glm::vec3>& vertices, std::vector<glm::
 
 SandBox::SandBox()
 	:m_PathTracer(mkU<CudaPathTracer>()),
-	 m_UniformData(mkU<UniformMaterialData>(1.f, glm::vec3(1.f)))
+	 m_UniformData(mkU<UniformMaterialData>(1.f, glm::vec3(1.f, 0.f, 0.f)))
 {
 	m_StartTimeString = currentTimeString();
 
@@ -88,7 +88,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/scene_1.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -151,6 +151,14 @@ void SandBox::DrawImGui()
 		changed |= ImGui::DragFloat("Scatter Coefficient", &m_UniformData->ss_scatter_coeffi, 0.2f, 0.2f, 15.f);
 		changed |= ImGui::ColorEdit3("Scatter Coefficient", &m_UniformData->ss_absorption_coeffi[0]);
 		
+		if (changed) m_PathTracer->Reset();
+		ImGui::End();
+	}
+	{
+		bool changed = false;
+		ImGui::Begin("Camera Setting");
+		changed |= ImGui::DragFloat("Len Radius", &m_Scene->state.camera.lenRadius, 0.1f, 0.f, 5.f);
+		changed |= ImGui::DragFloat("Focal Distance", &m_Scene->state.camera.focalDistance, 0.1f, 1.f, 100.f);
 		if (changed) m_PathTracer->Reset();
 		ImGui::End();
 	}

@@ -102,6 +102,42 @@ void InitDataContainer(GuiDataContainer* imGuiData)
 	guiData = imGuiData;
 }
 
+CPU_GPU Ray CastRay(const Camera& camera, const glm::vec2& p, const glm::vec2& rand_offset)
+{
+	glm::vec2 ndc = 2.f * p / glm::vec2(camera.resolution);
+	ndc.x = 1.f - ndc.x;
+	ndc.y = 1.f - ndc.y;
+
+	float aspect = static_cast<float>(camera.resolution.x) / static_cast<float>(camera.resolution.y);
+
+	// point in camera space
+	float radian = glm::radians(camera.fovy * 0.5f);
+	glm::vec3 p_camera = glm::vec3(
+		ndc.x * glm::tan(radian) * aspect,
+		ndc.y * glm::tan(radian),
+		1.f
+	);
+
+	Ray ray(glm::vec3(0), p_camera);
+
+	// len camera
+	glm::vec2 p_len = camera.lenRadius * SquareToDiskConcentric(rand_offset);
+	glm::vec3 p_focal = camera.focalDistance * p_camera;
+	ray.origin.x = p_len.x;
+	ray.origin.y = p_len.y;
+	ray.direction = glm::normalize(p_focal - ray.origin);
+
+	// transform to world space
+	ray.origin = camera.position + ray.origin.x * camera.right + ray.origin.y * camera.up;
+	ray.direction = glm::normalize(
+		ray.direction.z * camera.forward +
+		ray.direction.y * camera.up +
+		ray.direction.x * camera.right
+	);
+
+	return ray;
+}
+
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -123,7 +159,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		CudaRNG rng(iter, index, 0);
 
-		segment.ray = cam.CastRay({x + rng.rand(), y + rng.rand()});
+		segment.ray = CastRay(cam, { x + rng.rand(), y + rng.rand() }, { rng.rand(), rng.rand() });
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 
@@ -260,32 +296,36 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	PathSegment segment = pathSegments[idx];
 
-	if (segment.mediaId >= 0)
-	{
-		CudaRNG rng(iteration, idx, segment.remainingBounces);
-		//float weight = 10.0f;
-		
-		float distance = -glm::log(rng.rand()) / u_data.ss_scatter_coeffi;
-		//printf("distance: %f\n", distance);
-		float pdf = glm::exp(-u_data.ss_scatter_coeffi * distance);
-		glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * distance);
-		if (distance < 1000.f)
-		{
-			if (distance < intersection.t)
-			{
-				Ray ray(segment.ray.origin + segment.ray.direction * distance, SquareToSphereUniform({ rng.rand(), rng.rand() }));
-				ray.direction = glm::normalize(ray.direction);
-				pathSegments[idx].ray = ray;
-				pathSegments[idx].throughput *= transmission * pdf;
-				return;
-			}
-		}
-	}
-
 	if (intersection.materialId >= 0)
 	{
-		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
-		//return;	
+		pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
+		return;
+		
+		if (segment.mediaId >= 0)
+		{
+			CudaRNG rng(iteration, idx, segment.remainingBounces);
+
+			const float distance = -glm::log(rng.rand()) / u_data.ss_scatter_coeffi;
+			if (distance < 1000.f)
+			{
+				if (distance < intersection.t)
+				{
+					Ray ray(segment.ray.origin + segment.ray.direction * distance, SquareToSphereUniform({ rng.rand(), rng.rand() }));
+					pathSegments[idx].ray = ray;
+
+					const float weight = glm::exp(-u_data.ss_scatter_coeffi * distance);
+					const float pdf = Inv4Pi;
+					const glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * distance);
+					pathSegments[idx].throughput *= transmission * pdf;
+					return;
+				}
+				else
+				{
+					pathSegments[idx].throughput *= glm::exp(-u_data.ss_absorption_coeffi * intersection.t);
+				}
+			}
+		}
+		
 		Material material;
 		if (blockDim.x >= num_materials)
 		{
@@ -318,7 +358,7 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 
 				if (MaterialType::Glass == material.type)
 				{
-					pathSegments[idx].mediaId = 1;
+					pathSegments[idx].mediaId = segment.mediaId >= 0 ? -1: 0;
 				}
 			}
 			else
@@ -381,7 +421,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 									 const UniformMaterialData& data)
 {
 	const int pixelcount = resolution.x * resolution.y;
-
+	static const int max_depth = 5;
 	// TODO: might change to dynamic block size
 	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);
@@ -392,7 +432,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (camera, m_Iteration, 20, dev_paths);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (camera, m_Iteration, max_depth, dev_paths);
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
@@ -404,7 +444,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (depth < 20 && num_paths > 0) 
+	while (depth < max_depth && num_paths > 0)
 	{
 		depth++;
 
