@@ -1,0 +1,90 @@
+open = end of evangelion scene (1080 x 1350)
+closed = backrooms scene (1920 x 1080)
+
+unless otherwise specified:
+- BVH, partition rays, and russian roulette are on
+- sort rays by material type and first bounce cache are off
+- max ray depth = 8
+- denoising every 3 frames
+
+==================================================
+BVH
+==================================================
+
+freddy fazbear environment map scene (800 x 800) [17,386 tris]
+----------
+with: 38.2 ms/frame
+without: 355.2 ms/frame
+
+orange and blue monkey scene (800 x 800) [968 tris]
+----------
+with: 31.2 ms/frame
+without: 43.2 ms/frame 
+
+==================================================
+Partition rays
+==================================================
+
+russian roulette is off for this one because otherwise, the number of rays drops off significantly after depth 3
+
+Open
+----------
+0: 1458000
+1: 834771
+2: 80921
+3: 21742
+4: 6326
+5: 2741
+6: 1397
+7: 820
+
+Closed
+----------
+0: 2073600
+1: 2035969
+2: 1890627
+3: 1795060
+4: 1678968
+5: 1591109
+6: 1494073
+7: 1413231
+
+TODO: try running without partition (i.e. send all rays to kernel and early exit for those that are done already, will probably lead to severely degraded performance due to warps that aren't densely packed with live rays)
+
+==================================================
+Sort rays by material type
+==================================================
+
+Open
+----------
+without: 113.5 ms/frame
+with: 193.8 ms/frame
+
+Closed
+----------
+without: 436.8 ms/frame
+with: 685.6 ms/frame
+
+==================================================
+First bounce cache
+==================================================
+
+Open
+----------
+
+Closed
+----------
+
+==================================================
+Russian roulette path termination
+==================================================
+
+Open
+----------
+without: 120.9 ms/frame
+with: 113.5 ms/frame
+
+Closed
+----------
+without: 748.9 ms/frame
+with: 436.8 ms/frame

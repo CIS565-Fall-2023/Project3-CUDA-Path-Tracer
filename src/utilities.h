@@ -35,9 +35,9 @@ public:
 #if FIRST_BOUNCE_CACHE
     bool firstBounceCache{ true };
 #endif
-    bool russianRoulette{ true };
+    bool russianRoulette{ false };
 #if BVH_TOGGLE
-    bool useBvh{ false };
+    bool useBvh{ true };
 #endif
     bool denoising{ true };
     int denoiseInterval{ 3 };

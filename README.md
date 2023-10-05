@@ -48,7 +48,7 @@ Using [tinygltf](https://github.com/syoyo/tinygltf). The above images show, from
 
 #### BVH construction and traversal
 
-The [above scene](#environment-map-lights) renders at 26.4 FPS using a BVH and 2.9 FPS without a BVH. The mesh has 16,682 triangles and it takes about 11.5 ms to construct the BVH.
+The [above scene](#environment-map-lights) renders at 26.4 FPS using a BVH and 2.9 FPS without a BVH. The mesh has 17,386 triangles and it takes about 11.5 ms to construct the BVH.
 
 More detailed performance analysis is given [below](#bvh).
 
@@ -70,10 +70,6 @@ Using [Intel Open Image Denoise](https://www.openimagedenoise.org/). Left is raw
 
 TODO
 
-### BVH
-
-TODO
-
 ### Partition rays
 
 TODO
@@ -89,7 +85,13 @@ TODO
 
 TODO
 
+- Provide performance benefit analysis across different max ray depths.
+
 ### Russian roulette path termination
+
+TODO
+
+### BVH
 
 TODO
 

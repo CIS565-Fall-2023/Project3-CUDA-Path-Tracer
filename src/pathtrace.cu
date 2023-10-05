@@ -145,6 +145,10 @@ static glm::vec3* dev_first_hit_albedo = NULL;
 static glm::vec3* dev_first_hit_normals_accum = NULL;
 static glm::vec3* dev_first_hit_normals = NULL;
 
+#if COUNT_RAYS_PER_DEPTH
+static int* numRaysPerDepth;
+#endif
+
 void checkOIDNError()
 {
 #if ERRORCHECK
@@ -208,6 +212,15 @@ void Pathtracer::init(Scene* scene) {
 	initTextures();
 
 	initOIDN();
+
+#if COUNT_RAYS_PER_DEPTH
+	const int depth = hst_scene->state.traceDepth;
+	numRaysPerDepth = new int[depth];
+	for (int i = 0; i < depth; ++i)
+	{
+		numRaysPerDepth[i] = 0;
+	}
+#endif
 
 	checkCUDAError("pathtraceInit");
 }
@@ -322,6 +335,10 @@ void Pathtracer::free() {
 	oidnReleaseFilter(oidnFilter);
 	oidnReleaseDevice(oidnDevice);
 
+#if COUNT_RAYS_PER_DEPTH
+	delete[] numRaysPerDepth;
+#endif
+
 	checkCUDAError("pathtraceFree");
 }
 
@@ -402,8 +419,8 @@ __global__ void generateRayFromCamera(
 
 struct SegmentProcessingSettings
 {
-	bool russianRoulette;
-	bool useBvh;
+	bool russianRoulette = true;
+	bool useBvh = true;
 };
 
 __global__ void computeIntersections(
@@ -674,6 +691,10 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	num_valid_paths = num_total_paths;
 
 	while (num_valid_paths > 0) {
+#if COUNT_RAYS_PER_DEPTH
+		numRaysPerDepth[depth] += num_valid_paths;
+#endif
+
 		dim3 numblocksPathSegmentTracing = (num_valid_paths + blockSize1d - 1) / blockSize1d;
 
 		SegmentProcessingSettings settings;
@@ -768,6 +789,19 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 			guiData->tracedDepth = depth;
 		}
 	}
+
+#if COUNT_RAYS_PER_DEPTH
+	if (iter % 50 == 0)
+	{
+		for (int i = 0; i < hst_scene->state.traceDepth; ++i)
+		{
+			float raysAvg = numRaysPerDepth[i] / (float)iter;
+			printf("rays at depth %d: %.2f\n", i, raysAvg);
+		}
+
+		printf("\n");
+	}
+#endif
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
