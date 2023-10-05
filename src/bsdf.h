@@ -167,12 +167,25 @@ __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& w
     }
 }
 
-__device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, float* pdf, thrust::default_random_engine & rng, const glm::vec2 & uv) {
+__device__ float PDF(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec3& wi, const glm::vec3 & rands) {
+    switch (bsdfStruct.bsdfType) {
+        case DIFFUSE:
+		    return abs(wi.z) * INV_PI;
+        case MICROFACET:
+            auto wh = glm::normalize(wi + wo);
+            float alpha = bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor;
+            return glm::mix(abs(wi.z) * INV_PI, microfacetBSDF_D(wh, alpha) * wh.z / (4 * glm::dot(wo, wh)), 1.f / (2.f - bsdfStruct.metallicFactor));
+        default:
+            break;
+    }
+}
+
+__device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, float* pdf, thrust::default_random_engine & rng, const glm::vec2 & uv, const glm::vec3 & rands) {
     switch (bsdfStruct.bsdfType)
     {
     case DIFFUSE:
     {
-        wi = hemiSphereRandomSample(rng, pdf);
+        wi = hemiSphereRandomSample(glm::vec2(rands), pdf);
         // Encapsulate a sampler class
         return f(bsdfStruct, wo, wi, uv);
     }
@@ -184,37 +197,17 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         //return f(bsdfStruct, wo, wi, uv);
 
         thrust::uniform_real_distribution<float> u01(0, 1);
-        bsdfStruct.roughnessFactor = glm::max(bsdfStruct.roughnessFactor, EPSILON);
         float alpha = bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor;
         glm::vec3 wi_diffuse;
         float pdf_diffuse;
-        wi_diffuse = hemiSphereRandomSample(rng, &pdf_diffuse);
-
-        //glm::vec2 u(u01(rng), u01(rng));
-        ////float alpha = roughnessToAlpha(bsdfStruct.roughnessFactor);
-        //float logSample = glm::log(1 - u[0]);
-        //if (glm::isinf(logSample)) logSample = 0;
-        //float tanTheta2 = -alpha * alpha * logSample;
-        //float phi = u[1] * 2 * PI;
-        //float cosTheta = 1 / sqrt(1 + tanTheta2);
-        //float sinTheta = sqrt(1 - cosTheta * cosTheta);
-        //glm::vec3 _wh(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-        ////if (wh.z * wo.z < 0) wh = -wh;
-        //wi = glm::reflect(-wo, _wh);
-        //auto d = glm::dot(wo, _wh);
-        //*pdf = 1.0f;
-        //if (d < 0) return glm::vec3(0.0f, 0.0f, 1.0f);
-        //auto _h = glm::normalize(wi + wo);
-  //      if (abs(glm::distance(_h, _wh)) > 1e-3) {
-	 //       printf("h: %f %f %f wh: %f %f %f wo: %f %f %f wi:%f %f %f\n", _h.x, _h.y, _h.z, _wh.x, _wh.y, _wh.z, wo.x, wo.y, wo.z, wi.x, wi.y, wi.z);
-		//}
+        //wi_diffuse = hemiSphereRandomSample(glm::vec2(rands), &pdf_diffuse);
         glm::vec3 wh;
-        if (u01(rng) > (1.f / (2.f - bsdfStruct.metallicFactor))) {
-            wi = wi_diffuse;
+        if (rands.z > (1.f / (2.f - bsdfStruct.metallicFactor))) {
+            wi = hemiSphereRandomSample(glm::vec2(rands), &pdf_diffuse);
             wh = glm::normalize(wi + wo);
         }
         else {
-            glm::vec2 u(u01(rng), u01(rng));
+            glm::vec2 u(rands);
             //float alpha = roughnessToAlpha(bsdfStruct.roughnessFactor);
             float logSample = glm::log(1 - u[0]);
             if (glm::isinf(logSample)) logSample = 0;
@@ -228,7 +221,8 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
             if (d < 0) return glm::vec3();
             wi = glm::reflect(-wo, wh);
         }
-        *pdf = glm::mix(pdf_diffuse, microfacetBSDF_D(wh, alpha) * wh.z / (4 * glm::dot(wo, wh)), 1.f / (2.f - bsdfStruct.metallicFactor));
+        //*pdf = glm::mix(abs(wi.z) * INV_PI, microfacetBSDF_D(wh, alpha) * wh.z / (4 * glm::dot(wo, wh)), 1.f / (2.f - bsdfStruct.metallicFactor));
+        *pdf = PDF(bsdfStruct, wo, wi, rands);
         return f(bsdfStruct, wo, wi, uv);
         
     case EMISSIVE:

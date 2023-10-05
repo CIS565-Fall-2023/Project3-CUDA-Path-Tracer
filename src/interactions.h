@@ -42,10 +42,8 @@ __host__ __device__ glm::vec2 concentricSampleDisk(const glm::vec2& u) {
 }
 
 __host__ __device__
-glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float* pdf) {
+glm::vec3 hemiSphereRandomSample(const glm::vec2 & u, float* pdf) {
     thrust::uniform_real_distribution<float> u01(0, 1);
-
-    glm::vec2 u(u01(rng), u01(rng));
     glm::vec2 d(concentricSampleDisk(u));
     float z = sqrt(glm::max(0.0f, 1.0f - d.x * d.x - d.y * d.y));
     *pdf = INV_PI * z;

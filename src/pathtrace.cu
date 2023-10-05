@@ -27,7 +27,7 @@
 
 #define USE_FIRST_BOUNCE_CACHE 1
 #define USE_SORT_BY_MATERIAL 0
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 0
 #define USE_BVH 1
 
 #define ERRORCHECK 1
@@ -379,6 +379,7 @@ __global__ void shadeBSDF(
 		  // makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			thrust::uniform_real_distribution<float> u01(0, 1);
+			const glm::vec3 rands(u01(rng), u01(rng), u01(rng));
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
 			//pathSegment.color = glm::vec3(intersection.surfaceNormal);
 			//pathSegment.color = glm::vec3(intersection.uv.x, intersection.uv.y, 0.0f);
@@ -407,7 +408,7 @@ __global__ void shadeBSDF(
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 				glm::vec3 wi;
-				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
+				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv, rands);
 				float cosineTerm = abs(wi.z);
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Uniformly pick a light, will change to selecting by importance in the future */
