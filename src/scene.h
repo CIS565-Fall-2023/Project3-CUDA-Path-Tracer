@@ -23,6 +23,8 @@ public:
 
     void loadTextures();
 
+    void randomScene();
+
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     RenderState state;

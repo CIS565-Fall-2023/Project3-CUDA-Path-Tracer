@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include "perlin.h"
 
 #include <thrust/random.h>
 
@@ -125,6 +126,8 @@ void scatterRay(
 
 	thrust::uniform_real_distribution<float> u01(0.0f, 1.0f);
 
+	pathSegment.needSkyboxColor = false;
+
     switch (material.type)
     {
     case MaterialType::Emissive:
@@ -139,7 +142,6 @@ void scatterRay(
 		glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
 		pathSegment.ray.direction = target - intersect;
 		pathSegment.color *= material.color;
-		//pathSegment.color = normal;
 		pathSegment.remainingBounces--;
 	}
     break;
@@ -147,10 +149,10 @@ void scatterRay(
 	{
 		pathSegment.ray.origin = intersect + normal * 0.001f;
 
-		float fuzz = 0.0f;
 		glm::vec3 reflected = glm::reflect(glm::normalize(pathSegment.ray.direction), normal);
-		pathSegment.ray.direction = reflected + fuzz * random_in_unit_sphere(rng);
-		pathSegment.color *= material.color;
+		pathSegment.ray.direction = reflected + material.fuzz * random_in_unit_sphere(rng);
+		pathSegment.color *= material.color * material.hasReflective;
+		pathSegment.needSkyboxColor = true;
 		pathSegment.remainingBounces--;
 	}
 	break;
@@ -193,4 +195,29 @@ void scatterRay(
     default:
         break;
     }
+
+	if (material.pattern == Pattern::Ring)
+	{
+		float sqrt = glm::sqrt(intersect.x * intersect.x + intersect.y * intersect.y) * 4.0f;
+		float floor = glm::floor(sqrt);
+		if (glm::mod(glm::floor(sqrt), 2.0f))
+		{
+			pathSegment.color *= glm::vec3(0.0f);
+		}
+		else
+		{
+			pathSegment.color *= glm::vec3(1.0f);
+		}
+	}
+	else if (material.pattern == Pattern::CheckerBoard)
+	{
+		if (glm::mod(glm::floor(intersect.x) + glm::floor(intersect.y) + glm::floor(intersect.z), 2.0f) == 0)
+		{
+			pathSegment.color *= glm::vec3(0.0f);
+		}
+		else
+		{
+			pathSegment.color *= glm::vec3(1.0f);
+		}
+	}
 }

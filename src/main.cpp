@@ -11,7 +11,7 @@ static bool middleMousePressed = false;
 static double lastX;
 static double lastY;
 
-const float CameraSpeed = 0.1f;
+const float CameraSpeed = 1.0f;
 
 static bool camchanged = true;
 static float dtheta = 0, dphi = 0;
@@ -165,17 +165,22 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	if (action == GLFW_PRESS) {
 		switch (key) {
 		case GLFW_KEY_ESCAPE:
-			//saveImage();
+			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
 		case GLFW_KEY_S:
 			//saveImage();
 			break;
 		case GLFW_KEY_SPACE:
+		{
 			camchanged = true;
 			renderState = &scene->state;
 			Camera& cam = renderState->camera;
 			cam.lookAt = ogLookAt;
+			break;
+		}
+		case GLFW_KEY_1:
+			sortMaterial = !sortMaterial;
 			break;
 		}
 	}

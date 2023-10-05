@@ -17,7 +17,7 @@
 class GuiDataContainer
 {
 public:
-    GuiDataContainer() : TracedDepth(0), SamplePerPixel(1), Depth(8) {}
+    GuiDataContainer() : TracedDepth(0), SamplePerPixel(1), Depth(1) {}
     int TracedDepth;
 	int SamplePerPixel;
 	int Depth;
@@ -32,4 +32,9 @@ namespace utilityCore {
     extern glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
     extern std::string convertIntToString(int number);
     extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413
+    extern float random_float();
+    extern float random_float(float min, float max);
+	extern glm::vec3 random(float min, float max);
+	extern glm::vec3 uniformRandom(float min, float max);
+    extern int random_int(int min, int max);
 }

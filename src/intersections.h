@@ -6,6 +6,10 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+__device__ const int MAX_STEPS = 100;
+__device__ const float MAX_DIST = 100.0;
+__device__ const float SURF_DIST = 0.01;
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -125,28 +129,6 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     rt.origin = ro;
     rt.direction = rd;
 
-    //float vDotDirection = glm::dot(rt.origin, rt.direction);
-    //float radicand = vDotDirection * vDotDirection - (glm::dot(rt.origin, rt.origin) - powf(radius, 2.0f));
-    //if (radicand < 0) {
-    //    return -1.0f;
-    //}
-
-    //float squareRoot = std::sqrtf(radicand);
-    //float firstTerm = -vDotDirection;
-    //float t1 = firstTerm + squareRoot;
-    //float t2 = firstTerm - squareRoot;
-
-    //float t = 0;
-    //if (t1 < 0 && t2 < 0) {
-    //    return -1;
-    //} else if (t1 > 0 && t2 > 0) {
-    //    t = min(t1, t2);
-    //    outside = true;
-    //} else {
-    //    t = max(t1, t2);
-    //    outside = false;
-    //}
-
 	glm::vec3 oc = ro;
 	float a = glm::dot(rd, rd);
 	float halfB = glm::dot(oc, rd);
@@ -199,10 +181,6 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r,
 	Ray rt;
 	rt.origin = ro;
 	rt.direction = rd;
-
-	//mesh.triangle.v0 = { -1.0f, 0.0f, 0.0f };
-	//mesh.triangle.v1 = {  1.0f, 0.0f, 0.0f };
-	//mesh.triangle.v2 = {  0.0f, 1.0f, 0.0f };
 
     // E1
     glm::vec3 E1 = mesh.triangle.v1 - mesh.triangle.v0;
@@ -269,6 +247,227 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r,
 
 	//return glm::length(r.origin - intersectionPoint);
     return t;
+}
+
+
+__device__ float sdfCapsule(glm::vec3 p, glm::vec3 a, glm::vec3 b, float radius)
+{
+    glm::vec3 ab = b - a;
+    glm::vec3 ap = p - a;
+
+	float t = glm::dot(ab, ap) / glm::dot(ab, ab);
+	t = glm::clamp(t, 0.0f, 1.0f);
+
+    glm::vec3 c = a + t * ab;
+
+	float d = length(p - c) - radius;
+
+	return d;
+}
+
+__device__ float sdfTorus(glm::vec3 p, glm::vec2 r)
+{
+    float x = glm::length(glm::vec2(p.x, p.z)) - r.x;
+	return glm::length(glm::vec2(x, p.y)) - r.y;
+}
+
+__device__ float sdfCylinder(glm::vec3 p, glm::vec3 a, glm::vec3 b, float radius)
+{
+    glm::vec3 ab = b - a;
+    glm::vec3 ap = p - a;
+
+	float t = glm::dot(ap, ab) / glm::dot(ab, ab);
+
+    glm::vec3 c = a + t * ab;
+
+	float x = glm::length(p - c) - radius;
+	float y = (glm::abs(t - 0.5f) - 0.5f) * glm::length(ab);
+
+	float e = glm::length(max(glm::vec2(x, y), 0.0f));
+	float i = glm::min(glm::max(x, y), 0.0f);
+
+	return e + i;
+}
+
+__device__ float sdfBox(glm::vec3 p, glm::vec3 size)
+{
+	p = glm::abs(p) - size;
+	return glm::length(glm::max(p, 0.0f)) + glm::min(max(p.x, max(p.y, p.z)), 0.0f);
+}
+
+__device__ float getPlaneDist(glm::vec3 p)
+{
+	float d = p.y + 0.7f;
+    return d;
+}
+
+__device__ float getSphereDist(glm::vec3 p, glm::vec4 s)
+{
+
+	glm::vec3 center = { s.x, s.y, s.z };
+
+	float d = glm::length(p - center) - s.w;
+    
+    return d;
+}
+
+__device__ float getCapsuleDist(glm::vec3 p)
+{
+	float d = sdfCapsule(p, glm::vec3(-0.2f, -0.25f, 1.5f), glm::vec3(-0.2f, 0.25f, 1.5f), 0.25f);
+
+    return d;
+}
+
+__device__ float getTorusDist(glm::vec3 p)
+{
+	float d = sdfTorus(p - glm::vec3(1.5, 0.0, 1.5), glm::vec2(0.3f, 0.15f));
+    return d;
+}
+
+__device__ float getCylinderDist(glm::vec3 p)
+{
+	float d = sdfCylinder(p, glm::vec3(0.50f, -0.5f, 1.5f), glm::vec3(0.5f, 0.0f, 1.5f), 0.25f);
+    return d;
+}
+
+__device__ float getCubeDist(glm::vec3 p)
+{
+    float d = sdfBox(p, glm::vec3(0.5f));
+    return d;
+}
+
+__device__ float opSmoothUnion(float d1, float d2, float k) 
+{
+    float h = glm::clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return glm::mix(d2, d1, h) - k * h * (1.0 - h);
+}
+
+__device__ float opSmoothSubtraction(float d1, float d2, float k) 
+{
+    float h = glm::clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);
+    return glm::mix(d2, -d1, h) + k * h * (1.0 - h);
+}
+
+__device__ float opSmoothIntersection(float d1, float d2, float k) 
+{
+    float h = glm::clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return glm::mix(d2, d1, h) + k * h * (1.0 - h);
+}
+
+
+__device__ float getDist(glm::vec3 p, ProceduralType type)
+{
+    float d = 0.0f;
+    float d1 = 0.0f;
+    float d2 = 0.0f;
+    glm::vec4 s = glm::vec4(0.0f, 0.0f, 0.0f, 0.5);
+    glm::vec4 s1 = glm::vec4(0.0f, 1.0f, 0.0f, 0.5);
+    glm::vec4 s2 = glm::vec4(0.0f, 0.5f, 0.0f, 0.5);
+    glm::vec4 s3 = glm::vec4(0.0f, 1.0f, 0.0f, 0.5);
+
+    switch (type)
+    {
+    case ProceduralType::Plane:
+		d = getPlaneDist(p);
+        break;
+    case ProceduralType::Cube:
+        d = getCubeDist(p);
+        break;
+    case ProceduralType::Sphere:
+		d = getSphereDist(p, s);
+        break;
+    case ProceduralType::Cylinder:
+		d = getCylinderDist(p);
+        break;
+    case ProceduralType::Capsule:
+		d = getCapsuleDist(p);
+        break;
+    case ProceduralType::Torus:
+        d = getTorusDist(p);
+        break;
+    case ProceduralType::opSmoothUnion:
+        d1 = getCubeDist(p);
+        d2 = getSphereDist(p, s1);
+        d = opSmoothUnion(d1, d2, 0.4);
+        break;
+    case ProceduralType::opSmoothSubtraction:
+        d1 = getCubeDist(p);
+        d2 = getSphereDist(p, s2);
+        d = opSmoothSubtraction(d1, d2, 2);
+        break;
+    case ProceduralType::opSmoothIntersection:
+        d1 = getCubeDist(p);
+        d2 = getSphereDist(p, s3);
+        d = opSmoothIntersection(d1, d2, 0.4);
+        break;
+    default:
+        break;
+    }
+
+	return d;
+}
+
+__device__ float rayMarch(glm::vec3 ro, glm::vec3 rd, ProceduralType type)
+{
+	float dO = 0.0;
+
+	for (int i = 0; i < MAX_STEPS; i++)
+	{
+		glm::vec3 p = ro + rd * dO;
+
+		float dS = getDist(p, type);
+
+		dO += dS;
+		if (dO > MAX_DIST || dS < SURF_DIST)
+		{
+			break;
+		}
+	}
+
+	return dO;
+}
+
+__device__ glm::vec3 getNormal(glm::vec3 p, ProceduralType type)
+{
+	glm::vec2 e = glm::vec2(0.001f, 0.0f);
+	float d = getDist(p, type);
+    glm::vec3 n = d - glm::vec3(getDist(p - glm::vec3(e.x, e.y, e.y), type),
+		                         getDist(p - glm::vec3(e.y, e.x, e.y), type),
+		                         getDist(p - glm::vec3(e.y, e.y, e.x), type));
+
+	return normalize(n);
+}
+
+__device__ float proceduralIntersectionTest(Geom mesh, Ray r,
+	glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+	glm::vec3 ro = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+	glm::vec3 rd = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+
+    float d = rayMarch(ro, rd, mesh.proceduralType);
+
+    if (d < SURF_DIST || d > MAX_DIST)
+    {
+        return -1.0f;
+    }
+
+    glm::vec3 p = getPointOnRay(rt, d);
+
+    glm::vec3 n = getNormal(p, mesh.proceduralType);
+
+	intersectionPoint = multiplyMV(mesh.transform, glm::vec4(p, 1.0f));
+	normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(n, 0.f)));
+
+	outside = glm::dot(rd, normal) < 0.0f;
+
+	normal = outside ? normal : -normal;
+
+	d = glm::length(r.origin - intersectionPoint);
+
+	return d;
 }
 
 __device__ inline glm::vec2 sampleHDRMap(glm::vec3 v)

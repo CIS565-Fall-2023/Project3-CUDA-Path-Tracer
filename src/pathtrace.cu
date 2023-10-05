@@ -127,11 +127,21 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
+static int* dev_materialSortBuffer = nullptr;
+static int* dev_materialSortBuffer2 = nullptr;
 static ShadeableIntersection* dev_intersections = NULL;
 
-const int JitterRayCount = 50;
-
 int samplesPerPixel = 1;
+
+bool sortMaterial = false;
+
+int* dev_perm_x = nullptr;
+int* dev_perm_y = nullptr;
+int* dev_perm_z = nullptr;
+
+perlin** dev_perlinNoise = nullptr;
+
+bool perlinInitialized = false;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -142,12 +152,17 @@ void InitDataContainer(GuiDataContainer* imGuiData)
 	guiData = imGuiData;
 }
 
+__global__ void initPerlin(perlin** perlinNoise, thrust::default_random_engine rng, int* dev_perm_x, int* dev_perm_y, int* dev_perm_z)
+{
+	*perlinNoise = new perlin(rng, dev_perm_x, dev_perm_y, dev_perm_z);
+}
+
 void pathtraceInit(Scene* scene) {
 	hst_scene = scene;
 
 	samplesPerPixel = guiData->SamplePerPixel;
 
-	hst_scene->state.traceDepth = guiData->Depth;
+	//hst_scene->state.traceDepth = guiData->Depth;
 
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -156,6 +171,9 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
 	cudaMalloc(&dev_paths, samplesPerPixel * pixelcount * sizeof(PathSegment));
+
+	cudaMalloc(&dev_materialSortBuffer, samplesPerPixel * pixelcount * sizeof(int));
+	cudaMalloc(&dev_materialSortBuffer2, samplesPerPixel * pixelcount * sizeof(int));
 
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
@@ -169,12 +187,30 @@ void pathtraceInit(Scene* scene) {
 	// TODO: initialize any extra device memeory you need
 	cudaMalloc(&dev_cache, samplesPerPixel * pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_cache, 0, samplesPerPixel * pixelcount * sizeof(ShadeableIntersection));
+
+	cudaMalloc(&dev_perm_x, 256 * sizeof(int));
+	cudaMemset(dev_perm_x, 0, 256 * sizeof(int));
+
+	cudaMalloc(&dev_perm_y, 256 * sizeof(int));
+	cudaMemset(dev_perm_y, 0, 256 * sizeof(int));
+
+	cudaMalloc(&dev_perm_z, 256 * sizeof(int));
+	cudaMemset(dev_perm_z, 0, 256 * sizeof(int));
+
+	cudaMalloc(&dev_perlinNoise, sizeof(perlin*));
+
+	thrust::default_random_engine rng = makeSeededRandomEngine(0, 1, 2);
+
+	initPerlin<<<1, 1>>>(dev_perlinNoise, rng, dev_perm_x, dev_perm_y, dev_perm_z);
+
 	checkCUDAError("pathtraceInit");
 }
 
 void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
+	cudaFree(dev_materialSortBuffer);
+	cudaFree(dev_materialSortBuffer2);
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
@@ -216,7 +252,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		for (int i = 0; i < samplesPerPixel; i++)
 		{
-			int jitterIndex = cam.resolution.x * cam.resolution.y * i + index; //offset the ray each ray in each pixel
+			int jitterIndex = cam.resolution.x * cam.resolution.y * i + index;
 
 			PathSegment& segment = pathSegments[jitterIndex];
 
@@ -246,6 +282,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 // Feel free to modify the code below.
 __global__ void computeIntersections(
 	int depth
+	, int maxDepth
 	, int num_paths
 	, PathSegment* pathSegments
 	, Geom* geoms
@@ -256,6 +293,7 @@ __global__ void computeIntersections(
 	, int imageWidth
 	, int imageHeight
 	, int samplesPerPixel
+	, int* materialKeys
 )
 {
 	int pathIndex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -274,7 +312,7 @@ __global__ void computeIntersections(
 		intersections[jitterIndex].materialId = -1;
 
 		float t;
-		glm::vec3 intersect_point;
+		glm::vec3 intersectPoint;
 		glm::vec3 normal;
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
@@ -303,6 +341,10 @@ __global__ void computeIntersections(
 			{
 				t = triangleIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
+			else if (geom.type == PROCEDURAL)
+			{
+				t = proceduralIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
 			// Compute the minimum t from the intersection tests to determine what
@@ -311,33 +353,21 @@ __global__ void computeIntersections(
 			{
 				t_min = t;
 				hit_geom_index = i;
-				intersect_point = tmp_intersect;
+				intersectPoint = tmp_intersect;
 				normal = tmp_normal;
 			}
 		}
 
-		//if (t_min == FLT_MAX)
-		//{
-		//	intersections[path_index].t = -1.0f;
-		//	glm::vec2 uv = sampleHDRMap(glm::normalize(pathSegment.ray.direction));
-		//	float4 skyColorRGBA = tex2D<float4>(skyboxTex, uv.x, uv.y);
-		//	glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
-		//	pathSegment.color = skyColor * 3.0f;
-		//	pathSegment.remainingBounces = 0;
-		//}
-
+		int materialId = -1;
 		if (hit_geom_index == -1)
 		{
 			intersections[jitterIndex].t = -1.0f;
-			glm::vec2 uv = sampleHDRMap(glm::normalize(pathSegment.ray.direction));
-			float4 skyColorRGBA = tex2D<float4>(skyboxTex, uv.x, uv.y);
-			glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
 
-			if (pathSegment.remainingBounces == 8)
+			if (pathSegment.remainingBounces == maxDepth)
 			{
-				pathSegment.color = skyColor * 3.0f;
-				//image[pathSegment.pixelIndex] += pathSegment.color * skyColor;
+				pathSegment.needSkyboxColor = true;
 			}
+
 			pathSegment.remainingBounces = 0;
 		}
 		else
@@ -347,10 +377,12 @@ __global__ void computeIntersections(
 			intersections[jitterIndex].materialId = geoms[hit_geom_index].materialid;
 			intersections[jitterIndex].surfaceNormal = normal;
 			intersections[jitterIndex].frontFace = outside;
-			intersections[jitterIndex].point = intersect_point;
+			intersections[jitterIndex].point = intersectPoint;
 			intersections[jitterIndex].u = u;
 			intersections[jitterIndex].v = v;
+			materialId = intersections[jitterIndex].materialId;
 		}
+		materialKeys[jitterIndex] = materialId;
 	}
 }
 
@@ -372,6 +404,11 @@ __global__ void shadeFakeMaterial(
 	, int imageWidth
 	, int imageHeight
 	, int samplesPerPixel
+	, perlin** perlinNoise
+	, int* dev_perm_x
+	, int* dev_perm_y
+	, int* dev_perm_z
+	, cudaTextureObject_t skyBoxTexture
 )
 {
 	int pathIndex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -397,11 +434,15 @@ __global__ void shadeFakeMaterial(
 
 		if (pathSegments[jitterIndex].remainingBounces == 0)
 		{
-			//glm::vec3 unitDirection = glm::normalize(pathSegments[idx].ray.direction);
+			//glm::vec3 unitDirection = glm::normalize(pathSegments[jitterIndex].ray.direction);
 			//float t = 0.5f * (unitDirection.y + 1.0f);
-			//glm::vec3 color = (1.0f - t) * glm::vec3(1.0, 1.0, 1.0) + t * glm::vec3(0.5, 0.7, 1.0);
-			//pathSegments[idx].color *= color;
-			//pathSegments[idx].color = glm::vec3(0.0f);
+			//glm::vec3 backgroundColor = (1.0f - t) * glm::vec3(1.0, 1.0, 1.0) + t * glm::vec3(0.5, 0.7, 1.0);
+			//pathSegments[jitterIndex].color *= backgroundColor;
+			glm::vec2 uv = sampleHDRMap(glm::normalize(pathSegments[jitterIndex].ray.direction));
+			float4 skyColorRGBA = tex2D<float4>(skyBoxTexture, uv.x, uv.y);
+			glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
+			//pathSegments[jitterIndex].color *= skyColor;
+
 			color += pathSegments[jitterIndex].color;
 
 			continue;
@@ -417,6 +458,14 @@ __global__ void shadeFakeMaterial(
 		}
 
 		scatterRay(pathSegments[jitterIndex], intersection, intersection.point, intersection.surfaceNormal, intersection.frontFace, material, rng);
+
+		if (material.pattern == Pattern::PerlinNoise)
+		{
+			glm::vec3 perlinNoiseColor = glm::vec3(1.0f, 1.0f, 1.0f) * 0.5f * 
+										  (1.0f + glm::sin(1.0f * intersection.point.z + 10.0f * 
+										  (*perlinNoise)->turb(intersection.point, 7, dev_perm_x, dev_perm_y, dev_perm_z)));
+			pathSegments[jitterIndex].color *= perlinNoiseColor;
+		}
 
 		color += pathSegments[jitterIndex].color;
 	}
@@ -443,7 +492,7 @@ __global__ void shadeFakeMaterial(
 }
 
 // Add the current iteration's output to the overall image
-__global__ void finalGather(int numPaths, glm::vec3* image, PathSegment* iterationPaths)
+__global__ void finalGather(int numPaths, glm::vec3* image, PathSegment* iterationPaths, cudaTextureObject_t skyboxTexture)
 {
 	int pathIndex = (blockIdx.x * blockDim.x) + threadIdx.x;
 
@@ -452,7 +501,18 @@ __global__ void finalGather(int numPaths, glm::vec3* image, PathSegment* iterati
 		PathSegment iterationPath = iterationPaths[pathIndex];
 		if (!isNAN(iterationPath.color))
 		{
-			image[iterationPath.pixelIndex] += iterationPath.color;
+			glm::vec2 uv = sampleHDRMap(glm::normalize(iterationPath.ray.direction));
+			float4 skyColorRGBA = tex2D<float4>(skyboxTexture, uv.x, uv.y);
+			glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
+
+			if (iterationPath.needSkyboxColor)
+			{
+				image[iterationPath.pixelIndex] += iterationPath.color * skyColor * 3.0f;
+			}
+			else
+			{
+				image[iterationPath.pixelIndex] += iterationPath.color;
+			}
 		}
 	}
 }
@@ -463,6 +523,7 @@ __global__ void finalGather(int numPaths, glm::vec3* image, PathSegment* iterati
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
 	const int traceDepth = hst_scene->state.traceDepth;
+
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
@@ -512,6 +573,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	int depth = 0;
 	PathSegment* dev_path_end = dev_paths + pixelcount;
 	int num_paths = dev_path_end - dev_paths;
+	int current_num_paths = num_paths;
 
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
@@ -530,6 +592,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				// tracing
 				computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 					depth
+					, traceDepth
 					, num_paths
 					, dev_paths
 					, dev_geoms
@@ -540,6 +603,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 					, cam.resolution.x
 					, cam.resolution.y
 					, samplesPerPixel
+					, dev_materialSortBuffer
 					);
 				checkCUDAError("trace one bounce");
 				cudaDeviceSynchronize();
@@ -553,6 +617,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		else {
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
+				, traceDepth
 				, num_paths
 				, dev_paths
 				, dev_geoms
@@ -563,6 +628,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, cam.resolution.x
 				, cam.resolution.y
 				, samplesPerPixel
+				, dev_materialSortBuffer
 				);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
@@ -578,11 +644,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
 
-		//thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, SortIntersection());
-		//CUDATimer timer("shadeFakeMaterial");
-
-		//timer.start();
-
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
@@ -591,19 +652,41 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_materials,
 			cam.resolution.x,
 			cam.resolution.y,
-			samplesPerPixel
+			samplesPerPixel,
+			dev_perlinNoise,
+			dev_perm_x,
+			dev_perm_y,
+			dev_perm_z,
+			hst_scene->skyboxTextureObject
 			);
 
-		//timer.stop();
+		//CUDATimer timer("shadeFakeMaterial");
 
-		//dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_path_end, returnRemainBounce());
-		//int current_num_paths = dev_path_end - dev_paths;
-		//
-		//iterationComplete = (depth >= traceDepth || current_num_paths <= 0);
+		//timer.start();
 
-		if (depth == traceDepth)
+		if (sortMaterial)
 		{
-			iterationComplete = true; // TODO: should be based off stream compaction results.
+			//thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + current_num_paths, dev_paths, SortIntersection());
+			cudaMemcpy(dev_materialSortBuffer2, dev_materialSortBuffer, sizeof(int) * num_paths, cudaMemcpyDeviceToDevice);
+			thrust::sort_by_key(thrust::device, dev_materialSortBuffer, dev_materialSortBuffer + num_paths, dev_intersections);
+			thrust::sort_by_key(thrust::device, dev_materialSortBuffer2, dev_materialSortBuffer2 + num_paths, dev_paths);
+
+			//timer.stop();
+
+			//dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_path_end, returnRemainBounce());
+			dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, returnRemainBounce());
+			current_num_paths = dev_path_end - dev_paths;
+
+			//printf("%d\n", current_num_paths);
+
+			iterationComplete = (depth >= traceDepth || current_num_paths <= 0);
+		}
+		else
+		{
+			if (depth == traceDepth)
+			{
+				iterationComplete = true; // TODO: should be based off stream compaction results.
+			}
 		}
 
 		if (guiData != NULL)
@@ -616,7 +699,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);
+	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths, hst_scene->skyboxTextureObject);
 
 	///////////////////////////////////////////////////////////////////////////
 

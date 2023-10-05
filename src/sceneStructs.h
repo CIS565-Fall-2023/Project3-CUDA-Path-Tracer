@@ -10,7 +10,21 @@
 enum GeomType {
     SPHERE,
     CUBE,
-    MESH
+    MESH,
+    PROCEDURAL
+};
+
+enum class ProceduralType : uint8_t
+{
+    Plane,
+    Cube,
+    Sphere,
+    Cylinder,
+    Capsule,
+    Torus,
+    opSmoothUnion,
+    opSmoothSubtraction,
+    opSmoothIntersection
 };
 
 struct Ray {
@@ -34,6 +48,7 @@ struct Geom {
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
     Triangle triangle;
+    ProceduralType proceduralType;
 };
 
 enum class MaterialType : uint8_t
@@ -46,17 +61,27 @@ enum class MaterialType : uint8_t
     Image
 };
 
+enum class Pattern : uint8_t
+{
+    None,
+    Ring,
+    CheckerBoard,
+    PerlinNoise
+};
+
 struct Material {
     glm::vec3 color;
     struct {
         float exponent;
         glm::vec3 color;
-    } specular;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
-    float emittance;
+    } specular{};
+    float hasReflective = 0.0f;
+    float hasRefractive = 0.0f;
+    float indexOfRefraction = 1.0f;
+    float emittance = 0.0f;
+    float fuzz = 0.0f;
     MaterialType type = MaterialType::None;
+    Pattern pattern = Pattern::None;;
     cudaTextureObject_t albedo = 0;
 };
 
@@ -84,6 +109,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    bool needSkyboxColor;
 };
 
 // Use with a corresponding PathSegment to do:

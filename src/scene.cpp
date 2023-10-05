@@ -6,6 +6,7 @@
 #include <stb_image.h>
 
 #include "gltfLoader.h"
+#include "utilities.h"
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -30,7 +31,10 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
-            }
+			} else if (strcmp(tokens[0].c_str(), "RANDOM") == 0) {
+				randomScene();
+				cout << " " << endl;
+			}
         }
     }
 }
@@ -62,9 +66,15 @@ int Scene::loadGeom(string objectid) {
 				cout << "Creating new mesh..." << endl;
 				newGeom.type = MESH;
 				utilityCore::safeGetline(fp_in, line);
+
                 loadGLTF(line, triangleList);
-			
+
                 isMesh = true;
+			} else if (line.find("procedural") != std::string::npos) {
+				newGeom.type = PROCEDURAL;
+             
+				vector<string> tokens = utilityCore::tokenizeString(line);
+				newGeom.proceduralType = static_cast<ProceduralType>(atoi(tokens[1].c_str()));
 			}
         }
 
@@ -183,7 +193,7 @@ void Scene::loadTexture(const std::string& path, cudaTextureObject_t* cudaTextur
     stbi_set_flip_vertically_on_load(true);
 
 	int width, height, channels;
-	if (!type) //1 is for sphere texture, 0 is for skybox
+	if (!type)
 	{
 		unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
 		if (data) {
@@ -283,6 +293,75 @@ void Scene::loadTextures()
     }
 }
 
+void Scene::randomScene()
+{
+    srand(time(nullptr));
+
+    Material diffuseMaterial;
+    diffuseMaterial.type = MaterialType::Diffuse;
+    diffuseMaterial.color = utilityCore::random(0.1f, 1.0f);
+    diffuseMaterial.emittance = 0.0f;
+    diffuseMaterial.hasRefractive = 0.0f;
+    diffuseMaterial.hasRefractive = 0.0f;
+    diffuseMaterial.indexOfRefraction = 1.0f;
+    diffuseMaterial.pattern = Pattern::None;
+    diffuseMaterial.specular.color = glm::vec3(0.0f);
+    diffuseMaterial.specular.exponent = 0.0f;
+
+    materials.emplace_back(diffuseMaterial);
+
+    for (int i = 0; i < 20; i++)
+    {
+		Material metalMaterial;
+		metalMaterial.type = MaterialType::Metal;
+		metalMaterial.color = utilityCore::random(0.1f, 1.0f);
+		metalMaterial.emittance = 0.0f;
+		metalMaterial.hasReflective = 1.0f;
+		metalMaterial.hasRefractive = 0.0f;
+		metalMaterial.indexOfRefraction = 1.0f;
+		metalMaterial.pattern = Pattern::None;
+		metalMaterial.specular.color = glm::vec3(0.0f);
+		metalMaterial.specular.exponent = 0.0f;
+        metalMaterial.fuzz = 0.0f;// utilityCore::random_float(0.6f, 1.0f);
+
+		materials.emplace_back(metalMaterial);
+    }
+
+	Material glassMaterial;
+	glassMaterial.type = MaterialType::Glass;
+	glassMaterial.color = glm::vec3(1.0f);
+	glassMaterial.emittance = 0.0f;
+	glassMaterial.hasReflective = 0.0f;
+	glassMaterial.hasRefractive = 1.0f;
+	glassMaterial.indexOfRefraction = 1.5f;
+	glassMaterial.pattern = Pattern::None;
+	glassMaterial.specular.color = glm::vec3(0.0f);
+	glassMaterial.specular.exponent = 0.0f;
+
+	materials.emplace_back(glassMaterial);
+
+	Material skyboxMaterial;
+	skyboxMaterial.type = MaterialType::Image;
+
+	materials.emplace_back(skyboxMaterial);
+
+    for (int i = 0; i < 20; i++)
+    {
+		Geom geom;
+		geom.type = SPHERE;
+        geom.materialid = utilityCore::random_int(1, 20);
+		geom.translation = utilityCore::random(-6.0f, 6.0f);
+		geom.rotation = glm::vec3(0.0f);
+		geom.scale = utilityCore::uniformRandom(1.0f, 5.0f);
+
+        geom.transform = utilityCore::buildTransformationMatrix(geom.translation, geom.rotation, geom.scale);
+        geom.inverseTransform = glm::inverse(geom.transform);
+        geom.invTranspose = glm::inverseTranspose(geom.transform);
+
+		geoms.emplace_back(geom);
+    }
+}
+
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
@@ -293,7 +372,7 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 9; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
@@ -315,7 +394,9 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.emittance = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "TYPE") == 0) {
                 newMaterial.type = static_cast<MaterialType>(atoi(tokens[1].c_str()));
-            }
+			} else if (strcmp(tokens[0].c_str(), "PATTERN") == 0) {
+				newMaterial.pattern = static_cast<Pattern>(atoi(tokens[1].c_str()));
+			}
         }
 
         if (newMaterial.type == MaterialType::Image)

@@ -34,6 +34,8 @@ extern bool depthChanged;
 extern int width;
 extern int height;
 
+extern bool sortMaterial;
+
 void runCuda();
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos);
