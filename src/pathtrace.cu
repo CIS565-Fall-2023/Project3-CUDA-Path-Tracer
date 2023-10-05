@@ -244,6 +244,7 @@ __global__ void shadeFakeMaterial(
 	if (idx < num_paths)
 	{
 		ShadeableIntersection intersection = shadeableIntersections[idx];
+		PathSegment &path = pathSegments[idx];
 		if (intersection.t > 0.0f) { // if the intersection exists...
 			// Set up the RNG
 			// LOOK: this is how you use thrust's RNG! Please look at
@@ -257,18 +258,19 @@ __global__ void shadeFakeMaterial(
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
 				pathSegments[idx].color *= (materialColor * material.emittance);
-				image[pathSegments[idx].pixelIndex] += pathSegments[idx].color;
-				pathSegments[idx].remainingBounces = 0;
+				image[path.pixelIndex] += path.color;
+				path.remainingBounces = 0;
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-				scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t), intersection.surfaceNormal, material, rng);
+				scatterRay(path, getPointOnRay(path.ray, intersection.t), intersection.surfaceNormal, material, rng);
 				if (pathSegments[idx].remainingBounces == 0) {
 					float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-					pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-					pathSegments[idx].color *= u01(rng); // apply some noise because why not
+					path.color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+					path.color *= u01(rng); // apply some noise because why not
+					image[path.pixelIndex] += path.color;
 				}
 				// float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
 				// pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
@@ -280,8 +282,8 @@ __global__ void shadeFakeMaterial(
 		// used for opacity, in which case they can indicate "no opacity".
 		// This can be useful for post-processing and image compositing.
 		else {
-			pathSegments[idx].color = glm::vec3(0.0f);
-			pathSegments[idx].remainingBounces = 0;
+			path.color = glm::vec3(0.0f);
+			path.remainingBounces = 0;
 		}
 	}
 }
@@ -401,6 +403,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_image
 			);
 		checkCUDAError("shade path segments");
+		cudaDeviceSynchronize();
 		
 		auto dev_thrust_path_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, PathEnd());
 		checkCUDAError("stream compact");
