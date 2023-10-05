@@ -21,6 +21,21 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 ########################################
+# OIDN Setup
+########################################
+
+# Assuming OIDN root directory is in 'oidn-2.0.1.x64.windows' relative to your project root
+set(OIDN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/oidn-2.0.1.x64.windows")
+
+# Include OIDN headers
+include_directories(${OIDN_ROOT}/include)
+
+# Link against OIDN libraries
+link_directories(${OIDN_ROOT}/lib)
+
+########################################
+
+########################################
 # CUDA Setup
 ########################################
 find_package(CUDA 10 REQUIRED)
@@ -121,8 +136,17 @@ source_group(Sources FILES ${sources})
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 #add_subdirectory(src/Mesh)
 
+# Include OIDN in the target_link_libraries
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
+    OpenImageDenoise
     #stream_compaction  # TODO: uncomment if using your stream compaction
-    )
+)
+
+# Copy OIDN DLLs to the output directory
+file(GLOB OIDN_DLLS "${OIDN_ROOT}/bin/*.dll")
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   ${OIDN_DLLS}
+                   $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>)

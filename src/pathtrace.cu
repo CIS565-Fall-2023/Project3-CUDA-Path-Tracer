@@ -7,6 +7,7 @@
 #include <thrust/remove.h>
 #include <thrust/partition.h>
 #include <thrust/sort.h>
+#include <OpenImageDenoise/oidn.hpp>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -17,6 +18,7 @@
 #include "intersections.h"
 #include "interactions.h"
 #include "main.h"
+
 
 #define ERRORCHECK 1
 #define DEBUG_OBJ_LOADER 0
@@ -495,6 +497,29 @@ __global__ void computeStencil(int num_paths, PathSegment* paths, int* stencil) 
 	}
 }
 
+void denoise(const int& pixelcount, const Camera& cam) {
+	oidn::DeviceRef device = oidn::newDevice();
+	device.commit();
+
+	oidn::FilterRef filter = device.newFilter("RT");
+
+	// Ensure data is laid out correctly for OIDN
+	float* image_data = reinterpret_cast<float*>(dev_image);
+
+	filter.setImage("color", image_data, oidn::Format::Float3, cam.resolution.x, cam.resolution.y);
+	filter.setImage("output", image_data, oidn::Format::Float3, cam.resolution.x, cam.resolution.y);
+	filter.commit();
+
+	filter.execute();
+
+	// Check for any error
+	const char* errorMessage;
+	if (device.getError(errorMessage) != oidn::Error::None) {
+		printf("OIDN Error: %s\n", errorMessage);
+	}
+}
+
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -622,6 +647,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
+	if (iter == 10) {
+		denoise(pixelcount, cam);
+	}
+
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
 
@@ -631,3 +660,5 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	checkCUDAError("pathtrace");
 }
+
+
