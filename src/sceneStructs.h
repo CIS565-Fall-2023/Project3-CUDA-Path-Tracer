@@ -29,6 +29,11 @@ enum MaterialType {
     MICROFACET = 4
 };
 
+enum MediumType {
+    NONSCATTERING = 0,
+    ISOTROPIC = 1,
+};
+
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
@@ -69,6 +74,14 @@ struct Light {
     float innerAngle, outerAngle; // for spot light
 };
 
+struct Medium {
+    bool valid;
+
+    enum MediumType mediumType;
+    glm::vec3 absorptionCoefficient; // -log(absorptionColor) / absorptionAtDistance
+    float scatteringCoefficient; // for isotropic scattering medium
+};
+
 struct Material {
     glm::vec3 color;
     struct {
@@ -88,6 +101,9 @@ struct Material {
     int albedoTex;
     int normalTex;
     int roughnessTex;
+
+    // medium
+    Medium medium;
 };
 
 struct Camera {
@@ -103,6 +119,10 @@ struct Camera {
     // Depth of field
     float lensRadius;
 	float focalDistance;
+
+    // near and far plane
+    float farClip = 1000.f;
+    float nearClip = 0.001f;
 };
 
 struct RenderState {
@@ -124,17 +144,25 @@ struct PathSegment {
 
     bool isSpecularBounce;
     bool isFromCamera;
+
+    Medium medium; // check current medium, null means vaccum
+    bool hitSurface; // check if hit surface
+    float tFar;
 };
 
 // Use with a corresponding PathSegment to do:
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection {
-  float t;
-  glm::vec3 surfaceNormal;
-  glm::vec3 surfaceTangent;
-  int geomId;
-  int materialId;
+    float t;
+    glm::vec3 surfaceNormal;
+    glm::vec3 surfaceTangent;
+
+    float IORi = 1.0f;
+    float IORo;
+
+    int geomId;
+    int materialId;
 };
 
 // build in CPU

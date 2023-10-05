@@ -2,6 +2,7 @@
 
 #include "utilities.h"
 #include <cuda_runtime.h>
+#include <thrust/random.h>
 
 #define USE_STRATIFIED 0
 const int RES_PER_SIDE = 100;

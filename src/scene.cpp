@@ -378,7 +378,11 @@ int Scene::loadCamera() {
             camera.focalDistance = atof(tokens[1].c_str());
         } else if (strcmp(tokens[0].c_str(), "LENS_RADIUS") == 0) {
 			camera.lensRadius = atof(tokens[1].c_str());
-		} 
+        } else if (strcmp(tokens[0].c_str(), "FAR_PLANE") == 0) {
+		    camera.farClip = atof(tokens[1].c_str());
+		} else if (strcmp(tokens[0].c_str(), "NEAR_PLANE") == 0) {
+			camera.nearClip = atof(tokens[1].c_str());
+        }
 
         utilityCore::safeGetline(fp_in, line);
     }
@@ -414,6 +418,11 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
         newMaterial.roughness = 0.0f; //default
 
+        // subscattering
+        glm::vec3 absorptionColor(0.0f);
+        float absorptionDistance = 0.0f, scatterDistance = 0.0f;
+        newMaterial.medium.valid = false;
+
         //load static properties
         string line;
         utilityCore::safeGetline(fp_in, line);
@@ -437,13 +446,34 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.emittance = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "ROUGHNESS") == 0) {
                 newMaterial.roughness = atof(tokens[1].c_str());
-            }
+            } else if (strcmp(tokens[0].c_str(), "SUBSCATTERING_TYPE") == 0) {
+                newMaterial.medium.valid = true;
+                newMaterial.medium.mediumType = (MediumType)atoi(tokens[1].c_str());
+            } else if (strcmp(tokens[0].c_str(), "ABSORPTION_COLOR") == 0) {
+                absorptionColor = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+			} else if (strcmp(tokens[0].c_str(), "ABSORPTION_DISTANCE") == 0) {
+				absorptionDistance = atof(tokens[1].c_str());
+			} else if (strcmp(tokens[0].c_str(), "SCATTER_DISTANCE") == 0) {
+				scatterDistance = atof(tokens[1].c_str());
+			}
             utilityCore::safeGetline(fp_in, line);
         }
 
         // judge material type
         newMaterial.type = judgeMaterialType(newMaterial.reflectivity, 
             newMaterial.refractivity, newMaterial.roughness);
+
+        if (newMaterial.medium.valid) {
+            cout << "Subscattering material type: " << newMaterial.medium.mediumType << endl;
+            if (absorptionDistance > 0.0f) {
+                newMaterial.medium.absorptionCoefficient = -log(absorptionColor) / absorptionDistance;
+                cout << "Absorption coefficient: " << glm::to_string(newMaterial.medium.absorptionCoefficient) << endl;
+            }
+            if (scatterDistance > 0.0f) {
+				newMaterial.medium.scatteringCoefficient = 1.0f / scatterDistance;
+                cout << "Scattering coefficient: " << newMaterial.medium.scatteringCoefficient << endl;
+			}
+        }
 
         materials.push_back(newMaterial);
         return 1;

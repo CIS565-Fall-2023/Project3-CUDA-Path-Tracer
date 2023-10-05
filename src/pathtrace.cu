@@ -19,14 +19,14 @@
 
 #define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 0
-#define ANTI_ALIASING 1
+#define ANTI_ALIASING 0
 
 #define NAIVE 0
 #define DIRECT_MIS 0
 #define FULL 1
 #define RUSSIAN_ROULETTE 1
 
-#define SUB_SCATTERING 0
+#define SUB_SCATTERING 1
 
 #define USE_KD_TREE 1
 
@@ -253,6 +253,11 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 		segment.russianRouletteThres = traceDepth - 3;
+
+		// medium
+		segment.medium.valid = false;
+		segment.tFar = cam.farClip;
+		segment.hitSurface = false;
 	}
 }
 
@@ -495,6 +500,18 @@ __global__ void shadeFull(
 			Material material = materials[intersection.materialId];
 			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
 
+			cur.hitSurface = true;
+
+			// calculate transmission
+#if SUB_SCATTERING
+			sampleTransmission(cur, intersection.t, rng);
+
+			if (!cur.hitSurface) {
+				return;
+			}
+#endif // SUB_SCATTERING
+
+			
 			// specular or direct from camera
 			if (material.emittance > 0.0f) {
 				if (cur.isFromCamera || cur.isSpecularBounce) {
@@ -504,11 +521,11 @@ __global__ void shadeFull(
 				cur.remainingBounces = 0; // terminate path
 				return;
 			}
-			
-			cur.isFromCamera = false;
+			cur.isFromCamera = false; 
+			cur.isSpecularBounce = false;
 
 			// If the surface is diffuse or microfacet, compute MIS direct light
-			if (material.type == MaterialType::DIFFUSE || 
+			if (material.type == MaterialType::DIFFUSE ||
 				material.type == MaterialType::MICROFACET) {
 				glm::vec3 Ld = sampleUniformLight(
 					point, intersection, cur.ray.direction, materials, geoms, numGeoms,
@@ -520,11 +537,22 @@ __global__ void shadeFull(
 					lights, numLights, envmap, envmapWidth, envmapHeight, rng);
 				cur.color += Ld * cur.throughput;
 			}
-				
+
 			// Sample BSDF
 			scatterRay(cur, point, intersection.surfaceNormal, intersection.surfaceTangent, material, rng);
-			 
-			// TODO: subsurface scattering
+				
+#if SUB_SCATTERING
+			cur.medium.valid = false;
+			// if transimission, setup medium
+			if (material.type == MaterialType::SPEC_TRANS ||
+				material.type == MaterialType::SPEC_FRESNEL) {
+				// copy medium
+				cur.medium.valid = material.medium.valid;
+				cur.medium.absorptionCoefficient = material.medium.absorptionCoefficient;
+				cur.medium.scatteringCoefficient = material.medium.scatteringCoefficient;
+				cur.medium.mediumType = material.medium.mediumType;
+			}
+#endif
 
 			// russian roulette
 #if RUSSIAN_ROULETTE
@@ -541,8 +569,9 @@ __global__ void shadeFull(
 #endif
 		}
 		else {
+			// invalid colors
 			if ((cur.isFromCamera || cur.isSpecularBounce) && envmap != NULL) {
-				cur.color += cur.throughput * getEnvLight(envmap, envmapWidth, envmapHeight, cur.ray.direction, numLights);
+				cur.color += cur.throughput * getEnvLight(envmap, envmapWidth, envmapHeight, cur.ray.direction, numLights); 
 			}
 			cur.remainingBounces = 0; // terminate path
 		}

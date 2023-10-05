@@ -5,6 +5,7 @@
 #include "sample.h"
 #include "material.h"
 #include "light.h"
+#include "medium.h"
 
 __host__ __device__ float powerHeuristic(int nf, float fPdf, int ng, float gPdf) {
     float f = nf * fPdf, g = ng * gPdf;
@@ -227,4 +228,20 @@ __host__ __device__ glm::vec3 sampleUniformLight(
     }
 
     return Ld;
+}
+
+__host__ __device__ void sampleTransmission(PathSegment& cur, float t, thrust::default_random_engine& rng) {
+    if (cur.medium.valid) {
+        float distance = cur.tFar, weight = 1.0f;
+        glm::vec3 transmission = sampleMediumTransmission(cur.medium, t, cur.tFar, weight, distance, rng);
+        cur.throughput *= transmission * weight;
+
+        if (distance < cur.tFar) {
+            cur.hitSurface = false;
+            float directionPdf = 0.0f;
+            cur.ray.origin = cur.ray.origin + distance * glm::normalize(cur.ray.direction);
+            glm::vec3 dir = sampleScatterDirection(cur.medium, glm::normalize(cur.ray.direction), directionPdf, rng);
+            cur.ray.direction = glm::normalize(dir);
+        }
+    }
 }

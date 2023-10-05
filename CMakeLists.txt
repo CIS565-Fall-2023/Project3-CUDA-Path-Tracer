@@ -76,6 +76,7 @@ set(headers
     src/material.h
     src/light.h	
     src/sample.h
+    src/medium.h
     src/hdrloader.h
 
     src/ImGui/imconfig.h
