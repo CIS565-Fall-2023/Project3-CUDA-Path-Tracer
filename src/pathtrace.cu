@@ -19,7 +19,7 @@
 
 #define SORT_MATERIALS 0
 #define FIRST_BOUNCE_CACHE 0
-#define ANTI_ALIASING 0
+#define ANTI_ALIASING 1
 
 #define NAIVE 0
 #define DIRECT_MIS 0
@@ -435,21 +435,20 @@ __global__ void shadeDirectMIS(
 			cur.color = glm::vec3(0.0f);
 
 			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
 			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
 
 			if (material.emittance > 0.0f) {
-				cur.color = (materialColor * material.emittance);
+				cur.color = material.color * material.emittance;
 				cur.remainingBounces = 0; // terminate path
 			} else {
 				cur.color = sampleUniformLight(
-					point, intersection, cur.ray.direction, materials, geoms, numGeoms, 
+					point, intersection, cur.ray.direction, materials, geoms, numGeoms,
 #if USE_KD_TREE
 					nodes, node_size,
 #else
 					NULL, 0,
 #endif
-				lights, numLights, envmap, envmapWidth, envmapHeight, rng);
+					lights, numLights, envmap, envmapWidth, envmapHeight, rng);
 				cur.remainingBounces = 0;
 			}
 		} else {

@@ -72,8 +72,8 @@ __host__ __device__ glm::vec3 sampleLight(
 
     glm::vec3 Li(0.0f);
 
-    thrust::uniform_real_distribution<float> u01(0, 1);
-    int chosenLightIndex = (int)(u01(rng) * numLights);
+    thrust::uniform_int_distribution<int> u_light(0, numLights - 1);
+    int chosenLightIndex = u_light(rng);
 
     if (envMap != NULL && chosenLightIndex == numLights - 1) {
         // sample enviorment light

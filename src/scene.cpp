@@ -172,7 +172,7 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
    
     for (auto& shape : shapes) {
         auto& mesh = shape.mesh;
-        for (int i = 0; i < mesh.indices.size(); i += 3) {
+        for (int i = 0; i < mesh.indices.size() - 2; i += 3) {
             Triangle triangle;
 
             // vertex position
@@ -189,11 +189,22 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 1],
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 2]);
 
-            // position normal
-
-
-            triangle.normal = glm::cross(triangle.position[1] - triangle.position[0], 
+           glm::vec3 tri_normal = glm::cross(triangle.position[1] - triangle.position[0], 
                 triangle.position[2] - triangle.position[1]);
+
+           triangle.normal[0] = mesh.indices[i].normal_index == -1 ?
+               tri_normal : glm::vec3(attribs.normals[3 * mesh.indices[i].normal_index],
+                   attribs.normals[3 * mesh.indices[i].normal_index + 1],
+                   attribs.normals[3 * mesh.indices[i].normal_index + 2]);
+           triangle.normal[1] = mesh.indices[i + 1].normal_index == -1 ?
+               tri_normal : glm::vec3(attribs.normals[3 * mesh.indices[i + 1].normal_index],
+				   attribs.normals[3 * mesh.indices[i + 1].normal_index + 1],
+				   attribs.normals[3 * mesh.indices[i + 1].normal_index + 2]);
+           triangle.normal[2] = mesh.indices[i + 2].normal_index == -1 ?
+               tri_normal : glm::vec3(attribs.normals[3 * mesh.indices[i + 2].normal_index],
+                   attribs.normals[3 * mesh.indices[i + 2].normal_index + 1],
+                   attribs.normals[3 * mesh.indices[i + 2].normal_index + 2]);
+
 			//triangle.t0 = glm::vec2(
 			//		attribs.texcoords[2 * mesh.indices[i]],
 			//		attribs.texcoords[2 * mesh.indices[i] + 1]);

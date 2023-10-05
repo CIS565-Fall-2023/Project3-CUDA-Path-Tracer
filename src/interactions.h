@@ -220,8 +220,8 @@ __host__ __device__ glm::vec3 sampleUniformLight(
             computeRayIntersectionFromKdTree(geoms, nodes, numNodes, shadowRay, shadowIntersection);
         }
 
-        if (shadowIntersection.t > 0 && shadowIntersection.geomId == chosenLightGeomId) {
-            Material lightMat = materials[geoms[chosenLightGeomId].materialid];
+        if (shadowIntersection.t > 0) {
+            Material lightMat = materials[shadowIntersection.materialId];
             Ld += f * (lightMat.color * lightMat.emittance) * weight / scatterPdf;
         }
     }
