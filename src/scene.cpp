@@ -103,9 +103,9 @@ int Scene::loadGeom(string objectid, const string& objFilePath) {
                 loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
                 // printf("Material Size: %d\n", objLoader.materials.size());
                 // printf("Triangle Size: %d\n", tempTriangles.size());
-                if (objLoader.materials.size() > 0) {
+                /*if (objLoader.materials.size() > 0) {
                     tempMaterialId = loadObjMaterial(objLoader.materials);
-                }    
+                } */   
             }
         }
     }
@@ -415,7 +415,7 @@ int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end
         float minSplitCost = cost[0];
         int minCostIdx = 0;
 
-        for (int i = 1; i < nBuckets; ++i) {
+        for (int i = 1; i < nBuckets - 1; ++i) {
             if (cost[i] < minSplitCost) {
                 minSplitCost = cost[i];
                 minCostIdx = i;

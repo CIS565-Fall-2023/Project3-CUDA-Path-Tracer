@@ -32,9 +32,9 @@
 #define USE_DOF 0
 
 #if CACHE_FIRST_BOUNCE
-#define USE_STOCHASTIC_SAMPLING 0
+#define USE_STRATIFIED_SAMPLING 0
 #else
-#define USE_STOCHASTIC_SAMPLING 1
+#define USE_STRATIFIED_SAMPLING 1
 #endif
 
 
@@ -498,20 +498,31 @@ __global__ void computeStencil(int num_paths, PathSegment* paths, int* stencil) 
 }
 
 void denoise(const int& pixelcount, const Camera& cam) {
+	int width = cam.resolution.x, height = cam.resolution.y;
+
+	glm::vec3* denoised_image = new glm::vec3[pixelcount];
+	cudaMemcpy(denoised_image, dev_image, pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
+
 	oidn::DeviceRef device = oidn::newDevice();
 	device.commit();
+	
+	// create buffer
+	oidn::BufferRef colorBuf = device.newBuffer(width * height * sizeof(glm::vec3));
+	colorBuf.read(0, pixelcount * sizeof(glm::vec3), denoised_image);
 
+	// create filter
 	oidn::FilterRef filter = device.newFilter("RT");
-
-	// Ensure data is laid out correctly for OIDN
-	float* image_data = reinterpret_cast<float*>(dev_image);
-
-	filter.setImage("color", image_data, oidn::Format::Float3, cam.resolution.x, cam.resolution.y);
-	filter.setImage("output", image_data, oidn::Format::Float3, cam.resolution.x, cam.resolution.y);
+	filter.setImage("color", colorBuf, oidn::Format::Float3, width, height);
+	filter.setImage("output", colorBuf, oidn::Format::Float3, width, height);
+	filter.set("hdr", true);
 	filter.commit();
+
+	colorBuf.write(0, pixelcount * sizeof(glm::vec3), denoised_image);
+	cudaMemcpy(dev_image, denoised_image, pixelcount * sizeof(glm::vec3), cudaMemcpyHostToDevice);
 
 	filter.execute();
 
+	
 	// Check for any error
 	const char* errorMessage;
 	if (device.getError(errorMessage) != oidn::Error::None) {
@@ -525,7 +536,7 @@ void denoise(const int& pixelcount, const Camera& cam) {
  * of memory management
  */
 void pathtrace(uchar4* pbo, int frame, int iter) {
-	printf("Iter: %d\n", iter);
+	// printf("Iter: %d\n", iter);
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
@@ -647,9 +658,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
-	if (iter == 10) {
+	/*if (iter % 10 == 0) {
 		denoise(pixelcount, cam);
-	}
+	}*/
 
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);

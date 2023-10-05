@@ -1,4 +1,4 @@
-// Emissive material (ceiling light)
+// Emissive material (light)
 MATERIAL 0
 RGB         1 1 1
 SPECEX      0
@@ -6,17 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   10
-
-// Emissive material (side light)
-MATERIAL 6
-RGB         1 1 1
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   7
+EMITTANCE   20
 
 // Diffuse white
 MATERIAL 1
@@ -28,42 +18,57 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Specular white (for teapot)
+// Diffuse red
 MATERIAL 2
-RGB         .98 .98 .98
+RGB         .85 .35 .35
 SPECEX      0
-SPECRGB     .98 .98 .98
-REFL        1
+SPECRGB     0 0 0
+REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
 
+// Diffuse green
+MATERIAL 3
+RGB         .35 .85 .35
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Specular white
+MATERIAL 4
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        1
+REFRIOR     1.5
+EMITTANCE   0
+
 // Camera
 CAMERA
-RES         1280 720
+RES         800 800
 FOVY        45
-ITERATIONS  1000
-DEPTH       10
-FILE        teapot
-EYE         0.0 3 7
-LOOKAT      0 1 0
+ITERATIONS  5000
+DEPTH       16
+FILE        cornell
+EYE         0.0 5 15.5
+LOOKAT      0 5 0
 UP          0 1 0
+APERTURE    0.1
+FOCALDISTANCE 5
+
 
 // Ceiling light
 OBJECT 0
 cube
 material 0
-TRANS       0 4.8 0
+TRANS       0 10 0
 ROTAT       0 0 0
-SCALE       3 .1 3
-
-// Side light
-OBJECT 7
-cube
-material 6
-TRANS       -4 3 0
-ROTAT       0 0 0
-SCALE       .2 2 .2
+SCALE       3 .3 3
 
 // Floor
 OBJECT 1
@@ -71,45 +76,44 @@ cube
 material 1
 TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       6 .01 6
+SCALE       10 .01 10
 
 // Ceiling
 OBJECT 2
 cube
 material 1
-TRANS       0 5 0
-ROTAT       0 0 0
-SCALE       6 .01 6
+TRANS       0 10 0
+ROTAT       0 0 90
+SCALE       .01 10 10
 
-// Walls
-// Back Wall
+// Back wall
 OBJECT 3
 cube
 material 1
-TRANS       0 2.5 -3
-ROTAT       0 0 0
-SCALE       6 5 0.01
+TRANS       0 5 -5
+ROTAT       0 90 0
+SCALE       .01 10 10
 
-// Left Wall
+// Left wall
 OBJECT 4
 cube
-material 1
-TRANS       -3 2.5 0
+material 2
+TRANS       -5 5 0
 ROTAT       0 0 0
-SCALE       0.01 5 6
+SCALE       .01 10 10
 
-// Right Wall
+// Right wall
 OBJECT 5
 cube
-material 1
-TRANS       3 2.5 0
+material 3
+TRANS       5 5 0
 ROTAT       0 0 0
-SCALE       0.01 5 6
+SCALE       .01 10 10
 
-// Teapot
+// Sphere
 OBJECT 6
 obj
-material 2
-TRANS       0 0.75 0
+material 3
+TRANS       0 1 0
 ROTAT       0 0 0
-SCALE       0.5 0.5 0.5
+SCALE       0.1 0.1 0.1
