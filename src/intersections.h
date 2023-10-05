@@ -143,27 +143,35 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-__host__ __device__ float meshIntersectionTest(Geom mesh, Mesh* meshes, Vertex* vertices, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
+__host__ __device__ float meshIntersectionTest(
+    Geom mesh, Mesh *meshes, glm::vec3 *vertices, glm::vec3 *normals, glm::vec2 *texcoords,
+    Ray r, glm::vec3 &intersectionPoint, int &materialid, glm::vec3 &normal, glm::vec2 &texcoord)
+{
     float t_min = FLT_MAX;
-    for (int meshidx = mesh.meshidx; meshidx < mesh.meshidx + mesh.meshcnt; meshidx++) {
-        Mesh m = meshes[meshidx];
-        Vertex v0 = vertices[m.v[0]];
-        Vertex v1 = vertices[m.v[1]];
-        Vertex v2 = vertices[m.v[2]];
+    for (int i = mesh.meshidx; i < mesh.meshidx + mesh.meshcnt; i++) {
+        Mesh m = meshes[i];
+        glm::vec3 v0 = vertices[m.v[0]];
+        glm::vec3 v1 = vertices[m.v[1]];
+        glm::vec3 v2 = vertices[m.v[2]];
 
         glm::vec3 baryPosition;
 
-        if (glm::intersectRayTriangle(r.origin, r.direction, v0.position, v1.position, v2.position, baryPosition)) {
-            glm::vec3 point = (1 - baryPosition.x - baryPosition.y) * v0.position +
-                              baryPosition.x * v1.position +
-                              baryPosition.y * v2.position;
+        if (glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, baryPosition)) {
+            glm::vec3 point = (1 - baryPosition.x - baryPosition.y) * v0 +
+                              baryPosition.x * v1 +
+                              baryPosition.y * v2;
             float t = glm::length(r.origin - point);
             if (t > 0.0f && t < t_min) {
                 t_min = t;
                 intersectionPoint = point;
-                normal = m.normal;
-                outside = glm::dot(r.direction, normal) < 0;
+                materialid = m.materialid;
+                // normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+                normal = (1 - baryPosition.x - baryPosition.y) * normals[m.vn[0]] +
+                         baryPosition.x * normals[m.vn[1]] +
+                         baryPosition.y * normals[m.vn[2]];
+                texcoord = (1 - baryPosition.x - baryPosition.y) * texcoords[m.vt[0]] +
+                           baryPosition.x * texcoords[m.vt[1]] +
+                           baryPosition.y * texcoords[m.vt[2]];
             }
         }
     }

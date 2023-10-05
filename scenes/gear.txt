@@ -6,22 +6,22 @@ LENSRADIUS      0
 FOCALDISTANCE   0
 ITERATIONS      300
 DEPTH           8
-FILE            cornell
-EYE             0.0 5 10.5
+FILE            gear
+EYE             0.0 5 5
 LOOKAT          0 5 0
 UP              0 1 0
 
 // Emissive material (light)
-MATERIAL 0
+MATERIAL light
 RGB         1 1 1
 METALLIC    0
 ROUGHNESS   0
 IOR         0
 OPACITY     1
-EMITTANCE   5
+EMITTANCE   1
 
 // Diffuse white
-MATERIAL 1
+MATERIAL diffuse_white
 RGB         .98 .98 .98
 METALLIC    0
 ROUGHNESS   1
@@ -29,8 +29,7 @@ IOR         1.5
 OPACITY     1
 EMITTANCE   0
 
-// Diffuse red
-MATERIAL 2
+MATERIAL red
 RGB         .85 .35 .35
 METALLIC    0
 ROUGHNESS   1
@@ -38,8 +37,7 @@ IOR         1.5
 OPACITY     1
 EMITTANCE   0
 
-// Diffuse green
-MATERIAL 3
+MATERIAL green
 RGB         .35 .85 .35
 METALLIC    0
 ROUGHNESS   1
@@ -48,7 +46,7 @@ OPACITY     1
 EMITTANCE   0
 
 // Specular white
-MATERIAL 4
+MATERIAL specular_white
 RGB         .98 .98 .98
 METALLIC    1
 ROUGHNESS   0.5
@@ -87,23 +85,15 @@ EMITTANCE   0
 MATERIAL glass_glossy
 RGB         .98 .98 .98
 METALLIC    0
-ROUGHNESS   0.01
-IOR         1.5
+ROUGHNESS   0.025
+IOR         1.45
 OPACITY     0
 EMITTANCE   0
-
-// Ceiling light
-OBJECT 0
-cube
-material 0
-TRANS       0 10 0
-ROTAT       0 0 0
-SCALE       3 .3 3
 
 // Floor
 OBJECT 1
 cube
-material 1
+material specular_white
 TRANS       0 0 0
 ROTAT       0 0 0
 SCALE       10 .01 10
@@ -111,7 +101,7 @@ SCALE       10 .01 10
 // Ceiling
 OBJECT 2
 cube
-material 1
+material light
 TRANS       0 10 0
 ROTAT       0 0 90
 SCALE       .01 10 10
@@ -119,7 +109,7 @@ SCALE       .01 10 10
 // Back wall
 OBJECT 3
 cube
-material 1
+material specular_white
 TRANS       0 5 -5
 ROTAT       0 90 0
 SCALE       .01 10 10
@@ -127,7 +117,7 @@ SCALE       .01 10 10
 // Left wall
 OBJECT 4
 cube
-material 2
+material red
 TRANS       -5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
@@ -135,7 +125,7 @@ SCALE       .01 10 10
 // Right wall
 OBJECT 5
 cube
-material 3
+material green
 TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
@@ -144,6 +134,6 @@ SCALE       .01 10 10
 OBJECT gear
 mesh obj/Gear.obj
 material glass_glossy
-TRANS       0 1 0
+TRANS       1 2.5 0
 ROTAT       -20 30 10
 SCALE       .5 .5 .5

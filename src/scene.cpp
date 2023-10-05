@@ -88,96 +88,16 @@ int Scene::loadGeom(string objectid) {
 
     // TODO: load mesh
     string ext = mesh_filename.substr(mesh_filename.find_last_of(".") + 1);
+    transform(ext.begin(), ext.end(), ext.begin(), tolower);
     if (ext == "obj")
     {
-        string scene_dirname = scene_filename.substr(0, scene_filename.find_last_of("/") + 1);
-        mesh_filename = scene_dirname + mesh_filename;
-
-        tinyobj::attrib_t attrib;
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> tinyobj_materials;
-
-        std::string err;
-        bool ret = tinyobj::LoadObj(
-            &attrib, &shapes, &tinyobj_materials, &err, mesh_filename.c_str(), scene_dirname.c_str(), true);
-        if (!err.empty())
-        {
-            std::cerr << err << std::endl;
-        }
-        if (!ret)
-        {
-            std::cerr << "Failed to load/parse .obj." << std::endl;
-            exit(1);
-        }
-
-        int mstartIdx = materials.size();
-        // add materials
-        if (tinyobj_materials.size() > 0)
-        {
-            for (const tinyobj::material_t& material : tinyobj_materials)
-            {
-                Material newMaterial;
-                if (material.emission[0] + material.emission[1] + material.emission[2] > 0.0f)
-                {
-                    newMaterial.albedo = glm::vec3(material.emission[0], material.emission[1], material.emission[2]);
-                    newMaterial.emittance = 1.0f;
-                }
-                else
-                {
-                    newMaterial.albedo = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
-                    newMaterial.emittance = 0.0f;
-                }
-                newMaterial.metallic = material.metallic;
-                newMaterial.roughness = material.roughness;
-                newMaterial.ior = material.ior;
-                newMaterial.opacity = material.dissolve;
-                materials.push_back(newMaterial);
-            }
-        }
-
-        // add vertices
-        int vstartIdx = vertices.size();
-        for (int i = 0; i < attrib.vertices.size() / 3; i++)
-        {
-            Vertex vertex;
-            vertex.position = glm::vec3(newGeom.transform *
-                                        glm::vec4(attrib.vertices[3 * i + 0],
-                                                  attrib.vertices[3 * i + 1],
-                                                  attrib.vertices[3 * i + 2], 1.0f));
-            // TODO: texcoord
-            // vertex.texcoord = glm::vec2(attrib.texcoords[2 * i + 0], attrib.texcoords[2 * i + 1]);
-            vertices.push_back(vertex);
-        }
-
-        newGeom.meshidx = meshes.size();
-        for (const tinyobj::shape_t& shape : shapes)
-        {
-            for (size_t f = 0; f < shape.mesh.indices.size() / 3; f++)
-            {
-                Mesh newMesh;
-                newMesh.v[0] = shape.mesh.indices[3 * f + 0].vertex_index + vstartIdx;
-                newMesh.v[1] = shape.mesh.indices[3 * f + 1].vertex_index + vstartIdx;
-                newMesh.v[2] = shape.mesh.indices[3 * f + 2].vertex_index + vstartIdx;
-                newMesh.normal = glm::normalize(glm::cross(
-                    vertices[newMesh.v[1]].position - vertices[newMesh.v[0]].position,
-                    vertices[newMesh.v[2]].position - vertices[newMesh.v[0]].position));
-                newMesh.materialid = shape.mesh.material_ids[f] < 0
-                                         ? newGeom.materialid
-                                         : shape.mesh.material_ids[f] + mstartIdx;
-
-                // TODO: texcoord
-                // vertices[idx0.vertex_index + vstartIdx].texcoord = glm::vec2(
-                //     attrib.texcoords[2 * idx0.texcoord_index + 0], attrib.texcoords[2 * idx0.texcoord_index + 1]);
-                // vertices[idx1.vertex_index + vstartIdx].texcoord = glm::vec2(
-                //     attrib.texcoords[2 * idx1.texcoord_index + 0], attrib.texcoords[2 * idx1.texcoord_index + 1]);
-                // vertices[idx2.vertex_index + vstartIdx].texcoord = glm::vec2(
-                //     attrib.texcoords[2 * idx2.texcoord_index + 0], attrib.texcoords[2 * idx2.texcoord_index + 1]);
-
-                meshes.push_back(newMesh);
-            }
-        }
-        newGeom.meshcnt = meshes.size() - newGeom.meshidx;
+        loadObj(newGeom, mesh_filename);
     }
+    else if (ext == "gltf")
+    {
+        loadGltf(newGeom, mesh_filename);
+    }
+
 
     geoms.push_back(newGeom);
     return 1;
@@ -278,47 +198,187 @@ int Scene::loadMaterial(string materialid) {
     return 1;
 }
 
-// ObjScene::ObjScene(string dirname, string filename)
-// {
-//     cout << "Reading scene from " << filename << " ..." << endl;
-//     cout << " " << endl;
+void Scene::loadObj(Geom& newGeom, string obj_filename)
+{
+    string scene_dirname = scene_filename.substr(0, scene_filename.find_last_of("/\\") + 1);
+    string obj_dirname = scene_dirname + obj_filename.substr(0, obj_filename.find_last_of("/\\") + 1);
+    obj_filename = scene_dirname + obj_filename;
 
-//     tinyobj::attrib_t attrib;
-//     std::vector<tinyobj::shape_t> shapes;
-//     std::vector<tinyobj::material_t> materials;
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> tinyobj_materials;
 
-//     // get directory from filename
-//     std::string err;
-//     bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename.c_str(), dirname.c_str(), true);
-//     if (!err.empty())
-//     {
-//         std::cerr << err << std::endl;
-//     }
+    std::string err;
+    bool ret = tinyobj::LoadObj(
+        &attrib, &shapes, &tinyobj_materials, &err, obj_filename.c_str(), obj_dirname.c_str(), true);
+    if (!err.empty())
+    {
+        std::cerr << err << std::endl;
+    }
+    if (!ret)
+    {
+        std::cerr << "Failed to load/parse .obj." << std::endl;
+        exit(1);
+    }
 
-// }
+    int mstartIdx = materials.size();
+    // add materials
+    if (tinyobj_materials.size() > 0)
+    {
+        for (const tinyobj::material_t& material : tinyobj_materials)
+        {
+            Material newMaterial;
+            if (material.emission[0] + material.emission[1] + material.emission[2] > 0.0f)
+            {
+                newMaterial.albedo = glm::vec3(material.emission[0], material.emission[1], material.emission[2]);
+                newMaterial.emittance = 1.0f;
+            }
+            else
+            {
+                newMaterial.albedo = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
+                newMaterial.emittance = 0.0f;
+            }
+            newMaterial.metallic = material.metallic;
+            newMaterial.roughness = material.roughness;
+            newMaterial.ior = material.ior;
+            newMaterial.opacity = material.dissolve;
 
-// GLTFScene::GLTFScene(string filename)
-// {
+            materials.push_back(newMaterial);
+            // cout << "material: " << material.name << endl;
+            // cout << "albedo: " << glm::to_string(newMaterial.albedo) << endl;
+            // cout << "metallic: " << newMaterial.metallic << endl;
+            // cout << "roughness: " << newMaterial.roughness << endl;
+            // cout << "ior: " << newMaterial.ior << endl;
+            // cout << "opacity: " << newMaterial.opacity << endl;
+            // cout << "emittance: " << newMaterial.emittance << endl;
+            // cout << "transmittance: " << glm::to_string(glm::vec3(material.transmittance[0],
+            //                                                         material.transmittance[1],
+            //                                                         material.transmittance[2])) << endl;
+        }
+    }
 
-//     tinygltf::Model model;
-//     tinygltf::TinyGLTF loader;
-//     string warn, err;
-//     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
-//     if (!warn.empty())
-//     {
-//         cout << "WARNING: " << warn << endl;
-//     }
-//     if (!err.empty())
-//     {
-//         cout << "ERROR: " << err << endl;
-//     }
-//     if (!ret)
-//     {
-//         cout << "Failed to parse glTF" << endl;
-//         exit(1);
-//     }
-//     // loop through triangles
-//     for (const tinygltf::Mesh& mesh : model.meshes)
+    // add vertices
+    int vStartIdx = vertices.size();
+    for (int i = 0; i < attrib.vertices.size() / 3; i++)
+    {
+        vertices.push_back(glm::vec3(
+            newGeom.transform * glm::vec4(attrib.vertices[3 * i + 0],
+                                          attrib.vertices[3 * i + 1],
+                                          attrib.vertices[3 * i + 2], 1.0f)));
+    }
+
+    // add normals
+    int vnStartIdx = normals.size();
+    for (int i = 0; i < attrib.normals.size() / 3; i++)
+    {
+        normals.push_back(glm::normalize(glm::vec3(
+            newGeom.transform * glm::vec4(attrib.normals[3 * i + 0],
+                                          attrib.normals[3 * i + 1],
+                                          attrib.normals[3 * i + 2], 0.0f))));
+    }
+
+    // add texcoords
+    int vtStartIdx = texcoords.size();
+    for (int i = 0; i < attrib.texcoords.size() / 2; i++)
+    {
+        texcoords.push_back(glm::vec2(attrib.texcoords[2 * i + 0],
+                                      attrib.texcoords[2 * i + 1]));
+    }
+
+    // add meshes
+    newGeom.meshidx = meshes.size();
+    for (const tinyobj::shape_t &shape : shapes)
+    {
+        for (size_t f = 0; f < shape.mesh.indices.size() / 3; f++)
+        {
+            const tinyobj::index_t& idx0 = shape.mesh.indices[3 * f + 0];
+            const tinyobj::index_t& idx1 = shape.mesh.indices[3 * f + 1];
+            const tinyobj::index_t& idx2 = shape.mesh.indices[3 * f + 2];
+
+            Mesh newMesh;
+
+            newMesh.v[0] = idx0.vertex_index + vStartIdx;
+            newMesh.v[1] = idx1.vertex_index + vStartIdx;
+            newMesh.v[2] = idx2.vertex_index + vStartIdx;
+
+            newMesh.vn[0] = idx0.normal_index + vnStartIdx;
+            newMesh.vn[1] = idx1.normal_index + vnStartIdx;
+            newMesh.vn[2] = idx2.normal_index + vnStartIdx;
+
+            newMesh.vt[0] = idx0.texcoord_index + vtStartIdx;
+            newMesh.vt[1] = idx1.texcoord_index + vtStartIdx;
+            newMesh.vt[2] = idx2.texcoord_index + vtStartIdx;
+
+            newMesh.materialid = shape.mesh.material_ids[f] < 0
+                                     ? newGeom.materialid
+                                     : shape.mesh.material_ids[f] + mstartIdx;
+
+            meshes.push_back(newMesh);
+        }
+    }
+    newGeom.meshcnt = meshes.size() - newGeom.meshidx;
+
+    cout << "Loaded " << obj_filename << endl;
+    cout << "number of vertices: " << attrib.vertices.size() / 3 << endl;
+    cout << "number of normals: " << attrib.normals.size() / 3 << endl;
+    cout << "number of texcoords: " << attrib.texcoords.size() / 2 << endl;
+    cout << "number of meshes: " << newGeom.meshcnt << endl;
+    cout << "number of materials: " << tinyobj_materials.size() << endl;
+    cout << endl;
+}
+
+void Scene::loadGltf(Geom& newGeom, string gltf_filename)
+{
+    string scene_dirname = scene_filename.substr(0, scene_filename.find_last_of("/\\") + 1);
+    gltf_filename = scene_dirname + gltf_filename;
+    string obj_dirname = scene_dirname + gltf_filename.substr(0, gltf_filename.find_last_of("/\\") + 1);
+
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    string warn, err;
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, gltf_filename);
+    if (!warn.empty())
+    {
+        cout << "WARNING: " << warn << endl;
+    }
+    if (!err.empty())
+    {
+        cout << "ERROR: " << err << endl;
+    }
+    if (!ret)
+    {
+        cout << "Failed to parse glTF" << endl;
+        exit(1);
+    }
+
+    int mstartIdx = materials.size();
+    // add materials
+    for (const tinygltf::Material& material : model.materials)
+    {
+        Material newMaterial;
+        if (material.emissiveFactor[0] + material.emissiveFactor[1] + material.emissiveFactor[2] > 0.0f)
+        {
+            newMaterial.albedo = glm::vec3(material.emissiveFactor[0],
+                                           material.emissiveFactor[1],
+                                           material.emissiveFactor[2]);
+            newMaterial.emittance = 1.0f;
+        }
+        else
+        {
+            newMaterial.albedo = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0],
+                                           material.pbrMetallicRoughness.baseColorFactor[1],
+                                           material.pbrMetallicRoughness.baseColorFactor[2]);
+            newMaterial.emittance = 0.0f;
+        }
+        newMaterial.metallic = material.pbrMetallicRoughness.metallicFactor;
+        newMaterial.roughness = material.pbrMetallicRoughness.roughnessFactor;
+        newMaterial.ior = 1.5f; // it seems glTF has no ior by default?
+        newMaterial.opacity = material.alphaMode == "OPAQUE" ? 1.0f : material.alphaCutoff;
+        materials.push_back(newMaterial);
+    }
+
+
+    // for (const tinygltf::Mesh& mesh : model.meshes)
 //     {
 //         for (const tinygltf::Primitive &primitive : mesh.primitives)
 //         {
@@ -341,5 +401,5 @@ int Scene::loadMaterial(string materialid) {
 //             }
 //         }
 //     }
-//     exit(0);
-// }
+
+}

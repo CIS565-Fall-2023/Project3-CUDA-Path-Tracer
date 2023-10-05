@@ -31,15 +31,10 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
-struct Vertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 texcoord;
-};
-
 struct Mesh {
     int v[3];
-    glm::vec3 normal;
+    int vn[3];
+    int vt[3];
     int materialid;
 };
 
@@ -86,5 +81,6 @@ struct PathSegment {
 struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
+  glm::vec2 texcoord;
   int materialId;
 };

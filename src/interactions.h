@@ -104,7 +104,7 @@ void SpecularBxDF(
     pathSegment.ray.direction = glm::normalize(
         calculateRandomDirectionWithImportanceSampling(
             reflectDirection, powf(m.roughness + EPSILON, -2), rng));
-    // TODO: reflection light may go into opaque object, but current result seems fine
+    // reflection light may go into opaque object, but current method seems fine
     if (glm::dot(pathSegment.ray.direction, normal) < 0)
     {
         pathSegment.color *= 1 - m.opacity;
@@ -135,6 +135,7 @@ void TransmissionBxDF(
         pathSegment.ray.direction = glm::normalize(
             calculateRandomDirectionWithImportanceSampling(
                 refractionDirection, powf(m.roughness + EPSILON, -2), rng));
+        pathSegment.color *= m.albedo;
     }
 }
 
