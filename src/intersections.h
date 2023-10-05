@@ -142,3 +142,69 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+// CHECKITOUT
+/**
+ * Test intersection between a ray and a mesh.
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @param outside            Output param for whether the ray came from outside.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
+__host__ __device__ float meshIntersectionTest(
+    Mesh mesh, Ray r, 
+    glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside
+) {
+    glm::vec3 const ro = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 const rd = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+
+    float t = -1;
+    for (int i = 0; i < mesh.numIndices; i += 3) {
+        glm::vec3 const vert0 = glm::vec3(
+            mesh.vertices[mesh.indices[i]*3],
+            mesh.vertices[mesh.indices[i]*3 + 1],
+            mesh.vertices[mesh.indices[i]*3 + 2]
+        );
+        glm::vec3 const vert1 = glm::vec3(
+            mesh.vertices[mesh.indices[i + 1]*3],
+            mesh.vertices[mesh.indices[i + 1]*3 + 1],
+            mesh.vertices[mesh.indices[i + 1]*3 + 2]
+        );
+        glm::vec3 const vert2 = glm::vec3(
+            mesh.vertices[mesh.indices[i + 2]*3],
+            mesh.vertices[mesh.indices[i + 2]*3 + 1],
+            mesh.vertices[mesh.indices[i + 2]*3 + 2]
+        );
+
+        glm::vec3 barycentric;
+        if (glm::intersectRayTriangle(ro, rd, vert0, vert1, vert2, barycentric)) {
+            glm::vec3 intersection = vert0 + 
+                barycentric.x * (vert1 - vert0) + 
+                barycentric.y * (vert2 - vert0);
+
+            float current_t = glm::length(intersection - rt.origin);
+            if (t < 0 || current_t < t) {
+                t = current_t;
+                intersectionPoint = intersection;
+                normal = glm::normalize(glm::cross(vert1 - vert0, vert2 - vert0));
+            }
+        }
+    }
+
+    if (t < 0) {
+        return -1;
+    }
+
+    intersectionPoint = multiplyMV(mesh.transform, glm::vec4(intersectionPoint, 1.f));
+    normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.f)));
+    outside = glm::dot(normal, rt.direction) < 0;
+    if (!outside) {
+        normal = -normal;
+    }
+
+    return glm::length(r.origin - intersectionPoint);
+}

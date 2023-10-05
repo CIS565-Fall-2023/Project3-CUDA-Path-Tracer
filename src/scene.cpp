@@ -56,6 +56,13 @@ Scene::Scene(string filename) {
     }
 }
 
+Scene::~Scene() {
+    for (int i = 0; i < meshes.size(); i++) {
+        delete[] meshes[i].vertices;
+        delete[] meshes[i].indices;
+    }
+}
+
 int Scene::parseGLTFModel(const tinygltf::Model &model) {
     auto& scenes = model.scenes;
 
@@ -104,38 +111,68 @@ int Scene::parseGLTFModel(const tinygltf::Model &model) {
                         std::cout << "no position attribute" << std::endl;
                         continue;
                     }
+
                     auto& posAccessor = model.accessors[it->second];
                     auto& posBufferView = model.bufferViews[posAccessor.bufferView];
                     auto& posBuffer = model.buffers[posBufferView.buffer].data;
+                    int numVertices = posAccessor.count;
+                    float* vertices = new float[posAccessor.count * 3];
+                    std::memcpy(vertices, posBuffer.data() + posBufferView.byteOffset + posAccessor.byteOffset, posAccessor.count * 3 * sizeof(float));
 
-                    std::vector<float> vertices(posAccessor.count * 3);
-                    std::memcpy(vertices.data(), posBuffer.data() + posBufferView.byteOffset + posAccessor.byteOffset, posAccessor.count * 3 * sizeof(float));
 
                     auto& indices = primitive.indices;      
                     auto& indexAccessor = model.accessors[indices];
                     auto& indexBufferView = model.bufferViews[indexAccessor.bufferView];
                     auto& indexBuffer = model.buffers[indexBufferView.buffer].data;
+                    int numIndices = indexAccessor.count;
+                    unsigned short* indicesVec = new unsigned short[indexAccessor.count];
+                    std::memcpy(indicesVec, indexBuffer.data() + indexBufferView.byteOffset + indexAccessor.byteOffset, indexAccessor.count * sizeof(unsigned short));
 
-                    std::vector<unsigned short> indicesVec(indexAccessor.count);
-                    std::memcpy(indicesVec.data(), indexBuffer.data() + indexBufferView.byteOffset + indexAccessor.byteOffset, indexAccessor.count * sizeof(unsigned short));
+                    Material newMaterial;
+                    auto& material = primitive.material;
+                    if (material == -1) {
+                        std::cout << "no material found for primitive, using default material" << std::endl;
+                        newMaterial.color = glm::vec3(0.5f);
+                    }
+                    else {
+                        auto& materialObj = model.materials[material];
+                        auto& baseColor = materialObj.pbrMetallicRoughness.baseColorFactor;
+                        newMaterial.color = glm::vec3(baseColor[0], baseColor[1], baseColor[2]);
+                        newMaterial.specular.exponent = 0.0f;
+                        newMaterial.specular.color = glm::vec3(baseColor[0], baseColor[1], baseColor[2]);
+                        auto& metallicFactor = materialObj.pbrMetallicRoughness.metallicFactor;
+                        newMaterial.hasReflective = metallicFactor;
+                        std::cout << "material: " << material << std::endl;
+                        std::cout << "baseColor: " << baseColor[0] << " " << baseColor[1] << " " << baseColor[2] << std::endl;
+                        std::cout << "metallicFactor: " << metallicFactor << std::endl;
+
+                    }
+                    materials.push_back(newMaterial);
 
                     Mesh newMesh;
                     newMesh.vertices = vertices;
                     newMesh.indices = indicesVec;
+                    newMesh.numVertices = numVertices;
+                    if (numIndices % 3 != 0) {
+                        std::cout << "numIndices is not a multiple of 3" << std::endl;
+                        return -1;
+                    }
+                    newMesh.numIndices = numIndices;
                     newMesh.transform = transform;
                     newMesh.inverseTransform = inverseTransform;
                     newMesh.invTranspose = invTranspose;
                     newMesh.translation = translation;
                     newMesh.rotation = rotation;
                     newMesh.scale = scale;
+                    newMesh.materialid = materials.size() - 1;
                     meshes.push_back(newMesh);
                     std::cout << "vertices: " << std::endl;
-                    for (int i = 0; i < vertices.size(); i += 3) {
-                        std::cout << vertices[i] << " " << vertices[i + 1] << " " << vertices[i + 2] << std::endl;
-                    }
+                    for (int i = 0; i < numVertices; i++) {
+                        std::cout << vertices[i * 3] << " " << vertices[i * 3 + 1] << " " << vertices[i * 3 + 2] << std::endl;
+                    }   
                     std::cout << "indices: " << std::endl;
-                    for (int i = 0; i < indicesVec.size(); i += 3) {
-                        std::cout << indicesVec[i] << " " << indicesVec[i + 1] << " " << indicesVec[i + 2] << std::endl;
+                    for (int i = 0; i < numIndices; i++) {
+                        std::cout << indicesVec[i] << std::endl;
                     }
                 }
             }
@@ -178,6 +215,20 @@ int Scene::loadGLTFPerspectiveCamera(const tinygltf::Camera &cameraObj, glm::vec
     int arraylen = camera.resolution.x * camera.resolution.y;
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
+    state.iterations = 2000; // TODO
+    state.traceDepth = 8; // TODO
+
+    std::cout << "camera position: " << glm::to_string(camera.position) << std::endl;
+    std::cout << "camera lookAt: " << glm::to_string(camera.lookAt) << std::endl;
+    std::cout << "camera up: " << glm::to_string(camera.up) << std::endl;
+    std::cout << "camera right: " << glm::to_string(camera.right) << std::endl;
+    std::cout << "camera view: " << glm::to_string(camera.view) << std::endl;
+    std::cout << "camera pixelLength: " << glm::to_string(camera.pixelLength) << std::endl;
+    std::cout << "camera fov: " << glm::to_string(camera.fov) << std::endl;
+    std::cout << "camera resolution: " << glm::to_string(camera.resolution) << std::endl;
+    std::cout << "camera aspectRatio: " << aspectRatio << std::endl;
+    std::cout << "camera xscaled: " << xscaled << std::endl;
+    std::cout << "camera yscaled: " << yscaled << std::endl;
 
     cout << "Loaded gltf camera!" << endl;
     return 1;
@@ -324,6 +375,10 @@ int Scene::loadCamera() {
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
 
+    cout << "camera view: " << glm::to_string(camera.view) << endl;
+    cout << "camera up: " << glm::to_string(camera.up) << endl;
+    cout << "camera right: " << glm::to_string(camera.right) << endl;
+    cout << "camera lookAt: " << glm::to_string(camera.lookAt) << endl;
     cout << "Loaded camera!" << endl;
     return 1;
 }

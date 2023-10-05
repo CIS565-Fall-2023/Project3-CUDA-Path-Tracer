@@ -30,8 +30,11 @@ struct Geom {
 };
 
 struct Mesh {
-    std::vector<float> vertices;
-    std::vector<unsigned short> indices;
+    int materialid;
+    float* vertices;
+    unsigned short* indices;
+    int numVertices;
+    int numIndices;
     glm::vec3 translation;
     glm::quat rotation;
     glm::vec3 scale;

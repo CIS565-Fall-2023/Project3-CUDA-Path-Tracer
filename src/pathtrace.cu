@@ -88,6 +88,8 @@ static int* dev_materialIds = NULL;
 static PathSegment* dev_paths_out = NULL;
 static ShadeableIntersection* dev_intersections_out = NULL;
 static thrust::device_vector<int> index_array;
+static Mesh* dev_meshes = NULL;
+static int mesh_size = 0;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -124,30 +126,52 @@ void pathtraceInit(Scene* scene) {
 
 	index_array.resize(pixelcount);
 	thrust::sequence(thrust::device, index_array.begin(), index_array.end());
+	mesh_size = scene->meshes.size();
+	cudaMalloc(&dev_meshes, mesh_size * sizeof(Mesh));
+	for (int i = 0; i < mesh_size; i++) {
+		Mesh& mesh = scene->meshes[i];
+		Mesh dev_mesh;
+
+		dev_mesh.materialid = mesh.materialid;
+		dev_mesh.numVertices = mesh.numVertices;
+		dev_mesh.numIndices = mesh.numIndices;
+		dev_mesh.translation = mesh.translation;
+		dev_mesh.rotation = mesh.rotation;
+		dev_mesh.scale = mesh.scale;
+		dev_mesh.transform = mesh.transform;
+		dev_mesh.inverseTransform = mesh.inverseTransform;
+		dev_mesh.invTranspose = mesh.invTranspose;
+
+		cudaMalloc(&(dev_mesh.vertices), mesh.numVertices * sizeof(float)*3);
+		cudaMemcpy(dev_mesh.vertices, mesh.vertices, mesh.numVertices * sizeof(float)*3, cudaMemcpyHostToDevice);
+
+		cudaMalloc(&(dev_mesh.indices), mesh.numIndices * sizeof(unsigned short));
+		cudaMemcpy(dev_mesh.indices, mesh.indices, mesh.numIndices * sizeof(unsigned short), cudaMemcpyHostToDevice);
+
+		cudaMemcpy(&dev_meshes[i], &dev_mesh, sizeof(Mesh), cudaMemcpyHostToDevice);
+	}
 
 	checkCUDAError("pathtraceInit");
 }
 
 void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
-	checkCUDAError("pathtraceFree");
+
 	cudaFree(dev_paths);
-	checkCUDAError("pathtraceFree");
 	cudaFree(dev_geoms);
-	checkCUDAError("pathtraceFree");
 	cudaFree(dev_materials);
-	checkCUDAError("pathtraceFree");
 	cudaFree(dev_intersections);
-	checkCUDAError("pathtraceFree");
 	cudaFree(dev_materialIds);
-	checkCUDAError("pathtraceFree");
 
 	cudaFree(dev_paths_out);
-	checkCUDAError("pathtraceFree");
 	cudaFree(dev_intersections_gbuffer);
-	checkCUDAError("pathtraceFree");
 	cudaFree(dev_intersections_out);
-	// TODO: clean up any extra device memory you created
+
+	for (int i = 0; i < mesh_size; i++) {
+		cudaFree(dev_meshes[i].vertices);
+		cudaFree(dev_meshes[i].indices);
+	}
+	cudaFree(dev_meshes);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -192,7 +216,9 @@ __global__ void computeIntersections(
 	, int num_paths
 	, PathSegment* pathSegments
 	, Geom* geoms
+	, Mesh* meshes
 	, int geoms_size
+	, int meshes_size
 	, ShadeableIntersection* intersections
 )
 {
@@ -207,6 +233,7 @@ __global__ void computeIntersections(
 		glm::vec3 normal;
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
+		int hit_mesh_index = -1;
 		bool outside = true;
 
 		glm::vec3 tmp_intersect;
@@ -239,11 +266,32 @@ __global__ void computeIntersections(
 			}
 		}
 
-		if (hit_geom_index == -1)
+		for (int i = 0; i < meshes_size; i++)
+		{
+			Mesh& mesh = meshes[i];
+			t = meshIntersectionTest(mesh, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			if (t > 0.0f && t_min > t)
+			{
+				t_min = t;
+				hit_mesh_index = i;
+				intersect_point = tmp_intersect;
+				normal = tmp_normal;
+			}
+		}
+
+		if (hit_geom_index == -1 && hit_mesh_index == -1)
 		{
 			intersections[path_index].t = -1.0f;
 		}
-		else
+		else if (hit_mesh_index != -1)
+		{
+			//The ray hits something
+			intersections[path_index].t = t_min;
+			intersections[path_index].materialId = meshes[hit_mesh_index].materialid;
+			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].intersectPoint = intersect_point;
+		}
+		else if (hit_geom_index != -1)
 		{
 			//The ray hits something
 			intersections[path_index].t = t_min;
@@ -447,7 +495,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 						, num_paths
 						, dev_paths
 						, dev_geoms
+						, dev_meshes
 						, hst_scene->geoms.size()
+						, hst_scene->meshes.size()
 						, dev_intersections
 						);
 			if (!hasGBuffer && useGBuffer) {
