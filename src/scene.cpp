@@ -180,6 +180,8 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
+            } else if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+                newMaterial.hasTransmission = atof(tokens[1].c_str());
             }
         }
         materials.push_back(newMaterial);

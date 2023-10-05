@@ -323,7 +323,6 @@ __global__ void shadeMaterials(
 		else {
 			glm::vec3 isect = getPointOnRay(pathSegments[idx].ray, intersection.t);
 			scatterRay(pathSegments[idx], isect, intersection.surfaceNormal, material, rng);
-			pathSegments[idx].remainingBounces--;
 		}
 		// If there was no intersection, color the ray black.
 		// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -430,7 +429,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			);
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
-		depth++;
 
 		// TODO:
 		// --- Shading Stage ---
@@ -451,8 +449,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			num_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials
+			dev_materials,
+			depth
 			);
+		depth++;
 		//iterationComplete = true; // TODO: should be based off stream compaction results.
 
 #if COMPACT

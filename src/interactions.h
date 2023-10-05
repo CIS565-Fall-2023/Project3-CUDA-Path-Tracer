@@ -2,6 +2,8 @@
 
 #include "intersections.h"
 
+#define OFFSET 0.001f
+
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
@@ -41,11 +43,23 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+//---------------------------------------------------------
+//---------------BSDF funcs from CIS5610 PBR---------------
+//---------------------------------------------------------
+
 __host__ __device__
 glm::vec3 sampleDiffuse(const Material& m, glm::vec3 nor,
     thrust::default_random_engine& rng, glm::vec3& wi) { // write out to wi
 
     wi = calculateRandomDirectionInHemisphere(nor, rng);
+    return m.color;
+}
+
+__host__ __device__
+glm::vec3 sampleDiffuseTrans(const Material& m, glm::vec3 nor,
+    thrust::default_random_engine& rng, glm::vec3& wi) {
+    // sample wi in the opposite hemisphere of wo, everything else same as diffuse_refl
+    wi = calculateRandomDirectionInHemisphere(-nor, rng);
     return m.color;
 }
 
@@ -61,7 +75,82 @@ __host__ __device__
 glm::vec3 sampleSpecularTrans(const Material& m, glm::vec3 nor,
     glm::vec3 wo, glm::vec3& wi) {
 
+    // Hard-coded eta of air always assumed to be 1
+    //float etaA = 1.0f;
+    //float etaB = m.indexOfRefraction;
 
+    // figure out which surface to enter/exit
+    bool entering = glm::dot(nor, wo) > 0.0f;
+    float etaI = entering ? 1.0f : m.indexOfRefraction; // incident index
+    float etaT = entering ? m.indexOfRefraction : 1.0f; // transmitted index
+    float eta = etaI / etaT;
+
+    // face forward
+    nor = entering ? nor : -nor;
+
+    wi = glm::refract(wo, nor, eta);
+    // handle total internal refl
+    if (glm::length(wi) <= 0.0f) {
+        return glm::vec3(0.0f);
+    }
+    return m.specular.color;
+}
+
+__host__ __device__
+float fresnelDielectricEval(const Material& m, float cosThetaI) {
+    float etaI = 1.f;
+    float etaT = m.indexOfRefraction;
+    cosThetaI = glm::clamp(cosThetaI, -1.f, 1.f);
+
+    // see pbrt FrDielectric()
+    // Potentially swap indices of refraction
+    if (cosThetaI <= 0.f) {
+        float temp = etaI;
+        etaI = etaT;
+        etaT = temp;
+        cosThetaI = glm::abs(cosThetaI);
+    }
+
+    // Computer cosThetaT using Snell's law
+    float sinThetaI = glm::sqrt(glm::max(0.f,
+                                         1.f - cosThetaI * cosThetaI));
+    float sinThetaT = etaI / etaT * sinThetaI;
+    
+    // Handle total internal reflection
+    if (sinThetaT >= 1.f) {
+        return 1.f;
+    }
+
+    // Compute Fresnel reflectance, see PBRT 8.2.1
+    float cosThetaT = glm::sqrt(glm::max(0.f,
+                                         1.f - sinThetaT * sinThetaT));
+    float Rparl = ((etaT * cosThetaI) - (etaI * cosThetaT)) /
+        ((etaT * cosThetaI) + (etaI * cosThetaT));
+    float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) /
+        ((etaI * cosThetaI) + (etaT * cosThetaT));
+
+    return (Rparl * Rparl + Rperp * Rperp) * 0.5f; // coefficient
+}
+
+__host__ __device__
+glm::vec3 sampleGlass(const Material& m, glm::vec3 nor,
+    thrust::default_random_engine& rng, glm::vec3 wo, glm::vec3& wi) {
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    bool random = u01(rng);
+
+    float fresnel = fresnelDielectricEval(m, glm::dot(nor, -wo));;
+    glm::vec3 bsdf(0.f);
+    if (random < 0.5f) {
+        // Have to double contribution b/c we only sample
+        // reflection BxDF half the time
+        bsdf = sampleSpecularRefl(m, nor, wo, wi);
+        return 2.f * fresnel * bsdf;
+    }
+    else {
+        bsdf = sampleSpecularTrans(m, nor, wo, wi);
+        return 2.f * (1.f - fresnel) * bsdf; // 1-fr b/c all conditions sum up to 1
+    }
 }
 
 /**
@@ -119,12 +208,15 @@ void scatterRay(
     else if (m.hasRefractive) {
         bsdf = sampleSpecularTrans(m, normal, wo, wi);
     }
-    // default to diffuse refl
-    else {
+    //else if (m.hasTransmission) { // not working properly
+    //    bsdf = sampleDiffuseTrans(m, normal, rng, wi);
+    //}
+    else { // default to diffuse refl
         bsdf = sampleDiffuse(m, normal, rng, wi);
     }
 
     pathSegment.throughput *= bsdf;
     pathSegment.ray.direction = wi;
-    pathSegment.ray.origin = intersect + 0.001f * wi;
+    pathSegment.ray.origin = intersect + OFFSET * pathSegment.ray.direction;
+    pathSegment.remainingBounces--;
 }

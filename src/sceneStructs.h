@@ -38,6 +38,7 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    float hasTransmission;
 };
 
 struct Camera {
