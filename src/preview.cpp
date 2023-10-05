@@ -244,6 +244,7 @@ bool RenderImGui()
 #if BVH_TOGGLE
 		ImGui::Checkbox("use BVH", &imguiData->useBvh);
 #endif
+		ImGui::Checkbox("partition rays", &imguiData->partitionRays);
 	}
 
 	if (ImGui::CollapsingHeader("denoising"))

@@ -6,6 +6,6 @@
 #define FIRST_BOUNCE_CACHE 0
 #define BVH_TOGGLE 0
 
-#define COUNT_RAYS_PER_DEPTH 1
+#define COUNT_RAYS_PER_DEPTH 0
 
 #define DIFFUSE_ALPHA 0

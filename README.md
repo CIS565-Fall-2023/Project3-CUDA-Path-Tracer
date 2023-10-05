@@ -70,6 +70,10 @@ Using [Intel Open Image Denoise](https://www.openimagedenoise.org/). Left is raw
 
 TODO
 
+### Block size
+
+TODO
+
 ### Partition rays
 
 TODO
@@ -85,11 +89,15 @@ TODO
 
 TODO
 
+This option exists for performance comparisons but does not make sense to use for actual renders because it doesn't play nice with antialiasing.
+
 - Provide performance benefit analysis across different max ray depths.
 
 ### Russian roulette path termination
 
 TODO
+
+- Compare number of rays per depth with and without russian roulette
 
 ### BVH
 

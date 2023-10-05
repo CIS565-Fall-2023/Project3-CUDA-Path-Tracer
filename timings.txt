@@ -2,30 +2,24 @@ open = end of evangelion scene (1080 x 1350)
 closed = backrooms scene (1920 x 1080)
 
 unless otherwise specified:
+- Block size = 8x8 for 2D, 768 for 1D
 - BVH, partition rays, and russian roulette are on
 - sort rays by material type and first bounce cache are off
 - max ray depth = 8
 - denoising every 3 frames
 
 ==================================================
-BVH
+Baseline
 ==================================================
 
-freddy fazbear environment map scene (800 x 800) [17,386 tris]
-----------
-with: 38.2 ms/frame
-without: 355.2 ms/frame
-
-orange and blue monkey scene (800 x 800) [968 tris]
-----------
-with: 31.2 ms/frame
-without: 43.2 ms/frame 
+Open: 113.5 ms/frame
+Closed: 436.8 ms/frame
 
 ==================================================
 Partition rays
 ==================================================
 
-russian roulette is off for this one because otherwise, the number of rays drops off significantly after depth 3
+russian roulette is off for the # of rays measurements but on for the time/frame measurements
 
 Open
 ----------
@@ -38,6 +32,9 @@ Open
 6: 1397
 7: 820
 
+with: 113.5 ms/frame
+without: 86.7 ms/frame
+
 Closed
 ----------
 0: 2073600
@@ -49,7 +46,8 @@ Closed
 6: 1494073
 7: 1413231
 
-TODO: try running without partition (i.e. send all rays to kernel and early exit for those that are done already, will probably lead to severely degraded performance due to warps that aren't densely packed with live rays)
+with: 436.8 ms/frame
+without: 567.3 ms/frame
 
 ==================================================
 Sort rays by material type
@@ -84,7 +82,39 @@ Open
 without: 120.9 ms/frame
 with: 113.5 ms/frame
 
+0: 1458000
+1: 834771
+2: 80921
+3: 21742
+4: 815
+5: 141
+6: 29
+7: 8
+
 Closed
 ----------
 without: 748.9 ms/frame
 with: 436.8 ms/frame
+
+0: 2073600
+1: 2035969
+2: 1890627
+3: 1795060
+4: 98717
+5: 46377
+6: 22119
+7: 10439
+
+==================================================
+BVH
+==================================================
+
+freddy fazbear environment map scene (800 x 800) [17,386 tris] {~11.5 ms to construct BVH}
+----------
+with: 38.2 ms/frame
+without: 355.2 ms/frame
+
+orange and blue monkey scene (800 x 800) [968 tris] {~0.5 ms to construct BVH}
+----------
+with: 31.2 ms/frame
+without: 43.2 ms/frame

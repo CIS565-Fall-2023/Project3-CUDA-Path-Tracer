@@ -35,10 +35,12 @@ public:
 #if FIRST_BOUNCE_CACHE
     bool firstBounceCache{ true };
 #endif
-    bool russianRoulette{ false };
+    bool russianRoulette{ true };
 #if BVH_TOGGLE
     bool useBvh{ true };
 #endif
+    bool partitionRays{ true };
+
     bool denoising{ true };
     int denoiseInterval{ 3 };
 

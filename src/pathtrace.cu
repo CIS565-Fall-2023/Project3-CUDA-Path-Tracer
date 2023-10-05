@@ -441,7 +441,12 @@ __global__ void computeIntersections(
 		return;
 	}
 
-	const PathSegment& pathSegment = pathSegments[path_index];
+	const PathSegment& segment = pathSegments[path_index];
+
+	if (segment.remainingBounces <= 0)
+	{
+		return;
+	}
 
 	float t;
 	float tMin = FLT_MAX;
@@ -459,15 +464,15 @@ __global__ void computeIntersections(
 
 		if (geom.type == CUBE)
 		{
-			t = boxIntersectionTest(geom, pathSegment.ray, tmp_normal);
+			t = boxIntersectionTest(geom, segment.ray, tmp_normal);
 		}
 		else if (geom.type == SPHERE)
 		{
-			t = sphereIntersectionTest(geom, pathSegment.ray, tmp_normal);
+			t = sphereIntersectionTest(geom, segment.ray, tmp_normal);
 		}
 		else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, tris, bvhNodes, pathSegment.ray, tmp_normal, tmp_uv, tmp_triIdx, tMin, settings.useBvh);
+			t = meshIntersectionTest(geom, tris, bvhNodes, segment.ray, tmp_normal, tmp_uv, tmp_triIdx, tMin, settings.useBvh);
 		}
 
 		if (t < 0 || t > tMin)
@@ -610,6 +615,12 @@ __global__ void shadeMaterial(
 	}
 
 	PathSegment segment = pathSegments[idx];
+
+	if (segment.remainingBounces <= 0)
+	{
+		return;
+	}
+
 	processSegment(iter, idx, segment, shadeableIntersections[idx], geoms, tris, materials, 
 		textureObjects, settings, envMapTextureIdx, envMapStrength);
 	pathSegments[idx] = segment;
@@ -646,7 +657,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image,
 	image[iterationPath.pixelIndex] += col;
 #endif
 
-	float mult = 1 / (float)iter;
+	float mult = 1.f / (float)iter;
 
 	glm::vec3 albedoAccum = firstHitAlbedoAccum[iterationPath.pixelIndex] + iterationPath.firstHitAlbedo;
 	firstHitAlbedoAccum[iterationPath.pixelIndex] = albedoAccum;
@@ -690,7 +701,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	checkCUDAError("generate camera ray");
 	num_valid_paths = num_total_paths;
 
-	while (num_valid_paths > 0) {
+	while (num_valid_paths > 0 && depth < traceDepth) {
 #if COUNT_RAYS_PER_DEPTH
 		numRaysPerDepth[depth] += num_valid_paths;
 #endif
@@ -774,15 +785,22 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		}
 #endif
 
-		thrust::device_ptr<PathSegment> middle = thrust::partition(
-			thrust::device,
-			dev_thrust_paths,
-			dev_thrust_paths + num_valid_paths,
-			partition_predicate()
-		);
-		checkCUDAError("partition");
+		if (guiData->partitionRays)
+		{
+			thrust::device_ptr<PathSegment> middle = thrust::partition(
+				thrust::device,
+				dev_thrust_paths,
+				dev_thrust_paths + num_valid_paths,
+				partition_predicate()
+			);
+			checkCUDAError("partition");
 
-		num_valid_paths = middle - dev_thrust_paths;
+			num_valid_paths = middle - dev_thrust_paths;
+		}
+		else
+		{
+			num_valid_paths = num_total_paths;
+		}
 
 		if (guiData != NULL)
 		{
@@ -796,7 +814,7 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 		for (int i = 0; i < hst_scene->state.traceDepth; ++i)
 		{
 			float raysAvg = numRaysPerDepth[i] / (float)iter;
-			printf("rays at depth %d: %.2f\n", i, raysAvg);
+			printf("rays at depth %d: %d\n", i, (int)roundf(raysAvg));
 		}
 
 		printf("\n");
