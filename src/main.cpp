@@ -3,6 +3,7 @@
 #include <cstring>
 
 static std::string startTimeString;
+static std::string imageFolderPath = "../img/results/";
 
 // For camera controls
 static bool leftMousePressed = false;
@@ -98,7 +99,7 @@ void saveImage() {
 
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
-	ss << filename << "." << startTimeString << "." << samples << "samp";
+	ss << imageFolderPath << filename << "." << startTimeString << "." << samples << "samp";
 	filename = ss.str();
 
 	// CHECKITOUT

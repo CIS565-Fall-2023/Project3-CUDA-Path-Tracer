@@ -41,6 +41,29 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__
+glm::vec3 sampleDiffuse(const Material& m, glm::vec3 nor,
+    thrust::default_random_engine& rng, glm::vec3& wi) { // write out to wi
+
+    wi = calculateRandomDirectionInHemisphere(nor, rng);
+    return m.color;
+}
+
+__host__ __device__
+glm::vec3 sampleSpecularRefl(const Material& m, glm::vec3 nor,
+    glm::vec3 wo, glm::vec3& wi) {
+
+    wi = glm::reflect(wo, nor);
+    return m.specular.color;
+}
+
+__host__ __device__
+glm::vec3 sampleSpecularTrans(const Material& m, glm::vec3 nor,
+    glm::vec3 wo, glm::vec3& wi) {
+
+
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -73,7 +96,35 @@ void scatterRay(
         glm::vec3 normal,
         const Material &m,
         thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+    // Referenced CIS561 Sample_f(): 
+    // Computes the overall light scattering properties of a point on a Material,
+    // given the incoming wi and outgoing wo light directions.
+    // In other words, Sample_f() evaluates the BSDF *after* generating
+    // a wi based on the Intersection's material properties, allowing
+    // us to bias our wi samples in a way that gives more consistent
+    // light scattered along wo.
+    if (pathSegment.remainingBounces == 0) return;
+
+    glm::vec3 wo = pathSegment.ray.direction;
+    glm::vec3 wi = glm::vec3(0.0f);
+    glm::vec3 bsdf = glm::vec3(0.0f);
+
+    // Based on material type
+    if (m.hasReflective && m.hasRefractive) {
+        bsdf = sampleGlass(m, normal, rng, wo, wi);
+    }
+    else if (m.hasReflective) {
+        bsdf = sampleSpecularRefl(m, normal, wo, wi);
+    }
+    else if (m.hasRefractive) {
+        bsdf = sampleSpecularTrans(m, normal, wo, wi);
+    }
+    // default to diffuse refl
+    else {
+        bsdf = sampleDiffuse(m, normal, rng, wi);
+    }
+
+    pathSegment.throughput *= bsdf;
+    pathSegment.ray.direction = wi;
+    pathSegment.ray.origin = intersect + 0.001f * wi;
 }
