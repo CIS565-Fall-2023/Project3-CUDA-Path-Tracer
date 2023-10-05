@@ -27,7 +27,7 @@
 
 #define USE_FIRST_BOUNCE_CACHE 1
 #define USE_SORT_BY_MATERIAL 0
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 0
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
 #define USE_BVH 1
 
 #define ERRORCHECK 1
@@ -104,6 +104,7 @@ static BVHNode* dev_bvhNodes = nullptr;
 static ShadeableIntersection * dev_first_iteration_first_bounce_cache_intersections = nullptr;
 static Texture * dev_textures = nullptr;
 static TextureInfo * dev_textureInfos = nullptr;
+static Light* dev_lights = nullptr;
 int textureSize = 0;
 
 #if USE_SORT_BY_MATERIAL
@@ -173,8 +174,6 @@ void pathtraceInitBeforeMainLoop() {
 		checkCUDAError("initDeviceTextures");
 	}
 
-
-
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
 	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
@@ -191,6 +190,11 @@ void pathtraceInitBeforeMainLoop() {
 
 	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
 	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
+	pa->initLights(bvh->orderedPrims);
+	cudaMalloc(&dev_lights, pa->lights.size() * sizeof(Light));
+	cudaMemcpy(dev_lights, pa->lights.data(), pa->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
+	checkCUDAError("cudaMemcpy dev_lights");
 
 	int triangle_size = bvh->orderedPrims.size();
 	int blockSize = 256;
@@ -358,6 +362,10 @@ __global__ void shadeBSDF(
 	, int triangles_size
 	, BVHNode * bvhNodes
 	, int bvhNodes_size
+#if ONE_BOUNCE_DIRECT_LIGHTINIG
+	, Light * lights
+	, int lights_size
+#endif
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -370,6 +378,7 @@ __global__ void shadeBSDF(
 		  // LOOK: this is how you use thrust's RNG! Please look at
 		  // makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
 			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
 			//pathSegment.color = glm::vec3(intersection.surfaceNormal);
 			//pathSegment.color = glm::vec3(intersection.uv.x, intersection.uv.y, 0.0f);
@@ -401,40 +410,44 @@ __global__ void shadeBSDF(
 				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
 				float cosineTerm = abs(wi.z);
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
-				glm::vec3 L_direct;
-				/* Estimate one bounce direct lighting */
-				int n_sample = 10;
-				int n_valid_sample = 0;
-				for (size_t i = 0; i < n_sample; i++)
-				{
-					sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv);
-					float cosineTerm = abs(wi.z);
-					Ray one_bounce_ray;
-					one_bounce_ray.direction = o2w * wi;
-					one_bounce_ray.origin = intersect;
-					one_bounce_ray.min_t = EPSILON;
-					one_bounce_ray.max_t = FLT_MAX;
-					ShadeableIntersection oneBounceIntersection;
-					oneBounceIntersection.t = -1.0f;
-
-					if (intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, one_bounce_ray, oneBounceIntersection)){
-						auto oneBounceBSDF = bsdfStructs[oneBounceIntersection.materialId];
-						if (oneBounceBSDF.bsdfType == BSDFType::EMISSIVE) {
-							n_valid_sample++;
-							auto Li = oneBounceBSDF.emissiveFactor * oneBounceBSDF.strength;
-
-							// TODO: Figure out why is it still not so similar to the reference rendered image?
-							//		May be checkout the light propogation chapter of pbrt to find out how we use direct light estimation?
-							L_direct += Li * bsdf * cosineTerm;
-						}
+				/* Uniformly pick a light, will change to selecting by importance in the future */
+				thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
+				int sampled_light_index = uLight(rng);
+				//int sampled_light_index = 0;
+				float sampled_light_pdf = 1.0f / lights_size;
+				
+				const auto& light = lights[sampled_light_index];
+				const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
+				const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, u);
+				if (glm::length2(ls.wi) > 0.99f) {
+					//printf("triangles[light.primIndex]: %f, %f, %f\n", triangles[light.primIndex].p1.x, triangles[light.primIndex].p1.y, triangles[light.primIndex].p1.z);
+					Ray light_ray;
+					// TODO: Werid numerical error here, need to figure out why!
+					light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
+					//light_ray.direction = ls.wi;
+					//if (glm::distance(light_ray.direction, ls.wi) > EPSILON)
+					//	printf("ls.wi: %f, %f, %f   wi: %f %f %f\n", ls.wi.x, ls.wi.y, ls.wi.z, light_ray.direction.x, light_ray.direction.y, light_ray.direction.z);
+					//light_ray.direction = ls.wi;
+					light_ray.origin = intersect;
+					light_ray.min_t = EPSILON;
+					light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
+					//light_ray.max_t = ls.lightIntersection.t - 1e-4f; // Do occulusion test by setting max_t
+					ShadeableIntersection light_ray_intersection{-1.0f}; // set t = -1
+					// Figure out the exact pdf of d\omega dA!
+					if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection) && ls.pdf > 0) 
+					{
+						glm::vec3 light_wi = o2w * light_ray.direction;
+						float cosineTerm = abs(light_wi.z);
+						float light_sample_pdf = ls.pdf * cosineTerm / glm::distance2(ls.lightIntersection.intersectionPoint, intersection.intersectionPoint);
+						glm::vec3 light_bsdf = f(bsdfStruct, wo, light_wi, intersection.uv);
+						//pathSegment.color = glm::vec3(abs(glm::dot(ls.wi, intersection.surfaceNormal)));
+						//pathSegment.color = glm::vec3(1.0f);
+						//pathSegment.color += bsdf * cosineTerm * ls.L / (light_sample_pdf);
+						pathSegment.color += light_bsdf * cosineTerm * pathSegment.constantTerm;
+						//printf("ls.L: %f, %f, %f ls.pdf: %f\n", ls.L.x, ls.L.y, ls.L.z, ls.pdf);
+						//pathSegment.color += bsdf * abs(glm::dot(ls.wi, intersection.surfaceNormal)) * ls.L / (ls.pdf * sampled_light_pdf);
 					}
 				}
-
-				float one_over_n = 1.0f / (n_valid_sample + 1);
-				pathSegment.color += (L_direct * pathSegment.constantTerm * one_over_n);
-				pathSegment.constantTerm *= (bsdf * cosineTerm * one_over_n / pdf);
-#else
-				pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 #endif			
 				//if (bsdfStructs[intersection.materialId].bsdfType == MICROFACET) {
 				//	pathSegment.color = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -442,8 +455,10 @@ __global__ void shadeBSDF(
 				//else {
 				//	pathSegment.color = glm::vec3(0.0f, 0.0f, 1.0f);
 				//}
+				pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 				pathSegment.ray.direction = o2w * wi;
-				pathSegment.ray.origin = intersect + 1e-3f * pathSegment.ray.direction;
+				//pathSegment.ray.origin = intersect + 1e-5f * pathSegment.ray.direction;
+				pathSegment.ray.origin = intersect;
 				pathSegment.remainingBounces--;
 			}
 			// If there was no intersection, color the ray black.
@@ -647,6 +662,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			pa->triangles.size(),
 			dev_bvhNodes,
 			bvh->nodes.size()
+#if ONE_BOUNCE_DIRECT_LIGHTINIG
+			, dev_lights
+			, pa->lights.size()
+#endif
 			);
 		cudaDeviceSynchronize();
 		checkCUDAError("shadeMaterial failed\n");

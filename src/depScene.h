@@ -8,7 +8,6 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
-#include "light.h"
 #include <thrust/device_vector.h>
 
 using namespace std;
@@ -27,7 +26,6 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
-    std::vector<std::shared_ptr<Light>> lights;
     RenderState state;
     int geoms_size;
 };

@@ -20,7 +20,7 @@ struct Ray {
     glm::vec3 direction;
     float min_t;
     float max_t;
-    __host__ __device__ glm::vec3 at(float t) const{
+    __host__ __device__ glm::vec3 at(const float t) const{
         return origin + direction * t;
     }
 
@@ -160,4 +160,8 @@ struct Triangle{
     int materialID;
     int normalTextureID;
     Texture * normalTexture;
+
+    __device__ float area() const {
+        return glm::cross(p2 - p1, p3 - p1).length() * 0.5f;
+    }
 };

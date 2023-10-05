@@ -31,6 +31,7 @@ Scene::Scene(const char* filename)
     initTextures();
     initBSDFs();
     initTriangles();
+    //initLights();
 }
 
 void Scene::initTriangles()
@@ -129,6 +130,29 @@ void Scene::initTextures()
         texture.nrChannels = component;
         textures.push_back(texture);
     }
+}
+
+void Scene::initLights(const std::vector<Triangle> & orderedPrims)
+{
+    // Init light from tinygltf::Light
+
+    // Init light from triangles
+    for (size_t i = 0; i < orderedPrims.size(); i++)
+    {
+        auto & tri = orderedPrims[i];
+        if (bsdfStructs[tri.materialID].bsdfType == EMISSIVE) {
+			BSDFStruct & bsdfStruct = bsdfStructs[tri.materialID];
+            Light light;
+            light.type = LightType::AREA_LIGHT;
+			light.primIndex = i;
+            light.isDelta = false;
+            light.color = bsdfStruct.emissiveFactor;
+            light.scale = bsdfStruct.strength;
+            light.nSample = 1;
+			lights.push_back(light);
+        }
+    }
+
 }
 
 void Scene::traverseNode(const tinygltf::Model& model, int nodeIndex, const glm::mat4x4 & parentTransform)

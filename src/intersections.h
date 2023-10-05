@@ -6,12 +6,6 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 #include "bvh.h"
-#include "textureStruct.h"
-#include "bsdfStruct.h"
-#include "texture.h"
-extern Texture* dev_textures;
-extern BSDFStruct * dev_bsdfs;
-
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -35,38 +29,6 @@ __host__ __device__ glm::vec3 getPointOnRay(Ray r, float t) {
 }
 
 __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableIntersection* isect) {
-    //glm::vec3 e1, e2, h, s, q;
-    //e1 = tri.p2 - tri.p1;
-    //e2 = tri.p3 - tri.p1;
-    //h = glm::cross(r.direction, e2);
-    //float a = glm::dot(e1, h);
-    //if (a > -EPSILON && a < EPSILON) return false;
-    //float f = 1.0f / a;
-    //s = r.origin - tri.p1;
-    //if (a < 0.0f) {
-    //    a = -a;
-    //    s = -s;
-    //}
-    //
-    //float u = f * glm::dot(s, h);
-    //if (u < 0.0 || u > 1.0f) return false;
-    //q = glm::cross(s, e1);
-    //float v = f * glm::dot(r.direction, q);
-    //if (v < 0.0 || u + v > 1.0f) return false;
-    //// at this stage we can compute t to find out where
-    //// the intersection point is on the line
-    //float t = f * glm::dot(e2, q);
-    //if (t > r.min_t && t < r.max_t) // ray intersection
-    //{
-    //    r.max_t = t;
-    //    isect->t = t;
-    //    isect->materialId = tri.materialID;
-    //    isect->intersectionPoint = r.origin + r.direction * t;
-    //    isect->surfaceNormal = glm::normalize((1.0f-u-v)* tri.n1 + u * tri.n2 + v*tri.n3);
-    //    return true;
-    //} // this means that there is a line intersection
-    //else return false;
-    //printf("Triangle::intersect\n");
     glm::vec3 bary;
     bool hasHit = glm::intersectRayTriangle(r.origin, r.direction, tri.p1, tri.p2, tri.p3, bary);
     if (hasHit) {

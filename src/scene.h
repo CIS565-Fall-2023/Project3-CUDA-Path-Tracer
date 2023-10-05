@@ -10,6 +10,7 @@
 #include "sceneStructs.h"
 #include "bsdfStruct.h"
 #include "textureStruct.h"
+#include "lightStruct.h"
 
 enum GLTFDataType {
 	GLTF_DATA_TYPE_SIGNED_BYTE = 5120,
@@ -33,6 +34,7 @@ public:
     std::vector<Triangle> triangles;
     std::vector<BSDFStruct> bsdfStructs;
     std::vector<TextureInfo> textures;
+    std::vector<Light> lights;
     Triangle* dev_triangles;
     Sphere* dev_spheres;
     Primitive** dev_primitives;
@@ -42,6 +44,7 @@ public:
     void initTriangles();
     void initBSDFs();
     void initTextures();
+    void initLights(const std::vector<Triangle>& orderedPrims);
 };
 
 

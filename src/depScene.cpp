@@ -158,13 +158,7 @@ int HostScene::loadCamera() {
 void HostScene::initLightFromObject()
 {
     // TODO: Change geoms to meshes after refactoring geom part
-    for (const auto geom : geoms) {
-        auto mat = materials[geom.materialid];
-        if (mat.emittance > EPSILON) {
-            auto light = std::shared_ptr<Light>(new AreaLight(mat.color, mat.emittance));
-            lights.push_back(light);
-        }
-    }
+
 }
 
 int HostScene::loadMaterial(string materialid) {
