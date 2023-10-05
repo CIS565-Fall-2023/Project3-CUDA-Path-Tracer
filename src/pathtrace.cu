@@ -237,6 +237,7 @@ __global__ void shadeFakeMaterial(
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, Material* materials
+	, glm::vec3* image
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -256,6 +257,7 @@ __global__ void shadeFakeMaterial(
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
 				pathSegments[idx].color *= (materialColor * material.emittance);
+				image[pathSegments[idx].pixelIndex] += pathSegments[idx].color;
 				pathSegments[idx].remainingBounces = 0;
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
@@ -263,6 +265,11 @@ __global__ void shadeFakeMaterial(
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
 				scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t), intersection.surfaceNormal, material, rng);
+				if (pathSegments[idx].remainingBounces == 0) {
+					float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+					pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+					pathSegments[idx].color *= u01(rng); // apply some noise because why not
+				}
 				// float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
 				// pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
 				// pathSegments[idx].color *= u01(rng); // apply some noise because why not
@@ -291,9 +298,11 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	}
 }
 
-__host__ __device__ bool pathEnd(const PathSegment pathSegment) {
-	return pathSegment.remainingBounces == 0;
-}
+struct PathEnd {
+	__host__ __device__ bool operator()(const PathSegment& pathSegment) {
+		return pathSegment.remainingBounces == 0;
+	}
+};
 
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
@@ -388,13 +397,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			num_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials
+			dev_materials,
+			dev_image
 			);
-		printf("depth %d: shade path segments\n", depth);
 		checkCUDAError("shade path segments");
 		
-		auto dev_thrust_path_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, pathEnd);
-		printf("depth %d: stream compact\n", depth);
+		auto dev_thrust_path_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, PathEnd());
 		checkCUDAError("stream compact");
 		num_paths = dev_thrust_path_end - dev_thrust_paths;
 
