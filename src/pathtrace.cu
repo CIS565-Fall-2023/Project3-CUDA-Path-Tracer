@@ -298,8 +298,8 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 
 	if (intersection.materialId >= 0)
 	{
-		pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
-		return;
+		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
+		//return;
 		
 		if (segment.mediaId >= 0)
 		{
@@ -349,14 +349,14 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
 			BSDFSample bsdf_sample;
 			bsdf_sample.wiW = -segment.ray.direction;
-			if(SampleBSDF::Sample(material, intersection, rng, bsdf_sample))
+			if(SampleBSDF::Sample(material, intersection, rng, bsdf_sample, u_data.metallic, u_data.roughness))
 			{
 				// generate new ray
 				pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
 				pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
 				--pathSegments[idx].remainingBounces;
 
-				if (MaterialType::Glass == material.type)
+				if (MaterialType::SpecularGlass == material.type)
 				{
 					pathSegments[idx].mediaId = segment.mediaId >= 0 ? -1: 0;
 				}

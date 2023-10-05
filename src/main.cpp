@@ -8,7 +8,7 @@
 
 int main(int argc, char** argv) 
 {
-	Application app({1280, 960});
+	Application app({680, 680});
 	SandBox sandbox;
 	app.SetSandBox(&sandbox);
 	

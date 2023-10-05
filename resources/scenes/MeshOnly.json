@@ -37,7 +37,7 @@
     },
     {
       "name": "Glass",
-      "type": "Glass",
+      "type": "SpecularGlass",
       "albedo": [ 0.4, 1.0, 0.5 ],
       "eta": 1.55
     },
@@ -45,16 +45,21 @@
       "name": "subsurface",
       "type": "SubsurfaceScattering",
       "albedo": [ 1.0, 1.0, 1.0 ]
+    },
+    {
+      "name": "microfacet",
+      "type": "MicrofacetReflection",
+      "albedo": [ 1.0, 1.0, 1.0 ]
     }
   ],
   "geomerties": [
     {
       "type": "obj",
-      "path": "meshes/stanford_bunny.obj",
+      "path": "meshes/sphere.obj",
       "name": "bunny",
-      "material": "Glass",
+      "material": "microfacet",
       "translation": [ 0, 0, 0 ],
-      "rotation": [ 0, 180, 0 ],
+      "rotation": [ 0, 0, 0 ],
       "scale": [ 2, 2, 2 ]
     }
   ],

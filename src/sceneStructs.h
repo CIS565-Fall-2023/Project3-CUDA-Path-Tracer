@@ -47,18 +47,21 @@ struct Geom {
 
 enum MaterialType : unsigned int
 {
-    None                = 0,
-    Albedo_Texture      = BIT(27),
-    Normal_Texture      = BIT(28),
-    Roughness_Texture   = BIT(29),
-    Metallic_Texture    = BIT(30),
-    Clear_Texture       = ~(Albedo_Texture | Normal_Texture | Roughness_Texture | Metallic_Texture),
-    Specular            = BIT(6),
-    DiffuseReflection   = 1,
-    SpecularReflection  = Specular | 2,
-    Specularrefraction  = Specular | 3,
-    Glass               = Specular | 4,
-    SubsurfaceScattering= 5
+    None                    = 0,
+    Albedo_Texture          = BIT(27),
+    Normal_Texture          = BIT(28),
+    Roughness_Texture       = BIT(29),
+    Metallic_Texture        = BIT(30),
+    Clear_Texture           = ~(Albedo_Texture | Normal_Texture | Roughness_Texture | Metallic_Texture),
+    Specular                = BIT(6),
+    Microfacet              = BIT(7),
+    DiffuseReflection       = 1,
+    SpecularReflection      = Specular | 2,
+    SpecularGlass           = Specular | 3,
+    MicrofacetReflection    = Microfacet | 2,
+    MicrofacetGlass         = Microfacet | 3,
+    MicroFacetMix           = Microfacet | 4,
+    SubsurfaceScattering    = 5,
 };
 
 #define TryStr2Type(str, type) if(str == #type) { return MaterialType::type;}
@@ -70,8 +73,9 @@ inline MaterialType StringToMaterialType(const std::string& str)
 {
     TryStr2Type(str, DiffuseReflection);
     TryStr2Type(str, SpecularReflection);
-    TryStr2Type(str, Specularrefraction);
-    TryStr2Type(str, Glass);
+    TryStr2Type(str, SpecularGlass);
+    TryStr2Type(str, MicrofacetReflection);
+    TryStr2Type(str, MicrofacetGlass);
     TryStr2Type(str, SubsurfaceScattering);
     
     return MaterialType::None;
@@ -330,4 +334,7 @@ struct UniformMaterialData
 {
     float ss_scatter_coeffi;
     glm::vec3 ss_absorption_coeffi;
+
+    float roughness;
+    float metallic;
 };

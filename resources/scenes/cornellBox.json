@@ -29,6 +29,16 @@
       "name": "MatteGreen",
       "type": "DiffuseReflection",
       "albedo": [ 0.14, 0.45, 0.091 ]
+    },
+    {
+      "name": "mirror",
+      "type": "SpecularReflection",
+      "albedo": [ 1.0, 1.0, 1.0 ]
+    },
+    {
+      "name": "microfacet",
+      "type": "MicrofacetReflection",
+      "albedo": [ 1.0, 1.0, 1.0 ]
     }
   ],
   "geomerties": [
@@ -72,7 +82,7 @@
       "type": "obj",
       "path": "meshes/plane.obj",
       "name": "back wall",
-      "material": "MatteWhite",
+      "material": "microfacet",
       "translation": [ 0, 2.5, 5 ],
       "rotation": [ -90, 0, 0 ],
       "scale": [ 5, 1, 5 ]

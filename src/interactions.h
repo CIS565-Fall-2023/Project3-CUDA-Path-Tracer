@@ -71,13 +71,85 @@ inline CPU_GPU void Refract(const glm::vec3& dir,
 	wiW = glm::normalize(eta * dir + (eta * cosThetaI - cosThetaO) * normal);
 }
 
+inline CPU_GPU glm::vec3 SampleGGX(CudaRNG& rng, const float& alpha)
+{
+	float rand_num = rng.rand();
+	
+	float cosTheta = std::sqrt((1.0f - rand_num) / (1.0f + (alpha * alpha - 1.0f) * rand_num));
+	float sinTheta = glm::sqrt(glm::max(0.f, 1.f - cosTheta * cosTheta));
+	
+	float phi = 2.0f * Pi * rng.rand();
+	glm::vec3 wh = glm::vec3(sinTheta * glm::cos(phi), 
+							sinTheta * glm::sin(phi), 
+							cosTheta);
+	return wh;
+}
+
+inline CPU_GPU float SchlickWeight(float cos_theta)
+{
+	float w = glm::clamp(1.f - cos_theta, 0.f, 1.f);
+	float a = w * w;
+	return w * a * a;
+}
+
+inline CPU_GPU glm::vec3 FresnelSchlick(const glm::vec3& R, const float& cosTheta)
+{
+	return glm::mix(R, glm::vec3(1.f), SchlickWeight(cosTheta));
+}
+
+inline CPU_GPU float Lambda(const float& cos_theta, float alpha)
+{
+	if (cos_theta < Epsilon) return 0.;
+
+	float tan2_theta = cos_theta * cos_theta;
+	float alpha_tan2_theta = tan2_theta * tan2_theta * alpha;
+	return (-1 + sqrt(1.f + alpha_tan2_theta)) / 2;
+}
+
+inline CPU_GPU float GGX_D(const float& cos_theta, float alpha)
+{
+	float denom = (cos_theta * cos_theta) * (alpha - 1.0f) + 1.0f;
+	return alpha / (Pi * denom * denom);
+}
+
+inline CPU_GPU float GGX_Pdf(const float& cos_theta, const float& cos_theta_oh, float alpha)
+{
+	return GGX_D(cos_theta, alpha) * cos_theta / (4.0f * cos_theta_oh);
+}
+
+inline CPU_GPU float TrowbridgeReitzG(const float& cos_theta_o, const float& cos_theta_i, float alpha)
+{
+	return 1.f / (1.f + Lambda(cos_theta_o, alpha) + Lambda(cos_theta_i, alpha));
+}
+
+class EvaluateBSDF
+{
+public:
+	inline static GPU_ONLY glm::vec3 MicrofacetReflection(const glm::vec3& albedo, 
+															const float& cos_theta_i, 
+															const float& cos_theta_o,
+															const float& cos_theta_h,
+															const float& cos_theta_oh,
+															const float& metallic,
+															const float& alpha)
+	{
+		glm::vec3 F = FresnelSchlick(glm::mix(glm::vec3(0.04f), albedo, metallic), cos_theta_oh);
+		float D = GGX_D(cos_theta_h, alpha);
+		float G = TrowbridgeReitzG(cos_theta_o, cos_theta_i, alpha);
+
+		return albedo * F * D * G / (4.f * cos_theta_i * cos_theta_o);
+	}
+};
+
 class SampleBSDF
 {
 public:
 	inline static GPU_ONLY bool Sample(const Material& material,
 									const ShadeableIntersection& intersection,
 									CudaRNG& rng,
-									BSDFSample& sample)
+									BSDFSample& sample,
+									const float& metallic, 
+									const float& roughness)
 	{
 		// woW is stored in sample.wiW
 		switch (material.type & MaterialType::Clear_Texture)
@@ -90,13 +162,17 @@ public:
 		{
 			return SpecularReflection(material.GetAlbedo(intersection.uv), intersection, sample);
 		}
-		case MaterialType::Glass:
+		case MaterialType::SpecularGlass:
 		{
-			return Glass(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
+			return SpecularGlass(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
 		}
 		case MaterialType::SubsurfaceScattering:
 		{
 			return SubsurfaceScattering(material.GetAlbedo(intersection.uv), 0, intersection, rng, sample);
+		}
+		case MaterialType::MicrofacetReflection:
+		{
+			return MicrofacetReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample, metallic, roughness);
 		}
 		}
 	}
@@ -134,7 +210,7 @@ protected:
 		return true;
 	}
 
-	inline static GPU_ONLY bool Glass(const glm::vec3& albedo,
+	inline static GPU_ONLY bool SpecularGlass(const glm::vec3& albedo,
 									float etaA,
 									float etaB,
 									const ShadeableIntersection& intersection,
@@ -173,6 +249,44 @@ protected:
 			sample.f = albedo / glm::abs(glm::dot(sample.wiW, intersection.normal));
 			sample.pdf = 1.f;
 		}
+		return true;
+	}
+
+	inline static GPU_ONLY bool MicrofacetReflection(const glm::vec3& albedo,
+													 const ShadeableIntersection& intersection,
+													 CudaRNG& rng,
+													 BSDFSample& sample,
+													 const float& metallic,
+													 const float& roughness)
+	{
+		// woW is stored in sample.wiW
+		if (glm::dot(intersection.normal, sample.wiW) < 0.f)
+		{
+			return false;
+		}
+		float alpha = roughness * roughness;
+		glm::vec3 wh = SampleGGX(rng, alpha);
+		if (glm::abs(wh.z) < Epsilon) return false;
+
+		glm::vec3 whW = glm::normalize(LocalToWorld(intersection.normal) * wh);
+
+		glm::vec3 wiW = glm::normalize(glm::reflect(-sample.wiW, whW));
+
+		float cos_theta_i = glm::dot(sample.wiW, intersection.normal);
+		float cos_theta_o = glm::dot(wiW, intersection.normal);
+		float cos_theta_oh = glm::dot(sample.wiW, whW);
+
+		alpha = glm::max(alpha, 0.09f);
+		sample.pdf = GGX_Pdf(wh.z, cos_theta_oh, alpha);
+
+		sample.f = EvaluateBSDF::MicrofacetReflection(albedo,
+													  cos_theta_i,
+													  cos_theta_o,
+													  wh.z,
+													  cos_theta_oh,
+													  metallic, alpha);
+
+		sample.wiW = wiW;
 		return true;
 	}
 
