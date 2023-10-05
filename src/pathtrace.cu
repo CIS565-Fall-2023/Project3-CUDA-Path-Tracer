@@ -678,7 +678,9 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 
 		SegmentProcessingSettings settings;
 		settings.russianRoulette = guiData->russianRoulette;
+#if BVH_TOGGLE
 		settings.useBvh = guiData->useBvh;
+#endif
 
 #if FIRST_BOUNCE_CACHE
 		if (guiData->firstBounceCache && !fbcNeedsRefresh && depth == 0)
