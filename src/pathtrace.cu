@@ -4,6 +4,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <thrust/device_ptr.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -74,7 +75,7 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
-static thrust::device_ptr<PathSegment> dev_thrust_paths;
+static thrust::device_ptr<PathSegment> dev_thrust_paths = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -261,7 +262,7 @@ __global__ void shadeFakeMaterial(
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-				scatterRay(pathSegment[idx], getPointOnRay(pathSegment[idx].ray, intersection.t), intersection.surfaceNormal, material, rng);
+				scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t), intersection.surfaceNormal, material, rng);
 				// float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
 				// pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
 				// pathSegments[idx].color *= u01(rng); // apply some noise because why not
@@ -288,6 +289,10 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 		PathSegment iterationPath = iterationPaths[index];
 		image[iterationPath.pixelIndex] += iterationPath.color;
 	}
+}
+
+__host__ __device__ bool pathEnd(const PathSegment pathSegment) {
+	return pathSegment.remainingBounces == 0;
 }
 
 /**
@@ -385,8 +390,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials
 			);
+		printf("depth %d: shade path segments\n", depth);
+		checkCUDAError("shade path segments");
 		
-		auto dev_thrust_path_end = thrust::remove_if(dev_thrust_paths, dev_thrst_paths + num_paths, [](const PathSegment& pathSegment) -> bool { return pathSegment.remainingBounces == 0; });
+		auto dev_thrust_path_end = thrust::remove_if(dev_thrust_paths, dev_thrust_paths + num_paths, pathEnd);
+		printf("depth %d: stream compact\n", depth);
+		checkCUDAError("stream compact");
 		num_paths = dev_thrust_path_end - dev_thrust_paths;
 
 		iterationComplete = num_paths == 0 || depth == traceDepth; // TODO: should be based off stream compaction results.
