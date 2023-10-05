@@ -5,12 +5,26 @@
 #include <glm/gtx/string_cast.hpp>
 #include "Mesh/objLoader.h"
 
+string getDirectory(const string& path) {
+    size_t found = path.find_last_of("/\\");
+    return (found != string::npos) ? path.substr(0, found) : "";
+}
 
-Scene::Scene(string filename) {
+string getBaseFilename(const string& path) {
+    size_t start = path.find_last_of("/\\") + 1;
+    size_t end = path.rfind(".");
+    return path.substr(start, end - start);
+}
+
+Scene::Scene(string filename) { 
     cout << "Reading scene from " << filename << "..." << endl;
     cout << " " << endl;
-    filename = (char*)filename.c_str();
+    
+    string dir = getDirectory(filename);
+    string baseName = getBaseFilename(filename);
+    string objFilePath = dir + "/" + baseName + ".obj";
 
+    filename = (char*)filename.c_str();
     fp_in.open(filename);
     if (!fp_in.is_open()) {
         cout << "Error reading from file - aborting!" << endl;
@@ -26,7 +40,7 @@ Scene::Scene(string filename) {
                 cout << " " << endl;
             }
             else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
-                loadGeom(tokens[1]);
+                loadGeom(tokens[1], objFilePath);
                 cout << " " << endl;
             }
             else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
@@ -38,94 +52,116 @@ Scene::Scene(string filename) {
     
     printf("Number of Geoms: %d\n", geoms.size());
     printf("\n");
+
+#if USE_BVH
+    LEAF_SIZE = static_cast<int>(log(geoms.size()));
+    nBuckets = static_cast<int>(sqrt(geoms.size()));
+    printf("Leaf size: %d\n", LEAF_SIZE);
+    printf("Number of Buckets: %d\n", nBuckets);
+    cout << "" << endl;
+#endif
+
+    // for stochastic sampling
+    int sqrtSamples = static_cast<int>(sqrt(state.iterations));
+    printf("Number of Samples: %d\n", sqrtSamples);
+    cout << "" << endl;
 }
 
 Scene::~Scene()
 {}
 
-int Scene::loadGeom(string objectid) {
+int Scene::loadGeom(string objectid, const string& objFilePath) {
     int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
+    /*if (id > geoms.size()) {
         cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
         return -1;
     }
-    else {
-        cout << "Loading Geom " << id << "..." << endl;
-        Geom newGeom;
-        string line;
-        std::vector<Geom> tempTriangles;
+    else {*/
+    cout << "Loading Geom " << id << "..." << endl;
+    Geom newGeom;
+    string line;
+    std::vector<Geom> tempTriangles;
+    int tempMaterialId = -1;
 
-        //load object type
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            if (strcmp(line.c_str(), "sphere") == 0) {
-                cout << "Creating new sphere..." << endl;
-                newGeom.type = SPHERE;
-            }
-            else if (strcmp(line.c_str(), "cube") == 0) {
-                cout << "Creating new cube..." << endl;
-                newGeom.type = CUBE;
-            }
-            else if (strcmp(line.c_str(), "obj") == 0) {
-                cout << "Creating new obj..." << endl;
+    //load object type
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        if (strcmp(line.c_str(), "sphere") == 0) {
+            cout << "Creating new sphere..." << endl;
+            newGeom.type = SPHERE;
+        }
+        else if (strcmp(line.c_str(), "cube") == 0) {
+            cout << "Creating new cube..." << endl;
+            newGeom.type = CUBE;
+        }
+        else if (strcmp(line.c_str(), "obj") == 0) {
+            cout << "Creating new obj..." << endl;
 
-                ObjLoader objLoader;
+            ObjLoader objLoader;
 
-                if (objLoader.Load("../scenes/cube.obj")) {
-                    loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
-                    printf("Triangle Size: %d\n", tempTriangles.size());
-                }
+            if (objLoader.Load(objFilePath)) {
+                loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
+                // printf("Material Size: %d\n", objLoader.materials.size());
+                // printf("Triangle Size: %d\n", tempTriangles.size());
+                if (objLoader.materials.size() > 0) {
+                    tempMaterialId = loadObjMaterial(objLoader.materials);
+                }    
             }
         }
+    }
 
-        //link material
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
+    //link material
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        if (tempMaterialId == -1) {
             vector<string> tokens = utilityCore::tokenizeString(line);
             newGeom.materialid = atoi(tokens[1].c_str());
-            cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
         }
-
-        //load transformations
-        utilityCore::safeGetline(fp_in, line);
-        while (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-
-            //load tranformations
-            if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-                newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-            else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-                newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-            else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-
-            utilityCore::safeGetline(fp_in, line);
+        else {
+            newGeom.materialid = tempMaterialId;
         }
-
-        newGeom.transform = utilityCore::buildTransformationMatrix(
-            newGeom.translation, newGeom.rotation, newGeom.scale);
-        newGeom.inverseTransform = glm::inverse(newGeom.transform);
-        newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
-
-        for (auto& triangle : tempTriangles) {
-            triangle.type = TRIANGLE;
-            triangle.materialid = newGeom.materialid;
-            triangle.transform = newGeom.transform;
-            triangle.inverseTransform = newGeom.inverseTransform;
-            triangle.invTranspose = newGeom.invTranspose;
-
-            geoms.push_back(triangle);
-        }
-
-        if (newGeom.type == CUBE || newGeom.type == SPHERE) {
-            geoms.push_back(newGeom);
-        }
-
-        return 1;
+        cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
     }
+
+    //load transformations
+    utilityCore::safeGetline(fp_in, line);
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+
+        //load tranformations
+        if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+            newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+            newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+            newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+
+        utilityCore::safeGetline(fp_in, line);
+    }
+
+    newGeom.transform = utilityCore::buildTransformationMatrix(
+        newGeom.translation, newGeom.rotation, newGeom.scale);
+    newGeom.inverseTransform = glm::inverse(newGeom.transform);
+    newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+    for (auto& triangle : tempTriangles) {
+        triangle.type = TRIANGLE;
+        triangle.materialid = newGeom.materialid;
+        triangle.transform = newGeom.transform;
+        triangle.inverseTransform = newGeom.inverseTransform;
+        triangle.invTranspose = newGeom.invTranspose;
+
+        geoms.push_back(triangle);
+    }
+
+    if (newGeom.type == CUBE || newGeom.type == SPHERE) {
+        geoms.push_back(newGeom);
+    }
+
+    return 1;
 }
 
 int Scene::loadCamera() {
@@ -296,7 +332,7 @@ void Scene::loadObjGeom(const tinyobj::attrib_t& attrib,
 }
 
 
-void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials) {
+int Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials) {
 
     for (const auto& mat : tinyobjMaterials) {
         cout << "Loading Obj Material: " << mat.name << "...\n" << endl;
@@ -321,6 +357,7 @@ void Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMater
     }
 
     cout << "Loaded Obj Material!" << endl;
+    return materials.size() - 1;
 }
 
 int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int dim, int geomCount,
@@ -338,12 +375,11 @@ int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end
     }
     else {
         // allocate buckets for SAH partition
-        // constexpr int nBuckets = 12;
         struct BucketInfo {
             int count = 0;
             Bound bounds;
         };
-        BucketInfo buckets[nBuckets];
+        std::vector<BucketInfo> buckets(nBuckets);
 
         // initialize bucket info
         for (int i = start; i < end; ++i) {
@@ -355,7 +391,7 @@ int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end
         }
         
         // compute cost for splitting after each bucket
-        float cost[nBuckets - 1];
+        std::vector<float> cost(nBuckets - 1);
         float boundsSurfaceArea = bounds.computeBoxSurfaceArea();
 
         for (int i = 0; i < nBuckets - 1; ++i) {
@@ -420,7 +456,6 @@ BVHNode* Scene::constructBVHTree(std::vector<BVHGeomInfo>& geomInfo, int start, 
     // leaf nodes
     if (geomCount <= LEAF_SIZE) {
         int geomIndex = orderedGeoms.size();
-        // printf("Leaf Node Index: %d\n", geomIndex);
         for (int i = start; i < end; ++i) {
             int index = geomInfo[i].geomIndex;
             orderedGeoms.push_back(geoms[index]);

@@ -11,10 +11,6 @@
 #include "Mesh/tiny_obj_loader.h"
 
 #define USE_BVH 1
-#if USE_BVH
-const int LEAF_SIZE = 2;
-const int nBuckets = 12;
-#endif
 #define DEBUG_BVH 0
 
 using namespace std;
@@ -23,11 +19,11 @@ class Scene {
 private:
     ifstream fp_in;
     int loadMaterial(string materialid);
-    int loadGeom(string objectid);
+    int loadGeom(string objectid, const string& objFilePath);
     int loadCamera();
     void loadObjGeom(const tinyobj::attrib_t& attrib,
         const std::vector<tinyobj::shape_t>& shapes, std::vector<Geom>& tempTriangles);
-    void loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials);
+    int loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials);
 
     char* filename;
   
@@ -38,6 +34,7 @@ private:
         int* totalNodes, std::vector<Geom>& orderedGeoms);
     int flattenBVHTree(BVHNode* node, int* offset);
     
+    int LEAF_SIZE, nBuckets;
 
 public:
     Scene(string filename);
@@ -46,6 +43,7 @@ public:
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     RenderState state;
+    int sqrtSamples;
 
     std::vector<LinearBVHNode> bvh;
     void buildBVH();

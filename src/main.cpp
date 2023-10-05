@@ -4,7 +4,7 @@
 #include <filesystem>
 
 static std::string startTimeString;
-
+ 
 // For camera controls
 static bool leftMousePressed = false;
 static bool rightMousePressed = false;
@@ -123,12 +123,15 @@ void saveImage() {
 
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
+	ss << "../img/";
 	ss << filename << "." << startTimeString << "." << samples << "samp";
 	filename = ss.str();
+	cout << "Image is saved at " << filename << endl;
+	cout << "" << endl;
 
 	// CHECKITOUT
 	img.savePNG(filename);
-	//img.saveHDR(filename);  // Save a Radiance HDR file
+	// img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
 void runCuda() {

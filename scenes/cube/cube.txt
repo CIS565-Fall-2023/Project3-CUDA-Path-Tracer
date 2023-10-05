@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   10
+EMITTANCE   5
 
 // Diffuse white
 MATERIAL 1
@@ -43,22 +43,43 @@ MATERIAL 4
 RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     .98 .98 .98
-REFL        0
-REFR        0
+REFL        1
+REFR        1
 REFRIOR     0
 EMITTANCE   0
+
+// Translucent blue
+MATERIAL 5
+RGB .35 .35 .85
+SPECEX 0.5
+SPECRGB .5 .5 .85
+REFL 0.4
+REFR 0.6
+REFRIOR 1.5
+EMITTANCE 0
+
+// Emissive material (warm light)
+MATERIAL 6
+RGB 1 0.7 0.5
+SPECEX 0
+SPECRGB 0 0 0
+REFL 0
+REFR 0
+REFRIOR 0
+EMITTANCE 5
 
 // Camera
 CAMERA
 RES         800 800
 FOVY        45
-ITERATIONS  5000
-DEPTH       4
-FILE        cornell
+ITERATIONS  1000
+DEPTH       8
+FILE        cube
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
-
+APERTURE    0.1
+FOCALDISTANCE 5.0
 
 // Ceiling light
 OBJECT 0
@@ -110,8 +131,42 @@ SCALE       .01 10 10
 
 // Sphere
 OBJECT 6
-obj
+sphere
 material 4
 TRANS       -1 4 -1
 ROTAT       0 0 0
 SCALE       3 3 3
+
+// cube
+OBJECT 7
+obj
+material 4
+TRANS       1 4 3
+ROTAT       60 60 -90
+SCALE       2 2 2
+
+// New small ceiling light for warm accent
+OBJECT 8
+cube
+material 6
+TRANS -2 9.5 2
+ROTAT 0 0 0
+SCALE 1 .1 1
+
+// Cylinder (overlapping with sphere)
+OBJECT 9
+cylinder
+material 5
+TRANS -1 3 -1
+ROTAT 0 0 0
+SCALE 1 4 1
+
+// Cube (overlapping with the other cube)
+OBJECT 10
+obj
+material 5
+TRANS 2 5 2
+ROTAT 30 30 0
+SCALE 1.5 1.5 1.5
+
+

@@ -27,7 +27,7 @@
 
 #define CACHE_FIRST_BOUNCE 0
 #define SORT_RAY_BY_MATERIAL 1
-#define USE_DOF 1
+#define USE_DOF 0
 
 #if CACHE_FIRST_BOUNCE
 #define USE_STOCHASTIC_SAMPLING 0
@@ -117,7 +117,7 @@ static ShadeableIntersection* dev_first_bounce_intersections = NULL;
 static int* dev_stencil = NULL;
 
 // for bvh 
-#if USE_BVH 1
+#if USE_BVH
 static LinearBVHNode* dev_bvh = NULL;
 #endif
 
@@ -180,7 +180,8 @@ void pathtraceFree() {
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
+__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments,
+	int sqrtSamples)
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -199,7 +200,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 #else
 		// Create stratified samples within the pixel
 		// square root of the number of samples
-		int sqrtSamples = 2;
 		float invSqrtSamples = 1.0f / sqrtSamples;
 		int sampleX = x % sqrtSamples;
 		int sampleY = y % sqrtSamples;
@@ -504,6 +504,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
+	const int sqrtSamples = hst_scene->sqrtSamples;
 
 	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);
@@ -515,7 +516,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	const int blockSize1d = 128;
 
 	if (!CACHE_FIRST_BOUNCE || iter == 1) {
-		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths,
+			sqrtSamples);
 		checkCUDAError("generate camera ray");
 
 		// cache the paths

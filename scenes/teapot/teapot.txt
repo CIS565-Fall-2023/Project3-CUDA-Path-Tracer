@@ -1,0 +1,115 @@
+// Emissive material (ceiling light)
+MATERIAL 0
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   10
+
+// Emissive material (side light)
+MATERIAL 6
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   7
+
+// Diffuse white
+MATERIAL 1
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Specular white (for teapot)
+MATERIAL 2
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Camera
+CAMERA
+RES         1280 720
+FOVY        45
+ITERATIONS  1000
+DEPTH       10
+FILE        teapot
+EYE         0.0 3 7
+LOOKAT      0 1 0
+UP          0 1 0
+
+// Ceiling light
+OBJECT 0
+cube
+material 0
+TRANS       0 4.8 0
+ROTAT       0 0 0
+SCALE       3 .1 3
+
+// Side light
+OBJECT 7
+cube
+material 6
+TRANS       -4 3 0
+ROTAT       0 0 0
+SCALE       .2 2 .2
+
+// Floor
+OBJECT 1
+cube
+material 1
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       6 .01 6
+
+// Ceiling
+OBJECT 2
+cube
+material 1
+TRANS       0 5 0
+ROTAT       0 0 0
+SCALE       6 .01 6
+
+// Walls
+// Back Wall
+OBJECT 3
+cube
+material 1
+TRANS       0 2.5 -3
+ROTAT       0 0 0
+SCALE       6 5 0.01
+
+// Left Wall
+OBJECT 4
+cube
+material 1
+TRANS       -3 2.5 0
+ROTAT       0 0 0
+SCALE       0.01 5 6
+
+// Right Wall
+OBJECT 5
+cube
+material 1
+TRANS       3 2.5 0
+ROTAT       0 0 0
+SCALE       0.01 5 6
+
+// Teapot
+OBJECT 6
+obj
+material 2
+TRANS       0 0.75 0
+ROTAT       0 0 0
+SCALE       0.5 0.5 0.5
