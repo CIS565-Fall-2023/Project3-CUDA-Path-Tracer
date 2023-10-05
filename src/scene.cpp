@@ -1,16 +1,22 @@
 #include <iostream>
-#include "scene.h"
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#include "scene.h"
 #include "tiny_obj_loader.h"
+
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
     fp_in.open(fname);
+
+    // init hdrresult
+    hdrResult.width = 0;
+    hdrResult.height = 0;
+
     if (!fp_in.is_open()) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
@@ -29,11 +35,17 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
+            } else if (strcmp(tokens[0].c_str(), "ENVIRONMENT_MAP") == 0) {
+                loadHDR(tokens[1]);
+                cout << " " << endl;
             }
         }
     }
     // construct kd tree
     buildKDTree();
+
+    numLights = lights.size() + (hdrResult.width * hdrResult.height > 0 ? 1 : 0);
+    cout << "Number of lights in this scene: " << numLights << endl;
 }
 
 void Scene::calculateAABB(Geom& geom) {
@@ -74,11 +86,11 @@ void Scene::buildKDTree() {
     int nodeIndex = 0;
     createKDAccelNodes(kdRoot, nodeIndex);
 
-    for (auto& kdNode : kdNodes) {
+    /*for (auto& kdNode : kdNodes) {
         cout << "KDNode: " << kdNode.geomStart << " " << kdNode.numGeoms << " " << kdNode.rightOffset << endl;
         cout << "AABB: " << glm::to_string(kdNode.aabb.minPoint) << " " << glm::to_string(kdNode.aabb.maxPoint) << endl;
         cout << endl;
-    }
+    }*/
 
     cout << "KDTree complete!" << endl;
 }
@@ -162,6 +174,8 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
         auto& mesh = shape.mesh;
         for (int i = 0; i < mesh.indices.size(); i += 3) {
             Triangle triangle;
+
+            // vertex position
 			triangle.position[0] = glm::vec3(
 					attribs.vertices[3 * mesh.indices[i].vertex_index],
 					attribs.vertices[3 * mesh.indices[i].vertex_index + 1],
@@ -174,8 +188,12 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index],
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 1],
 					attribs.vertices[3 * mesh.indices[i + 2].vertex_index + 2]);
-            triangle.normal = glm::normalize(glm::cross(triangle.position[1] - triangle.position[0], 
-                triangle.position[2] - triangle.position[0]));
+
+            // position normal
+
+
+            triangle.normal = glm::cross(triangle.position[1] - triangle.position[0], 
+                triangle.position[2] - triangle.position[1]);
 			//triangle.t0 = glm::vec2(
 			//		attribs.texcoords[2 * mesh.indices[i]],
 			//		attribs.texcoords[2 * mesh.indices[i] + 1]);
@@ -196,6 +214,26 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
     }
 
     return res;
+}
+
+bool Scene::loadHDR(const string& hdrFile) {
+    cout << "Loading HDR image: " << hdrFile << "..." << endl;
+    bool ret = HDRLoader::load(hdrFile.c_str(), hdrResult);
+
+    if (ret) {
+        // load into hdrImage
+        hdrImage.resize(hdrResult.width * hdrResult.height);
+        for (int i = 0; i < hdrResult.width; ++i) {
+            for (int j = 0; j < hdrResult.height; ++j) {
+                int index = 3 * (j * hdrResult.width + i);
+				glm::vec3 color(hdrResult.cols[index], hdrResult.cols[index + 1], hdrResult.cols[index + 2]);
+                //hdrImage[j + i * hdrResult.height] = color;
+				hdrImage[(hdrResult.height - 1 - j) * hdrResult.width + i] = color;
+            }
+        }
+    }
+
+    return ret;
 }
 
 int Scene::loadGeom(string objectid) {

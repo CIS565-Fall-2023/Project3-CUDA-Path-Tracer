@@ -187,7 +187,7 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
 
     if (intersect && baryPosition.z < FLT_MAX) {
         intersectionPoint = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(rt, baryPosition.z), 1.0f));
-        normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(triangle.normal, 0.0f)));
+        normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(triangle.normal, 0.0f)));
         tangent = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
         outside = true;
         return glm::length(r.origin - intersectionPoint);

@@ -6,6 +6,56 @@
 #define USE_STRATIFIED 0
 const int RES_PER_SIDE = 100;
 
+// ref: 561 hw
+__host__ __device__
+glm::vec3 squareToDiskConcentric(thrust::default_random_engine& rng) {
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    glm::vec2 xi(u01(rng), u01(rng));
+
+    float phi = 0.0f, r = 0.0f, u = 0.0f, v = 0.0f;
+    float a = 2.0f * xi.x - 1.0f;
+    float b = 2.0f * xi.y - 1.0f;
+
+    if (a > -b)
+    {
+        if (a > b)
+        {
+            r = a;
+            phi = (b / a) * (PI / 4.0f);
+        }
+        else
+        {
+            r = b;
+            phi = (2.0f - (a / b)) * (PI / 4.0f);
+        }
+    }
+    else
+    {
+        if (a < b)
+        {
+            r = -a;
+            phi = (4.0f + (b / a)) * (PI / 4.0f);
+        }
+        else
+        {
+            r = -b;
+            if (b != 0.0f)
+            {
+                phi = (6.0f - (a / b)) * (PI / 4.0f);
+            }
+            else
+            {
+                phi = 0.0f;
+            }
+        }
+    }
+
+    u = r * cos(phi);
+    v = r * sin(phi);
+
+    return glm::vec3(u, v, 0.0f);
+}
+
 __host__ __device__
 glm::vec2 concentricSampleDisk(const glm::vec2& sample)
 {

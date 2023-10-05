@@ -76,6 +76,7 @@ set(headers
     src/material.h
     src/light.h	
     src/sample.h
+    src/hdrloader.h
 
     src/ImGui/imconfig.h
     src/ImGui/imgui.h
@@ -100,6 +101,7 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/hdrloader.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 

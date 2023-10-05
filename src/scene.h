@@ -7,6 +7,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
+#include "hdrloader.h"
 
 using namespace std;
 
@@ -25,6 +26,8 @@ private:
     int createKDAccelNodes(KDNode* node, int& index);
 
     bool loadObj(const Geom& geom, const string& objFile);
+
+    bool loadHDR(const string& hdrFile);
     
 public:
     Scene(string filename);
@@ -33,10 +36,19 @@ public:
     std::vector<Geom> geoms;
     std::vector<Geom> sortedGeoms;
     std::vector<Material> materials;
-    std::vector<Light> lights;
 
+    // lights
+    std::vector<Light> lights;
+    int numLights;
+
+    // kd tree
     KDNode* kdRoot;
     int nodeCount = 0;
     std::vector<KDAccelNode> kdNodes;
+
+    // hdr image
+    HDRLoaderResult hdrResult;
+    std::vector<glm::vec3> hdrImage;
+
     RenderState state;
 };

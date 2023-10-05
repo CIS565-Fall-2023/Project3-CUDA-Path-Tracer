@@ -25,7 +25,7 @@
 #define DIRECT_MIS 0
 #define FULL 1
 
-#define USE_KD_TREE 0
+#define USE_KD_TREE 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -107,10 +107,9 @@ static ShadeableIntersection* dev_intersections = NULL;
 static ShadeableIntersection* dev_first_bounce_cache = NULL;
 #endif
 
-#if USE_KD_TREE
 static KDAccelNode* dev_kdNodes = NULL;
-#endif //  USE_KD_TREE
 
+static glm::vec3* dev_envmap = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -160,6 +159,12 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_kdNodes, scene->kdNodes.size() * sizeof(KDAccelNode));
 	cudaMemcpy(dev_kdNodes, scene->kdNodes.data(), scene->kdNodes.size() * sizeof(KDAccelNode), cudaMemcpyHostToDevice);
 #endif
+
+	// environment map
+	if (scene->hdrImage.size() > 0) {
+		cudaMalloc(&dev_envmap, scene->hdrImage.size() * sizeof(glm::vec3));
+		cudaMemcpy(dev_envmap, scene->hdrImage.data(), scene->hdrImage.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+	}
 	
 	checkCUDAError("pathtraceInit");
 }
@@ -181,6 +186,10 @@ void pathtraceFree() {
 #if USE_KD_TREE
 	cudaFree(dev_kdNodes);
 #endif
+
+	if (dev_envmap != NULL) {
+		cudaFree(dev_envmap);
+	}
 
 	checkCUDAError("pathtraceFree");
 }
@@ -348,6 +357,10 @@ __global__ void shadeNaive(
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, Material* materials
+	, glm::vec3* envmap
+	, int envmapWidth
+	, int envmapHeight
+	, int numLights
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -382,7 +395,9 @@ __global__ void shadeNaive(
 			// used for opacity, in which case they can indicate "no opacity".
 			// This can be useful for post-processing and image compositing.
 		} else {
-			cur.color = glm::vec3(0.0f);
+			if (envmap != NULL) {
+				cur.color = cur.throughput * getEnvLight(envmap, envmapWidth, envmapHeight, cur.ray.direction, numLights);
+			}
 			cur.remainingBounces = 0; // terminate path
 		}
 	}
@@ -397,8 +412,13 @@ __global__ void shadeDirectMIS(
 	, Material* materials
 	, Geom* geoms
 	, int numGeoms
+	, KDAccelNode* nodes
+	, int node_size
 	, Light* lights
 	, int numLights
+	, glm::vec3* envmap
+	, int envmapWidth
+	, int envmapHeight
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -422,59 +442,20 @@ __global__ void shadeDirectMIS(
 				cur.color = (materialColor * material.emittance);
 				cur.remainingBounces = 0; // terminate path
 			} else {
-				cur.color = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, numGeoms, lights, numLights, rng);
+				cur.color = sampleUniformLight(
+					point, intersection, cur.ray.direction, materials, geoms, numGeoms, 
+#if USE_KD_TREE
+					nodes, node_size,
+#else
+					NULL, 0,
+#endif
+				lights, numLights, envmap, envmapWidth, envmapHeight, rng);
 				cur.remainingBounces = 0;
 			}
 		} else {
-			cur.color = glm::vec3(0.0f);
-			cur.remainingBounces = 0; // terminate path
-		}
-	}
-}
-
-__global__ void shadeDirectMIS_KDTree(
-	int iter
-	, int num_paths
-	, ShadeableIntersection* shadeableIntersections
-	, PathSegment* pathSegments
-	, Material* materials
-	, Geom* geoms
-	, KDAccelNode* nodes
-	, int node_size
-	, Light* lights
-	, int numLights
-)
-{
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_paths)
-	{
-		ShadeableIntersection intersection = shadeableIntersections[idx];
-		PathSegment& cur = pathSegments[idx];
-
-		if (intersection.t > 0.0) { // if the intersection exists...
-			// Set up the RNG
-			// LOOK: this is how you use thrust's RNG! Please look at
-			// makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			cur.color = glm::vec3(0.0f);
-
-			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
-			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
-
-			if (material.emittance > 0.0f) {
-				cur.color = (materialColor * material.emittance);
-				cur.remainingBounces = 0; // terminate path
+			if (envmap != NULL) {
+				cur.color = cur.throughput * getEnvLight(envmap, envmapWidth, envmapHeight, cur.ray.direction, numLights);
 			}
-			else {
-				cur.color = sampleUniformLightFromKDTree(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, nodes, node_size, lights, numLights, rng);
-				cur.remainingBounces = 0;
-			}
-		}
-		else {
-			cur.color = glm::vec3(0.0f);
 			cur.remainingBounces = 0; // terminate path
 		}
 	}
@@ -489,8 +470,13 @@ __global__ void shadeFull(
 	, Material* materials
 	, Geom* geoms
 	, int numGeoms
+	, KDAccelNode* nodes
+	, int node_size
 	, Light* lights
 	, int numLights
+	, glm::vec3* envmap
+	, int envmapWidth
+	, int envmapHeight
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -521,8 +507,14 @@ __global__ void shadeFull(
 			// If the surface is diffuse or microfacet, compute MIS direct light
 			if (material.type == MaterialType::DIFFUSE || 
 				material.type == MaterialType::MICROFACET) {
-				glm::vec3 Ld = sampleUniformLight(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, numGeoms, lights, numLights, rng);
+				glm::vec3 Ld = sampleUniformLight(
+					point, intersection, cur.ray.direction, materials, geoms, numGeoms,
+#if USE_KD_TREE
+					nodes, node_size,
+#else
+					NULL, 0,
+#endif
+					lights, numLights, envmap, envmapWidth, envmapHeight, rng);
 				cur.color += Ld * cur.throughput;
 			}
 				
@@ -534,84 +526,8 @@ __global__ void shadeFull(
 			// TODO: russian roulette
 		}
 		else {
-			cur.color = glm::vec3(0.0f);
-			if (cur.isFromCamera || cur.isSpecularBounce) {
-				// TODO: environment map
-
-
-				/*for (int i = 0; i < numLights; ++i) {
-					Material mat = materials[lights[i].geom.materialid];
-					cur.color += cur.throughput * mat.color * mat.emittance;
-				}*/
-			}
-			cur.remainingBounces = 0; // terminate path
-		}
-	}
-}
-
-__global__ void shadeFullFromKdTree(
-	int iter
-	, int num_paths
-	, ShadeableIntersection* shadeableIntersections
-	, PathSegment* pathSegments
-	, Material* materials
-	, Geom* geoms
-	, KDAccelNode* nodes
-	, int numNodes
-	, Light* lights
-	, int numLights
-)
-{
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_paths)
-	{
-		ShadeableIntersection intersection = shadeableIntersections[idx];
-		PathSegment& cur = pathSegments[idx];
-		if (intersection.t > 0.0) { // if the intersection exists...
-			// Set up the RNG
-			// LOOK: this is how you use thrust's RNG! Please look at
-			// makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			Material material = materials[intersection.materialId];
-			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
-
-			// specular or direct from camera
-			if (material.emittance > 0.0f) {
-				if (cur.isFromCamera || cur.isSpecularBounce) {
-					// If the material indicates that the object was a light, "light" the ray
-					cur.color += cur.throughput * material.color * material.emittance;
-				}
-				cur.remainingBounces = 0; // terminate path
-				return;
-			}
-
-			cur.isFromCamera = false;
-
-			// If the surface is diffuse or microfacet, compute MIS direct light
-			if (material.type == MaterialType::DIFFUSE ||
-				material.type == MaterialType::MICROFACET) {
-				glm::vec3 Ld = sampleUniformLightFromKDTree(point, intersection.surfaceNormal, intersection.surfaceTangent, cur.ray.direction
-					, materials, material, geoms, nodes, numNodes, lights, numLights, rng);
-				cur.color += Ld * cur.throughput;
-			}
-
-			// Sample BSDF
-			scatterRay(cur, point, intersection.surfaceNormal, intersection.surfaceTangent, material, rng);
-
-			// TODO: subsurface scattering
-
-			// TODO: russian roulette
-		}
-		else {
-			cur.color = glm::vec3(0.0f);
-			if (cur.isFromCamera || cur.isSpecularBounce) {
-				// TODO: environment map
-
-
-				/*for (int i = 0; i < numLights; ++i) {
-					Material mat = materials[lights[i].geom.materialid];
-					cur.color += cur.throughput * mat.color * mat.emittance;
-				}*/
+			if ((cur.isFromCamera || cur.isSpecularBounce) && envmap != NULL) {
+				cur.color += cur.throughput * getEnvLight(envmap, envmapWidth, envmapHeight, cur.ray.direction, numLights);
 			}
 			cur.remainingBounces = 0; // terminate path
 		}
@@ -771,64 +687,48 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			num_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials
+			dev_materials,
+			dev_envmap,
+			hst_scene->hdrResult.width,
+			hst_scene->hdrResult.height,
+			hst_scene->numLights
 			);
 #endif
 #if DIRECT_MIS
-	#if USE_KD_TREE
-			shadeDirectMIS_KDTree << <numblocksPathSegmentTracing, blockSize1d >> > (
-				iter,
-				num_paths,
-				dev_intersections,
-				dev_paths,
-				dev_materials,
-				dev_geoms,
-				dev_kdNodes,
-				hst_scene->kdNodes.size(),
-				dev_lights,
-				hst_scene->lights.size()
-				);
-	#else
-			shadeDirectMIS << <numblocksPathSegmentTracing, blockSize1d >> > (
-				iter,
-				num_paths,
-				dev_intersections,
-				dev_paths,
-				dev_materials,
-				dev_geoms,
-				hst_scene->geoms.size(),
-				dev_lights,
-				hst_scene->lights.size()
-				);
-	#endif // USE_KD_TREE
+		shadeDirectMIS << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter,
+			num_paths,
+			dev_intersections,
+			dev_paths,
+			dev_materials,
+			dev_geoms,
+			hst_scene->geoms.size(),
+			dev_kdNodes,
+			hst_scene->kdNodes.size(),
+			dev_lights,
+			hst_scene->numLights,
+			dev_envmap,
+			hst_scene->hdrResult.width,
+			hst_scene->hdrResult.height
+			);
 #endif
 #if FULL
-	#if USE_KD_TREE
-			shadeFullFromKdTree << <numblocksPathSegmentTracing, blockSize1d >> > (
-				iter,
-				num_paths,
-				dev_intersections,
-				dev_paths,
-				dev_materials,
-				dev_geoms,
-				dev_kdNodes,
-				hst_scene->kdNodes.size(),
-				dev_lights,
-				hst_scene->lights.size()
-				);
-	#else
-			shadeFull << <numblocksPathSegmentTracing, blockSize1d >> > (
-				iter,
-				num_paths,
-				dev_intersections,
-				dev_paths,
-				dev_materials,
-				dev_geoms,
-				hst_scene->geoms.size(),
-				dev_lights,
-				hst_scene->lights.size()
-				);
-	#endif
+		shadeFull << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter,
+			num_paths,
+			dev_intersections,
+			dev_paths,
+			dev_materials,
+			dev_geoms,
+			hst_scene->geoms.size(),
+			dev_kdNodes,
+			hst_scene->kdNodes.size(),
+			dev_lights,
+			hst_scene->numLights,
+			dev_envmap,
+			hst_scene->hdrResult.width,
+			hst_scene->hdrResult.height
+			);
 #endif
 
 		// remove rays with zero remaining bounces
