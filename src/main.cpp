@@ -19,7 +19,7 @@ float zoom, theta, phi;
 glm::vec3 cameraPosition;
 glm::vec3 ogLookAt; // for recentering the camera
 
-HostScene* scene;
+SceneConfig* scene;
 GuiDataContainer* guiData;
 RenderState* renderState;
 int iteration;
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 	const char* sceneFile = argv[1];
 
 	// Load scene file
-	scene = new HostScene(sceneFile);
+	scene = new SceneConfig(sceneFile);
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();

@@ -1,10 +1,10 @@
 #pragma once
 
 #include <vector>
-#include "depScene.h"
+#include "config.h"
 
 void InitDataContainer(GuiDataContainer* guiData);
-void pathtraceInit(HostScene *scene);
+void pathtraceInit(SceneConfig *scene);
 void pathtraceFree();
 void pathtrace(uchar4 *pbo, int frame, int iteration);
 void pathtraceInitBeforeMainLoop();

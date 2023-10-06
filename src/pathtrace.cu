@@ -10,7 +10,7 @@
 #include <thrust/partition.h>
 
 #include "sceneStructs.h"
-#include "depScene.h"
+#include "config.h"
 #include "glm/glm.hpp"
 #include "glm/gtx/norm.hpp"
 #include "utilities.h"
@@ -87,7 +87,7 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	}
 }
 
-static HostScene* hst_scene = NULL;
+static SceneConfig* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
@@ -204,7 +204,7 @@ void pathtraceInitBeforeMainLoop() {
 
 }
 
-void pathtraceInit(HostScene* scene) {
+void pathtraceInit(SceneConfig* scene) {
 	
 	hst_scene = scene;
 

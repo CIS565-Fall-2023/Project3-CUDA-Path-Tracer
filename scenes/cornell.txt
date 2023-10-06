@@ -1,53 +1,3 @@
-// Emissive material (light)
-MATERIAL 0
-RGB         1 1 1
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   5
-
-// Diffuse white
-MATERIAL 1
-RGB         .98 .98 .98
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse red
-MATERIAL 2
-RGB         .85 .35 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse green
-MATERIAL 3
-RGB         .35 .85 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Specular white
-MATERIAL 4
-RGB         .98 .98 .98
-SPECEX      0
-SPECRGB     .98 .98 .98
-REFL        1
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
 // Camera
 CAMERA
 RES         800 800
@@ -70,10 +20,6 @@ UP          0 1 0
 //LOOKAT      0 0 5
 //UP          0 1 0
 
-// Sphere
-OBJECT 0
-sphere
-material 4
-TRANS       0 0 0
-ROTAT       0 0 0
-SCALE       2 4 2
+// Environmental Mapping
+IBL
+FILE          img/colorful_studio_4k.exr

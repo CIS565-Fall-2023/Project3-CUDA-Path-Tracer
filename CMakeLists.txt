@@ -70,13 +70,13 @@ set(material
 )
 
 set(scene
-    src/depScene.h
     src/sceneStructs.h
     src/interactions.h
     src/intersections.h
     src/light.h
     src/lightStruct.h
-    src/depScene.cpp
+    src/config.h
+    src/config.cpp
     src/scene.h
     src/scene.cpp
     src/bvh.h

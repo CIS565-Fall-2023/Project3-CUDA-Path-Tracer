@@ -18,7 +18,7 @@
 #include "image.h"
 #include "pathtrace.h"
 #include "utilities.h"
-#include "depScene.h"
+#include "config.h"
 #include "scene.h"
 
 using namespace std;
@@ -27,7 +27,7 @@ using namespace std;
 //----------PATH TRACER----------
 //-------------------------------
 
-extern HostScene* scene;
+extern SceneConfig* scene;
 extern int iteration;
 
 extern int width;
