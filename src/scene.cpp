@@ -32,6 +32,13 @@ Scene::Scene(string filename) {
             }
         }
     }
+
+    if (hasMesh)
+    {
+        cout << "Building BVH..." << endl;
+        BuildBVH();
+        cout << "BVH nodes: " << bvhNode.size() << endl;
+    }
 }
 
 int Scene::loadGeom(string objectid) {
@@ -43,7 +50,7 @@ int Scene::loadGeom(string objectid) {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
-
+        string meshPath;
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -56,14 +63,10 @@ int Scene::loadGeom(string objectid) {
             }
             else if (strcmp(line.c_str(), "mesh") == 0)
             {
-                cout << "Creating new mesh..." << endl;
-                newGeom.type = MESH;
-                utilityCore::safeGetline(fp_in, line);              
-                vector<string> tokens = utilityCore::tokenizeString(line); 
-                hasMesh = true;
-                if (loadOBJ(tokens[0], newGeom) != 1) {
-                    cout << "loadOBJ Failed." << endl;
-                }
+                newGeom.type = MESH;         
+                utilityCore::safeGetline(fp_in, line);
+                vector<string> tokens = utilityCore::tokenizeString(line);
+                meshPath = tokens[0];
             }
         }
 
@@ -96,6 +99,15 @@ int Scene::loadGeom(string objectid) {
                 newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+        if (newGeom.type == MESH)
+        {        
+            cout << "Creating new mesh..." << endl;
+            hasMesh = true;
+            if (loadOBJ(meshPath, newGeom) != 1) {
+                cout << "loadOBJ Failed." << endl;
+            }
+        }
 
         geoms.push_back(newGeom);
         return 1;
@@ -200,6 +212,10 @@ int Scene::loadMaterial(string materialid) {
     }
 }
 
+glm::vec3 multiplyMV2(glm::mat4 m, glm::vec4 v) {
+    return glm::vec3(m * v);
+}
+
 int Scene::loadOBJ(string filePath, Geom& mesh) {
     tinyobj::ObjReader reader;
     reader.ParseFromFile(filePath);
@@ -210,26 +226,30 @@ int Scene::loadOBJ(string filePath, Geom& mesh) {
     aabb.max = glm::vec3(FLT_MIN);
     aabb.min = glm::vec3(FLT_MAX);
 
-    mesh.triIdx = triangles.size();
+    mesh.triIdx = tri.size();
     int triCnt = 0;
     for (int i = 0; i < shapes.size(); i++)
-    {
-        Triangle t;
+    {      
         int faceSize = shapes[i].mesh.material_ids.size();
         auto& indices = shapes[i].mesh.indices;
         for (int j = 0; j < faceSize; j++)
         {
+            Triangle t;
             for (int k = 0; k < 3; k++)
             {
                 int idx = indices[3 * j + k].vertex_index;
                 t.v[k] = glm::vec3(attrib.vertices[3 * idx + 0], attrib.vertices[3 * idx + 1], attrib.vertices[3 * idx + 2]);
+
+                t.v[k] = multiplyMV2(mesh.transform, glm::vec4(t.v[k], 1.0f));
+
                 aabb.min = glm::min(aabb.min, t.v[k]);
                 aabb.max = glm::max(aabb.max, t.v[k]);
 
                 if (attrib.normals.size() > 0)
                 {
                     int idx_n = indices[3 * j + k].normal_index;
-                    t.n[k] = glm::vec3(attrib.normals[3 * idx_n + 0], attrib.normals[3 * idx_n + 1], attrib.normals[3 * idx_n + 2]);        
+                    t.n[k] = glm::vec3(attrib.normals[3 * idx_n + 0], attrib.normals[3 * idx_n + 1], attrib.normals[3 * idx_n + 2]);      
+                    t.n[k] = multiplyMV2(mesh.invTranspose, glm::vec4(t.v[k], 0.0f));
                 }
                 if (attrib.texcoords.size() > 0)
                 {
@@ -237,11 +257,107 @@ int Scene::loadOBJ(string filePath, Geom& mesh) {
                     t.uv[k] = glm::vec2(attrib.texcoords[2 * idx_t + 0], attrib.texcoords[2 * idx_t + 1]);
                 }
             }
-            triangles.push_back(t);
+            t.geomIdx = geoms.size();
+            tri.push_back(t);
             triCnt++;
         }
     }
     mesh.aabb = aabb;
     mesh.triCnt = triCnt;
+    cout << "Loaded OBJ!"<< endl;
     return 1;
 }
+
+void Scene::BuildBVH() {
+    N = tri.size();
+    cout << "N ="<< N << endl;
+    for (int i = 0; i < N; i++) triIdx.push_back(i);
+
+    for (int i = 0; i < N; i++) {
+        tri[i].centroid = (tri[i].v[0] + tri[i].v[1] + tri[i].v[2]) * 0.3333f;
+    }
+/*
+    for (int i = 0; i < N * 2 - 1; i++) {
+        BVHNode node;
+        bvhNode.push_back(node);
+    }
+*/
+    // assign all triangles to root node
+    BVHNode root;
+    root.leftNode = 0;
+    root.firstTriIdx = 0;
+    root.triCount = N;
+    bvhNode.push_back(root);
+
+    UpdateNodeBounds(rootNodeIdx);
+    Subdivide(rootNodeIdx);     
+}
+
+void Scene::UpdateNodeBounds(int nodeIdx) {
+    BVHNode& node = bvhNode[nodeIdx];
+    node.aabbMin = glm::vec3(1e30f);
+    node.aabbMax = glm::vec3(-1e30f);
+    int first = node.firstTriIdx;
+    for (int i = 0; i < node.triCount; i++)
+    {
+        int leafTriIdx = triIdx[first + i];
+        Triangle leafTri = tri[leafTriIdx];
+        node.aabbMin = glm::min(node.aabbMin, leafTri.v[0]);
+        node.aabbMin = glm::min(node.aabbMin, leafTri.v[1]);
+        node.aabbMin = glm::min(node.aabbMin, leafTri.v[2]);
+        node.aabbMax = glm::max(node.aabbMax, leafTri.v[0]);
+        node.aabbMax = glm::max(node.aabbMax, leafTri.v[1]);
+        node.aabbMax = glm::max(node.aabbMax, leafTri.v[2]);
+    }
+}
+
+void Scene::Subdivide(int nodeIdx) {
+    // terminate recursion
+    BVHNode& node = bvhNode[nodeIdx];
+    if (node.triCount <= 2) {       
+        return;
+    }
+
+    // determine split axis and position
+    glm::vec3 extent = node.aabbMax - node.aabbMin;
+    int axis = 0;
+    if (extent.y > extent.x) axis = 1;
+    if (extent.z > extent[axis]) axis = 2;
+    float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
+    // in-place partition
+    int i = node.firstTriIdx;
+    int j = i + node.triCount - 1;
+    while (i <= j)
+    {
+        if (tri[triIdx[i]].centroid[axis] < splitPos)
+            i++;
+        else
+            swap(triIdx[i], triIdx[j--]);
+    }
+    // abort split if one of the sides is empty
+    int leftCount = i - node.firstTriIdx;
+    if (leftCount == 0 || leftCount == node.triCount) return;
+    // create child nodes
+    int leftChildIdx = nodesUsed++;
+    int rightChildIdx = nodesUsed++;
+
+    BVHNode left;
+    left.firstTriIdx = node.firstTriIdx;
+    left.triCount = leftCount;
+    bvhNode.push_back(left);
+
+    BVHNode right;
+    right.firstTriIdx = i;
+    right.triCount = node.triCount - leftCount;
+    bvhNode.push_back(right);
+
+    node.leftNode = leftChildIdx;
+    node.triCount = 0;
+    UpdateNodeBounds(leftChildIdx);
+    UpdateNodeBounds(rightChildIdx);
+    // recurse
+    Subdivide(leftChildIdx);
+    Subdivide(rightChildIdx);
+}
+
+

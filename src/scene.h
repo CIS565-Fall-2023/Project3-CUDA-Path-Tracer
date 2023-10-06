@@ -17,13 +17,22 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     int loadOBJ(string filePath, Geom& mesh);
+
+    void BuildBVH();
+    void UpdateNodeBounds(int nodeIdx);
+    void Subdivide(int nodeIdx);
+
 public:
     Scene(string filename);
     ~Scene();
 
     bool hasMesh = false;
+    int N; // num of triangles
+    std::vector<BVHNode> bvhNode;
+    int rootNodeIdx = 0, nodesUsed = 1;
     std::vector<Geom> geoms;
     std::vector<Material> materials;
-    std::vector<Triangle> triangles;
+    std::vector<Triangle> tri;
+    std::vector<int> triIdx;
     RenderState state;
 };

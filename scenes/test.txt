@@ -111,8 +111,8 @@ SCALE       .01 10 10
 // Mesh
 OBJECT 6
 mesh
-../scenes/duck.obj
+../scenes/wahoo.obj
 material 1
 TRANS       -1 4 0
 ROTAT       0 0 0
-SCALE       10 10 10
+SCALE       1 1 1

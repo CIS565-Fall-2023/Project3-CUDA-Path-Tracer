@@ -19,14 +19,22 @@ struct Ray {
 };
 
 struct Triangle {
-    glm::vec3 v[3];       
+    glm::vec3 v[3];
     glm::vec3 n[3];       
     glm::vec2 uv[3];
+    glm::vec3 centroid;
+    int geomIdx;
 };
 
 struct AABB {
     glm::vec3 min;
     glm::vec3 max;
+};
+
+struct BVHNode
+{
+    glm::vec3 aabbMin, aabbMax;
+    int leftNode, firstTriIdx, triCount;
 };
 
 struct Geom {
