@@ -19,14 +19,14 @@ CPU_ONLY void GPUScene::Load(const Scene& scene, const BVH& bvh)
 	FreeDataOnCuda();
 
 	shape_count = scene.m_TriangleIdxs.size();
-	material_count = scene.materials.size();
+	material_count = scene.m_Materials.size();
 	bvh_count = bvh.m_AABBs.size();
 
 	MallocArrayOnCuda<glm::vec3>(dev_vertices, scene.m_Vertices);
 	MallocArrayOnCuda<glm::vec3>(dev_normals, scene.m_Normals);
 	MallocArrayOnCuda<glm::vec2>(dev_uvs, scene.m_UVs);
 	MallocArrayOnCuda<TriangleIdx>(dev_triangles, scene.m_TriangleIdxs);
-	MallocArrayOnCuda<Material>(dev_materials, scene.materials);
+	MallocArrayOnCuda<Material>(dev_materials, scene.m_Materials);
 	MallocArrayOnCuda<AABB>(dev_BVH, bvh.m_AABBs);
 	
 	checkCUDAError("Load GPU scene Error!");

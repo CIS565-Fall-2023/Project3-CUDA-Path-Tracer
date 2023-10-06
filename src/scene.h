@@ -11,8 +11,16 @@
 #include "cudaTexture.h"
 
 #include <json.hpp>
-
+#include <tiny_obj_loader.h>
 typedef nlohmann::json Json;
+
+#include <tiny_obj_loader.h>
+
+typedef tinyobj::ObjReader ObjReader;
+typedef tinyobj::ObjReaderConfig ObjReaderConfig;
+typedef tinyobj::material_t MtlMaterial;
+
+
 namespace std
 {
     namespace filesystem
@@ -32,15 +40,16 @@ public:
     void LoadCameraFromJSON(const Json& camera_json);
     void LoadEnvironmentMapFromJSON(const Json& environment_json, const std::filesystem::path& res_path);
 
-    void ReadObj(const std::string& obj_file_path,
-                unsigned int matrial_id);
-    cudaTextureObject_t LoadTexture(const Json& texture_json, const std::filesystem::path& res_path);
+    void ReadObj(const std::string& obj_file_path, unsigned int matrial_id, const std::filesystem::path& res_path);
+    void LoadMaterialsFromMTL(const MtlMaterial& mtl_material, const std::filesystem::path& res_path);
+    cudaTextureObject_t LoadTextureFromJSON(const Json& texture_json, const std::filesystem::path& res_path);
+    cudaTextureObject_t LoadTextureFromFile(const std::string& texture_str, bool flip_v);
 
 public:
     Scene(const std::filesystem::path& res_path, const std::string& scene_filename);
     ~Scene() = default;
 
-    std::vector<Material> materials;
+    std::vector<Material> m_Materials;
     std::vector<uPtr<Texture2D>> m_Textures;
 
     std::vector<glm::vec3> m_Vertices;

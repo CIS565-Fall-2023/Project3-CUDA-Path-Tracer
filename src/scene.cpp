@@ -7,12 +7,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
-
-typedef tinyobj::ObjReader ObjReader;
-typedef tinyobj::ObjReaderConfig ObjReaderConfig;
-
 template<typename T>
 inline void SafeGet(const Json& json, const char* attr, T& value)
 {
@@ -117,7 +111,7 @@ Scene::Scene(const std::filesystem::path& res_path, const std::string& scene_fil
 
 void Scene::FreeScene()
 {
-    materials.clear();
+    m_Materials.clear();
     m_Textures.clear();
     m_Vertices.clear();
     m_Normals.clear();
@@ -197,7 +191,7 @@ void Scene::LoadGeomsFromJSON(const Json& geometry_json, const std::filesystem::
                 int v_start_id = m_Vertices.size();
                 int n_start_id = m_Normals.size();
                 std::cout << "Loading object: " << obj_path.string() << std::endl;
-                ReadObj(obj_path.string(), material_id);
+                ReadObj(obj_path.string(), material_id, res_path);
                 ApplyTransform(v_start_id, m_Vertices, n_start_id, m_Normals, translate, rotate, scale);
                 std::cout << "Finish loading object: " << obj_path.string() << std::endl;
             }
@@ -235,7 +229,7 @@ void Scene::LoadEnvironmentMapFromJSON(const Json& environment_json, const std::
 {
     std::cout << "Loading Environment Map ..." << std::endl;
 
-    auto tex_obj = LoadTexture(environment_json, res_path);
+    auto tex_obj = LoadTextureFromJSON(environment_json, res_path);
     if (tex_obj > 0)
     {
         m_EnvMapTexObj = tex_obj;
@@ -262,7 +256,7 @@ void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesyst
 
         if(material_json[i].contains("albedo map"))
         {
-            auto tex_obj = LoadTexture(material_json[i]["albedo map"], res_path);
+            auto tex_obj = LoadTextureFromJSON(material_json[i]["albedo map"], res_path);
             if (tex_obj > 0)
             {
                 material.type = static_cast<MaterialType>(material.type | MaterialType::Albedo_Texture);
@@ -276,7 +270,7 @@ void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesyst
 
         if (material_json[i].contains("normal map"))
         {
-            auto tex_obj = LoadTexture(material_json[i]["normal map"], res_path);
+            auto tex_obj = LoadTextureFromJSON(material_json[i]["normal map"], res_path);
             if (tex_obj > 0)
             {
                 material.type = static_cast<MaterialType>(material.type | MaterialType::Normal_Texture);
@@ -284,13 +278,13 @@ void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesyst
             }
         }
 
-        materials.push_back(std::move(material));
+        m_Materials.push_back(std::move(material));
     }
     std::cout << "Loading Materials Success!" << std::endl;
 }
 
 void Scene::ReadObj(const std::string& obj_file_path,
-                    unsigned int matrial_id)
+                    unsigned int material_id, const std::filesystem::path& res_path)
 {
     ObjReader reader;
     ObjReaderConfig config;
@@ -327,8 +321,16 @@ void Scene::ReadObj(const std::string& obj_file_path,
                 attribs.texcoords.data(),
                 attribs.texcoords.size() * sizeof(float));
 
+    int material_start_id = m_Materials.size();
+    
+    for (auto& material : reader.GetMaterials())
+    {
+        LoadMaterialsFromMTL(material, res_path);
+    }
+
     for (auto& shape : shapes)
     {
+        
         m_TriangleIdxs.reserve(m_TriangleIdxs.size() + shape.mesh.indices.size() / 3);
         for (int i = 0; i < shape.mesh.indices.size(); i += 3)
         {
@@ -347,13 +349,79 @@ void Scene::ReadObj(const std::string& obj_file_path,
                 uv_start_id + shape.mesh.indices[i + 1].texcoord_index,
                 uv_start_id + shape.mesh.indices[i + 2].texcoord_index
             };
+            
+            int mtl = (shape.mesh.material_ids[0] >= 0) ? shape.mesh.material_ids[0] + material_start_id : material_id;
 
-            m_TriangleIdxs.emplace_back(v_id, n_id, uv_id, matrial_id);
+            m_TriangleIdxs.emplace_back(v_id, n_id, uv_id, mtl);
         }
     }
 }
 
-cudaTextureObject_t Scene::LoadTexture(const Json& texture_json, const std::filesystem::path& res_path)
+void Scene::LoadMaterialsFromMTL(const MtlMaterial& mtl_material, const std::filesystem::path& res_path)
+{
+    Material material;
+    ;
+
+    material.type = MaterialType::MicrofacetMix;
+
+    m_MaterialMap.emplace(mtl_material.name, m_Materials.size());
+
+    if (mtl_material.diffuse_texname.size() > 0)
+    {
+        std::filesystem::path texture_path(res_path);
+        texture_path.append(mtl_material.diffuse_texname);
+        if (std::filesystem::directory_entry(texture_path).exists())
+        {
+            auto tex_obj = LoadTextureFromFile(texture_path.string(), true);
+            material.type = static_cast<MaterialType>(material.type | MaterialType::Albedo_Texture);
+            material.data.textures.albedo_tex.m_TexObj = tex_obj;
+        }
+    }
+    else
+    {
+        material.data.values.albedo[0] = mtl_material.diffuse[0];
+        material.data.values.albedo[1] = mtl_material.diffuse[1];
+        material.data.values.albedo[2] = mtl_material.diffuse[2];
+    }
+
+    if (mtl_material.normal_texname.size() > 0)
+    {
+        std::filesystem::path texture_path(res_path);
+        texture_path.append(mtl_material.normal_texname);
+        if (std::filesystem::directory_entry(texture_path).exists())
+        {
+            auto tex_obj = LoadTextureFromFile(texture_path.string(), true);
+            material.type = static_cast<MaterialType>(material.type | MaterialType::Normal_Texture);
+            material.data.textures.normal_tex.m_TexObj = tex_obj;
+        }
+    }
+    if (mtl_material.roughness_texname.size() > 0)
+    {
+        std::filesystem::path texture_path(res_path);
+        texture_path.append(mtl_material.roughness_texname);
+        if (std::filesystem::directory_entry(texture_path).exists())
+        {
+            auto tex_obj = LoadTextureFromFile(texture_path.string(), true);
+            material.type = static_cast<MaterialType>(material.type | MaterialType::Roughness_Texture);
+            material.data.textures.roughness_tex.m_TexObj = tex_obj;
+        }
+    }
+    if (mtl_material.metallic_texname.size() > 0)
+    {
+        std::filesystem::path texture_path(res_path);
+        texture_path.append(mtl_material.metallic_texname);
+        if (std::filesystem::directory_entry(texture_path).exists())
+        {
+            auto tex_obj = LoadTextureFromFile(texture_path.string(), true);
+            material.type = static_cast<MaterialType>(material.type | MaterialType::Metallic_Texture);
+            material.data.textures.metallic_tex.m_TexObj = tex_obj;
+        }
+    }
+
+    m_Materials.push_back(std::move(material));
+}
+
+cudaTextureObject_t Scene::LoadTextureFromJSON(const Json& texture_json, const std::filesystem::path& res_path)
 {
     std::string tex_str;
     bool flip_v = false;
@@ -363,12 +431,17 @@ cudaTextureObject_t Scene::LoadTexture(const Json& texture_json, const std::file
     texture_path.append(tex_str);
     if (std::filesystem::directory_entry(texture_path).exists())
     {
-        m_Textures.emplace_back(mkU<Texture2D>(texture_path.string(), flip_v));
-        return m_Textures.back()->m_TexObj;
+        return LoadTextureFromFile(texture_path.string(), flip_v);
     }
     else
     {
         printf("Can not find texture with path: %s", texture_path.c_str());
         return 0;
     }
+}
+
+cudaTextureObject_t Scene::LoadTextureFromFile(const std::string& texture_str, bool flip_v)
+{
+    m_Textures.emplace_back(mkU<Texture2D>(texture_str, flip_v));
+    return m_Textures.back()->m_TexObj;
 }

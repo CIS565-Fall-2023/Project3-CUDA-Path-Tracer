@@ -11,7 +11,7 @@
 #include "gpuScene.h"
 #include "bvh.h"
 #include "cameraController.h"
-
+#include "stb_image.h"
 #include "ImGui/imgui.h"
 
 #define JOIN(a, b) a##b
@@ -88,7 +88,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/scene_1.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings

@@ -188,11 +188,14 @@ public:
 		}
 		case MaterialType::MicrofacetReflection:
 		{
-			return MicrofacetReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample, metallic, roughness);
+			return MicrofacetReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample, 
+				material.GetMetallic(intersection.uv), material.GetRoughness(intersection.uv));
 		}
 		case MaterialType::MicrofacetMix:
 		{
-			return MicrofacetMix(material.GetAlbedo(intersection.uv), intersection, rng, sample, metallic, roughness);
+			return MicrofacetMix(material.GetAlbedo(intersection.uv), intersection, rng, sample, 
+				material.GetMetallic(intersection.uv), 
+				material.GetRoughness(intersection.uv));
 		}
 		}
 		return false;

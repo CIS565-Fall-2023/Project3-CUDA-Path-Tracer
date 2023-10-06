@@ -6,7 +6,7 @@
     "up": [ 0, 1, 0 ],
     "fovy": 19.5,
     "resolution": [ 680, 680 ],
-    "interation": 1000,
+    "interation": 10000,
     "depth": 8
   },
   "materials": [
@@ -55,12 +55,12 @@
   "geomerties": [
     {
       "type": "obj",
-      "path": "meshes/sphere.obj",
+      "path": "meshes/Astartes.obj",
       "name": "bunny",
       "material": "microfacet",
       "translation": [ 0, 0, 0 ],
       "rotation": [ 0, 0, 0 ],
-      "scale": [ 2, 2, 2 ]
+      "scale": [ 0.5, 0.5, 0.5 ]
     }
   ],
   "environment map": {

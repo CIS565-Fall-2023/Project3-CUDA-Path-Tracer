@@ -350,7 +350,6 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 		else
 		{	
 			material.GetNormal(intersection.uv, intersection.normal);
-
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
 			BSDFSample bsdf_sample;
 			bsdf_sample.wiW = -segment.ray.direction;
