@@ -25,11 +25,14 @@
 #define DEPTH_OF_FIELD 0
 #define ANTIALIASING 1
 #define DIRECT_LIGHTING 1
-#define MOTION_BLUR 1
+#define MOTION_BLUR 0
 #define MOTION_VELO glm::vec3(0.5, 0.5, 0.0)
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
+
+static Scene* hst_scene = NULL;
+
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #if ERRORCHECK
 	cudaDeviceSynchronize();
@@ -38,6 +41,10 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 		return;
 	}
 
+	if (hst_scene) 
+	{
+		fprintf(stderr, " (%d)", hst_scene->triangles.size());
+	}
 	fprintf(stderr, "CUDA error");
 	if (file) {
 		fprintf(stderr, " (%s:%d)", file, line);
@@ -79,7 +86,6 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	}
 }
 
-static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
@@ -90,6 +96,7 @@ static ShadeableIntersection* dev_intersections = NULL;
 // ...
 static ShadeableIntersection* dev_first_bounce = NULL;
 static Geom* dev_lights = NULL;
+static Triangle* dev_triangles = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -121,6 +128,8 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_first_bounce, 0, pixelcount * sizeof(ShadeableIntersection));
 	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Geom));
 	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_triangles, scene->triangles.size() * sizeof(Triangle));
+	cudaMemcpy(dev_triangles, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 	checkCUDAError("pathtraceInit");
 }
@@ -133,6 +142,8 @@ void pathtraceFree() {
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
 	cudaFree(dev_first_bounce);
+	cudaFree(dev_lights);
+	cudaFree(dev_triangles);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -226,6 +237,8 @@ __global__ void computeIntersections(
 	, int num_paths
 	, PathSegment* pathSegments
 	, Geom* geoms
+	, Triangle* triangles
+	, int tri_size
 	, int geoms_size
 	, ShadeableIntersection* intersections
 )
@@ -245,6 +258,7 @@ __global__ void computeIntersections(
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		glm::vec2 tmp_uv;
 
 		// naive parse through global geoms
 
@@ -261,6 +275,10 @@ __global__ void computeIntersections(
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
+			else if (geom.type == OBJ) 
+			{
+				t = triangleIntersectionTest(geom, pathSegment.ray, triangles, tri_size, tmp_intersect, tmp_normal, tmp_uv, outside);
+			}
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -513,6 +531,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, num_paths
 				, dev_paths
 				, dev_geoms
+				, dev_triangles
+				, hst_scene->triangles.size()
 				, hst_scene->geoms.size()
 				, dev_first_bounce
 				);
@@ -531,6 +551,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, num_paths
 				, dev_paths
 				, dev_geoms
+				, dev_triangles
+				, hst_scene->triangles.size()
 				, hst_scene->geoms.size()
 				, dev_intersections
 				);
@@ -543,6 +565,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, num_paths
 			, dev_paths
 			, dev_geoms
+			, dev_triangles
+			, hst_scene->triangles.size()
 			, hst_scene->geoms.size()
 			, dev_intersections
 			);

@@ -123,34 +123,9 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere, pure reflection
-OBJECT 6
-sphere
-material 5
-TRANS       -1 4 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-// Sphere, pure diffuse
-OBJECT 7
-sphere
-material 1
-TRANS       3 2 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-// Sphere, pure diffuse
-OBJECT 8
-sphere
-material 4
-TRANS       0 2 3
+// OBJ 1
+OBJ_FILE ../scenes/cube.obj
+material 3
+TRANS       -2 0 0
 ROTAT       0 0 0
 SCALE       2 2 2
-
-// floor light
-OBJECT 9
-cube
-material 0
-TRANS       -5 5 0
-ROTAT       0 0 0
-SCALE       .3 3 3

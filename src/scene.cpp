@@ -4,6 +4,9 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
+
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
@@ -26,6 +29,9 @@ Scene::Scene(string filename) {
                 cout << " " << endl;
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
+                cout << " " << endl;
+            } else if (strcmp(tokens[0].c_str(), "OBJ_FILE") == 0) {
+                loadObj(tokens[1].c_str());
                 cout << " " << endl;
             }
         }
@@ -157,6 +163,107 @@ int Scene::loadCamera() {
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
 
     cout << "Loaded camera!" << endl;
+    return 1;
+}
+
+int Scene::loadObj(const char* filename)
+{
+    cout << "loading .obj file: " << filename << endl;
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials; 
+    std::string warn;
+    std::string err;
+
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filename);
+
+    if (!warn.empty()) cout << "WARN: " << warn << endl;
+    if (!err.empty()) cout << "Err: " << err << endl;
+    if (!ret) 
+    {
+        cout << "Failed to load .obj file. " << endl;
+        return 0;
+    }
+
+    Geom newGeom;
+    newGeom.type = OBJ;
+    string line;
+
+    // link material
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        newGeom.materialid = atoi(tokens[1].c_str());
+    }
+
+    //load transformations
+    utilityCore::safeGetline(fp_in, line);
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+
+        //load tranformations
+        if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+            newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+            newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+            newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+
+        utilityCore::safeGetline(fp_in, line);
+    }
+
+    newGeom.transform = utilityCore::buildTransformationMatrix(
+        newGeom.translation, newGeom.rotation, newGeom.scale);
+    newGeom.inverseTransform = glm::inverse(newGeom.transform);
+    newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+    newGeom.triStart = triangles.size();
+
+    for (size_t i = 0; i < shapes.size(); i++) 
+    {
+        size_t index_offset = 0;
+
+        Triangle tri;
+
+        for (size_t f = 0; f < shapes[i].mesh.num_face_vertices.size(); f++)
+        {
+            for (size_t v = 0; v < 3; v++)
+            {
+                tinyobj::index_t idx_t = shapes[i].mesh.indices[index_offset + v];
+                size_t idx_v = (size_t)idx_t.vertex_index;
+                tinyobj::real_t vx = attrib.vertices[3 * idx_v + 0];
+                tinyobj::real_t vy = attrib.vertices[3 * idx_v + 1];
+                tinyobj::real_t vz = attrib.vertices[3 * idx_v + 2];
+                tri.verts[v] = glm::vec3(vx, vy, vz);
+
+                if (idx_t.normal_index >= 0) 
+                {
+                    size_t idx_n = (size_t)idx_t.normal_index;
+                    tinyobj::real_t nx = attrib.normals[3 * idx_n + 0];
+                    tinyobj::real_t ny = attrib.normals[3 * idx_n + 1];
+                    tinyobj::real_t nz = attrib.normals[3 * idx_n + 2];
+                    tri.nors[v] = glm::vec3(nx, ny, nz);
+                }
+
+                if (idx_t.texcoord_index >= 0) 
+                {
+                    size_t idx_uv = (size_t)idx_t.texcoord_index;
+                    tinyobj::real_t uvx = attrib.texcoords[2 * idx_uv + 0];
+                    tinyobj::real_t uvy = attrib.texcoords[2 * idx_uv + 1];
+                    tri.uvs[v] = glm::vec2(uvx, uvy);
+                }          
+            }
+            index_offset += 3;
+            triangles.push_back(tri);
+        }
+    }
+
+    newGeom.triEnd = triangles.size();
+    geoms.push_back(newGeom);
+
     return 1;
 }
 

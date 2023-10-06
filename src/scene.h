@@ -16,6 +16,7 @@ private:
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
     int loadCamera();
+    int loadObj(const char* filename);
 public:
     Scene(string filename);
     ~Scene();
@@ -25,4 +26,6 @@ public:
     RenderState state;
 
     std::vector<Geom> lights;
+
+    std::vector<Triangle> triangles;
 };
