@@ -79,7 +79,6 @@ __device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float HoV)
 	return f0 + (1.0f - f0) * util_math_pow_5(1.0f - HoV);
 }
 
-
 __device__ inline glm::vec3 util_math_fschlick_roughness(glm::vec3 f0, float roughness, float NoV)
 {
 	return f0 + util_math_pow_5(1.0f - NoV) * (glm::max(f0, glm::vec3(1.0f - roughness) - f0));
@@ -94,7 +93,7 @@ __device__ inline float util_math_luminance(glm::vec3 col)
 __device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float roughness, const glm::vec2& rand)
 {
 	glm::vec3 v = glm::normalize(glm::vec3(wo.x * roughness, wo.y * roughness, wo.z));
-	glm::vec3 t1 = v.z > 1 - EPSILON ? glm::vec3(1, 0, 0) : glm::cross(v, glm::vec3(0, 0, 1));
+	glm::vec3 t1 = v.z > 1 - 1e-9 ? glm::vec3(1, 0, 0) : glm::cross(v, glm::vec3(0, 0, 1));
 	glm::vec3 t2 = glm::cross(t1, v);
 	float a = 1 / (1 + v.z);
 	float r = sqrt(rand.x);
@@ -178,7 +177,7 @@ __device__ inline glm::vec3 bxdf_microfacet_eval(const glm::vec3& wo, const glm:
 	glm::vec3 F = util_math_fschlick(baseColor, glm::abs(glm::dot(wo, wh)));
 	float D = util_math_ggx_normal_distribution(wh, a2);
 	float G2 = util_math_smith_ggx_shadowing_masking(wi, wo, a2);
-	return (F * G2 * D) / (4 * util_math_tangent_space_abscos(wo));
+	return (F * G2 * D) / (4 * util_math_tangent_space_abscos(wo) * util_math_tangent_space_abscos(wi));
 }
 
 __device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3& wi, float roughness)
