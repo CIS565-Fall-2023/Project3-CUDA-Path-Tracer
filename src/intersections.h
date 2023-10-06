@@ -6,7 +6,7 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
@@ -152,25 +152,50 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray ray, Triangle* tri
     r.origin = multiplyMV(mesh.inverseTransform, glm::vec4(ray.origin, 1.0f));
     r.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(ray.direction, 0.0f)));
     float curr_t = FLT_MAX; //Double check what this does
-
-    for (int i = 0; i < tris_size; i++)
+    bool intersected = false;
+    glm::vec3 obj_intersect;
+    glm::vec3 obj_normal;
+    //printf("test mesh intersection 1 ");
+    //printf("tris_size = % d\n", tris_size);
+    for (int i = mesh.first_tri_index; i <= mesh.last_tri_index; i++)
     {
         Triangle tri = tris[i];
 		glm::vec3 tri_v0 = tri.v0.pos;
 		glm::vec3 tri_v1 = tri.v1.pos;
 		glm::vec3 tri_v2 = tri.v2.pos;
 		glm::vec3 bary;
+        //printf("test tri %d\n", i);
         if (glm::intersectRayTriangle(r.origin, r.direction, tri_v0, tri_v1, tri_v2, bary) && (bary.z < curr_t))
         {
+			intersected = true;
 			float bary_w = 1.0f - bary.x - bary.y;
-            intersect = getPointOnRay(r, bary.z);
+            obj_intersect = getPointOnRay(r, bary.z);
 			//intersect = bary.x * tri_v0 + bary.y * tri_v1 + bary_w * tri_v2; //try w = 1 - (u + v) here
-			normal = glm::normalize(bary.x * tri.v0.nor + bary.y * tri.v1.nor + bary_w * tri.v2.nor);
+			obj_normal = glm::normalize(bary_w * tri.v0.nor + bary.x * tri.v1.nor + bary.y * tri.v2.nor);
+            //printf("obj_normal is %f, %f, %f\n", obj_normal.x, obj_normal.y, obj_normal.z);
             curr_t = bary.z;
+            //printf("curr_t is %f, bary is %f %f %f\n", curr_t, bary.x, bary.y, bary.z);
 		}
 	}
-    intersect = multiplyMV(mesh.transform, glm::vec4(intersect, 1.0f));
-    normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
+    if (!intersected)
+    {
+        return -1;
+    }
+    intersect = multiplyMV(mesh.transform, glm::vec4(obj_intersect, 1.0f));
+    normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(obj_normal, 0.0f)));
+    //printf("normal is %f, %f, %f\n", normal.x, normal.y, normal.z);
+
+#if DEBUG
+    printf("in obj space:\n");
+    float obj_length = glm::length(r.origin - obj_intersect);
+    printf("curr_t is %f, length is %f\n", curr_t, obj_length);
+    printf("obj intersection is %f, %f, %f\n", obj_intersect.x, obj_intersect.y, obj_intersect.z);
+
+    printf("\n\n in world space:\n");
+    float length = glm::length(ray.origin - intersect);
+    printf("curr_t is %f, length is %f\n", curr_t, length);
+    printf("intersection is %f, %f, %f\n", intersect.x, intersect.y, intersect.z);
+#endif DEBUG
     return glm::length(ray.origin - intersect);
 }
 

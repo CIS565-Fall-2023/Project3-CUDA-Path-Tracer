@@ -1,0 +1,152 @@
+// piplup GLTF
+GLTF 0
+../scenes/piplup/scene.gltf
+
+// Camera
+CAMERA
+RES         800 800
+FOVY        45
+ITERATIONS  5000
+DEPTH       3
+FILE        cornell
+EYE         0.0 13 23
+LOOKAT      0 13 0
+UP          0 1 0
+
+// Emissive material (light)
+MATERIAL 2
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   5
+
+// Ceiling light
+OBJECT 2
+cube
+material 2
+TRANS       0 30 0
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Diffuse white
+MATERIAL 3
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse red
+MATERIAL 4
+RGB         .85 .35 .35
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse green
+MATERIAL 5
+RGB         .35 .85 .35
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Specular white
+MATERIAL 6
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Floor
+OBJECT 3
+cube
+material 3
+TRANS       0 -5 0
+ROTAT       0 0 0
+SCALE       30 0.01 30
+
+// Ceiling
+OBJECT 4
+cube
+material 3
+TRANS       0 30 0
+ROTAT       0 0 90
+SCALE       0.01 30 30
+
+// Back wall
+OBJECT 5
+cube
+material 3
+TRANS       0 12.5 -12.5
+ROTAT       0 90 0
+SCALE       0.01 35 30
+
+// Left wall
+OBJECT 6
+cube
+material 4
+TRANS       -12.5 12.5 0
+ROTAT       0 0 0
+SCALE       0.01 35 30
+
+// Right wall
+OBJECT 7
+cube
+material 5
+TRANS       12.5 12.5 0
+ROTAT       0 0 0
+SCALE       0.01 35 30
+
+// Right light
+OBJECT 8
+cube
+material 2
+TRANS       12.5 10 0
+ROTAT       0 0 0
+SCALE       .3 3 3
+
+// Left light
+OBJECT 9
+cube
+material 2
+TRANS       -12.5 10 0
+ROTAT       0 0 0
+SCALE       .3 3 3
+
+//// Right light 2
+//OBJECT 8
+//cube
+//material 2
+//TRANS       12.5 10 7
+//ROTAT       0 0 0
+//SCALE       .3 3 3
+//
+//// Left light 2
+//OBJECT 8
+//cube
+//material 2
+//TRANS       -12.5 10 7
+//ROTAT       0 0 0
+//SCALE       .3 3 3
+
+// Camera light
+OBJECT 9
+cube
+material 2
+TRANS 0.0 15 25
+ROTAT 0 0 0
+SCALE 16 16 .3

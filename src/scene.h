@@ -23,9 +23,20 @@ private:
     float bvh_find_best_split(uint32_t node_index, int &axis, float &split_pos);
     void bvh_reorder_tris();
     bool bvh_in_use = false;
+    void load_mesh(const tinygltf::Model &model, const tinygltf::Mesh& mesh, const glm::vec3& translation, 
+                   const glm::vec3& rotation, const glm::vec3& scale, const glm::quat& rotation_quat,
+                   const glm::mat4 &transformation = glm::mat4(0.0f));
+    void traverse_node(const tinygltf::Model& model, int node_index, const glm::mat4& parent_transform = glm::mat4(1.0f));
     bool load_gltf(string filename);
+    bool load_gltf_contents(string filename);
     bool gltf_load_materials(const tinygltf::Model &model);
     std::string basePath;
+    std::array<std::string, 2> const supported_attributes = {
+        "POSITION",
+        "NORMAL"
+        //TEXCOORD?
+    };
+    std::map<int, int> material_map;
 public:
     Scene(string filename);
     ~Scene();

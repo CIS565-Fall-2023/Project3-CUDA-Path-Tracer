@@ -44,6 +44,8 @@ struct Geom {
     glm::mat4 invTranspose;
     uint32_t root_node_index = 0; // can remove? maybe not
     uint32_t nodes_used = 0;
+    int first_tri_index;
+    int last_tri_index;
 };
 
 
@@ -173,3 +175,14 @@ struct Bin
     Aabb bounds;
     int tri_count = 0;
 };
+
+// print pos and nor of all vertices in tri
+inline void print_tri(Triangle tri)
+{
+    printf("v0 pos: %f %f %f\n", tri.v0.pos.x, tri.v0.pos.y, tri.v0.pos.z);
+	printf("v0 nor: %f %f %f\n", tri.v0.nor.x, tri.v0.nor.y, tri.v0.nor.z);
+	printf("v1 pos: %f %f %f\n", tri.v1.pos.x, tri.v1.pos.y, tri.v1.pos.z);
+	printf("v1 nor: %f %f %f\n", tri.v1.nor.x, tri.v1.nor.y, tri.v1.nor.z);
+	printf("v2 pos: %f %f %f\n", tri.v2.pos.x, tri.v2.pos.y, tri.v2.pos.z);
+	printf("v2 nor: %f %f %f\n", tri.v2.nor.x, tri.v2.nor.y, tri.v2.nor.z);
+}

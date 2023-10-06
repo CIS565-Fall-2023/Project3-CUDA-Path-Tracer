@@ -18,7 +18,7 @@
 
 #define ERRORCHECK 1
 #define MATERIAL_SORT 0
-#define CACHE_FIRST_BOUNCE 1
+#define CACHE_FIRST_BOUNCE 0
 
 #define MESH_INDEX 0
 
@@ -100,26 +100,33 @@ void pathtraceInit(Scene* scene) {
 
     cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
     cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
+    checkCUDAError("dev_image");
 
     cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+    checkCUDAError("dev_paths");
 
     cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
     cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+    checkCUDAError("dev_geoms");
 
     cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
     cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+    checkCUDAError("dev_tris");
 
     cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
     cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+    checkCUDAError("dev_materials");
 
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+    checkCUDAError("dev_intersections");
 
     cudaMalloc(&dev_first_bounce_cache, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_first_bounce_cache, 0, pixelcount * sizeof(ShadeableIntersection));
+    checkCUDAError("dev_first_bounce_cache");
 
-    cudaMalloc(&dev_bvh_nodes, scene->bvh_nodes.size() * sizeof(BvhNode));
-    cudaMemcpy(dev_bvh_nodes, scene->bvh_nodes.data(), scene->bvh_nodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
+    //cudaMalloc(&dev_bvh_nodes, scene->bvh_nodes.size() * sizeof(BvhNode));
+    //cudaMemcpy(dev_bvh_nodes, scene->bvh_nodes.data(), scene->bvh_nodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
     // TODO: initialize any extra device memeory you need
     first_bounce_cached = false;
     checkCUDAError("pathtraceInit");
@@ -216,6 +223,7 @@ __global__ void computeIntersections(
             for (int i = 0; i < geoms_size; i++)
             {
                 Geom& geom = geoms[i];
+                //printf("test intersection 1\n");
 
                 if (geom.type == CUBE)
                 {
@@ -227,6 +235,7 @@ __global__ void computeIntersections(
                 }
                 else if (geom.type == MESH)
                 {
+                    //printf("test mesh intersection 0\n");
                     t = meshIntersectionTest(geom, pathSegment.ray, tris, tmp_intersect, tmp_normal, outside, tris_size);
                 }
                 // TODO: add more intersection tests here... triangle? metaball? CSG?
@@ -252,6 +261,10 @@ __global__ void computeIntersections(
             //The ray hits something
             intersections[path_index].t = t_min;
             intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+            //if (intersections[path_index].materialId <= 1)
+            //{
+            //    printf("intersection with mesh %d material id: %d\n", hit_geom_index, intersections[path_index].materialId);
+            //}
             intersections[path_index].surfaceNormal = normal;
             intersections[path_index].intersectionPoint = intersect_point;
         }

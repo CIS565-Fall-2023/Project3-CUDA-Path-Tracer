@@ -6,6 +6,11 @@
 #include <cmath>
 
 #define EMISSIVE_FACTOR 1.5f
+#define TRANSFORM_DEBUG 1
+#define MATERIAL_DEBUG 1
+#define DEBUG 0
+
+using namespace std;
 
 Scene::Scene(string filename) {
     //std::string file = filename.substr(filename.rfind('/') + 1);
@@ -19,10 +24,12 @@ Scene::Scene(string filename) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
     }
-    if (fp_in.good() && !strcmp(strrchr(fname, '.'), ".gltf"))
-    {
-        load_gltf(filename);
-    }
+    //if (fp_in.good() && !strcmp(strrchr(fname, '.'), ".gltf"))
+    //{
+    //    // instead of this, add gltf file as meshes, maybe enable adding multiple meshes
+    //    // per gltf in existing scene.txt
+    //    load_gltf(filename);
+    //}
     else
     {
         while (fp_in.good()) {
@@ -42,9 +49,50 @@ Scene::Scene(string filename) {
                     loadCamera();
                     cout << " " << endl;
                 }
+                else if (strcmp(tokens[0].c_str(), "GLTF") == 0) {
+                    load_gltf(tokens[1]);
+                    cout << " " << endl;
+                }
             }
         }
     }
+}
+
+
+void print_mat4(const glm::mat4& mat)
+{
+    fprintf(stderr, "Matrix:\n");
+    for (int i = 0; i < 4; i++)
+    {
+        fprintf(stderr, "%f, %f, %f, %f\n", mat[i][0], mat[i][1], mat[i][2], mat[i][3]);
+    }
+
+}
+
+bool Scene::load_gltf(string gltf_id)
+{
+    int id = atoi(gltf_id.c_str());
+    string filename;
+    utilityCore::safeGetline(fp_in, filename);
+    if (!filename.empty() && fp_in.good())
+    {
+        if (!strcmp(strrchr(filename.c_str(), '.'), ".gltf"))
+        {
+            cout << "Loading gltf " << id << " from file " << filename << endl;
+            bool success = load_gltf_contents(filename);
+            if (success)
+			{
+				cout << "Loaded gltf " << id << " from file " << filename << endl;
+				return true;
+			}
+			else
+			{
+				cout << "Failed to load gltf " << id << " from file " << filename << endl;
+				return false;
+			}
+        }
+    }
+
 }
 
 bool Scene::gltf_load_materials(const tinygltf::Model &model)
@@ -62,14 +110,20 @@ bool Scene::gltf_load_materials(const tinygltf::Model &model)
         new_material.hasReflective = (material.pbrMetallicRoughness.metallicFactor > 0.0f) ? 1.0f : 0.0f;
         new_material.hasRefractive = 0.0f;
         new_material.indexOfRefraction = 0.0f;
-        new_material.emittance = (material.emissiveFactor.empty()) ? 0.0f : EMISSIVE_FACTOR; // hard coded emissive for now
+        //if (!material.emissiveFactor.empty())
+        //    cout << "Material emissive factor: " << material.emissiveFactor[0] << endl;
+        new_material.emittance = material.emissiveFactor[0]; // hard coded emissive for now
+#if MATERIAL_DEBUG 
+        fprintf(stderr, "Material color: %f, %f, %f\n", new_material.color.x, new_material.color.y, new_material.color.z);
+        fprintf(stderr, "Material index: %d\n", materials.size());
+#endif
         materials.push_back(new_material);
     }
     return true; // make it void?
 }
 
 // currently not using bvh here
-bool Scene::load_gltf(string filename)
+bool Scene::load_gltf_contents(string filename)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -90,12 +144,6 @@ bool Scene::load_gltf(string filename)
         return false;
     }
 
-    //for (int i = 0; i < model.bufferViews.size(); i++)
-    //{
-    //    const tinygltf::BufferView& bufferView = model.bufferViews[i];
-    //    // no support for sparse accessors at the moment
-    //    const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
-    //}
     if (model.scenes.size() <= 0)
     {
         fprintf(stderr, "No valid scenes\n");
@@ -104,270 +152,355 @@ bool Scene::load_gltf(string filename)
     // for now, load one scene
     int display_scene = model.defaultScene > -1 ? model.defaultScene : 0;
     const tinygltf::Scene& scene = model.scenes[display_scene];
-    std::array<std::string, 2> const supported_attributes = {
-        "POSITION",
-        "NORMAL"
-        //TEXCOORD?
-    };
     gltf_load_materials(model);
-    //materials = std::vector<Material>();
-    //for (const auto& material : model.materials)
-    //{
-    //    Material new_material;
-    //    new_material.color = glm::vec3(static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[0]),
-    //        static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[1]),
-    //        static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]));
-    //    new_material.specular.exponent = 1.0f / material.pbrMetallicRoughness.roughnessFactor;
-    //    new_material.specular.factor = material.pbrMetallicRoughness.metallicFactor;
-    //    new_material.specular.color = new_material.color;
-    //    new_material.hasReflective = (material.pbrMetallicRoughness.metallicFactor > 0.0f) ? 1.0f : 0.0f;
-    //    new_material.hasRefractive = 0.0f;
-    //    new_material.indexOfRefraction = 0.0f;
-    //    new_material.emittance = (material.emissiveFactor.empty()) ? 0.0f : EMISSIVE_FACTOR; // hard coded emissive for now
-    //    materials.push_back(new_material);
-    //}
 
     for (int i = 0; i < scene.nodes.size(); i++)
     {
-        tinygltf::Node node = model.nodes[scene.nodes[i]];
-        if (node.mesh < 0)
-        {
-            continue;
+#if DEBUG
+        fprintf(stderr, "node %d\n", i);
+#endif
+        traverse_node(model, scene.nodes[i]);
+    }
+#if TRANSFORM_DEBUG
+    cout << geoms.size() << " meshes loaded" << endl;
+    for (int i = 0; i < geoms.size(); i++)
+    {
+        cout << "mesh " << i << " has material " << geoms[i].materialid << endl;
+        cout << "and transformations: " << endl;
+        cout << "translation " << geoms[i].translation.x << ", " << geoms[i].translation.y << ", " << geoms[i].translation.z << endl;
+        cout << "rotation " << geoms[i].rotation.x << ", " << geoms[i].rotation.y << ", " << geoms[i].rotation.z << endl;
+        cout << "scale " << geoms[i].scale.x << ", " << geoms[i].scale.y << ", " << geoms[i].scale.z << endl;
+        cout << "and transform matrix: " << endl;
+        print_mat4(geoms[i].transform);
+        cout << "and inverse transform matrix: " << endl;
+        print_mat4(geoms[i].inverseTransform);
+        cout << "and inverse transpose matrix: " << endl;
+        print_mat4(geoms[i].invTranspose);
+    }
+#endif
+    return (tris.size() > 0); // look at this
+}
+
+
+
+void Scene::traverse_node(const tinygltf::Model& model, int node_index, 
+                           const glm::mat4& parent_transform)
+{
+    const tinygltf::Node& node = model.nodes[node_index];
+    glm::vec3 rotation(0.0f);
+    glm::quat rotation_quat;
+    glm::vec3 translation(0.0f);
+    glm::vec3 scale(1.0f);
+    glm::mat4 curr_node_transform(1.0f);
+    if (node.matrix.size() == 16)
+    {
+        cout << "has matrix" << endl;
+        for (int i = 0; i < 16; i++) {
+            curr_node_transform[i / 4][i % 4] = static_cast<float>(node.matrix[i]);
         }
+    }
+    else
+    {
+        if (!node.translation.empty())
+        {
+            translation = glm::vec3(static_cast<float>(node.translation[0]),
+                static_cast<float>(node.translation[1]),
+                static_cast<float>(node.translation[2]));
+            curr_node_transform = glm::translate(curr_node_transform, translation);
+        }
+        if (!node.rotation.empty())
+        {
+            rotation_quat = glm::quat(static_cast<float>(node.rotation[3]),
+                static_cast<float>(node.rotation[0]),
+                static_cast<float>(node.rotation[1]),
+                static_cast<float>(node.rotation[2]));
+            curr_node_transform = curr_node_transform * glm::mat4(rotation_quat);
+        }
+        if (!node.scale.empty())
+        {
+            scale = glm::vec3(static_cast<float>(node.scale[0]),
+                static_cast<float>(node.scale[1]),
+                static_cast<float>(node.scale[2]));
+            curr_node_transform = glm::scale(curr_node_transform, scale);
+        }
+    }
+    glm::mat4 combined_transform = parent_transform * curr_node_transform;
+    glm::decompose(combined_transform, scale, rotation_quat, translation, glm::vec3(), glm::vec4());
+    rotation = glm::degrees(glm::eulerAngles(rotation_quat));
+#if TRANSFORM_DEBUG
+    cout << "Translation: " << translation.x << ", " << translation.y << ", " << translation.z << endl;
+    cout << "Rotation: " << rotation.x << ", " << rotation.y << ", " << rotation.z << endl;
+    cout << "Scale: " << scale.x << ", " << scale.y << ", " << scale.z << endl;
+    cout << "Current node transform" << endl;
+    print_mat4(curr_node_transform);
+    cout << "Combined transform" << endl;
+    print_mat4(combined_transform);
+    //translation = glm::vec3(0.0f);
+    //rotation = glm::vec3(0.0f);
+    //scale = glm::vec3(1.0f);
+#endif
+    if (node.mesh >= 0)
+    {
         const tinygltf::Mesh& mesh = model.meshes[node.mesh];
+        load_mesh(model, mesh, translation, rotation, scale, rotation_quat, combined_transform);
+    }
+
+    for (int child_index : node.children)
+    {
+        traverse_node(model, child_index, combined_transform);
+    }
+}
 
 
-        // construct mesh and get transforms
-        Geom new_mesh;
-        new_mesh.type = MESH;
-        glm::mat4 transformation_matrix = glm::mat4();
-        glm::quat rotation_quat;
 
-        if (node.matrix.size() == 16)
+void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh, 
+                      const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale,
+                      const glm::quat& rotation_quat, const glm::mat4 &transformation)
+{
+    // construct mesh and get transforms
+    Geom new_mesh;
+    new_mesh.type = MESH;
+    new_mesh.translation = translation;
+    new_mesh.rotation = rotation;
+    new_mesh.scale = scale;
+    new_mesh.first_tri_index = tris.size();
+
+    // TODO: link material
+    // I'm kind of assuming each mesh is only one primitive here
+    for (const auto& primitive : mesh.primitives)
+    {
+        // initialize to nullptrs
+        std::array<const tinygltf::Accessor*, 2> accessors = {};
+        std::array<const tinygltf::BufferView*, 2> bufferViews = {};
+        std::array<const tinygltf::Buffer*, 2> buffers = {};
+        std::array<const float*, 2> data = {};
+        std::array<const glm::vec3*, 2> vec3_data = {};
+        std::array<int, 2> strides = {};
+
+        for (int i = 0; i < supported_attributes.size(); i++)
         {
-            for (int i = 0; i < 16; i++) {
-                transformation_matrix[i / 4][i % 4] = static_cast<float>(node.matrix[i]);
+            if (primitive.attributes.find(supported_attributes[i]) != primitive.attributes.end())
+            {
+                const int index = primitive.attributes.at(supported_attributes[i]);
+                //cout << " index: " << index << "for supported attributes i " << supported_attributes[i] << endl;
+                accessors[i] = &model.accessors[index];
+                bufferViews[i] = &model.bufferViews[accessors[i]->bufferView];
+                buffers[i] = &model.buffers[bufferViews[i]->buffer];
+                strides[i] = bufferViews[i]->byteStride;
+                data[i] = reinterpret_cast<const float*>(&(buffers[i]->data[accessors[i]->byteOffset + bufferViews[i]->byteOffset]));
+                vec3_data[i] = reinterpret_cast<const glm::vec3*>(&(buffers[i]->data[accessors[i]->byteOffset + bufferViews[i]->byteOffset]));
             }
-            glm::decompose(transformation_matrix, new_mesh.scale, rotation_quat, new_mesh.translation, glm::vec3(), glm::vec4());
         }
+        // Assume each mesh is one primitive right now
+        if (primitive.material >= 0)
+        {
+            new_mesh.materialid = primitive.material;
+#if MATERIAL_DEBUG
+            printf("Mesh material id: %d for mesh %li\n", new_mesh.materialid, geoms.size());
+#endif
+        }
+        //if (primitive.attributes.find("POSITION") != primitive.attributes.end())
+        //{
+        //    const int pos_index = primitive.attributes.at("POSITION");
+        //    const tinygltf::Accessor& pos_accessor = model.accessors[pos_index];
+        //    const tinygltf::BufferView& pos_bufferView = model.bufferViews[accessor.bufferView];
+        //    const tinygltf::Buffer& pos_buffer = model.buffers[bufferView.buffer];
+        //    const float* pos_data = reinterpret_cast<const float*>(&(buffer.data[accessor.byteOffset + bufferView.byteOffset]));
+        //
+        // not using indices
+        if (primitive.indices < 0)
+        {
+            int pos_accessor_index = std::find(supported_attributes.begin(), supported_attributes.begin(), "POSITION") - supported_attributes.begin();
+            for (int i = 0; i < (accessors[pos_accessor_index])->count; i += 3)
+            {
+                Triangle tri;
+                for (int j = 0; j < supported_attributes.size(); j++)
+                {
+                    if (accessors[j] == nullptr)
+                    {
+                        continue;
+                    }
+                    //const float* attribute_data = data[j];
+                    const glm::vec3 * attribute_data = vec3_data[j];
+                    if (supported_attributes[j] == "TEXCOORD_0")
+                    {
+                        // UV coords
+                    }
+                    else
+                    {
+                        //glm::vec3 vec_0 = glm::vec3(attribute_data[i * 3], attribute_data[i * 3 + 1], attribute_data[i * 3 + 2]);
+                        //glm::vec3 vec_1 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
+                        //glm::vec3 vec_2 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
+                        glm::vec3 vec_0 = attribute_data[i * strides[j] / sizeof(glm::vec3)]; // Adjust index based on stride
+                        glm::vec3 vec_1 = attribute_data[(i + 1) * strides[j] / sizeof(glm::vec3)]; // Adjust index based on stride
+                        glm::vec3 vec_2 = attribute_data[(i + 2) * strides[j] / sizeof(glm::vec3)]; // Adjust index based on stride
+
+                        if (supported_attributes[j] == "POSITION")
+                        {
+                            tri.v0.pos = vec_0;
+                            tri.v1.pos = vec_1;
+                            tri.v2.pos = vec_2;
+                            tri.centroid = (vec_0 + vec_1 + vec_2) * 0.333333333333f;
+
+                        }
+                        else if (supported_attributes[j] == "NORMAL")
+                        {
+                            tri.v0.nor = vec_0;
+                            tri.v1.nor = vec_1;
+                            tri.v2.nor = vec_2;
+                        }
+                    }
+                }
+                // For now assume that each mesh is one material
+                //tri.materialid = static_cast<int>(primitive.material);
+#if DEBUG
+                print_tri(tri);
+#endif
+                tris.push_back(tri);
+            }
+        }
+        // using indices
         else
         {
-            if (!node.translation.empty())
+            const tinygltf::Accessor& index_accessor = model.accessors[primitive.indices];
+            const tinygltf::BufferView& index_bufferView = model.bufferViews[index_accessor.bufferView];
+            const tinygltf::Buffer& index_buffer = model.buffers[index_bufferView.buffer];
+            // assuming 16 bit indices - may need to change
+            const uint32_t* index_data = reinterpret_cast<const uint32_t*>(&(index_buffer.data[index_accessor.byteOffset + index_bufferView.byteOffset]));
+            for (int i = 0; i < index_accessor.count; i += 3) //stride may be here?
             {
-                new_mesh.translation = glm::vec3(static_cast<float>(node.translation[0]), 
-                                                  static_cast<float>(node.translation[1]), 
-                                                  static_cast<float>(node.translation[2]));
-            }
-            if (!node.rotation.empty())
-            {
-                rotation_quat = glm::quat(static_cast<float>(node.rotation[3]),
-                                     static_cast<float>(node.rotation[0]),
-                                     static_cast<float>(node.rotation[1]),
-                                     static_cast<float>(node.rotation[2]));
-            }
-            if (!node.scale.empty())
-            {
-                new_mesh.scale = glm::vec3(static_cast<float>(node.scale[0]),
-                                            static_cast<float>(node.scale[1]),
-                                            static_cast<float>(node.scale[2]));
-            }
-		}
-        new_mesh.rotation = glm::eulerAngles(rotation_quat);
-        // TODO: link material
-        for (const auto& primitive : mesh.primitives)
-        {
-            // initialize to nullptrs
-            std::array<tinygltf::Accessor*, 2> accessors = {};
-            std::array<tinygltf::BufferView*, 2> bufferViews = {};
-            std::array<tinygltf::Buffer*, 2> buffers = {};
-            std::array<float*, 2> data = {};
 
-            for (int i = 0; i < supported_attributes.size(); i++)
-            {
-                if (primitive.attributes.find(supported_attributes[i]) != primitive.attributes.end())
+                Triangle tri;
+                int index_0 = index_data[i];
+                int index_1 = index_data[i + 1];
+                int index_2 = index_data[i + 2];
+
+                for (int j = 0; j < supported_attributes.size(); j++)
                 {
-                    const int index = primitive.attributes.at(supported_attributes[i]);
-                    accessors[i] = &model.accessors[index];
-                    bufferViews[i] = &model.bufferViews[accessors[i]->bufferView];
-                    buffers[i] = &model.buffers[bufferViews[i]->buffer];
-                    data[i] = reinterpret_cast<float*>(&(buffers[i]->data[accessors[i]->byteOffset + bufferViews[i]->byteOffset]));
-                }
-            }
-            // Assume each mesh is one material right now
-            if (primitive.material >= 0)
-            {
-                new_mesh.materialid = static_cast<int>(primitive.material);
-            }
-            //if (primitive.attributes.find("POSITION") != primitive.attributes.end())
-            //{
-            //    const int pos_index = primitive.attributes.at("POSITION");
-            //    const tinygltf::Accessor& pos_accessor = model.accessors[pos_index];
-            //    const tinygltf::BufferView& pos_bufferView = model.bufferViews[accessor.bufferView];
-            //    const tinygltf::Buffer& pos_buffer = model.buffers[bufferView.buffer];
-            //    const float* pos_data = reinterpret_cast<const float*>(&(buffer.data[accessor.byteOffset + bufferView.byteOffset]));
-            //
-            // not using indices
-            if (primitive.indices < 0)
-            {
-                int pos_accessor_index = std::find(supported_attributes.begin(), supported_attributes.begin(), "POSITION") - supported_attributes.begin();
-                for (int i = 0; i < (accessors[pos_accessor_index])->count; i += 3)
-                {
-                    Triangle tri;
-                    for (int j = 0; j < supported_attributes.size(); j++)
+                    if (accessors[j] == nullptr)
                     {
-                        if (accessors[j] == nullptr)
-                        {
-                            continue;
-                        }
-                        float* attribute_data = data[j];
-                        if (supported_attributes[j] == "TEXCOORD_0")
-                        {
-                            // UV coords
-                        }
-                        else
-                        {
-                            glm::vec3 vec_0 = glm::vec3(attribute_data[i * 3], attribute_data[i * 3 + 1], attribute_data[i * 3 + 2]);
-                            glm::vec3 vec_1 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
-                            glm::vec3 vec_2 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
+                        continue;
+                    }
+                    //const float* attribute_data = data[j];
+                    const glm::vec3 * attribute_data = vec3_data[j];
+                    if (supported_attributes[j] == "TEXCOORD_0")
+                    {
 
-                            if (supported_attributes[j] == "POSITION")
-                            {
-                                tri.v0.pos = vec_0;
-                                tri.v1.pos = vec_1;
-                                tri.v2.pos = vec_2;
-                                tri.centroid = (vec_0 + vec_1 + vec_2) * 0.333333333333f;
+                    }
+                    else
+                    {
+                        //glm::vec3 vec_0 = glm::vec3(attribute_data[index_0 * 3], attribute_data[index_0 * 3 + 1], attribute_data[index_0 * 3 + 2]);
+                        //glm::vec3 vec_1 = glm::vec3(attribute_data[index_1 * 3], attribute_data[index_1 * 3 + 1], attribute_data[index_1 * 3 + 2]);
+                        //glm::vec3 vec_2 = glm::vec3(attribute_data[index_2 * 3], attribute_data[index_2 * 3 + 1], attribute_data[index_2 * 3 + 2]);
+                        int byte_stride = strides[j]; // Get byte stride for this attribute
 
-                            }
-                            else if (supported_attributes[j] == "NORMAL")
-                            {
-                                tri.v0.nor = vec_0;
-                                tri.v1.nor = vec_1;
-                                tri.v2.nor = vec_2;
-                            }
+                        // Access vec3 values while accounting for byte stride
+                        glm::vec3 vec_0 = attribute_data[index_0 * byte_stride / sizeof(glm::vec3)];
+                        glm::vec3 vec_1 = attribute_data[index_1 * byte_stride / sizeof(glm::vec3)];
+                        glm::vec3 vec_2 = attribute_data[index_2 * byte_stride / sizeof(glm::vec3)];
+
+                        if (supported_attributes[j] == "POSITION")
+                        {
+                            tri.v0.pos = vec_0;
+                            tri.v1.pos = vec_1;
+                            tri.v2.pos = vec_2;
+                            tri.centroid = (vec_0 + vec_1 + vec_2) * 0.333333333333f;
+
+                        }
+                        else if (supported_attributes[j] == "NORMAL")
+                        {
+                            tri.v0.nor = vec_0;
+                            tri.v1.nor = vec_1;
+                            tri.v2.nor = vec_2;
                         }
                     }
-                    // For now assume that each mesh is one material
-                    //tri.materialid = static_cast<int>(primitive.material);
-                    tris.push_back(tri);
                 }
-            }
-            // using indices
-            else
-            {
-                const tinygltf::Accessor& index_accessor = model.accessors[primitive.indices];
-                const tinygltf::BufferView& index_bufferView = model.bufferViews[index_accessor.bufferView];
-                const tinygltf::Buffer& index_buffer = model.buffers[index_bufferView.buffer];
-                // assuming 16 bit indices - may need to change
-                const uint16_t* index_data = reinterpret_cast<const uint16_t*>(&(index_buffer.data[index_accessor.byteOffset + index_bufferView.byteOffset]));
-                for (int i = 0; i < index_accessor.count; i += 3)
-                {
-
-                    Triangle tri;
-                    int index_0 = index_data[i];
-                    int index_1 = index_data[i + 1];
-                    int index_2 = index_data[i + 2];
-
-                    for (int j = 0; j < supported_attributes.size(); j++)
-                    {
-                        if (accessors[j] == nullptr)
-                        {
-                            continue;
-                        }
-                        float* attribute_data = data[j];
-                        if (supported_attributes[j] == "TEXCOORD_0")
-                        {
-
-                        }
-                        else
-                        {
-                            glm::vec3 vec_0 = glm::vec3(attribute_data[index_0 * 3], attribute_data[index_0 * 3 + 1], attribute_data[index_0 * 3 + 2]);
-                            glm::vec3 vec_1 = glm::vec3(attribute_data[index_1 * 3], attribute_data[index_1 * 3 + 1], attribute_data[index_1 * 3 + 2]);
-                            glm::vec3 vec_2 = glm::vec3(attribute_data[index_2 * 3], attribute_data[index_2 * 3 + 1], attribute_data[index_2 * 3 + 2]);
-
-                            if (supported_attributes[j] == "POSITION")
-                            {
-                                tri.v0.pos = vec_0;
-                                tri.v1.pos = vec_1;
-                                tri.v2.pos = vec_2;
-                                tri.centroid = (vec_0 + vec_1 + vec_2) * 0.333333333333f;
-
-                            }
-                            else if (supported_attributes[j] == "NORMAL")
-                            {
-                                tri.v0.nor = vec_0;
-                                tri.v1.nor = vec_1;
-                                tri.v2.nor = vec_2;
-                            }
-                        }
-                    }
-                    tris.push_back(tri);
-                }
+#if DEBUG
+                print_tri(tri);
+#endif
+                tris.push_back(tri);
             }
         }
-        new_mesh.transform = utilityCore::buildTransformationMatrix(
-            new_mesh.translation, new_mesh.rotation, new_mesh.scale);
-        new_mesh.inverseTransform = glm::inverse(new_mesh.transform);
-        new_mesh.invTranspose = glm::inverseTranspose(new_mesh.transform);
-        geoms.push_back(new_mesh);
     }
-    return true; // look at this
+    new_mesh.last_tri_index = tris.size() - 1;
+
+    //new_mesh.transform = utilityCore::buildTransformationMatrix(new_mesh.translation, new_mesh.rotation, new_mesh.scale);
+    glm::quat quat = rotation_quat;
+    new_mesh.transform = (transformation == glm::mat4(0.0f)) ? glm::scale((glm::translate(glm::mat4(1.0f), translation) * glm::mat4(quat)), scale)
+                                                             : transformation;
+    new_mesh.inverseTransform = glm::inverse(new_mesh.transform);
+    new_mesh.invTranspose = glm::inverseTranspose(new_mesh.transform);
+#if TRANSFORM_DEBUG
+    std::cout << "Building matrix with translation " << translation.x << ", " << translation.y << ", " << translation.z << endl;
+    std::cout << "rotation " << rotation.x << ", " << rotation.y << ", " << rotation.z << endl;
+    std::cout << "scale " << scale.x << ", " << scale.y << ", " << scale.z << endl;
+    std::cout << "and transform matrix: " << endl;
+    print_mat4(new_mesh.transform);
+	std::cout << "and inverse transform matrix: " << endl;
+    print_mat4(new_mesh.inverseTransform);
+	std::cout << "and inverse transpose matrix: " << endl;
+    print_mat4(new_mesh.invTranspose);
+    std::cout << endl << endl << endl;
+#endif
+    geoms.push_back(new_mesh);
 }
 
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
-        cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-        return -1;
-    } else {
-        cout << "Loading Geom " << id << "..." << endl;
-        Geom newGeom;
-        string line;
+    //if (id != geoms.size()) {
+    //    cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
+    //    return -1;
+    //} else {
+    cout << "Loading Geom " << id << "..." << endl;
+    Geom newGeom;
+    string line;
 
-        //load object type
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            if (strcmp(line.c_str(), "sphere") == 0) {
-                cout << "Creating new sphere..." << endl;
-                newGeom.type = SPHERE;
-            } else if (strcmp(line.c_str(), "cube") == 0) {
-                cout << "Creating new cube..." << endl;
-                newGeom.type = CUBE;
-            }
+    //load object type
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        if (strcmp(line.c_str(), "sphere") == 0) {
+            cout << "Creating new sphere..." << endl;
+            newGeom.type = SPHERE;
+        } else if (strcmp(line.c_str(), "cube") == 0) {
+            cout << "Creating new cube..." << endl;
+            newGeom.type = CUBE;
         }
-
-        //link material
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            newGeom.materialid = atoi(tokens[1].c_str());
-            cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
-        }
-
-        //load transformations
-        utilityCore::safeGetline(fp_in, line);
-        while (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-
-            //load tranformations
-            if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-                newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-                newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-
-            utilityCore::safeGetline(fp_in, line);
-        }
-
-        newGeom.transform = utilityCore::buildTransformationMatrix(
-                newGeom.translation, newGeom.rotation, newGeom.scale);
-        newGeom.inverseTransform = glm::inverse(newGeom.transform);
-        newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
-
-        geoms.push_back(newGeom);
-        return 1;
     }
+
+    //link material
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        newGeom.materialid = material_map.at(atoi(tokens[1].c_str()));
+        cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid 
+             << " mapped from " << tokens[1] << "..." << endl;
+    }
+
+    //load transformations
+    utilityCore::safeGetline(fp_in, line);
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+
+        //load tranformations
+        if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+            newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        } else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+            newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+            newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+
+        utilityCore::safeGetline(fp_in, line);
+    }
+
+    newGeom.transform = utilityCore::buildTransformationMatrix(
+            newGeom.translation, newGeom.rotation, newGeom.scale);
+    newGeom.inverseTransform = glm::inverse(newGeom.transform);
+    newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+    geoms.push_back(newGeom);
+    return 1;
+    //}
 }
 
 int Scene::loadCamera() {
@@ -433,39 +566,40 @@ int Scene::loadCamera() {
 
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
-    if (id != materials.size()) {
-        cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
-        return -1;
-    } else {
-        cout << "Loading Material " << id << "..." << endl;
-        Material newMaterial;
-
-        //load static properties
-        for (int i = 0; i < 7; i++) {
-            string line;
-            utilityCore::safeGetline(fp_in, line);
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "RGB") == 0) {
-                glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
-                newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
-                newMaterial.specular.exponent = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
-                glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                newMaterial.specular.color = specColor;
-            } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
-                newMaterial.hasReflective = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
-                newMaterial.hasRefractive = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
-                newMaterial.indexOfRefraction = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
-                newMaterial.emittance = atof(tokens[1].c_str());
-            }
+    //if (id != materials.size()) {
+    //    cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
+    //    return -1;
+    //} else {
+    cout << "Loading Material " << id << "..." << endl;
+    Material newMaterial;
+    int material_index = materials.size();
+    material_map.emplace(id, material_index);
+    //load static properties
+    for (int i = 0; i < 7; i++) {
+        string line;
+        utilityCore::safeGetline(fp_in, line);
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        if (strcmp(tokens[0].c_str(), "RGB") == 0) {
+            glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
+            newMaterial.color = color;
+        } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
+            newMaterial.specular.exponent = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
+            glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            newMaterial.specular.color = specColor;
+        } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
+            newMaterial.hasReflective = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
+            newMaterial.hasRefractive = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            newMaterial.indexOfRefraction = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
+            newMaterial.emittance = atof(tokens[1].c_str());
         }
-        materials.push_back(newMaterial);
-        return 1;
     }
+    materials.push_back(newMaterial);
+    return 1;
+    //}
 }
 
 void Scene::bvh_build()
