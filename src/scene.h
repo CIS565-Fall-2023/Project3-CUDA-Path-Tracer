@@ -48,6 +48,5 @@ public:
     std::vector<Material> materials;
     RenderState state;
     std::vector<BvhNode> bvh_nodes;
-    uint32_t root_node_index = 0;
     uint32_t nodes_used = 0;
 };

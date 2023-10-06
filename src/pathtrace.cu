@@ -192,7 +192,6 @@ __global__ void computeIntersections(
     , Triangle* tris
     , int tris_size
     , BvhNode* bvh_nodes
-    , int root_node_index
     , bool using_bvh
 )
 {
@@ -212,75 +211,42 @@ __global__ void computeIntersections(
         glm::vec3 tmp_intersect;
         glm::vec3 tmp_normal;
 
-        if (using_bvh)
-        {
-            t = intersect_bvh(geoms[MESH_INDEX], tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, root_node_index);
-
-            if (t > 0.0f && t_min > t)
-			{
-				t_min = t;
-				hit_geom_index = MESH_INDEX;
-				intersect_point = tmp_intersect;
-				normal = tmp_normal;
-			}
-            for (int i = 0; i < geoms_size; i++)
-            {
-                Geom& geom = geoms[i];
-
-                if (geom.type == CUBE)
-                {
-                    t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-                }
-                else if (geom.type == SPHERE)
-                {
-                    t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-                }
-                else
-                {
-                    continue;
-                }
-                if (t > 0.0f && t_min > t)
-                {
-                    t_min = t;
-                    hit_geom_index = i;
-                    intersect_point = tmp_intersect;
-                    normal = tmp_normal;
-                }
-            }
-        }
 
         // naive parse through global geoms
-        else
+        for (int i = 0; i < geoms_size; i++)
         {
-            for (int i = 0; i < geoms_size; i++)
-            {
-                Geom& geom = geoms[i];
-                //printf("test intersection 1\n");
+            Geom& geom = geoms[i];
+            //printf("test intersection 1\n");
 
-                if (geom.type == CUBE)
+            if (geom.type == CUBE)
+            {
+                t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+            }
+            else if (geom.type == SPHERE)
+            {
+                t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+            }
+            else if (geom.type == MESH)
+            {
+                if (using_bvh)
+				{
+					t = intersect_bvh(geom, tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, geom.root_node_index);
+				}
+                else
                 {
-                    t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-                }
-                else if (geom.type == SPHERE)
-                {
-                    t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-                }
-                else if (geom.type == MESH)
-                {
-                    //printf("test mesh intersection 0\n");
                     t = meshIntersectionTest(geom, pathSegment.ray, tris, tmp_intersect, tmp_normal, outside, tris_size);
                 }
-                // TODO: add more intersection tests here... triangle? metaball? CSG?
+            }
+            // TODO: add more intersection tests here... triangle? metaball? CSG?
 
-                // Compute the minimum t from the intersection tests to determine what
-                // scene geometry object was hit first.
-                if (t > 0.0f && t_min > t)
-                {
-                    t_min = t;
-                    hit_geom_index = i;
-                    intersect_point = tmp_intersect;
-                    normal = tmp_normal;
-                }
+            // Compute the minimum t from the intersection tests to determine what
+            // scene geometry object was hit first.
+            if (t > 0.0f && t_min > t)
+            {
+                t_min = t;
+                hit_geom_index = i;
+                intersect_point = tmp_intersect;
+                normal = tmp_normal;
             }
         }
 
@@ -502,7 +468,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
                 , dev_tris
                 , hst_scene->tris.size()
                 , dev_bvh_nodes
-                , hst_scene->root_node_index
                 , hst_scene->using_bvh()
                 );
             checkCUDAError("compute_intersections");

@@ -618,14 +618,23 @@ void Scene::bvh_build()
     {
         tri_indices[i] = i;
     }
-    bvh_nodes.emplace_back();
-    root_node_index = bvh_nodes.size() - 1;
-    nodes_used++;
-    BvhNode& root = bvh_nodes[root_node_index];
-    root.left_first = 0;
-    root.tri_count = tri_indices.size();
-    bvh_update_node_bounds(root_node_index);
-    bvh_subdivide(root_node_index);
+    for (int i = 0; i < geoms.size(); i++)
+    {
+        Geom& geom = geoms[i];
+        if (geom.type != MESH)
+        {
+            continue;
+        }
+        bvh_nodes.emplace_back();
+        geom.root_node_index = bvh_nodes.size() - 1;
+        nodes_used++; //not sure what this is used for at the moment
+        geom.nodes_used++;
+        BvhNode& root = bvh_nodes[geom.root_node_index];
+        root.left_first = geom.first_tri_index;
+        root.tri_count = geom.last_tri_index - geom.first_tri_index + 1;
+        bvh_update_node_bounds(geom.root_node_index);
+        bvh_subdivide(geom.root_node_index);
+    }
     bvh_reorder_tris();
     bvh_in_use = true;
 }
