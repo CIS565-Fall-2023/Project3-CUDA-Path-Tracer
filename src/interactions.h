@@ -86,6 +86,13 @@ __host__ __device__ glm::vec3 refract(const glm::vec3& uv, const glm::vec3& n, f
 	return r_out_perp + r_out_parallel;
 }
 
+__host__ __device__ float schlickApproximation(float cosine, float ref_idx) {
+	float R0 = (1.0f - ref_idx) / (1.0f + ref_idx);
+	R0 = R0 * R0;
+	return R0 + (1.0f - R0) * powf((1.0f - cosine), 5.0f);
+}
+
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -135,57 +142,52 @@ void scatterRay(
 		pathSegment.color *= (material.color * material.emittance);
 		pathSegment.remainingBounces = 0;
         break;
-    case MaterialType::Diffuse:
+	case MaterialType::Diffuse:
 	{
 		pathSegment.ray.origin = intersect + normal * 0.001f;
 
 		glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
 		pathSegment.ray.direction = target - intersect;
-		pathSegment.color *= material.color;
+
+		float cosine = glm::dot(glm::normalize(pathSegment.ray.direction), normal);
+		float reflectance = schlick(cosine, material.indexOfRefraction);
+		pathSegment.color *= reflectance * material.color;
+
 		pathSegment.remainingBounces--;
 	}
     break;
-    case MaterialType::Metal:
-	{
+	case MaterialType::Metal: {
 		pathSegment.ray.origin = intersect + normal * 0.001f;
-
 		glm::vec3 reflected = glm::reflect(glm::normalize(pathSegment.ray.direction), normal);
-		pathSegment.ray.direction = reflected + material.fuzz * random_in_unit_sphere(rng);
+		float cosine = glm::dot(glm::normalize(pathSegment.ray.direction), normal);
+		float reflectance = schlickApproximation(cosine, material.indexOfRefraction);
+		pathSegment.ray.direction = reflected + reflectance * material.fuzz * random_in_unit_sphere(rng);
 		pathSegment.color *= material.color * material.hasReflective;
 		pathSegment.needSkyboxColor = true;
 		pathSegment.remainingBounces--;
 	}
 	break;
-    case MaterialType::Glass:
-    {
+
+	case MaterialType::Glass: {
 		pathSegment.ray.origin = intersect;
-
 		float refractionIndex = frontFace ? (1.0f / material.indexOfRefraction) : material.indexOfRefraction;
-
-		//pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-
 		glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
-		float costTheta = std::fminf(glm::dot(-unitDirection, normal), 1.0f);
-		float sinTheta = std::sqrtf(1.0f - costTheta * costTheta);
-
-		bool cannotRefract = refractionIndex * sinTheta > 1.0f;
-
+		float cosine = glm::dot(-unitDirection, normal);
+		float reflectance = schlickApproximation(cosine, refractionIndex);
 		glm::vec3 direction;
 
-		if (cannotRefract || schlick(costTheta, refractionIndex) > u01(rng))
-		{
+		if (reflectance > u01(rng)) {
 			direction = glm::reflect(unitDirection, normal);
 		}
-		else
-		{
+		else {
 			direction = glm::refract(unitDirection, normal, refractionIndex);
 		}
 
 		pathSegment.ray.direction = direction;
 		pathSegment.needSkyboxColor = true;
 		pathSegment.remainingBounces--;
-    }
-    break;
+	}
+	break;
 	case MaterialType::Image:
 	{
 		float4 color = tex2D<float4>(material.albedo, intersection.u, intersection.v);
