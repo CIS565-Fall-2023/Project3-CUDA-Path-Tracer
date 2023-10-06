@@ -141,17 +141,11 @@ EYE         0 5 10
 LOOKAT      0 5 0
 UP          0 1 0
 
-// Procedural
-OBJECT 0
-procedural 0
-material 6
-TRANS      -2 2 -1
-ROTAT       0 0 0
-SCALE       3 3 3
 
-OBJECT 1
+
+OBJECT 0
 procedural 8
-material 2
+material 9
 TRANS      -2 5 -1
 ROTAT       0 0 0
 SCALE       5 3 5

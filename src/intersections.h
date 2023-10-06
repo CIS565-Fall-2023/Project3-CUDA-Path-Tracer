@@ -366,13 +366,17 @@ __device__ float opSmoothSubtraction(float d1, float d2, float k)
     return glm::mix(d2, -d1, h) + k * h * (1.0 - h);
 }
 
-__device__ float opSmoothIntersection(float d1, float d2, float k) 
+__device__ float somePrimitiveFunction(glm::vec3 point)
 {
-    float h = glm::clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    return glm::mix(d2, d1, h) + k * h * (1.0 - h);
+    return getSphereDist(point, glm::vec4(0.0f, 0.0f, 0.0f, 0.5));
 }
 
 
+__device__ float opRepetition(glm::vec3 p, glm::vec3 s, float (*primitive)(glm::vec3))
+{
+    glm::vec3 q = p - s * glm::round(p / s);
+    return primitive(q);
+}
 
 
 
@@ -417,9 +421,7 @@ __device__ float getDist(glm::vec3 p, ProceduralType type)
         d = opSmoothSubtraction(d1, d2, 2);
         break;
     case ProceduralType::opSmoothIntersection:
-        d1 = getCubeDist(p);
-        d2 = getSphereDist(p, s3);
-        d = opSmoothIntersection(d1, d2, 0.4);
+        d = opRepetition(p, glm::vec3(5.0,5.0,5.0), somePrimitiveFunction);
         break;
     default:
         break;
