@@ -1,3 +1,5 @@
+this readme is still in progress, pls be patient thank you
+
 # CUDA Path Tracer
 
 <img src="img/cool_renders/029_backrooms_final.png" width="64%"/><img src="img/cool_renders/030_evangelion_final.png" width="28.8%"/>
