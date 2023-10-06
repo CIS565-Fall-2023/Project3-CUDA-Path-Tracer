@@ -182,6 +182,7 @@ void scatterRay(
 		}
 
 		pathSegment.ray.direction = direction;
+		pathSegment.needSkyboxColor = true;
 		pathSegment.remainingBounces--;
     }
     break;

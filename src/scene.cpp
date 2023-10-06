@@ -288,7 +288,7 @@ void Scene::loadTextures()
         if (material.type == MaterialType::Image)
         {
 			loadTexture("scenes/textures/2k_earth_daymap.jpg", &material.albedo, 1);
-            loadTexture("scenes/textures/spaichingen_hill_4k.hdr", &skyboxTextureObject, 0);
+            loadTexture("scenes/textures/PaintedSky_Dawn.hdr", &skyboxTextureObject, 0);
         }
     }
 }

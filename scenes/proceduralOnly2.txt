@@ -141,60 +141,51 @@ EYE         0 5 10
 LOOKAT      0 5 0
 UP          0 1 0
 
-// Procedural
+// Procedural plane
 OBJECT 0
 procedural 0
-material 6
-TRANS      -2 2 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-OBJECT 1
-procedural 5
-material 2
-TRANS      -2 2 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-OBJECT 2
-procedural 4
-material 8
-TRANS      -2 2 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-OBJECT 3
-procedural 3
-material 7
-TRANS      -2 2 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-OBJECT 4
-procedural 2
 material 9
 TRANS      -2 2 -1
 ROTAT       0 0 0
 SCALE       3 3 3
 
-OBJECT 5
-procedural 6
-material 4
-TRANS      -5 2 -5
-ROTAT       0 0 0
-SCALE       5 3 5
-
-OBJECT 6
-procedural 8
+//Torus
+OBJECT 1
+procedural 5
 material 2
-TRANS      -2 5 -1
+TRANS      -2 0 -1
+ROTAT       -2 3 5
+SCALE       3 3 3
+
+//Capsule
+OBJECT 2
+procedural 4
+material 5
+TRANS      -2 2 -1
+ROTAT       0 0 0
+SCALE       3 3 3
+
+//Cylinder
+OBJECT 3
+procedural 3
+material 4
+TRANS      -2 2 -3
+ROTAT       0 0 0
+SCALE       3 3 3
+
+//SmoothSunbtraction
+OBJECT 4
+procedural 6
+material 7
+TRANS      -3 2 -4
 ROTAT       0 0 0
 SCALE       5 3 5
 
-//OBJECT 7
-//procedural 7
-//material 4
-//TRANS      -5 2 -5
-//ROTAT       0 0 0
-//SCALE       5 3 5
+//Texture
+OBJECT 5
+sphere
+material 10
+TRANS       2 2 -1
+ROTAT       0 0 0
+SCALE       3 3 3
 

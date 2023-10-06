@@ -145,7 +145,7 @@ UP          0 1 0
 
 OBJECT 0
 procedural 8
-material 9
+material 5
 TRANS      -2 5 -1
 ROTAT       0 0 0
 SCALE       5 3 5
