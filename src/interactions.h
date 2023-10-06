@@ -99,8 +99,7 @@ inline CPU_GPU glm::vec3 FresnelSchlick(const glm::vec3& R, const float& cosThet
 
 inline CPU_GPU float Lambda(const float& cos_theta, float alpha)
 {
-	if (cos_theta < Epsilon) return 0.;
-
+	if (cos_theta < Epsilon) return 0.f;
 	float tan2_theta = cos_theta * cos_theta;
 	float alpha_tan2_theta = tan2_theta * tan2_theta * alpha;
 	return (-1 + sqrt(1.f + alpha_tan2_theta)) / 2;
@@ -108,16 +107,18 @@ inline CPU_GPU float Lambda(const float& cos_theta, float alpha)
 
 inline CPU_GPU float GGX_D(const float& cos_theta, float alpha)
 {
+	if (cos_theta < Epsilon) return 0.f;
 	float denom = (cos_theta * cos_theta) * (alpha - 1.0f) + 1.0f;
 	return alpha / (Pi * denom * denom);
 }
 
 inline CPU_GPU float GGX_Pdf(const float& cos_theta, const float& cos_theta_oh, float alpha)
 {
+	if (cos_theta < Epsilon) return 0.f;
 	return GGX_D(cos_theta, alpha) * cos_theta / (4.0f * cos_theta_oh);
 }
 
-inline CPU_GPU float TrowbridgeReitzG(const float& cos_theta_o, const float& cos_theta_i, float alpha)
+inline CPU_GPU float GGX_G(const float& cos_theta_o, const float& cos_theta_i, float alpha)
 {
 	return 1.f / (1.f + Lambda(cos_theta_o, alpha) + Lambda(cos_theta_i, alpha));
 }
@@ -126,18 +127,33 @@ class EvaluateBSDF
 {
 public:
 	inline static GPU_ONLY glm::vec3 MicrofacetReflection(const glm::vec3& albedo, 
-															const float& cos_theta_i, 
-															const float& cos_theta_o,
-															const float& cos_theta_h,
-															const float& cos_theta_oh,
-															const float& metallic,
-															const float& alpha)
+														  const float& cos_theta_i, 
+														  const float& cos_theta_o,
+														  const float& cos_theta_h,
+														  const float& cos_theta_oh,
+														  const float& metallic,
+														  const float& alpha)
 	{
+		if (cos_theta_i * cos_theta_o < Epsilon) return glm::vec3(0.f);
+		float D = GGX_D(cos_theta_h, alpha);
+		float G = GGX_G(cos_theta_o, cos_theta_i, alpha);
+		return albedo * D * G / (4.f * cos_theta_i * cos_theta_o);
+	}
+
+	inline static GPU_ONLY glm::vec3 MicrofacetMix(const glm::vec3& albedo,
+		const float& cos_theta_i,
+		const float& cos_theta_o,
+		const float& cos_theta_h,
+		const float& cos_theta_oh,
+		const float& metallic,
+		const float& alpha)
+	{
+		if (cos_theta_i * cos_theta_o < Epsilon) return glm::vec3(0.f);
+
 		glm::vec3 F = FresnelSchlick(glm::mix(glm::vec3(0.04f), albedo, metallic), cos_theta_oh);
 		float D = GGX_D(cos_theta_h, alpha);
-		float G = TrowbridgeReitzG(cos_theta_o, cos_theta_i, alpha);
-
-		return albedo * F * D * G / (4.f * cos_theta_i * cos_theta_o);
+		float G = GGX_G(cos_theta_o, cos_theta_i, alpha);
+		return glm::mix(albedo * InvPi * (1.f - metallic), glm::vec3(D * G / (4.f * cos_theta_i * cos_theta_o)), F);
 	}
 };
 
@@ -174,7 +190,12 @@ public:
 		{
 			return MicrofacetReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample, metallic, roughness);
 		}
+		case MaterialType::MicrofacetMix:
+		{
+			return MicrofacetMix(material.GetAlbedo(intersection.uv), intersection, rng, sample, metallic, roughness);
 		}
+		}
+		return false;
 	}
 
 protected:
@@ -260,32 +281,110 @@ protected:
 													 const float& roughness)
 	{
 		// woW is stored in sample.wiW
-		if (glm::dot(intersection.normal, sample.wiW) < 0.f)
+		float cos_theta_o = glm::dot(sample.wiW, intersection.normal);
+		if (cos_theta_o < 0.f)
+		{
+			return false;
+		}
+
+		float alpha = roughness * roughness;
+		glm::vec3 wh = SampleGGX(rng, alpha);
+		if (glm::abs(wh.z) < Epsilon) return false;
+		
+		glm::vec3 whW = glm::normalize(LocalToWorld(intersection.normal) * wh);
+		glm::vec3 wiW = glm::normalize(glm::reflect(-sample.wiW, whW));
+		float cos_theta_i = glm::dot(wiW, intersection.normal);
+		if (cos_theta_i < 0.f)
+		{
+			return false;
+		}
+		
+		float cos_theta_oh	= glm::dot(sample.wiW, whW);
+		
+		alpha = glm::max(alpha, 0.09f);
+		
+		sample.f = EvaluateBSDF::MicrofacetReflection(albedo,
+														cos_theta_i,
+														cos_theta_o,
+														wh.z,
+														cos_theta_oh,
+														1.f, alpha);
+
+		sample.pdf = GGX_Pdf(wh.z, cos_theta_oh, alpha);
+		if (sample.pdf < 0.1f)
+		{
+			sample.f = albedo;
+			sample.pdf = glm::dot(wiW, intersection.normal);
+		}
+		sample.wiW = wiW;
+		return true;
+	}
+
+	inline static GPU_ONLY bool MicrofacetMix(const glm::vec3& albedo,
+												const ShadeableIntersection& intersection,
+												CudaRNG& rng,
+												BSDFSample& sample,
+												const float& metallic,
+												const float& roughness)
+	{
+		// woW is stored in sample.wiW
+		float cos_theta_o = glm::dot(sample.wiW, intersection.normal);
+		if (cos_theta_o < 0.f)
 		{
 			return false;
 		}
 		float alpha = roughness * roughness;
-		glm::vec3 wh = SampleGGX(rng, alpha);
-		if (glm::abs(wh.z) < Epsilon) return false;
+		
+		glm::vec3 wiW, whW;
+		float microfacet_pdf;
+		float u = 1.f / (2.f - metallic);
+		if (rng.rand() > u)
+		{
+			glm::vec3 wi = SquareToHemisphereCosine({ rng.rand(), rng.rand() });
+			wiW = glm::normalize(LocalToWorld(intersection.normal) * wi);
+			whW = glm::normalize(sample.wiW + wiW);
+		}
+		else
+		{
+			glm::vec3 wh = SampleGGX(rng, alpha);
+			if (glm::abs(wh.z) < Epsilon) return false;
+		
+			whW = glm::normalize(LocalToWorld(intersection.normal) * wh);
+			wiW = glm::normalize(glm::reflect(-sample.wiW, whW));
+		
+			float cos_theta_oh = glm::dot(sample.wiW, whW);
+			microfacet_pdf = GGX_Pdf(wh.z, cos_theta_oh, alpha);
+		}
 
-		glm::vec3 whW = glm::normalize(LocalToWorld(intersection.normal) * wh);
-
-		glm::vec3 wiW = glm::normalize(glm::reflect(-sample.wiW, whW));
-
-		float cos_theta_i = glm::dot(sample.wiW, intersection.normal);
-		float cos_theta_o = glm::dot(wiW, intersection.normal);
-		float cos_theta_oh = glm::dot(sample.wiW, whW);
-
+		float cos_theta_i = glm::dot(wiW, intersection.normal);
+		
+		if (cos_theta_i < 0.f)
+		{
+			return false;
+		}
 		alpha = glm::max(alpha, 0.09f);
-		sample.pdf = GGX_Pdf(wh.z, cos_theta_oh, alpha);
+		
+		float diffuse_pdf = cos_theta_i *InvPi;
 
-		sample.f = EvaluateBSDF::MicrofacetReflection(albedo,
-													  cos_theta_i,
-													  cos_theta_o,
-													  wh.z,
-													  cos_theta_oh,
-													  metallic, alpha);
+		float cos_theta_oh = glm::dot(sample.wiW, whW);
+		float cos_theta_h = glm::dot(whW, intersection.normal);
+		
+		microfacet_pdf = GGX_Pdf(cos_theta_h, cos_theta_oh, alpha);
 
+		sample.f =  EvaluateBSDF::MicrofacetMix(albedo,
+											   cos_theta_i,
+											   cos_theta_o,
+											   cos_theta_h,
+											   cos_theta_oh,
+											   metallic, alpha);
+
+		sample.pdf = glm::mix(diffuse_pdf, microfacet_pdf, u);
+
+		if (sample.pdf < 0.1f)
+		{
+			sample.f = albedo;
+			sample.pdf = glm::dot(wiW, intersection.normal);
+		}
 		sample.wiW = wiW;
 		return true;
 	}

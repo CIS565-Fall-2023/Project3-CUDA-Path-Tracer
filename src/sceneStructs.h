@@ -60,7 +60,7 @@ enum MaterialType : unsigned int
     SpecularGlass           = Specular | 3,
     MicrofacetReflection    = Microfacet | 2,
     MicrofacetGlass         = Microfacet | 3,
-    MicroFacetMix           = Microfacet | 4,
+    MicrofacetMix           = Microfacet | 4,
     SubsurfaceScattering    = 5,
 };
 
@@ -75,6 +75,7 @@ inline MaterialType StringToMaterialType(const std::string& str)
     TryStr2Type(str, SpecularReflection);
     TryStr2Type(str, SpecularGlass);
     TryStr2Type(str, MicrofacetReflection);
+    TryStr2Type(str, MicrofacetMix);
     TryStr2Type(str, MicrofacetGlass);
     TryStr2Type(str, SubsurfaceScattering);
     
@@ -256,7 +257,7 @@ struct ShadeableIntersection
     CPU_GPU void Reset()
     {
         t = -1.f;
-        materialId = -1.f;
+        materialId = -1;
     }
 };
 

@@ -88,7 +88,7 @@ SandBox::SandBox()
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/cornellBox.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/MeshOnly.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 
 	// Set up camera stuff from loaded path tracer settings
@@ -150,8 +150,8 @@ void SandBox::DrawImGui()
 		ImGui::Begin("Uniform Material Param");
 		changed |= ImGui::DragFloat("Scatter Coefficient", &m_UniformData->ss_scatter_coeffi, 0.2f, 0.2f, 15.f);
 		changed |= ImGui::ColorEdit3("Scatter Coefficient", &m_UniformData->ss_absorption_coeffi[0]);
-		changed |= ImGui::DragFloat("Roughness", &m_UniformData->roughness, 0.001f, 0.001f, 1.f);
-		changed |= ImGui::DragFloat("Metallic", &m_UniformData->metallic, 0.01f, 0.01f, 1.f);
+		changed |= ImGui::DragFloat("Roughness", &m_UniformData->roughness, 0.001f, 0.f, 1.f);
+		changed |= ImGui::DragFloat("Metallic", &m_UniformData->metallic, 0.01f, 0.f, 1.f);
 		
 		if (changed) m_PathTracer->Reset();
 		ImGui::End();

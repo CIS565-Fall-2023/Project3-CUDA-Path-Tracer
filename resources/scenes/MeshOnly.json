@@ -48,7 +48,7 @@
     },
     {
       "name": "microfacet",
-      "type": "MicrofacetReflection",
+      "type": "MicrofacetMix",
       "albedo": [ 1.0, 1.0, 1.0 ]
     }
   ],
@@ -64,7 +64,7 @@
     }
   ],
   "environment map": {
-    "path": "env_maps/kloppenheim_02_puresky_24k.hdr",
+    "path": "env_maps/small_apartment_1.hdr",
     "flip": true
   }
 }

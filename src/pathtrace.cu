@@ -181,7 +181,7 @@ __global__ void computeIntersections(int num_paths, PathSegment* pathSegments, S
 	ShadeableIntersection& shadeable_intersection = intersections[index];
 	shadeable_intersection.Reset();
 
-	if (segment.IsEnd()) return;
+	if (segment.remainingBounces <= 0) return;
 
 	Intersection intersection = scene.SceneIntersection(segment.ray, threadIdx.x);
 	if (intersection.shapeId >= 0)
@@ -293,8 +293,10 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 		__syncthreads();
 	}
 
-	ShadeableIntersection intersection = shadeableIntersections[idx];
 	PathSegment segment = pathSegments[idx];
+	if (segment.IsEnd()) return;
+	ShadeableIntersection intersection = shadeableIntersections[idx];
+	
 
 	if (intersection.materialId >= 0)
 	{
@@ -316,12 +318,15 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 					const float weight = glm::exp(-u_data.ss_scatter_coeffi * distance);
 					const float pdf = Inv4Pi;
 					const glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * distance);
-					pathSegments[idx].throughput *= transmission * pdf;
+					pathSegments[idx].throughput *= transmission / glm::max(weight, 0.1f);
 					return;
 				}
 				else
 				{
 					pathSegments[idx].throughput *= glm::exp(-u_data.ss_absorption_coeffi * intersection.t);
+					const glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * intersection.t);
+					const float weight = glm::exp(-u_data.ss_scatter_coeffi * intersection.t);
+					pathSegments[idx].throughput *= transmission / glm::max(weight, 0.1f);
 				}
 			}
 		}
@@ -363,7 +368,8 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 			}
 			else
 			{
-				pathSegments[idx].Terminate();
+				pathSegments[idx].remainingBounces = 0;
+				return;
 			}
 		}
 	}
