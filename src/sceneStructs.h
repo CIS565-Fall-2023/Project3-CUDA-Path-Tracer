@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 #include "bound.h"
 
-#define BACKGROUND_COLOR (glm::vec3(0.0f))
+#define BACKGROUND_COLOR (glm::vec3(0.5f))
 
 enum GeomType {
     SPHERE,
@@ -20,7 +20,7 @@ struct Ray {
 };
 
 struct Geom {
-    enum GeomType type;
+    GeomType type;
     int materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
@@ -28,11 +28,9 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
-    struct {
-        glm::vec3 v0;
-        glm::vec3 v1;
-        glm::vec3 v2;
-    } triangle;
+
+    // For triangle:
+    glm::vec3 v0, v1, v2;
 
     Bound getBounds() const {
         glm::vec3 objectSpaceMin;
@@ -41,8 +39,8 @@ struct Geom {
         // Get the object-space bounding box
         switch (type) {
         case TRIANGLE:
-            objectSpaceMin = glm::min(triangle.v0, glm::min(triangle.v1, triangle.v2));
-            objectSpaceMax = glm::max(triangle.v0, glm::max(triangle.v1, triangle.v2));
+            objectSpaceMin = glm::min(v0, glm::min(v1, v2));
+            objectSpaceMax = glm::max(v0, glm::max(v1, v2));
             break;
         case SPHERE:
             objectSpaceMin = glm::vec3(-scale.x);
@@ -80,6 +78,7 @@ struct Geom {
         return bound;
     }
 };
+
 
 struct BVHGeomInfo {
     size_t geomIndex;
@@ -124,7 +123,7 @@ struct LinearBVHNode {
 };
 
 struct Material {
-    glm::vec3 color;
+    glm::vec3 color;       // color used for diffuse
     struct {
         float exponent;
         glm::vec3 color;

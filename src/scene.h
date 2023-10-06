@@ -19,14 +19,15 @@ class Scene {
 private:
     ifstream fp_in;
     int loadMaterial(string materialid);
-    int loadGeom(string objectid, const string& objFilePath);
+    int loadGeom(string objectid);
     int loadCamera();
-    void loadObjGeom(const tinyobj::attrib_t& attrib,
-        const std::vector<tinyobj::shape_t>& shapes, std::vector<Geom>& tempTriangles);
-    int loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials);
 
-    char* filename;
-  
+    int addObjMaterial(const tinyobj::material_t& mat);
+    int loadObj(const string& objFilePath, int materialid, 
+        const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale,
+        const glm::mat4& transform, const glm::mat4& inverseTransform, 
+        const glm::mat4& invTranspose);
+
     int partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int splitAxis, int geomCount,
         Bound& centroidBounds, Bound& bounds);
 
@@ -34,6 +35,7 @@ private:
         int* totalNodes, std::vector<Geom>& orderedGeoms);
     int flattenBVHTree(BVHNode* node, int* offset);
     
+    string filename;
     int LEAF_SIZE, nBuckets;
 
 public:

@@ -575,9 +575,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 		if (CACHE_FIRST_BOUNCE && depth == 0) {
 			if (iter == 1) {
-				cout << "Using CACHE_FIRST_BOUNCE..." << endl;
-				cout << "Not Appling Stochastic Sample" << endl;
-				cout << "" << endl;
 #if USE_BVH
 				computeIntersectionsBVH << <numblocksPathSegmentTracing, blockSize1d >> > (
 					depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections,

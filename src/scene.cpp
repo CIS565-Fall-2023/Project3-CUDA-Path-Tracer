@@ -16,15 +16,14 @@ string getBaseFilename(const string& path) {
     return path.substr(start, end - start);
 }
 
-Scene::Scene(string filename) { 
+Scene::Scene(string filename)
+    : filename(filename), sqrtSamples(10)
+{ 
     cout << "Reading scene from " << filename << "..." << endl;
     cout << " " << endl;
     
-    string dir = getDirectory(filename);
-    string baseName = getBaseFilename(filename);
-    string objFilePath = dir + "/" + baseName + ".obj";
+    // char* filename = (char*)filename.c_str();
 
-    filename = (char*)filename.c_str();
     fp_in.open(filename);
     if (!fp_in.is_open()) {
         cout << "Error reading from file - aborting!" << endl;
@@ -40,7 +39,7 @@ Scene::Scene(string filename) {
                 cout << " " << endl;
             }
             else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
-                loadGeom(tokens[1], objFilePath);
+                loadGeom(tokens[1]);
                 cout << " " << endl;
             }
             else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
@@ -70,7 +69,7 @@ Scene::Scene(string filename) {
 Scene::~Scene()
 {}
 
-int Scene::loadGeom(string objectid, const string& objFilePath) {
+int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
     /*if (id > geoms.size()) {
         cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
@@ -78,49 +77,37 @@ int Scene::loadGeom(string objectid, const string& objFilePath) {
     }
     else {*/
     cout << "Loading Geom " << id << "..." << endl;
-    Geom newGeom;
+
+    GeomType type = CUBE;
+    int materialid = -1;
+    glm::vec3 translation, rotation, scale;
+    glm::mat4 transform, inverseTransform, invTranspose;
+
     string line;
-    std::vector<Geom> tempTriangles;
-    int tempMaterialId = -1;
 
     //load object type
     utilityCore::safeGetline(fp_in, line);
     if (!line.empty() && fp_in.good()) {
         if (strcmp(line.c_str(), "sphere") == 0) {
             cout << "Creating new sphere..." << endl;
-            newGeom.type = SPHERE;
+            type = SPHERE;
         }
         else if (strcmp(line.c_str(), "cube") == 0) {
             cout << "Creating new cube..." << endl;
-            newGeom.type = CUBE;
+            type = CUBE;
         }
         else if (strcmp(line.c_str(), "obj") == 0) {
             cout << "Creating new obj..." << endl;
-
-            ObjLoader objLoader;
-
-            if (objLoader.Load(objFilePath)) {
-                loadObjGeom(objLoader.attrib, objLoader.shapes, tempTriangles);
-                // printf("Material Size: %d\n", objLoader.materials.size());
-                // printf("Triangle Size: %d\n", tempTriangles.size());
-                /*if (objLoader.materials.size() > 0) {
-                    tempMaterialId = loadObjMaterial(objLoader.materials);
-                } */   
-            }
+            type = TRIANGLE;
         }
     }
 
     //link material
     utilityCore::safeGetline(fp_in, line);
     if (!line.empty() && fp_in.good()) {
-        if (tempMaterialId == -1) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            newGeom.materialid = atoi(tokens[1].c_str());
-        }
-        else {
-            newGeom.materialid = tempMaterialId;
-        }
-        cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        materialid = atoi(tokens[1].c_str());
+        cout << "Connecting Geom " << objectid << " to Material " << materialid << "..." << endl;
     }
 
     //load transformations
@@ -130,37 +117,42 @@ int Scene::loadGeom(string objectid, const string& objFilePath) {
 
         //load tranformations
         if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-            newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
         else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-            newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
         else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-            newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
-
         utilityCore::safeGetline(fp_in, line);
     }
 
-    newGeom.transform = utilityCore::buildTransformationMatrix(
-        newGeom.translation, newGeom.rotation, newGeom.scale);
-    newGeom.inverseTransform = glm::inverse(newGeom.transform);
-    newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+    transform = utilityCore::buildTransformationMatrix(translation, rotation, scale);
+    inverseTransform = glm::inverse(transform);
+    invTranspose = glm::inverseTranspose(transform);
 
-    for (auto& triangle : tempTriangles) {
-        triangle.type = TRIANGLE;
-        triangle.materialid = newGeom.materialid;
-        triangle.transform = newGeom.transform;
-        triangle.inverseTransform = newGeom.inverseTransform;
-        triangle.invTranspose = newGeom.invTranspose;
-
-        geoms.push_back(triangle);
-    }
-
-    if (newGeom.type == CUBE || newGeom.type == SPHERE) {
+    Geom newGeom;
+    if (type == CUBE || type == SPHERE) {
+        newGeom.type = type;
+        newGeom.materialid = materialid;
+        newGeom.translation = translation;
+        newGeom.rotation = rotation;
+        newGeom.scale = scale;
+        newGeom.transform = transform;
+        newGeom.inverseTransform = inverseTransform;
+        newGeom.invTranspose = invTranspose;
         geoms.push_back(newGeom);
     }
+    else {
+        string dir = getDirectory(filename);
+        string baseName = getBaseFilename(filename);
+        string objFilePath = dir + "/" + baseName + ".obj";
 
+        loadObj(objFilePath, materialid, translation, rotation,
+            scale, transform, inverseTransform, invTranspose);
+    }
+    
     return 1;
 }
 
@@ -237,7 +229,6 @@ int Scene::loadCamera() {
     return 1;
 }
 
-
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
@@ -282,82 +273,100 @@ int Scene::loadMaterial(string materialid) {
     }
 }
 
+int Scene::addObjMaterial(const tinyobj::material_t& mat) {
+    cout << "Loading Obj Material: " << mat.name << "..." << endl;
+    Material newMaterial;
+  
+    auto diffuse = mat.diffuse;
+    auto specular = mat.specular;
+    auto emission = mat.emission;
 
-void Scene::loadObjGeom(const tinyobj::attrib_t& attrib,
-    const std::vector<tinyobj::shape_t>& shapes, std::vector<Geom>& tempTriangles) {
+    newMaterial.color = glm::vec3(diffuse[0], diffuse[1], diffuse[2]);
+    newMaterial.specular.color = glm::vec3(specular[0], specular[1], specular[2]);
+    newMaterial.specular.exponent = mat.shininess;
+    newMaterial.indexOfRefraction = mat.ior;
 
-    // Loop over shapes
-    for (const auto& shape : shapes) {
-        cout << "Loading Obj Shape: " << shape.name << "\n" << endl;
+    float reflectivity = glm::length(newMaterial.specular.color);
+    newMaterial.hasReflective = (reflectivity > 0.1f) ? 1 : 0;
+    newMaterial.hasRefractive = (mat.dissolve < 1.f) ? 1 : 0;
 
-        size_t index_offset = 0;
-        // Loop over faces (polygons)
-        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
-            size_t fv = size_t(shape.mesh.num_face_vertices[f]);
+    newMaterial.emittance = glm::length(glm::vec3(emission[0], emission[1], emission[2]));
 
-            // We need at least 3 vertices to form a triangle
-            if (fv < 3) {
-                index_offset += fv;
-                continue;
-            }
-
-            // Fetch the vertices of the polygon
-            std::vector<glm::vec3> vertices;
-            for (size_t v = 0; v < fv; v++) {
-                tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
-                tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-                tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-                tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-                vertices.push_back(glm::vec3(vx, vy, vz));
-            }
-
-            // Triangulate the polygon using a fan triangulation
-            for (size_t v = 1; v < fv - 1; v++) {
-                Geom newGeom;
-                newGeom.type = TRIANGLE;
-                if (shape.mesh.material_ids.size() > 0) {
-                    newGeom.materialid = shape.mesh.material_ids[f];
-                }
-
-                newGeom.triangle.v0 = vertices[0];
-                newGeom.triangle.v1 = vertices[v];
-                newGeom.triangle.v2 = vertices[v + 1];
-
-                tempTriangles.push_back(newGeom);
-            }
-
-            index_offset += fv;
-        }
-    }
+    int id = materials.size();
+    materials.push_back(newMaterial);
+    return id;
 }
 
+int Scene::loadObj(const string& objFilePath, int materialid, 
+    const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale,
+    const glm::mat4& transform, const glm::mat4& inverseTransform,
+    const glm::mat4& invTranspose) {
 
-int Scene::loadObjMaterial(const std::vector<tinyobj::material_t>& tinyobjMaterials) {
+    ObjLoader objLoader;
 
-    for (const auto& mat : tinyobjMaterials) {
-        cout << "Loading Obj Material: " << mat.name << "...\n" << endl;
-        Material newMaterial;
-
-        auto diffuse = mat.diffuse;
-        auto specular = mat.specular;
-        auto emission = mat.emission;
-
-        newMaterial.color = glm::vec3(diffuse[0], diffuse[1], diffuse[2]);
-        newMaterial.specular.color = glm::vec3(specular[0], specular[1], specular[2]);
-        newMaterial.specular.exponent = mat.shininess;
-        newMaterial.indexOfRefraction = mat.ior;
-
-        float reflectivity = glm::length(newMaterial.specular.color);
-        newMaterial.hasReflective = (reflectivity > 0.1f) ? 1 : 0;
-        newMaterial.hasRefractive = (mat.dissolve < 1.f) ? 1 : 0;
-
-        newMaterial.emittance = glm::length(glm::vec3(emission[0], emission[1], emission[2]));
-
-        materials.push_back(newMaterial);
+    if (!objLoader.Load(objFilePath)) {
+        cout << "Error Loading " << objFilePath << endl;
+        return -1;
     }
+    else {
+        int shapeSize = objLoader.shapes.size();
+        int materialSize = objLoader.materials.size();
+        tinyobj::attrib_t attrib = objLoader.attrib;
 
-    cout << "Loaded Obj Material!" << endl;
-    return materials.size() - 1;
+        for (int i = 0; i < shapeSize; ++i) {
+            tinyobj::shape_t shape = objLoader.shapes[i];
+            cout << "Loading Obj Shape: " << shape.name << endl;
+
+            if (materialid == -1) {
+                tinyobj::material_t material = objLoader.materials[i];
+                materialid = addObjMaterial(material);
+            }
+
+            cout << "Connection Obj Shape: " << shape.name << "to Material ID: " << materialid << endl;
+
+            size_t index_offset = 0;
+            for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
+                size_t fv = size_t(shape.mesh.num_face_vertices[f]);
+
+                // We need at least 3 vertices to form a triangle
+                if (fv < 3) {
+                    index_offset += fv;
+                    continue;
+                }
+
+                // Fetch the vertices of the polygon
+                std::vector<glm::vec3> vertices;
+                for (size_t v = 0; v < fv; v++) {
+                    tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+                    tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                    tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                    tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+                    vertices.push_back(glm::vec3(vx, vy, vz));
+                }
+
+                // Triangulate the polygon using a fan triangulation
+                for (size_t v = 1; v < fv - 1; v++) {
+                    Geom newGeom;
+                    newGeom.type = TRIANGLE;
+                    newGeom.materialid = materialid;
+                    newGeom.translation = translation;
+                    newGeom.rotation = rotation;
+                    newGeom.scale = scale;
+                    newGeom.transform = transform;
+                    newGeom.inverseTransform = inverseTransform;
+                    newGeom.invTranspose = invTranspose;
+                    
+                    newGeom.v0 = vertices[0];
+                    newGeom.v1 = vertices[v];
+                    newGeom.v2 = vertices[v + 1];
+
+                    geoms.push_back(newGeom);
+                }
+
+                index_offset += fv;
+            }
+        }
+    }
 }
 
 int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int dim, int geomCount,

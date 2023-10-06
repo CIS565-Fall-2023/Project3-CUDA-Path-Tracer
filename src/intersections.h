@@ -154,9 +154,9 @@ __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
     rt.origin = ro;
     rt.direction = rd;
 
-    glm::vec3 v0 = triangle.triangle.v0;
-    glm::vec3 v1 = triangle.triangle.v1;
-    glm::vec3 v2 = triangle.triangle.v2;
+    glm::vec3 v0 = triangle.v0;
+    glm::vec3 v1 = triangle.v1;
+    glm::vec3 v2 = triangle.v2;
 
     glm::vec3 barycentricCoords;
     if (glm::intersectRayTriangle(rt.origin, rt.direction, v0, v1, v2, barycentricCoords)) {
