@@ -10,6 +10,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    GLTF_MESH
 };
 
 struct Ray {

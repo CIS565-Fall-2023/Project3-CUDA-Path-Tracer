@@ -4,6 +4,12 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#define TINYGLTF_IMPLEMENTATION
+#include "tiny_gltf.h"
+
+tinygltf::Model model;
+tinygltf::TinyGLTF loader;
+
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
@@ -51,6 +57,26 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
+            }
+            else
+            {
+                vector<string> tokens = utilityCore::tokenizeString(line);
+                if (strcmp(tokens[0].c_str(), "gltf") == 0)
+                {
+                    newGeom.type = GLTF_MESH;
+                    string path = tokens[1].c_str();
+                    std::string err;
+                    std::string warn;
+
+                    cout << "Creating new gltf scene at path " << path << "..." << endl;
+
+                    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
+
+                    for (tinygltf::Mesh mesh : model.meshes)
+                    {
+                        std::cout << mesh.name << std::endl;
+                    }
+                }
             }
         }
 
