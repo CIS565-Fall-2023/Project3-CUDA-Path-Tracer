@@ -204,8 +204,6 @@ void RenderImGui()
 	static float f = 0.0f;
 	static int counter = 0;
 
-	float oldFocalLength = imguiData->focalLength;
-	float oldApertureSize = imguiData->apertureSize;
 	ImGui::Begin("Path Tracer Analytics");				  // Create a window called "Hello, world!" and append into it.
 
 	// LOOK: Un-Comment to check the output window and usage
@@ -225,8 +223,19 @@ void RenderImGui()
 	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
 	ImGui::Checkbox("Enable ACES Film", &imguiData->ACESFilm);
 	ImGui::Checkbox("Disable Gamma Correction", &imguiData->NoGammaCorrection);
-	ImGui::SliderFloat("Focal Length", &imguiData->focalLength, 0.0f, 8.0f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
-	ImGui::SliderFloat("Lens Radius", &imguiData->apertureSize, 0.000f, 0.01f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
+	float availWidth = ImGui::GetContentRegionAvail().x;
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool focalLengthChanged = ImGui::DragFloat("Focal Length", &imguiData->focalLength, 0.1f, 0.0f, 8.0f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool apertureSizeChanged = ImGui::DragFloat("Aperture Size", &imguiData->apertureSize, 0.001f, 0.000f, 0.05f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool cameraPhiChanged = ImGui::DragFloat("Camera Phi", &imguiData->phi, 0.1f, -PI, PI, "%.4f");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool cameraThetaChanged = ImGui::DragFloat("Camera Theta", &imguiData->theta, 0.1f, 0.001f, PI - 0.001f, "%.4f");
+	bool cameraLookAtChanged = ImGui::DragFloat3("Camera Look At", &imguiData->cameraLookAt.x, 0.1f, 0.0f, 100.0f, "%.4f");
+	bool zoomChanged = ImGui::DragFloat("Zoom", &imguiData->zoom, 0.01f, 0.01f, 5.0f, "%.4f");
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 
@@ -234,7 +243,7 @@ void RenderImGui()
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-	if (imguiData->focalLength != oldFocalLength || imguiData->apertureSize != oldApertureSize) {
+	if (focalLengthChanged || apertureSizeChanged || cameraPhiChanged || cameraThetaChanged || cameraLookAtChanged || zoomChanged) {
 		valChanged = true;
 	}
 }

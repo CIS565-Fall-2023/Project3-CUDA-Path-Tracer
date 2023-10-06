@@ -76,6 +76,9 @@ public:
             bool envMapEnabled;
             bool isProcedural;
             float scale;
+            bool testNormal;
+            bool testIntersect;
+            glm::vec3 testColor;
         }trSettings;
         struct CameraSettings {
             bool dof;

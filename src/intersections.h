@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <glm/glm.hpp>
 #include <glm/gtx/intersect.hpp>
@@ -35,7 +35,6 @@ __host__ __device__ glm::vec3 multiplyMV(const glm::mat4& m, const glm::vec4& v)
     return glm::vec3(m * v);
 }
 
-
 /*
 * return val:
 * x: t
@@ -49,7 +48,10 @@ __host__ __device__ float3 triangleIntersectionTest(TriangleDetail triangle, Ray
     glm::vec3 v2 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v2, 1.f));
 
     glm::vec3 bary;
-    bool intersect = glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, bary);
+    bool intersect = false;
+    if (triangle.doubleSided)
+        intersect = glm::intersectRayTriangle(r.origin, r.direction, v2, v1, v0, bary);
+    intersect |= glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, bary);
 
     if (!intersect) {
         return float3{ -1.0f, 0.f, 0.f }; // No intersection
@@ -59,7 +61,6 @@ __host__ __device__ float3 triangleIntersectionTest(TriangleDetail triangle, Ray
         return float3{ -1.0f, 0.f, 0.f }; // No intersection
     return float3{ t, 1 - bary.x - bary.y,bary.x };
 }
-
 __device__ bool intersectTBB(const Ray& ray, const TBB& aabb, float& tmin) {
     glm::vec3 invDir = 1.0f / ray.direction;
 

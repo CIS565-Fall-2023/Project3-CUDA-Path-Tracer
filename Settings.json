@@ -1,14 +1,16 @@
 {
     "GLTF": {
         "from file": true,
-        "path": "D:/OneDrive/GitHub/Upenn/CIS_5650/Project3-CUDA-Path-Tracer/scenes/cornell_box/scene2.gltf"
+        "path": "D:/OneDrive/GitHub/glTF-Sample-Models/2.0/ABeautifulGame/glTF/ABeautifulGame.gltf"
     },
     "RenderState": {
         "camera": {
             "aspect ratio": 1,
             "screen height": 1200,
-            "position": [0, 0, 2],
-            "lookAt": [0, 1, 0],
+            "focal length": 0.5,
+            "aperture size": 0.005,
+            "position": [0, 0, 0.8],
+            "lookAt": [0, 0.3, 0.8],
             "view": [0, 0, -1],
             "up": [0, 1, 0],
             "fovy": 45
@@ -16,7 +18,11 @@
         "iterations": 5000,
         "traceDepth": 8,
         "imageName": "output.png",
-        "antiAliasing": false
+        "antiAliasing": true,
+        "dof": true,
+        "test normal": false,
+        "test intersect": false,
+        "test color":[1,1,1]
     },
     "Materials": [
         {
@@ -31,8 +37,12 @@
             }
         }
     ],
+    "procedural": {
+        "on": false,
+        "scale": 16
+    },
     "environmentMap": {
-        "path": "D:/OneDrive/GitHub/Upenn/CIS_4610/homework-05-full-lighting-and-environment-maps-GrahamZen/path_tracer/environment_maps/small_apartment_1.hdr",
+        "path":"D:/OneDrive/GitHub/Upenn/CIS_5650/Project3-CUDA-Path-Tracer/scenes/envmap/rural_asphalt_road_4k.hdr",
         "on": true
     }
 }

@@ -68,12 +68,12 @@ struct TriangleDetail {
     TriangleDetail(Transformation t, int materialid, glm::vec3 v0, glm::vec3 v1, glm::vec3 v2,
         glm::vec3 normal0, glm::vec3 normal1, glm::vec3 normal2,
         glm::vec4 tangent0, glm::vec4 tangent1, glm::vec4 tangent2,
-        glm::vec2 uv0, glm::vec2 uv1, glm::vec2 uv2, int id)
+        glm::vec2 uv0, glm::vec2 uv1, glm::vec2 uv2, bool doubleSided, int id)
         : t(t), materialid(materialid), v0(v0), v1(v1), v2(v2),
         normal0(normal0), normal1(normal1), normal2(normal2),
         tangent0(tangent0), tangent1(tangent1), tangent2(tangent2),
         uv0(uv0), uv1(uv1), uv2(uv2), centroid((v0 + v1 + v2)* (1.f / 3.f)),
-        tbb(glm::vec3(t.transform* glm::vec4(v0, 1.f)), glm::vec3(t.transform* glm::vec4(v1, 1.f)), glm::vec3(t.transform* glm::vec4(v2, 1.f))), id(id) {}
+        tbb(glm::vec3(t.transform* glm::vec4(v0, 1.f)), glm::vec3(t.transform* glm::vec4(v1, 1.f)), glm::vec3(t.transform* glm::vec4(v2, 1.f))), doubleSided(doubleSided), id(id) {}
     Transformation t;
     int materialid;
     glm::vec3 v0, v1, v2;
@@ -81,6 +81,7 @@ struct TriangleDetail {
     glm::vec4 tangent0, tangent1, tangent2;
     glm::vec3 centroid;
     glm::vec2 uv0, uv1, uv2;
+    bool doubleSided;
     TBB tbb;
     int id = -1;
 };
@@ -178,8 +179,13 @@ struct Material {
     TextureInfo emissiveTexture;
 
     struct Dielectric {
-        float eta = 0.f;
+        float eta = 1.55f;
     }dielectric;
+
+    struct Specular {
+        float specularFactor = 0.f;
+        glm::vec3 specularColorFactor = glm::vec3(0.f);
+    }specular;
 
     struct Metal {
         glm::vec3 etat = glm::vec3(0.f);

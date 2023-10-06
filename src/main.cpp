@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
-	InitDataContainer(guiData);
+	InitDataContainer(guiData, scene);
 
 	// GLFW main loop
 	mainLoop();
@@ -108,6 +108,14 @@ void saveImage() {
 }
 
 void runCuda() {
+	if (ValueChanged()) {
+		camchanged = true;
+		phi = guiData->phi;
+		theta = guiData->theta;
+		renderState->camera.lookAt = guiData->cameraLookAt;
+		zoom = guiData->zoom;
+		ResetValueChanged();
+	}
 	if (camchanged) {
 		iteration = 0;
 		Camera& cam = renderState->camera;
@@ -127,6 +135,7 @@ void runCuda() {
 		cam.position = cameraPosition;
 		camchanged = false;
 		renderState->isCached = false;
+		UpdateDataContainer(guiData, scene, zoom, theta, phi);
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -186,10 +195,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-	if (ValueChanged()) {
-		camchanged = true;
-		ResetValueChanged();
-	}
 	if (MouseOverImGuiWindow())
 	{
 		renderState->camera.focalLength = guiData->focalLength;

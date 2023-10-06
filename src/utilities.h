@@ -38,6 +38,9 @@ public:
     bool NoGammaCorrection;
     float focalLength;
     float apertureSize;
+    float theta, phi;
+    glm::vec3 cameraLookAt;
+    float zoom;
 };
 
 namespace utilityCore

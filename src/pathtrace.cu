@@ -70,9 +70,35 @@ static ShadeableIntersection* dev_intersections_cache = nullptr;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
-void InitDataContainer(GuiDataContainer* imGuiData)
+void InitDataContainer(GuiDataContainer* imGuiData, Scene* scene)
 {
     guiData = imGuiData;
+    guiData->TracedDepth = scene->state.traceDepth;
+    guiData->SortByMaterial = false;
+    guiData->UseBVH = true;
+    guiData->ACESFilm = false;
+    guiData->NoGammaCorrection = false;
+    guiData->focalLength = scene->state.camera.focalLength;
+    guiData->apertureSize = scene->state.camera.apertureSize;
+    guiData->theta = 0.f;
+    guiData->phi = 0.f;
+    guiData->cameraLookAt = scene->state.camera.lookAt;
+    guiData->zoom = 1.f;
+}
+
+void UpdateDataContainer(GuiDataContainer* imGuiData, Scene* scene, float zoom, float theta, float phi)
+{
+    imGuiData->TracedDepth = scene->state.traceDepth;
+    imGuiData->SortByMaterial = false;
+    imGuiData->UseBVH = true;
+    imGuiData->ACESFilm = false;
+    imGuiData->NoGammaCorrection = false;
+    imGuiData->focalLength = scene->state.camera.focalLength;
+    imGuiData->apertureSize = scene->state.camera.apertureSize;
+    imGuiData->theta = theta;
+    imGuiData->phi = phi;
+    imGuiData->cameraLookAt = scene->state.camera.lookAt;
+    imGuiData->zoom = zoom;
 }
 
 void pathtraceInit(Scene* scene) {
@@ -293,39 +319,56 @@ __global__ void shadeMaterial(
             Material material = materials[intersection.materialId];
 
             // If the material indicates that the object was a light, "light" the ray
-            //if (glm::length2(material.emissiveFactor) > 0.0f && dot(pSeg.ray.direction, intersection.surfaceNormal) < 0.f) {
+            glm::vec3 emissiveColor{ 0.f };
+            if (material.emissiveTexture.index > 0) {
+                emissiveColor = sampleTexture(material.emissiveTexture.cudaTexObj, intersection.uv);
+            }
             if (material.type == Material::Type::LIGHT) {
-                if (material.emissiveTexture.index > 0)
-                    pSeg.color = pSeg.throughput * (sampleTexture(material.emissiveTexture.cudaTexObj, intersection.uv) * material.emissiveFactor * material.emissiveStrength);
-                else
-                    pSeg.color = pSeg.throughput * (glm::vec3(material.pbrMetallicRoughness.baseColorFactor) * material.emissiveFactor * material.emissiveStrength);
+                pSeg.color = pSeg.throughput * (glm::vec3(material.pbrMetallicRoughness.baseColorFactor) * material.emissiveFactor * material.emissiveStrength);
                 pSeg.remainingBounces = 0;
             }
-            // Otherwise, do some pseudo-lighting computation. This is actually more
-            // like what you would expect from shading in a rasterizer like OpenGL.
-            // TODO: replace this! you should be able to start with basically a one-liner
+            else if (glm::length(emissiveColor) > EPSILON) {
+                pSeg.color = pSeg.throughput * emissiveColor * material.emissiveFactor * material.emissiveStrength;
+                pSeg.remainingBounces = 0;
+            }
             else {
-                float ao{ 1.f };
-                if (material.occlusionTexture.index != -1) {
-                    auto aoData = tex2D<float4>(material.occlusionTexture.cudaTexObj, intersection.uv.x, intersection.uv.y);
-                    ao = aoData.x;
-                }
-                glm::vec3 nor = intersection.surfaceNormal;
-                if (material.normalTexture.index != -1) {
-                    nor = sampleTexture(material.normalTexture.cudaTexObj, intersection.uv);
-                    nor = glm::normalize(nor) * 2.f - 1.f;
-                    nor = glm::normalize((glm::mat3(glm::vec3(intersection.tangent), glm::cross(intersection.surfaceNormal, glm::vec3(intersection.tangent)) * intersection.tangent[3], intersection.surfaceNormal)) * nor);
-                }
-                BsdfSample sample;
-                auto bsdf = ao * sample_f(material, settings.isProcedural, settings.scale, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
-                if (sample.pdf <= 0) {
+                if (settings.testNormal) {
+                    glm::vec3 nor = intersection.surfaceNormal;
+                    if (material.normalTexture.index != -1) {
+                        nor = sampleTexture(material.normalTexture.cudaTexObj, intersection.uv);
+                        nor = glm::normalize(nor) * 2.f - 1.f;
+                        nor = glm::normalize((glm::mat3(glm::vec3(intersection.tangent), glm::cross(intersection.surfaceNormal, glm::vec3(intersection.tangent)) * intersection.tangent[3], intersection.surfaceNormal)) * nor);
+                    }
+                    pSeg.color = nor * 0.5f + 0.5f;
                     pSeg.remainingBounces = 0;
-                    pSeg.pixelIndex = -1;
+                }
+                else if (settings.testIntersect) {
+                    pSeg.color = settings.testColor;
+                    pSeg.remainingBounces = 0;
                 }
                 else {
-                    pSeg.remainingBounces -= 1;
-                    pSeg.throughput *= bsdf / sample.pdf * AbsDot(intersection.surfaceNormal, sample.wiW);
-                    pSeg.ray = SpawnRay(intersection.pos, sample.wiW);
+                    float ao{ 1.f };
+                    if (material.occlusionTexture.index != -1) {
+                        auto aoData = tex2D<float4>(material.occlusionTexture.cudaTexObj, intersection.uv.x, intersection.uv.y);
+                        ao = aoData.x;
+                    }
+                    glm::vec3 nor = intersection.surfaceNormal;
+                    if (material.normalTexture.index != -1) {
+                        nor = sampleTexture(material.normalTexture.cudaTexObj, intersection.uv);
+                        nor = glm::normalize(nor) * 2.f - 1.f;
+                        nor = glm::normalize((glm::mat3(glm::vec3(intersection.tangent), glm::cross(intersection.surfaceNormal, glm::vec3(intersection.tangent)) * intersection.tangent[3], intersection.surfaceNormal)) * nor);
+                    }
+                    BsdfSample sample;
+                    auto bsdf = ao * sample_f(material, settings.isProcedural, settings.scale, nor, intersection.uv, intersection.woW, glm::vec3(u01(rng), u01(rng), u01(rng)), sample);
+                    if (sample.pdf <= 0) {
+                        pSeg.remainingBounces = 0;
+                        pSeg.pixelIndex = -1;
+                    }
+                    else {
+                        pSeg.remainingBounces -= 1;
+                        pSeg.throughput *= bsdf / sample.pdf * AbsDot(intersection.surfaceNormal, sample.wiW);
+                        pSeg.ray = SpawnRay(intersection.pos, sample.wiW);
+                    }
                 }
             }
             // If there was no intersection, color the ray black.

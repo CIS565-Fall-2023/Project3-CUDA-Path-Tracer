@@ -52,7 +52,6 @@ std::pair<const T*, int> getIndexBuffer(tinygltf::Model* model, const tinygltf::
 
 void updateTransform(const tinygltf::Node& node, std::vector<glm::mat4>& transforms) {
     glm::vec3 translation(0.0f);
-    glm::quat rotation;
     glm::vec3 scale(1.0f);
     glm::mat4 transformation(1.0f);
     glm::mat4 t;
@@ -60,20 +59,22 @@ void updateTransform(const tinygltf::Node& node, std::vector<glm::mat4>& transfo
         transformation = glm::make_mat4(node.matrix.data());
         t = transformation;
     }
-
-    if (!node.translation.empty()) {
-        translation = glm::make_vec3(node.translation.data());
-        t = glm::translate(glm::mat4(1.0f), translation);
-    }
-
-    if (!node.rotation.empty()) {
-        rotation = glm::make_quat(node.rotation.data());
-        t = glm::mat4_cast(rotation);
-    }
-
-    if (!node.scale.empty()) {
-        scale = glm::make_vec3(node.scale.data());
-        t = glm::scale(glm::mat4(1.0f), scale);
+    else {
+        glm::mat4 translationMatrix(1.f);
+        glm::mat4 rotationMatrix(1.f);
+        glm::mat4 scaleMatrix(1.f);
+        if (!node.translation.empty()) {
+            translation = glm::make_vec3(node.translation.data());
+            translationMatrix = glm::translate(translationMatrix, translation);
+        }
+        if (!node.rotation.empty()) {
+            rotationMatrix = glm::mat4_cast(glm::make_quat(node.rotation.data()));
+        }
+        if (!node.scale.empty()) {
+            scale = glm::make_vec3(node.scale.data());
+            scaleMatrix = glm::scale(scaleMatrix, scale);
+        }
+        t = translationMatrix * rotationMatrix * scaleMatrix;
     }
     transforms.push_back(t);
 }
@@ -135,7 +136,7 @@ Transformation evaluateTransform(std::vector<glm::mat4>& transforms) {
     t.transform = glm::mat4(1.0f);
     t.inverseTransform = glm::mat4(1.0f);
     t.invTranspose = glm::mat4(1.0f);
-    for (auto it = transforms.rbegin(); it != transforms.rend(); ++it) {
+    for (auto it = transforms.begin(); it != transforms.end(); ++it) {
         t.transform = t.transform * (*it);
     }
     t.inverseTransform = glm::inverse(t.transform);
@@ -240,6 +241,9 @@ void Scene::loadSettings() {
         settings.envMapFilename = jsonData["environmentMap"]["path"];
 
         nlohmann::json renderStateData = jsonData["RenderState"];
+        settings.trSettings.testNormal = renderStateData["test normal"];
+        settings.trSettings.testIntersect = renderStateData["test intersect"];
+        settings.trSettings.testColor = glm::vec3(renderStateData["test color"][0], renderStateData["test color"][1], renderStateData["test color"][2]);
         camera.resolution.y = renderStateData["camera"]["screen height"];
         camera.focalLength = renderStateData["camera"]["focal length"];
         camera.apertureSize = renderStateData["camera"]["aperture size"];
@@ -382,15 +386,17 @@ Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transfor
                 triangle.tangent0 = computeTangent(triangle.v0, triangle.v1, triangle.v2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.normal0);
                 triangle.tangent1 = computeTangent(triangle.v1, triangle.v2, triangle.v0, triangle.uv1, triangle.uv2, triangle.uv0, triangle.normal1);
                 triangle.tangent2 = computeTangent(triangle.v2, triangle.v0, triangle.v1, triangle.uv2, triangle.uv0, triangle.uv1, triangle.normal2);
+#ifdef DEBUG
                 if (!(glm::dot(glm::vec3(triangle.tangent0), triangle.normal0) < EPSILON && (glm::dot(glm::vec3(triangle.tangent1), triangle.normal1) < EPSILON) && (glm::dot(glm::vec3(triangle.tangent2), triangle.normal2) < EPSILON)))
                     std::cerr << "tangent and normal not vertical" << std::endl;
+#endif
             }
             triangle.id = Scene::id++;
             tris.push_back(triangle);
             s->geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2,
                 triangle.normal0, triangle.normal1, triangle.normal2,
                 triangle.tangent0, triangle.tangent1, triangle.tangent2,
-                triangle.uv0, triangle.uv1, triangle.uv2, triangle.id);
+                triangle.uv0, triangle.uv1, triangle.uv2, s->materials[materialid].doubleSided, triangle.id);
             s->tbb.expand(s->geoms.back().tbb);
         }
     }
@@ -428,15 +434,17 @@ Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transfor
                 triangle.tangent0 = computeTangent(triangle.v0, triangle.v1, triangle.v2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.normal0);
                 triangle.tangent1 = computeTangent(triangle.v1, triangle.v2, triangle.v0, triangle.uv1, triangle.uv2, triangle.uv0, triangle.normal1);
                 triangle.tangent2 = computeTangent(triangle.v2, triangle.v0, triangle.v1, triangle.uv2, triangle.uv0, triangle.uv1, triangle.normal2);
+#ifdef DEBUG
                 if (!(glm::dot(glm::vec3(triangle.tangent0), triangle.normal0) < EPSILON && (glm::dot(glm::vec3(triangle.tangent1), triangle.normal1) < EPSILON) && (glm::dot(glm::vec3(triangle.tangent2), triangle.normal2) < EPSILON)))
                     std::cerr << "tangent and normal not vertical" << std::endl;
+#endif
             }
             triangle.id = Scene::id++;
             tris.push_back(triangle);
             s->geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2,
                 triangle.normal0, triangle.normal1, triangle.normal2,
                 triangle.tangent0, triangle.tangent1, triangle.tangent2,
-                triangle.uv0, triangle.uv1, triangle.uv2, triangle.id);
+                triangle.uv0, triangle.uv1, triangle.uv2, s->materials[materialid].doubleSided, triangle.id);
             s->tbb.expand(s->geoms.back().tbb);
         }
     }
@@ -522,14 +530,18 @@ void Scene::loadExtensions(Material& material, const tinygltf::ExtensionMap& ext
             material.dielectric.eta = extensionValue.Get("ior").Get<double>();
         }
         else if (extensionName == "KHR_materials_specular") {
-            material.type = Material::Type::SPECULAR;
             auto data = extensionValue.Get("specularColorFactor").Get<tinygltf::Value::Array>();
-            material.pbrMetallicRoughness.baseColorFactor = glm::vec4(glm::clamp(glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>()), 0.f, 1.f), 1.f);
+            material.specular.specularColorFactor = glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>());
+            material.specular.specularFactor = extensionValue.Get("specularFactor").Get<double>();
+            if (glm::length(material.specular.specularFactor) == 0.f) {
+                material.specular.specularFactor = 1.f;
+            }
         }
         else if (extensionName == "KHR_materials_transmission") {
             material.type = Material::Type::DIELECTRIC;
         }
         else if (extensionName == "KHR_materials_emissive_strength") {
+            material.type = Material::Type::LIGHT;
             material.emissiveStrength = extensionValue.Get("emissiveStrength").Get<double>();
         }
         else if (extensionName == "CUSTOM_materials_metal") {
@@ -558,8 +570,6 @@ int Scene::loadMaterial() {
         material.type = matType;
         const auto& emissiveFactor = gltfMaterial.emissiveFactor;
         material.emissiveFactor = glm::make_vec3(emissiveFactor.data());
-        if (glm::length2(material.emissiveFactor) > 0.f)
-            material.type = Material::Type::LIGHT;
         material.alphaCutoff = gltfMaterial.alphaCutoff;
         material.doubleSided = gltfMaterial.doubleSided;
 
