@@ -19,7 +19,7 @@
 
 #define ERRORCHECK 1
 #define ANTIALIA 1
-#define DEPTHOFFIELD 1
+#define DEPTHOFFIELD 0
 #define blockSize 128
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
