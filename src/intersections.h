@@ -318,10 +318,18 @@ __device__ float getCapsuleDist(glm::vec3 p)
     return d;
 }
 
+__device__ float displacement(glm::vec3 p)
+{
+    float freq = 15.0f;
+    float amplitude = 0.1f;
+    return amplitude * (sin(freq * p.x) * sin(freq * p.y) * sin(freq * p.z));
+}
+
 __device__ float getTorusDist(glm::vec3 p)
 {
-	float d = sdfTorus(p - glm::vec3(1.5, 0.0, 1.5), glm::vec2(0.3f, 0.15f));
-    return d;
+    float d1 = sdfTorus(p - glm::vec3(1.5, 0.0, 1.5), glm::vec2(0.3f, 0.15f));
+    float d2 = displacement(p);
+    return d1 + d2;
 }
 
 __device__ float getCylinderDist(glm::vec3 p)
@@ -332,8 +340,18 @@ __device__ float getCylinderDist(glm::vec3 p)
 
 __device__ float getCubeDist(glm::vec3 p)
 {
-    float d = sdfBox(p, glm::vec3(0.5f));
-    return d;
+    const float k = 2.0;
+    float c = cos(k * p.x);
+    float s = sin(k * p.x);
+    glm::mat2  m = glm::mat2(c, -s, s, c);
+
+    glm::vec2 rotated = m * glm::vec2(p.x, p.y);
+
+    glm::vec3  q = glm::vec3(rotated.x, rotated.y, p.z);
+
+    float d1 = sdfBox(q, glm::vec3(0.5f));
+    float d2 = displacement(p);
+    return d1+d2;
 }
 
 __device__ float opSmoothUnion(float d1, float d2, float k) 
@@ -353,6 +371,9 @@ __device__ float opSmoothIntersection(float d1, float d2, float k)
     float h = glm::clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
     return glm::mix(d2, d1, h) + k * h * (1.0 - h);
 }
+
+
+
 
 
 __device__ float getDist(glm::vec3 p, ProceduralType type)

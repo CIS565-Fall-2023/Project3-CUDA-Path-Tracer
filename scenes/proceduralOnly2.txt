@@ -150,9 +150,51 @@ ROTAT       0 0 0
 SCALE       3 3 3
 
 OBJECT 1
+procedural 5
+material 2
+TRANS      -2 2 -1
+ROTAT       0 0 0
+SCALE       3 3 3
+
+OBJECT 2
+procedural 4
+material 8
+TRANS      -2 2 -1
+ROTAT       0 0 0
+SCALE       3 3 3
+
+OBJECT 3
+procedural 3
+material 7
+TRANS      -2 2 -1
+ROTAT       0 0 0
+SCALE       3 3 3
+
+OBJECT 4
+procedural 2
+material 9
+TRANS      -2 2 -1
+ROTAT       0 0 0
+SCALE       3 3 3
+
+OBJECT 5
+procedural 6
+material 4
+TRANS      -5 2 -5
+ROTAT       0 0 0
+SCALE       5 3 5
+
+OBJECT 6
 procedural 8
 material 2
 TRANS      -2 5 -1
 ROTAT       0 0 0
 SCALE       5 3 5
+
+//OBJECT 7
+//procedural 7
+//material 4
+//TRANS      -5 2 -5
+//ROTAT       0 0 0
+//SCALE       5 3 5
 

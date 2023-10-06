@@ -18,16 +18,16 @@
  * Skybox Sphere Texture
  * Procedure Texture(Perlin Noise)
 
- [Ray-Tracing: Rendering a Triangle](https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html) including:
+ [_Ray-Tracing: Rendering a Triangle_](https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html) including:
   * Triangle Intersection Test(Moller-Trumbore algorithm)
 
- [Inigo Quilez](https://iquilezles.org/articles/normalsSDF/) including:
+ [_Inigo Quilez_](https://iquilezles.org/articles/normalsSDF/) including:
  * SDF Normalize Formula
 
- [iquilezles.org](https://iquilezles.org/articles/distfunctions/) including:
+ [_iquilezles.org_](https://iquilezles.org/articles/distfunctions/) including:
  * Procedure Shape Formula
 
- [syoyo/tinygltf](https://github.com/syoyo/tinygltf/) & [Reddit](https://www.reddit.com/r/vulkan/comments/oeg87z/loading_some_indexed_gltf_meshes_cause_weird/#:~:text=TRIANGLE_LIST%20topology.%20Here%20is%20my%20code%20for,tinygltf::Model%20&model%2C%20int%20accessorIndex%20%7B%20auto%20accessor) including:
+ [_syoyo/tinygltf_](https://github.com/syoyo/tinygltf/) & [Reddit](_https://www.reddit.com/r/vulkan/comments/oeg87z/loading_some_indexed_gltf_meshes_cause_weird/#:~:text=TRIANGLE_LIST%20topology.%20Here%20is%20my%20code%20for,tinygltf::Model%20&model%2C%20int%20accessorIndex%20%7B%20auto%20accessor_) including:
  * Extract GLTF object mesh to triangle index buffer
 
  
