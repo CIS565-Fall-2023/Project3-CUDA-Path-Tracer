@@ -167,42 +167,23 @@ void Scene::LoadGeomsFromJSON(const Json& geometry_json, const std::filesystem::
         auto it = m_MaterialMap.find(material_name);
         int material_id = (it != m_MaterialMap.end() ? it->second: 0);
 
-        if (type == "plane")
-        {
-            int start_id = m_Vertices.size();
-            //AddPlane_Triangles(start_id, m_Vertices, m_TriangleIdxs, material_id);
-            //ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
-        }
-        else if (type == "cube")
-        {
-            int start_id = m_Vertices.size();
-            //AddCude_Triangles(start_id, m_Vertices, m_TriangleIdxs, material_id);
-            //ApplyTransform(start_id, m_Vertices, translate, rotate, scale);
-        }
-        else if (type == "obj")
-        {
-            std::string obj_path_str;
-            SafeGet<std::string>(geometry_json[i], "path", obj_path_str);
+        std::string obj_path_str;
+        SafeGet<std::string>(geometry_json[i], "path", obj_path_str);
 
-            std::filesystem::path obj_path(res_path);
-            obj_path.append(obj_path_str);
-            if (std::filesystem::directory_entry(obj_path).exists())
-            {
-                int v_start_id = m_Vertices.size();
-                int n_start_id = m_Normals.size();
-                std::cout << "Loading object: " << obj_path.string() << std::endl;
-                ReadObj(obj_path.string(), material_id, res_path);
-                ApplyTransform(v_start_id, m_Vertices, n_start_id, m_Normals, translate, rotate, scale);
-                std::cout << "Finish loading object: " << obj_path.string() << std::endl;
-            }
-            else
-            {
-                std::cout << obj_path.string() << std::endl;
-            }
+        std::filesystem::path obj_path(res_path);
+        obj_path.append(obj_path_str);
+        if (std::filesystem::directory_entry(obj_path).exists())
+        {
+            int v_start_id = m_Vertices.size();
+            int n_start_id = m_Normals.size();
+            std::cout << "Loading object: " << obj_path.string() << std::endl;
+            ReadObj(obj_path.string(), material_id, res_path);
+            ApplyTransform(v_start_id, m_Vertices, n_start_id, m_Normals, translate, rotate, scale);
+            std::cout << "Finish loading object: " << obj_path.string() << std::endl;
         }
         else
         {
-            assert(false);
+            std::cout << obj_path.string() << std::endl;
         }
     }
     std::cout << "Loading Geomerties Success!" << std::endl;

@@ -18,6 +18,7 @@ public:
 	bool Init();
 	bool Run();
 
+	void ResizeWindow(const unsigned int& w, const unsigned int& h);
 	void OnWindowResize(GLFWwindow* window, int w, int h);
 	void OnMouseButton(GLFWwindow* window, int button, int action, int mods);
 	void OnKey(GLFWwindow* window, int key, int scancode, int action, int mods);

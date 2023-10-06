@@ -15,23 +15,24 @@ namespace glslUtility {
 
 // embedded passthrough shaders so that default passthrough shaders don't need to be loaded
 static std::string passthroughVS =
-    "   #version 120 \n"
-    "   attribute vec4 Position; \n"
-    "   attribute vec2 Texcoords; \n"
-    "   varying vec2 v_Texcoords; \n"
+    "   #version 330 core\n"
+    "   in vec4 Position; \n"
+    "   in vec2 Texcoords; \n"
+    "   out vec2 fs_UV; \n"
     "   \n"
     "   void main(void){ \n"
-    "       v_Texcoords = Texcoords; \n"
+    "       fs_UV = Texcoords; \n"
     "       gl_Position = Position; \n"
     "   }";
 static std::string passthroughFS =
-    "   #version 120 \n"
-    "   varying vec2 v_Texcoords; \n"
+    "   #version 330 core\n"
+    "   in vec2 fs_UV; \n"
+    "   out vec4 fs_Color;\n"
     "   \n"
     "   uniform sampler2D u_image; \n"
     "   \n"
     "   void main(void){ \n"
-    "       gl_FragColor = texture2D(u_image, v_Texcoords); \n"
+    "       fs_Color = texture2D(u_image, fs_UV); \n"
     "   }";
 
 typedef struct {

@@ -42,6 +42,7 @@ CPU_ONLY CudaPathTracer::~CudaPathTracer()
 	// free ptr
 	SafeCudaFree(dev_hdr_img);  // no-op if dev_image is null
 	SafeCudaFree(dev_paths);
+	SafeCudaFree(dev_end_paths);
 	SafeCudaFree(dev_intersections);
 
 	if (cuda_pbo_dest_resource)
@@ -50,11 +51,6 @@ CPU_ONLY CudaPathTracer::~CudaPathTracer()
 	}
 
 	checkCUDAError("Free cuda pointers Error!");
-}
-
-CPU_ONLY GPU_ONLY thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
-	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
-	return thrust::default_random_engine(h);
 }
 
 GPU_ONLY float4 CudaTexture2D::Get(const float& x, const float& y) const
@@ -88,10 +84,9 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 
 	if (x >= resolution.x || y >= resolution.y) return;
 
-	int index = x + (y * resolution.x);
+	int index = (x + (y * resolution.x));
 	glm::vec3 pix = image[index];
 
-	//int write_index = (resolution.x - x - 1) + (y * resolution.x);
 	writePixel(pix, pbo[index]);
 }
 
@@ -105,7 +100,7 @@ void InitDataContainer(GuiDataContainer* imGuiData)
 CPU_GPU Ray CastRay(const Camera& camera, const glm::vec2& p, const glm::vec2& rand_offset)
 {
 	glm::vec2 ndc = 2.f * p / glm::vec2(camera.resolution);
-	ndc.x = 1.f - ndc.x;
+	ndc.x = ndc.x - 1.f;
 	ndc.y = 1.f - ndc.y;
 
 	float aspect = static_cast<float>(camera.resolution.x) / static_cast<float>(camera.resolution.y);
@@ -203,60 +198,6 @@ __global__ void computeIntersections(int num_paths, PathSegment* pathSegments, S
 
 		shadeable_intersection = shadeable;
 	}
-}
-
-// LOOK: "fake" shader demonstrating what you might do with the info in
-// a ShadeableIntersection, as well as how to use thrust's random number
-// generator. Observe that since the thrust random number generator basically
-// adds "noise" to the iteration, the image should start off noisy and get
-// cleaner as more iterations are computed.
-//
-// Note that this shader does NOT do a BSDF evaluation!
-// Your shaders should handle that - this can allow techniques such as
-// bump mapping.
-__global__ void shadeFakeMaterial(
-	int iter
-	, int num_paths
-	, ShadeableIntersection* shadeableIntersections
-	, PathSegment* pathSegments
-	, Material* materials
-)
-{
-	//int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	//if (idx < num_paths)
-	//{
-	//	ShadeableIntersection intersection = shadeableIntersections[idx];
-	//	if (intersection.t > 0.0f) { // if the intersection exists...
-	//	  // Set up the RNG
-	//	  // LOOK: this is how you use thrust's RNG! Please look at
-	//	  // makeSeededRandomEngine as well.
-	//		thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-	//		thrust::uniform_real_distribution<float> u01(0, 1);
-
-	//		Material material = materials[intersection.materialId];
-	//		glm::vec3 materialColor = material.albedo;
-
-	//		// If the material indicates that the object was a light, "light" the ray
-	//		if (material.emittance > 0.0f) {
-	//			pathSegments[idx].throughput *= (materialColor * material.emittance);
-	//		}
-	//		// Otherwise, do some pseudo-lighting computation. This is actually more
-	//		// like what you would expect from shading in a rasterizer like OpenGL.
-	//		// TODO: replace this! you should be able to start with basically a one-liner
-	//		else {
-	//			float lightTerm = glm::dot(intersection.normal, glm::vec3(0.0f, 1.0f, 0.0f));
-	//			pathSegments[idx].throughput *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-	//			pathSegments[idx].throughput *= u01(rng); // apply some noise because why not
-	//		}
-	//		// If there was no intersection, color the ray black.
-	//		// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-	//		// used for opacity, in which case they can indicate "no opacity".
-	//		// This can be useful for post-processing and image compositing.
-	//	}
-	//	else {
-	//		pathSegments[idx].throughput = glm::vec3(0.0f);
-	//	}
-	//}
 }
 
 // Add the current iteration's output to the overall image
@@ -382,7 +323,38 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 	}
 }
 
-CPU_ONLY void CudaPathTracer::Init(Scene* scene)
+CPU_ONLY void CudaPathTracer::Resize(const int& w, const int& h)
+{
+	resolution.x = w;
+	resolution.y = h;
+
+	SafeCudaFree(dev_hdr_img);  // no-op if dev_image is null
+	SafeCudaFree(dev_paths);
+	SafeCudaFree(dev_end_paths);
+	SafeCudaFree(dev_intersections);
+
+	if (cuda_pbo_dest_resource)
+	{
+		UnRegisterPBO();
+	}
+	const int pixelcount = resolution.x * resolution.y;
+	
+	checkCUDAError("Get PBO pointer Error");
+
+	cudaMalloc(&dev_hdr_img, pixelcount * sizeof(glm::vec3));
+	cudaMemset(dev_hdr_img, 0, pixelcount * sizeof(glm::vec3));
+
+	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+	cudaMalloc(&dev_end_paths, pixelcount * sizeof(PathSegment));
+
+	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+
+	thrust_dev_paths_begin = thrust::device_ptr<PathSegment>(dev_paths);
+	thrust_dev_end_paths_bgein = thrust::device_ptr<PathSegment>(dev_end_paths);
+}
+
+void CudaPathTracer::Init(Scene* scene)
 {
 	m_Iteration = 0;
 
@@ -426,6 +398,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 									 const UniformMaterialData& data)
 {
 	const int pixelcount = resolution.x * resolution.y;
+
 	static const int max_depth = 5;
 	// TODO: might change to dynamic block size
 	// 2D block for generating ray from camera

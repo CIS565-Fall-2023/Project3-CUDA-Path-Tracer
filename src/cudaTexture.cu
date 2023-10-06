@@ -30,7 +30,11 @@ void Texture2D::Create(const std::string& img_path, bool flip_v)
 	// read image
 	stbi_set_flip_vertically_on_load(flip_v);
 	m_RawImg = stbi_loadf(img_path.c_str(), &m_Width, &m_Height, nullptr, 4);
-	assert(m_RawImg != nullptr);
+    if (m_RawImg == nullptr)
+    {
+        std::cout << "Load: " << img_path << " Failed!" << std::endl;
+        return;
+    }
 
 	// create array
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
@@ -63,7 +67,6 @@ void Texture2D::Create(const std::string& img_path, bool flip_v)
 
 void Texture2D::Free()
 {
-    std::cout << "free texture" << std::endl;
 	if (!m_RawImg) stbi_image_free(m_RawImg);
 	m_RawImg = nullptr;
 

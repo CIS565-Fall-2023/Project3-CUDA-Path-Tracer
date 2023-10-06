@@ -5,7 +5,7 @@
     "position": [ 0, 5.5, -30 ],
     "up": [ 0, 1, 0 ],
     "fovy": 19.5,
-    "resolution": [ 680, 680 ],
+    "resolution": [ 1960, 1080 ],
     "interation": 1000,
     "depth": 8
   },

@@ -20,7 +20,6 @@ typedef tinyobj::ObjReader ObjReader;
 typedef tinyobj::ObjReaderConfig ObjReaderConfig;
 typedef tinyobj::material_t MtlMaterial;
 
-
 namespace std
 {
     namespace filesystem

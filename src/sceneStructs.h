@@ -333,9 +333,9 @@ struct BSDFSample
 
 struct UniformMaterialData
 {
-    float ss_scatter_coeffi;
-    glm::vec3 ss_absorption_coeffi;
-
-    float roughness;
-    float metallic;
+    glm::vec3 albedo = glm::vec3(1.f);
+    glm::vec3 ss_absorption_coeffi = glm::vec3(1.f);
+    float ss_scatter_coeffi = 1.f;
+    float roughness = 0.f;
+    float metallic = 1.f;
 };

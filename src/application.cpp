@@ -86,10 +86,10 @@ void Application::InitVAO()
 	};
 
 	GLfloat texcoords[] = {
-		1.0f, 1.0f,
 		0.0f, 1.0f,
-		0.0f, 0.0f,
-		1.0f, 0.0f
+		1.0f, 1.0f,
+		1.0f, 0.0f,
+		0.0f, 0.0f
 	};
 
 	GLushort indices[] = { 0, 1, 3, 3, 1, 2 };
@@ -132,6 +132,7 @@ void Application::ResizeGL()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_Resolution.x, m_Resolution.y, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+	glActiveTexture(0);
 
 	// resize PBO
 	// set up vertex data parameter
@@ -144,6 +145,8 @@ void Application::ResizeGL()
 
 	// Allocate data for the buffer. 4-channel 8-bit image
 	glBufferData(GL_PIXEL_UNPACK_BUFFER, size_tex_data, NULL, GL_DYNAMIC_COPY);
+
+	glViewport(0, 0, m_Resolution.x, m_Resolution.y);
 }
 
 bool Application::Init()
@@ -190,8 +193,6 @@ bool Application::Init()
 	InitShader();
 	ResizeGL();
 
-	glActiveTexture(GL_TEXTURE0);
-
 	return true;
 }
 
@@ -201,6 +202,7 @@ void Application::OnWindowResize(GLFWwindow* window, int x, int y)
 	m_Resolution.y = y;
 
 	ResizeGL();
+
 	m_SandBox->OnWindowResize(x, y);
 }
 
@@ -232,7 +234,7 @@ bool Application::Run()
 
 		m_SandBox->Run();
 
-		std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(0) + " Iterations";
+		std::string title = "CIS565 Path Tracer | " + m_SandBox->WinAdditionalDisplayInfo();
 		glfwSetWindowTitle(m_GLFWwindow, title.c_str());
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 		glBindTexture(GL_TEXTURE_2D, displayImage);
@@ -258,4 +260,9 @@ bool Application::Run()
 		glfwSwapBuffers(m_GLFWwindow);
 	}
 	return 0;
+}
+
+void Application::ResizeWindow(const unsigned int& w, const unsigned int& h)
+{
+	glfwSetWindowSize(m_GLFWwindow, w, h);
 }
