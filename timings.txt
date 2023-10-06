@@ -82,14 +82,14 @@ without
 8: 113.5 ms/frame
 
 with
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 
+1: 53.6 ms/frame
+2: 86.9 ms/frame
+3: 98.8 ms/frame
+4: 103.3 ms/frame
+5: 105.5 ms/frame
+6: 106.9 ms/frame
+7: 108.9 ms/frame
+8: 109.2 ms/frame
 
 Closed
 ----------
