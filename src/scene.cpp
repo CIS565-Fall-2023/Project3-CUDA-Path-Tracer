@@ -155,6 +155,17 @@ void Scene::initLights(const std::vector<Triangle> & orderedPrims)
 
 }
 
+void Scene::initConfig( SceneConfig& conf)
+{
+    config.env_map  = conf.env_map;
+    config.state = conf.state;
+}
+
+void Scene::initEnvironmentalMap()
+{
+    TextureInfo envMap = config.env_map;
+}
+
 void Scene::traverseNode(const tinygltf::Model& model, int nodeIndex, const glm::mat4x4 & parentTransform)
 {
     if (nodeIndex < 0 || nodeIndex >= model.nodes.size()) {

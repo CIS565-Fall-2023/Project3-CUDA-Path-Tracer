@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
 
-	pathtraceInitBeforeMainLoop();
+	pathtraceInitBeforeMainLoop(scene);
 
 	// GLFW main loop
 	mainLoop();

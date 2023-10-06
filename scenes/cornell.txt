@@ -22,4 +22,4 @@ UP          0 1 0
 
 // Environmental Mapping
 IBL
-FILE          img/colorful_studio_4k.exr
+FILE          D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\img\\colorful_studio_4k.exr

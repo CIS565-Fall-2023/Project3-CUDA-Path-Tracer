@@ -5,6 +5,10 @@
 #include <glm/gtx/string_cast.hpp>
 #include <cuda.h>
 #include <cuda_runtime.h>
+#define TINYEXR_USE_MINIZ 0
+#define TINYEXR_USE_STB_ZLIB 1
+#define TINYEXR_IMPLEMENTATION
+#include "tinyexr.h"
 
 SceneConfig::SceneConfig(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -23,6 +27,9 @@ SceneConfig::SceneConfig(string filename) {
             if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
+            }
+            else if (strcmp(tokens[0].c_str(), "IBL") == 0) {
+                loadEnvironmentMap();
             }
         }
     }
@@ -87,4 +94,46 @@ int SceneConfig::loadCamera() {
 
     cout << "Loaded camera!" << endl;
     return 1;
+}
+
+int SceneConfig::loadEnvironmentMap()
+{
+    cout << "Loading environment map..." << endl;
+
+    string line;
+    utilityCore::safeGetline(fp_in, line);
+
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        if (strcmp(tokens[0].c_str(), "FILE") == 0) {
+            cout << tokens[1] << endl;
+
+            float* exr_pixels;
+            int width, height;
+            const char* err;
+            //const char* filename = "img/colorful_studio_4k.exr";
+
+            int ret;
+            // Load the EXR image using tinyexr
+            if ((ret = LoadEXR(&exr_pixels, &width, &height, tokens[1].c_str(), &err))) {
+                // Handle error loading EXR image
+                if (err) {
+                    fprintf(stderr, "ERR : %s\n", err);
+                    FreeEXRErrorMessage(err); // release memory of error message.
+                    assert(0);
+                }
+            }
+            
+            env_map.width = width;
+            env_map.height = height;
+            env_map.nrChannels = 4;
+            env_map.data.assign(env_map.width * env_map.height * env_map.nrChannels, 0.0f);
+            for (size_t i = 0; i < width* height * 4; i++)
+            {
+                env_map.data[i] = exr_pixels[i];
+            }
+        }
+        utilityCore::safeGetline(fp_in, line);
+    }
+    return 0;
 }

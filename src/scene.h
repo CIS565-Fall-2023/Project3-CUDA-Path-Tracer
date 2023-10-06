@@ -11,6 +11,7 @@
 #include "bsdfStruct.h"
 #include "textureStruct.h"
 #include "lightStruct.h"
+#include "config.h"
 
 enum GLTFDataType {
 	GLTF_DATA_TYPE_SIGNED_BYTE = 5120,
@@ -38,6 +39,7 @@ public:
     Triangle* dev_triangles;
     Sphere* dev_spheres;
     Primitive** dev_primitives;
+    SceneConfig config;
     int getPrimitiveSize() const{
         return triangles.size() + spheres.size();
     }
@@ -45,6 +47,8 @@ public:
     void initBSDFs();
     void initTextures();
     void initLights(const std::vector<Triangle>& orderedPrims);
+    void initConfig(SceneConfig& conf);
+    void initEnvironmentalMap();
 };
 
 

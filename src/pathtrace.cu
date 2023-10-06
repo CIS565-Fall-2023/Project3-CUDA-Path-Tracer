@@ -104,6 +104,7 @@ static BVHNode* dev_bvhNodes = nullptr;
 static ShadeableIntersection * dev_first_iteration_first_bounce_cache_intersections = nullptr;
 static Texture * dev_textures = nullptr;
 static TextureInfo * dev_textureInfos = nullptr;
+static Texture* dev_env_map = nullptr;
 static Light* dev_lights = nullptr;
 int textureSize = 0;
 
@@ -153,7 +154,7 @@ __global__ void initBSDFWithTextures(BSDFStruct* bsdfStructs, Texture* texture, 
 	}
 }
 
-void pathtraceInitBeforeMainLoop() {
+void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 
 	// TODO: initialize any extra device memeory you need
 
@@ -191,11 +192,13 @@ void pathtraceInitBeforeMainLoop() {
 	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
 	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
 
+	pa->initConfig(*config);
 	pa->initLights(bvh->orderedPrims);
 	cudaMalloc(&dev_lights, pa->lights.size() * sizeof(Light));
 	cudaMemcpy(dev_lights, pa->lights.data(), pa->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 	checkCUDAError("cudaMemcpy dev_lights");
 
+	pa->initEnvironmentalMap();
 	int triangle_size = bvh->orderedPrims.size();
 	int blockSize = 256;
 	dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
