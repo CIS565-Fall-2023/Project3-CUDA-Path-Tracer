@@ -288,7 +288,7 @@ void Scene::loadTextures()
         if (material.type == MaterialType::Image)
         {
 			loadTexture("scenes/textures/2k_earth_daymap.jpg", &material.albedo, 1);
-            loadTexture("scenes/textures/PaintedSky_Dawn.hdr", &skyboxTextureObject, 0);
+            loadTexture("scenes/textures/PaintedSky_Day.hdr", &skyboxTextureObject, 0);
         }
     }
 }
@@ -387,8 +387,12 @@ int Scene::loadMaterial(string materialid) {
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.hasReflective = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
+                printf("REF");
                 newMaterial.hasRefractive = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            }else if (strcmp(tokens[0].c_str(), "FUZZ") == 0) {
+                newMaterial.fuzz = atoi(tokens[1].c_str());
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
@@ -396,7 +400,8 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.type = static_cast<MaterialType>(atoi(tokens[1].c_str()));
 			} else if (strcmp(tokens[0].c_str(), "PATTERN") == 0) {
 				newMaterial.pattern = static_cast<Pattern>(atoi(tokens[1].c_str()));
-			}
+			} 
+
         }
 
         if (newMaterial.type == MaterialType::Image)

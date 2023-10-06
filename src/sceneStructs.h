@@ -79,7 +79,7 @@ struct Material {
     float hasRefractive = 0.0f;
     float indexOfRefraction = 1.0f;
     float emittance = 0.0f;
-    float fuzz = 0.0f;
+    float fuzz = 0.1f;
     MaterialType type = MaterialType::None;
     Pattern pattern = Pattern::None;;
     cudaTextureObject_t albedo = 0;

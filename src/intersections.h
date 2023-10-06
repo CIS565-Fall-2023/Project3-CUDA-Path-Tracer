@@ -327,8 +327,24 @@ __device__ float displacement(glm::vec3 p)
 
 __device__ float getTorusDist(glm::vec3 p)
 {
-    float d1 = sdfTorus(p - glm::vec3(1.5, 0.0, 1.5), glm::vec2(0.3f, 0.15f));
-    float d2 = displacement(p);
+    glm::mat3 rotationX = glm::mat3(
+        1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f,
+        0.0f, 1.0f, 0.0f
+    );
+
+    glm::mat3 rotationY = glm::mat3(
+        0.0f, 0.0f, 1.0f,
+        0.0f, 1.0f, 0.0f,
+        -1.0f, 0.0f, 0.0f
+    );
+
+    glm::mat3 combinedRotation = rotationX * rotationY;
+
+    glm::vec3 rotatedP = combinedRotation * p;
+
+    float d1 = sdfTorus(rotatedP - glm::vec3(1.5, 0.0, 1.5), glm::vec2(0.3f, 0.15f));
+    float d2 = displacement(rotatedP);
     return d1 + d2;
 }
 

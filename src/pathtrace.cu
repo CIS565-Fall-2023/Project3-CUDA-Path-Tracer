@@ -436,12 +436,16 @@ __global__ void shadeFakeMaterial(
 					(*perlinNoise)->turb(intersection.point, 7, dev_perm_x, dev_perm_y, dev_perm_z)));
 
 
-			glm::vec3 darkGreen = glm::vec3(0.09f, 0.45f, 0.08f);
-			glm::vec3 lightGreen = glm::vec3(0.61f, 0.82f, 0.49f);
+			glm::vec3 deepBlue = glm::vec3(0.0f, 0.0f, 0.5f);
+			glm::vec3 lightBlue = glm::vec3(0.53f, 0.81f, 0.98f);
+			glm::vec3 turquoise = glm::vec3(0.25f, 0.88f, 0.82f);
+			glm::vec3 seaGreen = glm::vec3(0.13f, 0.55f, 0.13f);
 
-			glm::vec3 grassColor = glm::mix(darkGreen, lightGreen, perlinNoiseColor.x); 
+			glm::vec3 intermediateColor1 = glm::mix(deepBlue, lightBlue, perlinNoiseColor.x);
+			glm::vec3 intermediateColor2 = glm::mix(turquoise, seaGreen, perlinNoiseColor.y);
+			glm::vec3 waterColor = glm::mix(intermediateColor1, intermediateColor2, 0.5f);
 
-			pathSegments[jitterIndex].color *= grassColor;
+			pathSegments[jitterIndex].color *= waterColor;
 		}
 
 

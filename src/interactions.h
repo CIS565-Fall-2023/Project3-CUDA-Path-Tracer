@@ -200,16 +200,21 @@ void scatterRay(
 	if (material.pattern == Pattern::Ring)
 	{
 		float sqrt = glm::sqrt(intersect.x * intersect.x + intersect.y * intersect.y) * 4.0f;
-		float floor = glm::floor(sqrt);
-		if (glm::mod(glm::floor(sqrt), 2.0f))
+		float floorValue = glm::floor(sqrt);
+		if (glm::mod(floorValue, 2.0f))
 		{
-			pathSegment.color *= glm::vec3(0.0f);
+			glm::vec3 slimeColor = glm::vec3(0.0f, 1.0f, 0.0f);
+			float factor = sqrt - floorValue;
+			pathSegment.color *= glm::mix(pathSegment.color, slimeColor, factor);
 		}
 		else
 		{
-			pathSegment.color *= glm::vec3(1.0f);
+			glm::vec3 iceCreamColor = glm::vec3(1.0f, 0.6f, 0.7f);
+			float factor = sqrt - floorValue;
+			pathSegment.color *= glm::mix(pathSegment.color, iceCreamColor, factor);
 		}
 	}
+
 	else if (material.pattern == Pattern::CheckerBoard)
 	{
 		if (glm::mod(glm::floor(intersect.x) + glm::floor(intersect.y) + glm::floor(intersect.z), 2.0f) == 0)
