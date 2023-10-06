@@ -12,6 +12,7 @@
 #include <mikktspace.h>
 #include <unordered_map>
 #include <queue>
+#include <numeric>
 
 #include "scene.h"
 
@@ -603,7 +604,6 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& indicesAccessor = model.accessors[indicesAccessorIdx];
                 if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_SHORT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
                 {
-                    assert(indicesAccessor.byteOffset == 0);
                     auto& bView = model.bufferViews[indicesAccessor.bufferView];
                     size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(short);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
@@ -618,7 +618,6 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 }
                 else if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
                 {
-                    assert(indicesAccessor.byteOffset == 0);
                     auto& bView = model.bufferViews[indicesAccessor.bufferView];
                     size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(int);
                     unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
@@ -692,6 +691,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 assert(verticies.size() == uvs.size());
                 if (useVertexNormal)
                 {
+                    //use MikkTSpace to calculate tangents
                     fSigns.resize(normals.size());
                     tangents.resize(normals.size());
                     SMikkTSpaceInterface interface = {
@@ -711,29 +711,6 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                         &helperStruct,  
                     };
                     genTangSpaceDefault(&context);
-                    /*for (int i = newModel.triangleStart; i != newModel.triangleEnd; i++)
-                    {
-                        auto& tri = triangles[i];
-                        glm::vec3 e1 = verticies[tri[1]] - verticies[tri[0]];
-                        glm::vec3 e2 = verticies[tri[2]] - verticies[tri[0]];
-                        glm::vec2 dUV1 = uvs[tri[1]] - uvs[tri[0]];
-                        glm::vec2 dUV2 = uvs[tri[2]] - uvs[tri[0]];
-                        dUV1.y = -dUV1.y;
-                        dUV2.y = -dUV2.y;
-                        float inv = 1 / (dUV1.x * dUV2.y - dUV2.x * dUV1.y);
-                        glm::vec3 tangent;
-                        tangent.x = inv * (dUV2.y * e1.x - dUV1.y * e2.x);
-                        tangent.y = inv * (dUV2.y * e1.y - dUV1.y * e2.y);
-                        tangent.z = inv * (dUV2.y * e1.z - dUV1.y * e2.z);
-                        tangents[tri[0]] += tangent;
-                        tangents[tri[1]] += tangent;
-                        tangents[tri[2]] += tangent;
-                    }
-                    for (int i = tangentsStart; i != tangentsEnd; i++)
-                    {
-                        tangents[i] = glm::normalize(tangents[i]);
-                    }*/
-
                 }
             }
         }
@@ -999,4 +976,56 @@ void Scene::buildStacklessBVH()
 #else
     recursiveCompactBVHTreeForStacklessTraverse(bvhArray, bvhroot);
 #endif
+}
+
+
+
+
+//from pbrt-v4
+void InitAliasTable(const std::vector<float>& w, std::vector<AliasBin>& bins)
+{
+    bins.resize(w.size());
+    double sum = std::accumulate(w.begin(), w.end(), 0.0);
+    for (size_t i = 0; i < w.size(); i++)
+    {
+        bins[i].p = w[i] / sum;
+    }
+    struct Work {
+        float pScaled;
+        size_t idx;
+        Work(float ps, size_t i):pScaled(ps),idx(i){}
+    };
+    queue<Work> qUnder, qOver;
+    for (size_t i = 0; i < bins.size(); i++)
+    {
+        float pScaled = bins[i].p * bins.size();
+        if (pScaled < 1.0)
+            qUnder.emplace(pScaled, i);
+        else
+            qOver.emplace(pScaled, i);
+    }
+    while (!qUnder.empty() && !qOver.empty())
+    {
+        auto under = qUnder.front(); qUnder.pop();
+        auto over = qOver.front(); qOver.pop();
+        bins[under.idx].q = under.pScaled;
+        bins[under.idx].alias = over.idx;
+        float pEx = over.pScaled - (1.0 - under.pScaled);
+        if (pEx < 1.0)
+            qOver.emplace(pEx, over.idx);
+        else
+            qUnder.emplace(pEx, over.idx);
+    }
+    while (!qOver.empty()) {
+        Work over = qOver.back();
+        qOver.pop();
+        bins[over.idx].q = 1;
+        bins[over.idx].alias = -1;
+    }
+    while (!qUnder.empty()) {
+        Work under = qUnder.back();
+        qUnder.pop();
+        bins[under.idx].q = 1;
+        bins[under.idx].alias = -1;
+    }
 }

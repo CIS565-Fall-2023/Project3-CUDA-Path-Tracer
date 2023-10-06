@@ -56,3 +56,8 @@ struct MikkTSpaceHelper
     Scene* scene;
     int i;
 };
+
+struct AliasBin {
+    float q, p;
+    int alias = -1;
+};

@@ -26,5 +26,5 @@ SCALE       15 15 15
 
 
 SKYBOX
-../scenes/environment/spree_bank_4k.hdr
+../scenes/environment/GravelPlaza_REF.hdr
 

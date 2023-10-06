@@ -8,7 +8,7 @@ EMITTANCE   0
 // Camera
 CAMERA
 RES         1080 1080
-FOVY        45
+FOVY        40
 ITERATIONS  10000
 DEPTH       8
 FILE        chess

@@ -41,8 +41,6 @@ __device__ inline float util_math_tangent_space_abscos(const glm::vec3& w)
 	return abs(w.z);
 }
 
-
-
 __device__ inline float util_math_sin_cos_convert(float sinOrCos)
 {
 	return sqrt(max(1 - sinOrCos * sinOrCos, 0.0f));
@@ -70,14 +68,21 @@ __device__ inline bool util_geomerty_refract(const glm::vec3& wi, const glm::vec
 	return true;
 }
 
+__device__ inline float util_math_pow_5(float x)
+{
+	float x2 = x * x;
+	return x2 * x2 * x;
+}
+
 __device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float HoV)
 {
-	return f0 + (1.0f - f0) * pow(1.0f - HoV, 5.0f);
+	return f0 + (1.0f - f0) * util_math_pow_5(1.0f - HoV);
 }
+
 
 __device__ inline glm::vec3 util_math_fschlick_roughness(glm::vec3 f0, float roughness, float NoV)
 {
-	return f0 + pow(1.0f - NoV, 5.0f) * (glm::max(f0, glm::vec3(1.0f - roughness) - f0));
+	return f0 + util_math_pow_5(1.0f - NoV) * (glm::max(f0, glm::vec3(1.0f - roughness) - f0));
 }
 
 __device__ inline float util_math_luminance(glm::vec3 col)
@@ -112,7 +117,30 @@ __device__ inline float util_math_smith_ggx_shadowing_masking(const glm::vec3& w
 	float NoL = util_math_tangent_space_abscos(wi);
 	float NoV = util_math_tangent_space_abscos(wo);
 	float denom = NoL * sqrt(NoV * NoV * (1 - a2) + a2) + NoV * sqrt(NoL * NoL * (1 - a2) + a2);
-	return 2.0 * NoL * NoV / denom;
+	return (2.0 * NoL * NoV) / (denom);
+}
+
+__device__ inline float util_math_ggx_normal_distribution(const glm::vec3& wh, float a2)
+{
+	float NoH = util_math_tangent_space_abscos(wh);
+	float denom = NoH * NoH * (a2 - 1) + 1;
+	denom = denom * denom * PI;
+	return (a2 + 1e-10) / (denom + 1e-10);
+}
+
+__device__ inline glm::vec3 bxdf_diffuse_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor)
+{
+	return baseColor * INV_PI;
+}
+
+__device__ inline float bxdf_diffuse_pdf(const glm::vec3& wo, const glm::vec3& wi)
+{
+	return util_math_tangent_space_abscos(wi) * INV_PI;
+}
+
+__device__ inline glm::vec3 bxdf_diffuse_sample(const glm::vec2& random, const glm::vec3& wo)
+{
+	return util_sample_hemisphere_cosine(random);
 }
 
 __device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
@@ -143,44 +171,89 @@ __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::ve
 	}
 }
 
-__device__ inline glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, float roughness)
+__device__ inline glm::vec3 bxdf_microfacet_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float roughness)
+{
+	glm::vec3 wh = glm::normalize(wo + wi);
+	float a2 = roughness * roughness;
+	glm::vec3 F = util_math_fschlick(baseColor, glm::abs(glm::dot(wo, wh)));
+	float D = util_math_ggx_normal_distribution(wh, a2);
+	float G2 = util_math_smith_ggx_shadowing_masking(wi, wo, a2);
+	return (F * G2 * D) / (4 * util_math_tangent_space_abscos(wo));
+}
+
+__device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3& wi, float roughness)
+{
+	float a2 = roughness * roughness;
+	glm::vec3 wh = glm::normalize(wo + wi);
+	float G1 = util_math_smith_ggx_masking(wo, a2);
+	float D = util_math_ggx_normal_distribution(wh, a2);
+
+	return (G1 * D) / (4 * util_math_tangent_space_abscos(wo));
+}
+
+__device__ inline glm::vec3 bxdf_microfacet_sample(const glm::vec2& random, const glm::vec3& wo, float roughness)
 {
 	float a2 = roughness * roughness;
 	glm::vec3 h = util_math_sample_ggx_vndf(wo, roughness, random);//importance sample
-	*wi = glm::reflect(-wo, h);
+	glm::vec3 wi = glm::reflect(-wo, h);
+	return wi;
+}
+
+__device__ inline glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, float roughness)
+{
+	*wi = bxdf_microfacet_sample(random, wo, roughness);
+	*pdf = bxdf_microfacet_pdf(wo, *wi, roughness);
 	if ((*wi).z > 0)
-	{
-		glm::vec3 F = util_math_fschlick(reflectionAlbedo, glm::dot(wo, h));
-		float G1 = util_math_smith_ggx_masking(wo, a2);
-		float G2 = util_math_smith_ggx_shadowing_masking(*wi, wo, a2);
-		*pdf = (*wi).z;//pdf already divided
-		return F * G2 / G1;
-	}
+		return bxdf_microfacet_eval(wo, *wi, reflectionAlbedo, roughness);
 	else
 		return glm::vec3(0);
 }
 
-__device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec3& random, float* pdf, glm::vec3& baseColor, float metallic, float roughness)
+__device__ inline float util_math_calc_lS(float metallic)
 {
-	float NoV = util_math_tangent_space_abscos(wo);
+	return 1.0 / (2.0 - metallic * metallic);
+}
+
+__device__ inline glm::vec3 bxdf_metallic_workflow_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float metallic, float roughness)
+{
+	glm::vec3 wh = glm::normalize(wo + wi);
 	glm::vec3 F0 = glm::vec3(0.04);
 	F0 = glm::mix(F0, baseColor, metallic);
-	glm::vec3 F = util_math_fschlick_roughness(F0, roughness, NoV);
+	glm::vec3 F = util_math_fschlick(F0, glm::abs(glm::dot(wh, wo)));
 	glm::vec3 kS = F;
 	glm::vec3 kD = glm::vec3(1.0f) - kS;
-	kD *= 1.0f - metallic;
-	float lS = util_math_luminance(kS);
-	float lD = util_math_luminance(kD);
-	float w = lS + lD;
-	lS /= w;
-	if (random.x < lS)//Russian Roulette
+	kD *= 1.0 - metallic;
+	float a2 = roughness * roughness;
+	float D = util_math_ggx_normal_distribution(wh, a2);
+	float G2 = util_math_smith_ggx_shadowing_masking(wi, wo, a2);
+	return kD * bxdf_diffuse_eval(wo, wi, baseColor) + kS * D * G2 / (4 * util_math_tangent_space_abscos(wo) * util_math_tangent_space_abscos(wi));
+}
+
+__device__ inline float bxdf_metallic_workflow_pdf(const glm::vec3& wo, const glm::vec3& wi, const glm::vec3& baseColor, float metallic, float roughness)
+{
+	float lS = util_math_calc_lS(metallic);
+	float lD = 1 - lS;
+	return lD * bxdf_diffuse_pdf(wo, wi) + lS * bxdf_microfacet_pdf(wo, wi, roughness);
+}
+
+__device__ inline glm::vec3 bxdf_metallic_workflow_sample(const glm::vec3& random, const glm::vec3& wo, const glm::vec3& baseColor, float metallic, float roughness)
+{
+	float lS = util_math_calc_lS(metallic);
+	if (random.x < lS)
 	{
-		return bxdf_microfacet_sample_f(wo, wi, glm::vec2(random.y, random.z), pdf, baseColor, roughness);
+		return bxdf_microfacet_sample(glm::vec2(random.y, random.z), wo, roughness);
 	}
 	else
 	{
-		return bxdf_diffuse_sample_f(wo, wi, glm::vec2(random.y, random.z), pdf, baseColor);
+		return bxdf_diffuse_sample(glm::vec2(random.y, random.z), wo);
 	}
+}
+
+__device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec3& random, float* pdf, glm::vec3& baseColor, float metallic, float roughness)
+{
+	*wi = bxdf_metallic_workflow_sample(random, wo, baseColor, metallic, roughness);
+	*pdf = bxdf_metallic_workflow_pdf(wo, *wi, baseColor, metallic, roughness);
+	return bxdf_metallic_workflow_eval(wo, *wi, baseColor, metallic, roughness);
 }
 
 

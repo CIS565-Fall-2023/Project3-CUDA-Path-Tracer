@@ -23,3 +23,20 @@ __host__ __device__ inline glm::vec3 util_postprocess_gamma(glm::vec3 x)
 {
 	return glm::pow(x, glm::vec3(1 / 2.2f));
 }
+
+
+__host__ __device__ inline int util_sample_alias_table(AliasBin* bins, int bSize, float random)
+{
+	float scaledRandom = random * bSize;
+	int binIdx = min(scaledRandom, (float)bSize - 1);
+	float u = scaledRandom - binIdx;
+	if (u < bins[binIdx].q)
+		return binIdx;
+	else
+		return bins[binIdx].alias;
+}
+
+
+
+
+

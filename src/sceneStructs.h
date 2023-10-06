@@ -11,7 +11,7 @@
 #define TONEMAPPING 1
 #define DOF_ENABLED 1
 #define BACKGROUND_COLOR_MULT 1.0f
-#define SCATTER_ORIGIN_OFFSETMULT 0.00001f
+#define SCATTER_ORIGIN_OFFSETMULT 0.001f
 #define BOUNDING_BOX_EXPAND 0.001f
 #define ALPHA_CUTOFF 0.01f
 #define STOCHASTIC_SAMPLING 1
@@ -165,3 +165,27 @@ struct ShadeableIntersection {
     glm::vec2 uv = glm::vec2(0.0);
     MaterialType type = diffuse;
 };
+
+struct ModelInfoDev {
+    glm::ivec3* dev_triangles;
+    glm::vec3* dev_vertices;
+    glm::vec2* dev_uvs;
+    glm::vec3* dev_normals;
+    glm::vec3* dev_tangents;
+    float* dev_fsigns;
+};
+
+struct SceneInfoDev {
+    Material* dev_materials;
+    Object* dev_objs;
+    int objectsSize;
+    ModelInfoDev modelInfo;
+    Primitive* dev_primitives;
+    union {
+        BVHGPUNode* dev_bvhArray;
+        MTBVHGPUNode* dev_mtbvhArray;
+    };
+    int bvhDataSize;
+    cudaTextureObject_t skyboxObj;
+};
+

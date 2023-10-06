@@ -8,6 +8,22 @@ CUDA Path Tracer
   
 * Tested on: Windows 11, i9-12900HX @ 2.30GHz 16GB, RTX4080 laptop 12GB
 
+## Principles
+
+Path tracing basics
+
+Stream compaction
+
+Metallic workflow importance sampling
+
+Multiple importance sampling
+
+Anti-aliasing and depth of field
+
+GLTF loading
+
+
+
 ## Showcase
 
 Wanna play chess? 
@@ -19,6 +35,8 @@ Large `wavefront-obj` scene load and render (with alpha cutoff):
 ![](./img/rungholt-dof.png)
 
 Metallic Workflow PBR with normal mapping:
+
+![](./img/flighthelmet.png)
 
 ![](./img/helmet-pbr.png)
 

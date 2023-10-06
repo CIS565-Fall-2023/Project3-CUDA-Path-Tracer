@@ -233,3 +233,164 @@ __device__ inline glm::vec2 util_sample_spherical_map(glm::vec3 v)
     uv += 0.5;
     return uv;
 }
+
+__device__ inline bool util_bvh_leaf_intersect(
+    int primsStart,
+    int primsEnd,
+    const SceneInfoDev& dev_sceneInfo,
+    const Ray& ray,
+    ShadeableIntersection* intersection
+)
+{
+    glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord, tmp_tangent;
+    float tmp_fsign;
+    glm::vec2	tmp_uv;
+    bool intersected = false;
+    float t = -1.0;
+    for (int i = primsStart; i != primsEnd; i++)
+    {
+        const Primitive& prim = dev_sceneInfo.dev_primitives[i];
+        int objID = prim.objID;
+        const Object& obj = dev_sceneInfo.dev_objs[objID];
+
+        if (obj.type == TRIANGLE_MESH)
+        {
+            const glm::ivec3& tri = dev_sceneInfo.modelInfo.dev_triangles[obj.triangleStart + prim.offset];
+            const glm::vec3& v0 = dev_sceneInfo.modelInfo.dev_vertices[tri[0]];
+            const glm::vec3& v1 = dev_sceneInfo.modelInfo.dev_vertices[tri[1]];
+            const glm::vec3& v2 = dev_sceneInfo.modelInfo.dev_vertices[tri[2]];
+            t = triangleIntersectionTest(obj.Transform, v0, v1, v2, ray, tmp_intersect, tmp_normal, tmp_baryCoord);
+            if (dev_sceneInfo.modelInfo.dev_normals && dev_sceneInfo.modelInfo.dev_uvs)
+            {
+                const glm::vec3& n0 = dev_sceneInfo.modelInfo.dev_normals[tri[0]];
+                const glm::vec3& n1 = dev_sceneInfo.modelInfo.dev_normals[tri[1]];
+                const glm::vec3& n2 = dev_sceneInfo.modelInfo.dev_normals[tri[2]];
+                tmp_normal = n0 * tmp_baryCoord[0] + n1 * tmp_baryCoord[1] + n2 * tmp_baryCoord[2];
+                tmp_normal = glm::vec3(obj.Transform.invTranspose * glm::vec4(tmp_normal, 0.0));//TODO: precompute transformation
+                const glm::vec2& uv0 = dev_sceneInfo.modelInfo.dev_uvs[tri[0]];
+                const glm::vec2& uv1 = dev_sceneInfo.modelInfo.dev_uvs[tri[1]];
+                const glm::vec2& uv2 = dev_sceneInfo.modelInfo.dev_uvs[tri[2]];
+                tmp_uv = uv0 * tmp_baryCoord[0] + uv1 * tmp_baryCoord[1] + uv2 * tmp_baryCoord[2];
+                const glm::vec3& t0 = dev_sceneInfo.modelInfo.dev_tangents[tri[0]];
+                const glm::vec3& t1 = dev_sceneInfo.modelInfo.dev_tangents[tri[1]];
+                const glm::vec3& t2 = dev_sceneInfo.modelInfo.dev_tangents[tri[2]];
+                tmp_tangent = t0 * tmp_baryCoord[0] + t1 * tmp_baryCoord[1] + t2 * tmp_baryCoord[2];
+                tmp_tangent = glm::vec3(obj.Transform.invTranspose * glm::vec4(tmp_tangent, 0.0));
+            }
+        }
+        else if (obj.type == CUBE)
+        {
+            t = boxIntersectionTest(obj, ray, tmp_intersect, tmp_normal);
+        }
+        else if (obj.type == SPHERE)
+        {
+            t = util_geometry_ray_sphere_intersection(obj, ray, tmp_intersect, tmp_normal);
+        }
+
+        if (t > 0.0 && t < intersection->t)
+        {
+            intersection->t = t;
+            intersection->materialId = obj.materialid;
+            intersection->worldPos = tmp_intersect;
+            intersection->surfaceNormal = tmp_normal;
+            intersection->surfaceTangent = tmp_tangent;
+            intersection->fsign = tmp_fsign;
+            intersection->uv = tmp_uv;
+            intersected = true;
+        }
+
+    }
+    return intersected;
+}
+
+__device__ inline bool util_bvh_leaf_test_intersect(
+    int primsStart,
+    int primsEnd,
+    const SceneInfoDev& dev_sceneInfo,
+    const Ray& ray,
+    float tmax
+)
+{
+    glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord;
+    float t;
+    for (int i = primsStart; i != primsEnd; i++)
+    {
+        const Primitive& prim = dev_sceneInfo.dev_primitives[i];
+        int objID = prim.objID;
+        const Object& obj = dev_sceneInfo.dev_objs[objID];
+        if (obj.type == TRIANGLE_MESH)
+        {
+            const glm::ivec3& tri = dev_sceneInfo.modelInfo.dev_triangles[obj.triangleStart + prim.offset];
+            const glm::vec3& v0 = dev_sceneInfo.modelInfo.dev_vertices[tri[0]];
+            const glm::vec3& v1 = dev_sceneInfo.modelInfo.dev_vertices[tri[1]];
+            const glm::vec3& v2 = dev_sceneInfo.modelInfo.dev_vertices[tri[2]];
+            t = triangleIntersectionTest(obj.Transform, v0, v1, v2, ray, tmp_intersect, tmp_normal, tmp_baryCoord);
+        }
+        else if (obj.type == CUBE)
+        {
+            t = boxIntersectionTest(obj, ray, tmp_intersect, tmp_normal);
+        }
+        else if (obj.type == SPHERE)
+        {
+            t = util_geometry_ray_sphere_intersection(obj, ray, tmp_intersect, tmp_normal);
+        }
+        if (t > 0.0 && t < tmax - EPSILON)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+__host__ __device__ bool util_test_visibility(glm::vec3 p0, glm::vec3 p1)
+{
+    if (glm::length(p1 - p0) < EPSILON) return true;
+    glm::vec3 rayDir = glm::normalize(p1 - p0);
+    glm::vec3 rayOri = p0;
+    //TODO
+    return false;
+}
+
+
+__device__ bool util_bvh_test_visibility(glm::vec3 p0, glm::vec3 p1, const SceneInfoDev& dev_sceneInfo)
+{
+    if (glm::length(p1 - p0) < EPSILON) return true;
+    glm::vec3 rayDir = glm::normalize(p1 - p0);
+    glm::vec3 rayOri = p0;
+    Ray ray;
+    ray.direction = rayDir;
+    ray.origin = rayOri;
+    float tmax = ((p1 - p0) / rayDir).x;
+#if MTBVH
+    float x = fabs(rayDir.x), y = fabs(rayDir.y), z = fabs(rayDir.z);
+    int axis = x > y && x > z ? 0 : (y > z ? 1 : 2);
+    int sgn = rayDir[axis] > 0 ? 0 : 1;
+    int d = (axis << 1) + sgn;
+    const MTBVHGPUNode* currArray = dev_sceneInfo.dev_mtbvhArray + d * dev_sceneInfo.bvhDataSize;
+    int curr = 0;
+    
+    while (curr >= 0 && curr < dev_sceneInfo.bvhDataSize)
+    {
+        bool outside = true;
+        float boxt = boundingBoxIntersectionTest(currArray[curr].bbox, ray, outside);
+        if (!outside) boxt = EPSILON;
+        if (boxt > 0 && boxt < tmax + EPSILON)
+        {
+            if (currArray[curr].startPrim != -1)//leaf node
+            {
+                int start = currArray[curr].startPrim, end = currArray[curr].endPrim;
+                if (util_bvh_leaf_test_intersect(start, end, dev_sceneInfo, ray, tmax))
+                    return false;
+            }
+            curr = currArray[curr].hitLink;
+        }
+        else
+        {
+            curr = currArray[curr].missLink;
+        }
+    }
+#else
+#endif // MTBVH
+    return true;
+}
