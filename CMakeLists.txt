@@ -75,6 +75,7 @@ set(scene
     src/interactions.h
     src/intersections.h
     src/light.h
+    src/lightStruct.h
     src/depScene.cpp
     src/scene.h
     src/scene.cpp

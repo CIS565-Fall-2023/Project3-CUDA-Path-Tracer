@@ -27,7 +27,7 @@
 
 #define USE_FIRST_BOUNCE_CACHE 1
 #define USE_SORT_BY_MATERIAL 0
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 0
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
 #define USE_BVH 1
 
 #define ERRORCHECK 1
@@ -407,58 +407,36 @@ __global__ void shadeBSDF(
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
-				glm::vec3 wi;
-				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv, rands);
-				float cosineTerm = abs(wi.z);
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Uniformly pick a light, will change to selecting by importance in the future */
 				thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
 				int sampled_light_index = uLight(rng);
-				//int sampled_light_index = 0;
 				float sampled_light_pdf = 1.0f / lights_size;
 				
 				const auto& light = lights[sampled_light_index];
 				const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
 				const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, u);
-				if (glm::length2(ls.wi) > 0.99f) {
-					//printf("triangles[light.primIndex]: %f, %f, %f\n", triangles[light.primIndex].p1.x, triangles[light.primIndex].p1.y, triangles[light.primIndex].p1.z);
+				if (ls.pdf > 0) {
 					Ray light_ray;
-					// TODO: Werid numerical error here, need to figure out why!
-					light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
-					//light_ray.direction = ls.wi;
-					//if (glm::distance(light_ray.direction, ls.wi) > EPSILON)
-					//	printf("ls.wi: %f, %f, %f   wi: %f %f %f\n", ls.wi.x, ls.wi.y, ls.wi.z, light_ray.direction.x, light_ray.direction.y, light_ray.direction.z);
-					//light_ray.direction = ls.wi;
+					//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
+					light_ray.direction = ls.wi;
 					light_ray.origin = intersect;
 					light_ray.min_t = EPSILON;
 					light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
-					//light_ray.max_t = ls.lightIntersection.t - 1e-4f; // Do occulusion test by setting max_t
 					ShadeableIntersection light_ray_intersection{-1.0f}; // set t = -1
-					// Figure out the exact pdf of d\omega dA!
-					if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection) && ls.pdf > 0) 
+					if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) 
 					{
 						glm::vec3 light_wi = o2w * light_ray.direction;
-						float cosineTerm = abs(light_wi.z);
-						float light_sample_pdf = ls.pdf * cosineTerm / glm::distance2(ls.lightIntersection.intersectionPoint, intersection.intersectionPoint);
 						glm::vec3 light_bsdf = f(bsdfStruct, wo, light_wi, intersection.uv);
-						//pathSegment.color = glm::vec3(abs(glm::dot(ls.wi, intersection.surfaceNormal)));
-						//pathSegment.color = glm::vec3(1.0f);
-						//pathSegment.color += bsdf * cosineTerm * ls.L / (light_sample_pdf);
-						pathSegment.color += light_bsdf * cosineTerm * pathSegment.constantTerm;
-						//printf("ls.L: %f, %f, %f ls.pdf: %f\n", ls.L.x, ls.L.y, ls.L.z, ls.pdf);
-						//pathSegment.color += bsdf * abs(glm::dot(ls.wi, intersection.surfaceNormal)) * ls.L / (ls.pdf * sampled_light_pdf);
+						pathSegment.color += 0.5f * ls.L * light_bsdf * abs(light_wi.z) * pathSegment.constantTerm / (ls.pdf * sampled_light_pdf);
 					}
 				}
 #endif			
-				//if (bsdfStructs[intersection.materialId].bsdfType == MICROFACET) {
-				//	pathSegment.color = glm::vec3(1.0f, 0.0f, 0.0f);
-				//}
-				//else {
-				//	pathSegment.color = glm::vec3(0.0f, 0.0f, 1.0f);
-				//}
+				glm::vec3 wi;
+				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv, rands);
+				float cosineTerm = abs(wi.z);
 				pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 				pathSegment.ray.direction = o2w * wi;
-				//pathSegment.ray.origin = intersect + 1e-5f * pathSegment.ray.direction;
 				pathSegment.ray.origin = intersect;
 				pathSegment.remainingBounces--;
 			}

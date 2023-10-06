@@ -221,7 +221,6 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
             if (d < 0) return glm::vec3();
             wi = glm::reflect(-wo, wh);
         }
-        //*pdf = glm::mix(abs(wi.z) * INV_PI, microfacetBSDF_D(wh, alpha) * wh.z / (4 * glm::dot(wo, wh)), 1.f / (2.f - bsdfStruct.metallicFactor));
         *pdf = PDF(bsdfStruct, wo, wi, rands);
         return f(bsdfStruct, wo, wi, uv);
         

@@ -6,8 +6,8 @@
 __device__ glm::vec3 L(const Light & light, const glm::vec3 & p, const glm::vec3 & n, const glm::vec2 & uv, 
 	const glm::vec3 & w /* Outgoing ray from light */
 ) {
-	//return light.scale * light.color;
-	return light.color;
+	return light.scale * light.color;
+	//return light.color;
 }
 
 __device__ LightLiSample sampleLi(const Light& light, const Triangle & tri, const ShadeableIntersection& intersection, const glm::vec2 & u) {
@@ -23,6 +23,12 @@ __device__ LightLiSample sampleLi(const Light& light, const Triangle & tri, cons
 			return {};
 	}
 	ss.intersection.t = glm::length(ss.intersection.intersectionPoint - intersection.intersectionPoint);
+	float pdf = ss.pdf * glm::length2(ss.intersection.intersectionPoint - intersection.intersectionPoint) / glm::dot(ss.intersection.surfaceNormal, -wi);
 	auto Le = L(light, ss.intersection.intersectionPoint, ss.intersection.surfaceNormal, ss.intersection.uv, -wi);
-	return {Le, wi, ss.pdf, ss.intersection };
+	LightLiSample sample;
+	sample.L = Le;
+	sample.lightIntersection = ss.intersection;
+	sample.wi = wi;
+	sample.pdf = pdf;
+	return sample;
 }
