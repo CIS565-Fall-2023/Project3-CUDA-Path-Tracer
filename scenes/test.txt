@@ -65,7 +65,7 @@ FOVY        45
 ITERATIONS  5000
 DEPTH       8
 FILE        cornell
-EYE         0.0 2.5 -5
+EYE         0.0 5.5 -10
 LOOKAT      0 2.5 0
 UP          0 1 0
 
@@ -121,7 +121,7 @@ SCALE       3 6 3
 // Short cube
 MESH 6
 cube.obj
-material 5
+material 1
 TRANS       -2 -1 0.75
 ROTAT       0 -17.5 0
 SCALE       3 3 3

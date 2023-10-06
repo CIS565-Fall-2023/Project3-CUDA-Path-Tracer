@@ -23,7 +23,6 @@
 
 #define ERRORCHECK 1
 #define DEBUG 0
-#define GATHER 1
 #define BVH 1
 #define COMPACTION 1
 #define MATERIAL_SORT 0
@@ -77,11 +76,7 @@ __global__ void finalGather(int nPaths, float iter, glm::vec3* image, PathSegmen
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-#if GATHER
 		image[iterationPath.pixelIndex] = glm::mix(image[iterationPath.pixelIndex],iterationPath.color,1.f/iter);
-#else
-		image[iterationPath.pixelIndex] = image[iterationPath.pixelIndex] + iterationPath.color;
-#endif
 	}
 }
 
@@ -92,19 +87,14 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		glm::vec3 pix = image[index];
-		//glm::vec3 pix = glm::pow(image[index]/(image[index] + 1.f),glm::vec3(1/2.2));
+		//glm::vec3 pix = image[index];
+		
+		glm::vec3 pix = glm::pow(image[index]/(image[index] + 1.f),glm::vec3(1.f/2.2));
 
 		glm::ivec3 color;
-#if GATHER
 		color.x = glm::clamp((int)(pix.x * 255.0), 0, 255);
 		color.y = glm::clamp((int)(pix.y * 255.0), 0, 255);
 		color.z = glm::clamp((int)(pix.z * 255.0), 0, 255);
-#else
-		color.x = glm::clamp((int)(pix.x * 255.0 / iter), 0, 255);
-		color.y = glm::clamp((int)(pix.y * 255.0 / iter), 0, 255);
-		color.z = glm::clamp((int)(pix.z * 255.0 / iter), 0, 255);
-#endif
 		// Each thread writes one pixel location in the texture (textel)
 		pbo[index].w = 0;
 		pbo[index].x = color.x;
@@ -389,7 +379,7 @@ __global__ void processPBR(
 	}
 #if DEBUG
 	seg.color = normal * 0.5f + glm::vec3(0.5);
-	//seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
+	seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
 	seg.remainingBounces = 0;
 	return;
 #else
@@ -476,6 +466,7 @@ __global__ void processPBRMedium(
 		segment.remainingBounces = 0;
 		return;
 	}
+	
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, id, depth);
 	glm::vec3 normal = intersect.surfaceNormal;
 	if (material.bumpId != -1) {
@@ -491,8 +482,6 @@ __global__ void processPBRMedium(
 			segment.color = glm::vec3(0.);
 			return;
 		}
-		//fix strange artifact
-		segment.ray.origin += 0.01f * segment.ray.direction;
 	} else {
 		//http://corysimon.github.io/articles/uniformdistn-on-sphere/
 		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
@@ -500,11 +489,10 @@ __global__ void processPBRMedium(
 		float phi = acos(1.f - 2 * u01(rng));
 		float sinPhi = sin(phi);
 		segment.ray.direction = glm::vec3(sinPhi*cos(theta),sinPhi*sin(theta),cos(phi));
-		//fix strange artifact
-		segment.ray.origin += 0.01f * segment.ray.direction;
+
 	}
-
-
+	//fix strange artifact
+	segment.ray.origin += 0.01f * segment.ray.direction;
 
 	if (hitSurface) {
 		glm::vec3 bsdf = getBSDF(segment.ray.direction, wo, intersect.surfaceUV, material, textures);
@@ -549,6 +537,8 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	BVHNode* dev_bvh = this->dev_bvh.get();
 	int num_bvh = this->dev_bvh.size();
 	cudaTextureObject_t* dev_texObjs = this->dev_texObjs.get();
+	float lenRadius = m_guiData->lensRadius;
+	float focusLen = m_guiData->focusLength;
 
 	thrust::device_ptr<PathSegment> thrust_paths(dev_paths);
 	thrust::device_ptr<PathSegment> thrust_paths_end(dev_paths + pixelcount);
@@ -594,7 +584,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 #endif //BVH
 	}
 #else
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth,lenRadius, focusLen, dev_paths);
 	checkCUDAError("generate camera ray");
 #endif // CACHE_FIRST_FRAME
 	while (!iterationComplete) {
@@ -711,37 +701,27 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
 
-		//processPBRMedium(
-		//	int iter
-		//	, int depth
-		//	, int num_paths
-		//	, PathSegment* segments
-		//	, ShadeableIntersection* intersects
-		//	, Material* materials
-		//	, cudaTextureObject_t* textures
-		//	, cudaTextureObject_t envTexture
-		//	, bool hasEnvLight
-		//processPBRMedium << <numblocksPathSegmentTracing, blockSize1d >> > (
-		//	iter
-		//	, depth
-		//	, num_paths
-		//	, dev_paths
-		//	, dev_intersections
-		//	, dev_materials
-		//	, dev_texObjs
-		//	, envMap
-		//	, hasEnvMap
-		//);
-		processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
-			iter, depth
+		processPBRMedium << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter
+			, depth
 			, num_paths
-			, dev_intersections
 			, dev_paths
+			, dev_intersections
 			, dev_materials
 			, dev_texObjs
-			, envMap 
+			, envMap
 			, hasEnvMap
-			);
+		);
+		//processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
+		//	iter, depth
+		//	, num_paths
+		//	, dev_intersections
+		//	, dev_paths
+		//	, dev_materials
+		//	, dev_texObjs
+		//	, envMap 
+		//	, hasEnvMap
+		//	);
 		depth++;
 
 #if COMPACTION

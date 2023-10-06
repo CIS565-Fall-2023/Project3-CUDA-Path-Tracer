@@ -38,6 +38,9 @@ bool Application::init()
 	}
 	printf("Opengl Version:%s\n", glGetString(GL_VERSION));
 	
+	//https://stackoverflow.com/questions/71680516/how-do-i-handle-mouse-events-in-general-in-imgui-with-glfw#:~:text=This%20is%20answered%20in%20the%20Dear%20ImGui%20FAQ%3A,https%3A%2F%2Fgithub.com%2Focornut%2Fimgui%2Fblob%2Fmaster%2Fdocs%2FFAQ.md%23q-how-can-i-tell-whether-to-dispatch-mousekeyboard-to-dear-imgui-or-my-application%20TL%3BDR%20check%20the%20io.WantCaptureMouse%20flag%20for%20mouse.
+	initCallbacks();
+	
 	//Set up ImGui
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -46,7 +49,7 @@ bool Application::init()
 	ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 	ImGui_ImplOpenGL3_Init("#version 120");
 
-	initCallbacks();
+	
 	initCuda();
 	initOutputTexture();
 	initVAO();
@@ -151,6 +154,7 @@ void Application::initCallbacks()
 {
 	glfwSetKeyCallback(m_window,[](GLFWwindow * window, int key, int scancode, int action, int mods) {
 		Application& app = Application::getInstance();
+
 		if (action == GLFW_PRESS) {
 			switch (key) {
 			case GLFW_KEY_ESCAPE:
@@ -166,49 +170,53 @@ void Application::initCallbacks()
 				app.updateCameraView();
 				break;
 			}
+			
 		}
 	});
-	glfwSetCursorPosCallback(m_window, [](GLFWwindow * window, double xpos, double ypos) {
-		Application& app = Application::getInstance();
-		if (xpos == app.m_input.lastX || ypos == app.m_input.lastY) return; // otherwise, clicking back into window causes re-start
-		if (app.m_input.leftMousePressed) {
-			// compute new camera parameters
-			phi -= (xpos - app.m_input.lastX) / app.m_width;
-			theta -= (ypos - app.m_input.lastY) / app.m_height;
-			theta = std::fmax(0.001f, std::fmin(theta, PI));
-			app.updateCameraView();
-		}
-		else if (app.m_input.rightMousePressed) {
-			zoom += (ypos - app.m_input.lastY) / app.m_height;
-			zoom = std::fmax(0.1f, zoom);
-			app.updateCameraView();
-		}
-		else if (app.m_input.middleMousePressed) {
-			Camera& cam = app.getCamera();
-			glm::vec3 forward = cam.view;
-			forward.y = 0.0f;
-			forward = glm::normalize(forward);
-			glm::vec3 right = cam.right;
-			right.y = 0.0f;
-			right = glm::normalize(right);
 
-			cam.lookAt -= (float)(xpos - app.m_input.lastX) * right * 0.01f;
-			cam.lookAt += (float)(ypos - app.m_input.lastY) * forward * 0.01f;
-			app.updateCameraView();
-		}
-		app.m_input.lastX = xpos;
-		app.m_input.lastY = ypos;
-	});
 	glfwSetMouseButtonCallback(m_window, [](GLFWwindow * window, int button, int action, int mods) {
 		Application& app = Application::getInstance();
-		if (app.m_input.mouseOverGuiWindow)
-		{
+		if (app.m_input.mouseOverGuiWindow) {
 			return;
 		}
 		app.m_input.leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
 		app.m_input.rightMousePressed = (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
 		app.m_input.middleMousePressed = (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
 	});
+	glfwSetCursorPosCallback(m_window, [](GLFWwindow * window, double xpos, double ypos) {
+	Application& app = Application::getInstance();
+	if (app.m_input.mouseOverGuiWindow) {
+		return;
+	}
+	if (xpos == app.m_input.lastX || ypos == app.m_input.lastY) return; // otherwise, clicking back into window causes re-start
+	if (app.m_input.leftMousePressed) {
+		// compute new camera parameters
+		phi -= (xpos - app.m_input.lastX) / app.m_width;
+		theta -= (ypos - app.m_input.lastY) / app.m_height;
+		theta = std::fmax(0.001f, std::fmin(theta, PI));
+		app.updateCameraView();
+	}
+	else if (app.m_input.rightMousePressed) {
+		zoom += (ypos - app.m_input.lastY) / app.m_height;
+		zoom = std::fmax(0.1f, zoom);
+		app.updateCameraView();
+	}
+	else if (app.m_input.middleMousePressed) {
+		Camera& cam = app.getCamera();
+		glm::vec3 forward = cam.view;
+		forward.y = 0.0f;
+		forward = glm::normalize(forward);
+		glm::vec3 right = cam.right;
+		right.y = 0.0f;
+		right = glm::normalize(right);
+
+		cam.lookAt -= (float)(xpos - app.m_input.lastX) * right * 0.01f;
+		cam.lookAt += (float)(ypos - app.m_input.lastY) * forward * 0.01f;
+		app.updateCameraView();
+	}
+	app.m_input.lastX = xpos;
+	app.m_input.lastY = ypos;
+});
 }
 
 void Application::initCamera()
@@ -297,8 +305,8 @@ void Application::cleanupGL()
 
 void Application::renderImGui()
 {
-	auto io = &ImGui::GetIO(); (void)io;
-	m_input.mouseOverGuiWindow = io->WantCaptureMouse;
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	m_input.mouseOverGuiWindow = io.WantCaptureMouse;
 
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -314,10 +322,10 @@ void Application::renderImGui()
 
 	// LOOK: Un-Comment to check the output window and usage
 	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-	//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+	ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 	//ImGui::Checkbox("Another Window", &show_another_window);
 
-	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+	ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 	//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
 	//if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
@@ -325,6 +333,16 @@ void Application::renderImGui()
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
 	//ImGui::Text("Traced Depth %d", m_guiData->TracedDepth);
+	float lastRadius = m_guiData->lensRadius;
+	float lastLength = m_guiData->focusLength;
+
+	ImGui::SliderFloat("lens radius", &m_guiData->lensRadius, 0.0f, 5.f);
+	ImGui::SliderFloat("focus length", &m_guiData->focusLength, 0.0, 50.f);
+
+	if (lastRadius != m_guiData->lensRadius || lastLength!=m_guiData->focusLength) {
+		updateCameraView();
+	}
+
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 
@@ -422,8 +440,6 @@ void Application::updateCameraView()
 	glm::vec3 r = glm::cross(v, u);
 	cam.up = glm::cross(r, v);
 	cam.right = r;
-
-	cam.position = cameraPosition;
 	cameraPosition += cam.lookAt;
 	cam.position = cameraPosition;
 }

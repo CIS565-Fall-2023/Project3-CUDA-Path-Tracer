@@ -74,6 +74,24 @@ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int de
 	return thrust::default_random_engine(h);
 }
 
+
+__device__ glm::vec2 sampleUniformDisk(thrust::default_random_engine& rng) {
+	thrust::uniform_real_distribution<float> u11(-1.f, 1.f);
+	glm::vec2 minus1To1(u11(rng), u11(rng));
+	if (minus1To1.x == 0 && minus1To1.y == 0) {
+		return glm::vec2(0.f);
+	}
+	float theta, r;
+	if (abs(minus1To1.x) > abs(minus1To1.y)) {
+		r = minus1To1.x;
+		theta = PI * 0.25 * (minus1To1.y / minus1To1.x);
+	}
+	else {
+		r = minus1To1.y;
+		theta = PI * 0.5 - PI * 0.25 * (minus1To1.x / minus1To1.y);
+	}
+	return r * glm::vec2(cos(theta), sin(theta));
+}
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -82,7 +100,13 @@ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int de
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
+__global__ void generateRayFromCamera(
+	Camera cam
+	, int iter
+	, int traceDepth
+	, float lenRadius
+	, float focusLen
+	, PathSegment* pathSegments)
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -90,18 +114,28 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	if (x < cam.resolution.x && y < cam.resolution.y) {
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
-
-		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		glm::mat3 camToWorld(cam.right, cam.up, cam.view);
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 1);
 		thrust::uniform_real_distribution<float> u01(-1.2, 1.2);
 
-		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y + u01(rng) - (float)cam.resolution.y * 0.5f)
-		);
+		glm::vec2 clip = 2.f * (glm::vec2(((float)x + u01(rng))/ float(cam.resolution.x), ((float)y + u01(rng)) / float(cam.resolution.y)) - glm::vec2(0.5));
+		float tanX = tan(cam.fov.x * (PI / 360));
+		float tanY = tan(cam.fov.y * (PI / 360));
 
+		glm::vec3 dir = glm::normalize(glm::vec3(-clip.x * tanX, -clip.y * tanY, 1.f));
+		if (lenRadius > 0) {
+			glm::vec2 lensPt = sampleUniformDisk(rng) * lenRadius;
+			float ft = focusLen / dir.z;
+			glm::vec3 focusPt = dir * ft;
+			focusPt = camToWorld * (focusPt - glm::vec3(lensPt,0));
+			segment.ray.origin = cam.position + camToWorld * glm::vec3(lensPt,0);
+			segment.ray.direction = glm::normalize(focusPt);
+		}
+		else {
+			segment.ray.origin = cam.position;
+			segment.ray.direction = camToWorld * dir;
+		};
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
@@ -154,7 +188,7 @@ __device__ bool sampleRay(
 			fresnel < u01(rng)
 			) // not reflected
 		{ 
-			if (inside && material.isScatterMedium)seg.inScatterMedium = false;
+			if (inside)seg.inScatterMedium = false;
 			float absdot = glm::dot(-normal, refract);
 			out_pdf = absdot;
 			out_wi = refract;
@@ -207,10 +241,7 @@ __device__ glm::vec3 getBSDF(
 	, cudaTextureObject_t* texs
 ) {
 	if (material.textureId != -1) {
-		return texture2D(uv, texs[material.textureId]);
-	}
-	if (material.hasRefractive && glm::dot(wi,wo) < 0) {
-		return material.color;
+		return glm::pow(texture2D(uv, texs[material.textureId]),glm::vec3(2.2)) * INV_PI;
 	}
 	if (material.hasReflective) {
 		return material.specular.color;
@@ -235,7 +266,7 @@ __device__ bool marchRay(
 	, float absorbAtDistance
 	, thrust::default_random_engine& rng
 ) {
-	segment.inScatterMedium = segment.inScatterMedium || glm::dot(intersect.surfaceNormal, segment.ray.direction) > 0;
+	segment.inScatterMedium = segment.inScatterMedium || (material.isScatterMedium && glm::dot(intersect.surfaceNormal, segment.ray.direction) > 0);
 	if (segment.inScatterMedium) {
 		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
 		float distFactor = -logf(u01(rng));

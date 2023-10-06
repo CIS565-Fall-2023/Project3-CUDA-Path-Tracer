@@ -110,7 +110,6 @@ TRANS       0 7.5 0
 ROTAT       90 0 0
 SCALE       10 10 1
 
-// Short cube
 MESH 5
 sphere.obj
 material 5
