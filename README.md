@@ -31,7 +31,7 @@ Basic Lambertian shading, shown here in a Cornell box scene.
 
 Perfect specular reflection and refraction, shown in the same Cornell box scene as above.
 
-Note that this project also has code for microfacet reflection and refraction but it currently does not work properly. The render on the right at the top of the page does use a roughness value of 0.3 (for the transparent character) but the calculations aren't entirely accurate even if the effect looks cool.
+Note that this project also has code for microfacet reflection and refraction but it currently does not work properly. The second render at the top of the page does use a roughness value of 0.3 for the transparent character but the calculations aren't entirely accurate even if the effect looks cool.
 
 ### Scene building tools
 
@@ -50,7 +50,9 @@ Using [tinygltf](https://github.com/syoyo/tinygltf). The above images show, from
 
 #### BVH construction and traversal
 
-The [above scene](#environment-map-lights) renders at 26.4 FPS using a BVH and 2.9 FPS without a BVH. The mesh has 17,386 triangles and it takes about 11.5 ms to construct the BVH.
+TODO: replace these FPS numbers
+
+The [above scene](#environment-map-lights) renders at \_\_\_\_ FPS using a BVH and \_\_\_\_ FPS without a BVH. The mesh has 17,386 triangles and it takes about 11.5 ms to construct the BVH.
 
 More detailed performance analysis is given [below](#bvh).
 

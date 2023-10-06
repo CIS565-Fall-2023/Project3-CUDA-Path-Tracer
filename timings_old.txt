@@ -2,7 +2,7 @@ open = end of evangelion scene (1080 x 1350)
 closed = backrooms scene (1920 x 1080)
 
 unless otherwise specified:
-- Block size = 64 for 1D, 8x8 for 2D
+- Block size = 8x8 for 2D, 768 for 1D
 - BVH, partition rays, and russian roulette are on
 - sort rays by material type and first bounce cache are off
 - max ray depth = 8
@@ -12,12 +12,14 @@ unless otherwise specified:
 Baseline
 ==================================================
 
-Open: 103.1 ms/frame
-Closed: 355.9 ms/frame
+Open: 113.5 ms/frame
+Closed: 436.8 ms/frame
 
 ==================================================
 Block size
 ==================================================
+
+default for 1D is 768 and default for 2D is 8x8
 
 Open
 ----------
@@ -28,17 +30,17 @@ Open
 128: 103.6 ms/frame
 256: 104.3 ms/frame
 512: 110.7 ms/frame
-768: 114.2 ms/frame
+768: 113.5 ms/frame
 1024: doesn't work (too many resources requested)
 
 2D size
-4x4: 103.1 ms/frame
-8x4: 102.8 ms/frame
-8x8: 103.1 ms/frame
-16x8: 102.4 ms/frame
-16x16: 103.1 ms/frame
-32x16: 102.9 ms/frame
-32x32: 103.0 ms/frame
+4x4: 
+8x4: 
+8x8: 113.5 ms/frame
+16x8: 
+16x16: 
+32x16: 
+32x32: 
 
 Closed
 ----------
@@ -49,17 +51,17 @@ Closed
 128: 357.7 ms/frame
 256: 369.3 ms/frame
 512: 431.4 ms/frame
-768: 441.3 ms/frame
+768: 436.8 ms/frame
 1024: doesn't work (too many resources requested)
 
 2D size
-4x4: 356.3 ms/frame
-8x4: 356.2 ms/frame
-8x8: 355.9 ms/frame
-16x8: 355.9 ms/frame
-16x16: 356.2 ms/frame
-32x16: 356.8 ms/frame
-32x32: 356.2 ms/frame
+4x4: 
+8x4: 
+8x8: 436.8 ms/frame
+16x8: 
+16x16: 
+32x16: 
+32x32: 
 
 ==================================================
 Partition rays
@@ -78,8 +80,8 @@ Open
 6: 1397
 7: 820
 
-with: 103.1 ms/frame
-without: 
+with: 113.5 ms/frame
+without: 86.7 ms/frame
 
 Closed
 ----------
@@ -92,8 +94,8 @@ Closed
 6: 1494073
 7: 1413231
 
-with: 355.9 ms/frame
-without: 
+with: 436.8 ms/frame
+without: 567.3 ms/frame
 
 ==================================================
 Sort rays by material type
@@ -101,13 +103,13 @@ Sort rays by material type
 
 Open
 ----------
-without: 103.1 ms/frame
-with: 
+without: 113.5 ms/frame
+with: 193.8 ms/frame
 
 Closed
 ----------
-without: 355.9 ms/frame
-with: 
+without: 436.8 ms/frame
+with: 685.6 ms/frame
 
 ==================================================
 First bounce cache
@@ -118,46 +120,46 @@ the numbers on the left represent max ray depth
 Open
 ----------
 without
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 103.1 ms/frame
+1: 60.2 ms/frame
+2: 95.5 ms/frame 
+3: 103.1 ms/frame
+4: 108.1 ms/frame
+5: 110.4 ms/frame
+6: 111.9 ms/frame
+7: 112.7 ms/frame
+8: 113.5 ms/frame
 
 with
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 
+1: 53.6 ms/frame
+2: 86.9 ms/frame
+3: 98.8 ms/frame
+4: 103.3 ms/frame
+5: 105.5 ms/frame
+6: 106.9 ms/frame
+7: 108.9 ms/frame
+8: 109.2 ms/frame
 
 Closed
 ----------
 without
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 355.9 ms/frame
+1: 92.2 ms/frame
+2: 211.3 ms/frame
+3: 320.6 ms/frame
+4: 422.8 ms/frame
+5: 430.1 ms/frame
+6: 434.2 ms/frame
+7: 435.3 ms/frame
+8: 436.8 ms/frame
 
 with
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 
+1: 73.9 ms/frame
+2: 190.6 ms/frame
+3: 300.7 ms/frame
+4: 398.1 ms/frame
+5: 405.3 ms/frame
+6: 408.5 ms/frame
+7: 410.5 ms/frame
+8: 412.3 ms/frame
 
 ==================================================
 Russian roulette path termination
@@ -165,8 +167,8 @@ Russian roulette path termination
 
 Open
 ----------
-with: 103.1 ms/frame
-without: 
+without: 120.9 ms/frame
+with: 113.5 ms/frame
 
 0: 1458000
 1: 834771
@@ -179,8 +181,8 @@ without:
 
 Closed
 ----------
-with: 355.9 ms/frame
-without: 
+without: 748.9 ms/frame
+with: 436.8 ms/frame
 
 0: 2073600
 1: 2035969
@@ -197,10 +199,10 @@ BVH
 
 freddy fazbear environment map scene (800 x 800) [17,386 tris] {~11.5 ms to construct BVH}
 ----------
-with: 
-without: 
+with: 38.2 ms/frame
+without: 355.2 ms/frame
 
 orange and blue monkey scene (800 x 800) [968 tris] {~0.5 ms to construct BVH}
 ----------
-with: 
-without: 
+with: 31.2 ms/frame
+without: 43.2 ms/frame

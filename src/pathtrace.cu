@@ -685,12 +685,12 @@ void Pathtracer::pathtrace(uchar4* pbo, int frame, int iter) {
 	const Camera& cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
-	const dim3 blockSize2d(8, 8);
+	const dim3 blockSize2d(16, 8);
 	const dim3 blocksPerGrid2d(
 		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
-	const int blockSize1d = 768;
+	const int blockSize1d = 64;
 
 	int depth = 0;
 	const PathSegment* dev_path_end = dev_paths + pixelcount;

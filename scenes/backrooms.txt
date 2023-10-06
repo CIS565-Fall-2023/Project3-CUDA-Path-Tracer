@@ -63,7 +63,7 @@ CAMERA
 RES          1920 1080
 FOVY         38
 ITERATIONS   5000
-DEPTH        1
+DEPTH        8
 FILE         backrooms
 EYE          -11.39 9.44 7.82
 LOOKAT       -6.51 8.83 -0.89
