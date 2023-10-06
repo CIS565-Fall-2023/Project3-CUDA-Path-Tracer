@@ -115,3 +115,19 @@ material 4
 TRANS       -1 4 -1
 ROTAT       0 0 0
 SCALE       3 3 3
+
+// Sphere
+OBJECT 7
+sphere
+material 4
+TRANS       3 5 3
+ROTAT       0 0 0
+SCALE       2 2 2
+
+// Sphere
+OBJECT 8
+sphere
+material 4
+TRANS       1 2 1
+ROTAT       0 0 0
+SCALE       1 2 1
