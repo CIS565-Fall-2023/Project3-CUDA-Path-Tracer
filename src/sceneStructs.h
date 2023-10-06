@@ -59,8 +59,7 @@ enum MaterialType : unsigned int
     SpecularReflection      = Specular | 2,
     SpecularGlass           = Specular | 3,
     MicrofacetReflection    = Microfacet | 2,
-    MicrofacetGlass         = Microfacet | 3,
-    MicrofacetMix           = Microfacet | 4,
+    MicrofacetMix           = Microfacet | 3,
     SubsurfaceScattering    = 5,
 };
 
@@ -76,7 +75,6 @@ inline MaterialType StringToMaterialType(const std::string& str)
     TryStr2Type(str, SpecularGlass);
     TryStr2Type(str, MicrofacetReflection);
     TryStr2Type(str, MicrofacetMix);
-    TryStr2Type(str, MicrofacetGlass);
     TryStr2Type(str, SubsurfaceScattering);
     
     return MaterialType::None;
@@ -195,7 +193,6 @@ struct Camera {
     glm::vec3 up;
     glm::vec3 right;
     float fovy;
-    glm::vec2 pixelLength;
     float lenRadius = 0.f;
     float focalDistance = 1.f;
 
@@ -333,9 +330,11 @@ struct BSDFSample
 
 struct UniformMaterialData
 {
+    MaterialType type = MaterialType::DiffuseReflection;
     glm::vec3 albedo = glm::vec3(1.f);
     glm::vec3 ss_absorption_coeffi = glm::vec3(1.f);
     float ss_scatter_coeffi = 1.f;
     float roughness = 0.f;
     float metallic = 1.f;
+    float eta = 1.5f;
 };

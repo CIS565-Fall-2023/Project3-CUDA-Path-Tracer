@@ -131,7 +131,6 @@ public:
 														  const float& cos_theta_o,
 														  const float& cos_theta_h,
 														  const float& cos_theta_oh,
-														  const float& metallic,
 														  const float& alpha)
 	{
 		if (cos_theta_i * cos_theta_o < Epsilon) return glm::vec3(0.f);
@@ -163,9 +162,7 @@ public:
 	inline static GPU_ONLY bool Sample(const Material& material,
 									const ShadeableIntersection& intersection,
 									CudaRNG& rng,
-									BSDFSample& sample,
-									const float& metallic, 
-									const float& roughness)
+									BSDFSample& sample)
 	{
 		// woW is stored in sample.wiW
 		switch (material.type & MaterialType::Clear_Texture)
@@ -184,12 +181,12 @@ public:
 		}
 		case MaterialType::SubsurfaceScattering:
 		{
-			return SubsurfaceScattering(material.GetAlbedo(intersection.uv), 0, intersection, rng, sample);
+			return SubsurfaceScattering(material.GetAlbedo(intersection.uv), ETA_AIR, material.eta, intersection, rng, sample);
 		}
 		case MaterialType::MicrofacetReflection:
 		{
 			return MicrofacetReflection(material.GetAlbedo(intersection.uv), intersection, rng, sample, 
-				material.GetMetallic(intersection.uv), material.GetRoughness(intersection.uv));
+				material.GetRoughness(intersection.uv));
 		}
 		case MaterialType::MicrofacetMix:
 		{
@@ -235,11 +232,11 @@ protected:
 	}
 
 	inline static GPU_ONLY bool SpecularGlass(const glm::vec3& albedo,
-									float etaA,
-									float etaB,
-									const ShadeableIntersection& intersection,
-									CudaRNG& rng,
-									BSDFSample& sample)
+												float etaA,
+												float etaB,
+												const ShadeableIntersection& intersection,
+												CudaRNG& rng,
+												BSDFSample& sample)
 	{
 		// woW is stored in sample.wiW
 		float cosThetaI = glm::dot(intersection.normal, sample.wiW);
@@ -280,7 +277,6 @@ protected:
 													 const ShadeableIntersection& intersection,
 													 CudaRNG& rng,
 													 BSDFSample& sample,
-													 const float& metallic,
 													 const float& roughness)
 	{
 		// woW is stored in sample.wiW
@@ -311,7 +307,7 @@ protected:
 														cos_theta_o,
 														wh.z,
 														cos_theta_oh,
-														1.f, alpha);
+														alpha);
 
 		sample.pdf = GGX_Pdf(wh.z, cos_theta_oh, alpha);
 		if (sample.pdf < 0.1f)
@@ -365,6 +361,7 @@ protected:
 		{
 			return false;
 		}
+
 		alpha = glm::max(alpha, 0.09f);
 		
 		float diffuse_pdf = cos_theta_i *InvPi;
@@ -392,12 +389,45 @@ protected:
 		return true;
 	}
 
-	inline static GPU_ONLY bool SubsurfaceScattering(const glm::vec3& albedo, 
-													float alpha,
-													const ShadeableIntersection& intersection,
-													CudaRNG& rng,
-													BSDFSample& sample)
+	inline static GPU_ONLY bool SubsurfaceScattering(const glm::vec3& albedo,
+													 float etaA,
+													 float etaB,
+													 const ShadeableIntersection& intersection,
+													 CudaRNG& rng,
+													 BSDFSample& sample)
 	{
-		return false;
+		// woW is stored in sample.wiW
+		float cosThetaI = glm::dot(intersection.normal, sample.wiW);
+		glm::vec3 normal = intersection.normal;
+		if (cosThetaI < 0.f)
+		{
+			normal = -normal;
+			cosThetaI = -cosThetaI;
+			thrust::swap(etaA, etaB);
+		}
+		float eta = etaA / etaB;
+
+		float sinThetaI = glm::sqrt(glm::max(0.f, 1.f - cosThetaI * cosThetaI));
+		float sinThetaO = eta * sinThetaI;
+		float cosThetaO = glm::sqrt(glm::max(0.f, 1.f - sinThetaO * sinThetaO));
+
+		float F = 1.f;
+
+		if (sinThetaO < 1.f)
+		{
+			F = FresnelDielectric(etaA, etaB, cosThetaI, cosThetaO);
+		}
+
+		if (rng.rand() < F) // Reflection
+		{
+			SpecularReflection(albedo, intersection, sample);
+		}
+		else // Refraction
+		{
+			Refract(-sample.wiW, normal, eta, cosThetaI, cosThetaO, sample.wiW);
+			sample.f = albedo / glm::abs(glm::dot(sample.wiW, intersection.normal));
+			sample.pdf = 1.f;
+		}
+		return true;
 	}
 };

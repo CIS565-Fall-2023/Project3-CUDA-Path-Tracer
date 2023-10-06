@@ -21,6 +21,9 @@
 #include "rng.h"
 #include "cudaTexture.h"
 
+
+#define DebugNormal 0
+
 static constexpr int Compact_Threshold = 2073600;
 
 struct CopyEndPaths 
@@ -69,6 +72,8 @@ CPU_GPU void writePixel(glm::vec3& hdr_pixel, uchar4& pixel)
 	// map to [0, 255]
 	hdr_pixel = glm::mix(glm::vec3(0.f), glm::vec3(255.f), hdr_pixel);
 	
+	hdr_pixel = glm::clamp(hdr_pixel, 0.f, 255.f);
+
 	// write color
 	pixel = { static_cast<unsigned char>(hdr_pixel.r), 
 			  static_cast<unsigned char>(hdr_pixel.g), 
@@ -238,12 +243,8 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 	if (segment.IsEnd()) return;
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	
-
 	if (intersection.materialId >= 0)
 	{
-		//pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
-		//return;
-		
 		if (segment.mediaId >= 0)
 		{
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
@@ -259,15 +260,14 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 					const float weight = glm::exp(-u_data.ss_scatter_coeffi * distance);
 					const float pdf = Inv4Pi;
 					const glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * distance);
-					pathSegments[idx].throughput *= transmission / glm::max(weight, 0.1f);
+					pathSegments[idx].throughput *= transmission * glm::max(weight, 0.1f);
 					return;
 				}
 				else
 				{
 					pathSegments[idx].throughput *= glm::exp(-u_data.ss_absorption_coeffi * intersection.t);
 					const glm::vec3 transmission = glm::exp(-u_data.ss_absorption_coeffi * intersection.t);
-					const float weight = glm::exp(-u_data.ss_scatter_coeffi * intersection.t);
-					pathSegments[idx].throughput *= transmission / glm::max(weight, 0.1f);
+					pathSegments[idx].throughput *= transmission;
 				}
 			}
 		}
@@ -282,6 +282,15 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 			Material material = shared_materials[intersection.materialId];
 		}
 
+		if (intersection.materialId == 0)
+		{
+			material.type = u_data.type;
+			material.eta = u_data.eta;
+			material.data.values.albedo = u_data.albedo;
+			material.data.values.metallic = u_data.metallic;
+			material.data.values.rougness = u_data.roughness;
+		}
+
 		if (material.emittance > 0.f) 
 		{
 			glm::vec3 final_throughput = segment.throughput * material.emittance;
@@ -294,14 +303,14 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 			CudaRNG rng(iteration, idx, segment.remainingBounces);
 			BSDFSample bsdf_sample;
 			bsdf_sample.wiW = -segment.ray.direction;
-			if(SampleBSDF::Sample(material, intersection, rng, bsdf_sample, u_data.metallic, u_data.roughness))
+			if(SampleBSDF::Sample(material, intersection, rng, bsdf_sample))
 			{
 				// generate new ray
 				pathSegments[idx].ray = Ray::SpawnRay(intersection.position, bsdf_sample.wiW);
 				pathSegments[idx].throughput *= bsdf_sample.f * glm::abs(glm::dot(bsdf_sample.wiW, intersection.normal)) / bsdf_sample.pdf;
 				--pathSegments[idx].remainingBounces;
 
-				if (MaterialType::SpecularGlass == material.type)
+				if (MaterialType::SubsurfaceScattering == material.type)
 				{
 					pathSegments[idx].mediaId = segment.mediaId >= 0 ? -1: 0;
 				}
@@ -321,6 +330,28 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 		}
 		pathSegments[idx].Terminate();
 	}
+}
+
+__global__ void KernelDisplayNormal(const int iteration, const int num_paths, const int num_materials,
+										ShadeableIntersection* shadeableIntersections,
+										PathSegment* pathSegments,
+										const Material* materials)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx >= num_paths) return;
+
+	PathSegment segment = pathSegments[idx];
+	if (segment.IsEnd()) return;
+	ShadeableIntersection intersection = shadeableIntersections[idx];
+
+	if (intersection.materialId >= 0)
+	{
+		Material material = materials[intersection.materialId];
+		material.GetNormal(intersection.uv, intersection.normal);
+		pathSegments[idx].radiance = intersection.normal * 0.5f + 0.5f;
+	}
+	pathSegments[idx].Terminate();
+	return;
 }
 
 CPU_ONLY void CudaPathTracer::Resize(const int& w, const int& h)
@@ -399,7 +430,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 {
 	const int pixelcount = resolution.x * resolution.y;
 
-	static const int max_depth = 5;
+	static const int max_depth = 32;
 	// TODO: might change to dynamic block size
 	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);
@@ -434,10 +465,14 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 		computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths, dev_intersections, scene);
 		checkCUDAError("Intersection Error");
 		cudaDeviceSynchronize();
-		
+#if DebugNormal
+		KernelDisplayNormal << <numblocksPathSegmentTracing, blockSize1d >> > (m_Iteration, num_paths, scene.material_count,
+																				dev_intersections, dev_paths, scene.dev_materials);
+#else
 		KernelNaiveGI<<<numblocksPathSegmentTracing, blockSize1d >>>(m_Iteration, num_paths, scene.material_count,
 																	 dev_intersections, dev_paths, scene.dev_materials, scene.env_map, data);
 		checkCUDAError("NaiveGI Error");
+#endif
 		cudaDeviceSynchronize();
 		if (pixelcount >= Compact_Threshold)
 		{

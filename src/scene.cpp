@@ -200,16 +200,14 @@ void Scene::LoadCameraFromJSON(const Json& camera_json)
     SafeGet<int>(camera_json, "depth", state.traceDepth);
     SafeGetVec<glm::vec3, float, 3>(camera_json, "ref", camera.ref);
     SafeGetVec<glm::vec3, float, 3>(camera_json, "position", camera.position);
-    SafeGetVec<glm::vec3, float, 3>(camera_json, "up", camera.up);
     SafeGetVec<glm::ivec2, unsigned int, 2>(camera_json, "resolution", camera.resolution);
-
+    camera.Recompute();
     std::cout << "Loading Camera Success!" << std::endl;
 }
 
 void Scene::LoadEnvironmentMapFromJSON(const Json& environment_json, const std::filesystem::path& res_path)
 {
     std::cout << "Loading Environment Map ..." << std::endl;
-
     auto tex_obj = LoadTextureFromJSON(environment_json, res_path);
     if (tex_obj > 0)
     {
@@ -221,6 +219,11 @@ void Scene::LoadEnvironmentMapFromJSON(const Json& environment_json, const std::
 void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesystem::path& res_path)
 {
     std::cout << "Loading Materials ..." << std::endl;
+    // add default material
+    Material material;
+    material.type = MaterialType::MicrofacetMix;
+    m_Materials.push_back(std::move(material));
+    m_MaterialMap.emplace("default", 0);
     for (unsigned int i = 0; i < material_json.size(); ++i)
     {
         Material material;
@@ -230,7 +233,7 @@ void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesyst
         
         material.type = StringToMaterialType(type);
 
-        m_MaterialMap.emplace(name, i);
+        m_MaterialMap.emplace(name, i + 1);
 
         SafeGet<float>(material_json[i], "emittance", material.emittance);
         SafeGet<float>(material_json[i], "eta", material.eta);

@@ -3,9 +3,8 @@
   "camera": {
     "ref": [ 0, 2.5, 0 ],
     "position": [ 0, 5.5, -30 ],
-    "up": [ 0, 1, 0 ],
     "fovy": 19.5,
-    "resolution": [ 1960, 1080 ],
+    "resolution": [ 680, 680 ],
     "interation": 1000,
     "depth": 8
   },
@@ -29,16 +28,6 @@
       "name": "MatteGreen",
       "type": "DiffuseReflection",
       "albedo": [ 0.14, 0.45, 0.091 ]
-    },
-    {
-      "name": "mirror",
-      "type": "SpecularReflection",
-      "albedo": [ 1.0, 1.0, 1.0 ]
-    },
-    {
-      "name": "microfacet",
-      "type": "MicrofacetReflection",
-      "albedo": [ 1.0, 1.0, 1.0 ]
     }
   ],
   "geomerties": [
@@ -82,7 +71,6 @@
       "type": "obj",
       "path": "meshes/plane.obj",
       "name": "back wall",
-      "material": "microfacet",
       "translation": [ 0, 2.5, 5 ],
       "rotation": [ -90, 0, 0 ],
       "scale": [ 5, 1, 5 ]
@@ -114,6 +102,10 @@
       "rotation": [ 0, -17.5, 0 ],
       "scale": [ 1.5, 1.5, 1.5 ]
     }
-  ]
+  ],
+  "environment map": {
+    "path": "env_maps/small_apartment_1.hdr",
+    "flip": true
+  }
 }
   

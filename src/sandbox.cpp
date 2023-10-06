@@ -89,12 +89,8 @@ SandBox::SandBox(const char* scene_path)
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/cornellBox.json");
+	m_Scene = mkU<Scene>(res_path, "scenes/materialBall.json");
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
-	
-	// Set up camera stuff from loaded path tracer settings
-	Camera& cam = m_Scene->state.camera;
-	cam.Recompute();
 }
 
 SandBox::~SandBox()
@@ -161,7 +157,33 @@ void SandBox::DrawImGui()
 	{
 		bool changed = false;
 		ImGui::Begin("Default Material Param");
+		
+		static std::string cur_material_type = "DiffuseReflection";
+		const static std::vector<std::string> material_types{
+			"DiffuseReflection",
+			"SpecularReflection",
+			"SpecularGlass",
+			"MicrofacetReflection",
+			"MicrofacetMix",
+			"SubsurfaceScattering"
+		};
+		if (ImGui::BeginCombo("##combo", cur_material_type.c_str()))
+		{
+			for (int i = 0; i < material_types.size(); ++i)
+			{
+				bool is_selected = (cur_material_type == material_types[i]);
+				if (ImGui::Selectable(material_types[i].c_str(), is_selected))
+				{
+					cur_material_type = material_types[i];
+					changed |= true;
+					m_UniformData->type = StringToMaterialType(cur_material_type);
+				}
+			}
+			ImGui::EndCombo();
+		}
 		changed |= ImGui::ColorEdit3("Albedo", &m_UniformData->albedo[0]);
+
+		changed |= ImGui::DragFloat("ETA", &m_UniformData->eta, 0.1f, 0.1f, 3.f);
 
 		ImGui::Text("Microfacet Param");
 		changed |= ImGui::DragFloat("Roughness", &m_UniformData->roughness, 0.001f, 0.f, 1.f);
@@ -178,7 +200,7 @@ void SandBox::DrawImGui()
 		bool changed = false;
 		ImGui::Begin("Camera Setting");
 		changed |= ImGui::DragFloat("Fov", &m_Scene->state.camera.fovy, 1.f, 19.5f, 90.f);
-		changed |= ImGui::DragFloat("Len Radius", &m_Scene->state.camera.lenRadius, 0.1f, 0.f, 5.f);
+		changed |= ImGui::DragFloat("Len Radius", &m_Scene->state.camera.lenRadius, 0.02f, 0.f, 5.f);
 		changed |= ImGui::DragFloat("Focal Distance", &m_Scene->state.camera.focalDistance, 0.1f, 1.f, 100.f);
 		if (changed) m_PathTracer->Reset();
 		ImGui::End();
