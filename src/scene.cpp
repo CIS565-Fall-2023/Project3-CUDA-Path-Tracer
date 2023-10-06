@@ -4,6 +4,9 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
+
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
@@ -13,6 +16,8 @@ Scene::Scene(string filename) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
     }
+
+    lightMaterialNum = 0;
     while (fp_in.good()) {
         string line;
         utilityCore::safeGetline(fp_in, line);
@@ -56,6 +61,16 @@ int Scene::loadGeom(string objectid) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
             }
+            else if (strcmp(line.c_str(), "objmesh") == 0)
+            {
+                cout << "Creating new obj mesh..." << endl;
+                newGeom.type = OBJMESH;
+                utilityCore::safeGetline(fp_in, line);
+                if (!line.empty() && fp_in.good()) {
+                    const char* filename = line.c_str();
+                    loadObj(newGeom, filename);
+                }
+            }
         }
 
         //link material
@@ -90,7 +105,7 @@ int Scene::loadGeom(string objectid) {
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
-        if (newGeom.materialid == 0)
+        if (newGeom.materialid < lightMaterialNum)
         {
             this->lightNum++;
             this->lights.push_back(newGeom);
@@ -179,7 +194,7 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 9; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
@@ -200,14 +215,119 @@ int Scene::loadMaterial(string materialid) {
             else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
                 newMaterial.hasRefractive = atof(tokens[1].c_str());
             }
+            else if (strcmp(tokens[0].c_str(), "SUBS") == 0) {
+                newMaterial.hasSubsurface = atof(tokens[1].c_str());
+            }
             else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             }
+            else if (strcmp(tokens[0].c_str(), "SUBSRADIUS") == 0)
+            {
+                newMaterial.subsurfaceRadius = atof(tokens[1].c_str());
+            }
             else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
+                if (newMaterial.emittance > 0)
+                {
+                    ++lightMaterialNum;
+                }
             }
         }
         materials.push_back(newMaterial);
         return 1;
     }
 }
+
+// Reference: https://github.com/tinyobjloader/tinyobjloader
+int Scene::loadObj(Geom& geo, const char* inputfile) {
+    tinyobj::ObjReader reader;
+    tinyobj::ObjReaderConfig reader_config;
+
+    if (!reader.ParseFromFile(inputfile, reader_config)) {
+        if (!reader.Error().empty()) {
+            std::cerr << "TinyObjReader: " << reader.Error();
+        }
+        exit(1);
+    }
+
+    if (!reader.Warning().empty()) {
+        std::cout << "TinyObjReader: " << reader.Warning();
+    }
+
+    tinyobj::attrib_t attrib = reader.GetAttrib();
+    std::vector<tinyobj::shape_t> shapes = reader.GetShapes();
+
+    geo.triangleIdStart = triangles.size();
+
+    float maxX = -FLT_MAX, maxY = -FLT_MAX, maxZ = -FLT_MAX;
+    float minX = FLT_MAX, minY = FLT_MAX, minZ = FLT_MAX;
+
+    // Loop over shapes
+    for (const auto& shape : shapes) {
+        Triangle face;     // current face to be loaded
+
+        size_t idx = 0;
+
+        // Loop over faces
+        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); ++f) {
+            size_t num_v = size_t(shape.mesh.num_face_vertices[f]);
+
+            // Loop over vertices
+            for (size_t v = 0; v < num_v; ++v) {
+
+                tinyobj::index_t v_idx = shape.mesh.indices[idx + v];
+                tinyobj::real_t vx = attrib.vertices[3 * size_t(v_idx.vertex_index) + 0];
+                tinyobj::real_t vy = attrib.vertices[3 * size_t(v_idx.vertex_index) + 1];
+                tinyobj::real_t vz = attrib.vertices[3 * size_t(v_idx.vertex_index) + 2];
+
+                glm::vec3 vert(vx, vy, vz);
+
+                // Update the bounding box
+                maxX = std::max(vx, maxX);
+                maxY = std::max(vy, maxY);
+                maxZ = std::max(vz, maxZ);
+
+                minX = std::min(vx, minX);
+                minY = std::min(vy, minY);
+                minZ = std::min(vz, minZ);
+
+                glm::vec3 norm;
+                if (v_idx.normal_index >= 0) {
+                    norm = glm::vec3(
+                        attrib.normals[3 * size_t(v_idx.normal_index) + 0],
+                        attrib.normals[3 * size_t(v_idx.normal_index) + 1],
+                        attrib.normals[3 * size_t(v_idx.normal_index) + 2]
+                    );
+                }
+
+                glm::vec2 texture;
+                if (v_idx.texcoord_index >= 0) {
+                    texture = glm::vec2(
+                        attrib.texcoords[2 * size_t(v_idx.texcoord_index) + 0],
+                        attrib.texcoords[2 * size_t(v_idx.texcoord_index) + 1]
+                    );
+                }
+
+                if (v < 3) {
+                    face.vertices[v] = vert;
+                    face.normals[v] = norm;
+                    face.uvs[v] = texture;
+                }
+                else {
+                    std::cout << "Quad face detected" << reader.Warning();
+                }
+            }
+
+            idx += num_v;
+            triangles.push_back(face);
+        }
+    }
+
+    geo.boundingBoxMax = glm::vec3(maxX, maxY, maxZ);
+    geo.boundingBoxMin = glm::vec3(minX, minY, minZ);
+    geo.triangleIdEnd = triangles.size();
+
+    return 1;
+}
+
+

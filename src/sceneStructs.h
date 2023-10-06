@@ -11,7 +11,7 @@ enum GeomType {
     SPHERE,
     CUBE,
     LIGHT,
-    MESH,
+    OBJMESH,
 };
 
 struct Ray {
@@ -35,7 +35,9 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
-    int triangleIdFst;
+    glm::vec3 boundingBoxMin;
+    glm::vec3 boundingBoxMax;
+    int triangleIdStart;
     int triangleIdEnd;
 };
 
@@ -47,6 +49,8 @@ struct Material {
     } specular;
     float hasReflective;
     float hasRefractive;
+    float hasSubsurface;
+    float subsurfaceRadius;
     float indexOfRefraction;
     float emittance;
 };

@@ -5,7 +5,9 @@ SPECEX      0
 SPECRGB     0 0 0
 REFL        0
 REFR        0
+SUBS		0
 REFRIOR     0
+SUBSRADIUS  0
 EMITTANCE   5
 
 // Diffuse white
@@ -15,7 +17,9 @@ SPECEX      0
 SPECRGB     0 0 0
 REFL        0
 REFR        0
+SUBS		0
 REFRIOR     0
+SUBSRADIUS  0
 EMITTANCE   0
 
 // Diffuse red
@@ -25,7 +29,9 @@ SPECEX      0
 SPECRGB     0 0 0
 REFL        0
 REFR        0
+SUBS		0
 REFRIOR     0
+SUBSRADIUS  0
 EMITTANCE   0
 
 // Diffuse green
@@ -35,7 +41,9 @@ SPECEX      0
 SPECRGB     0 0 0
 REFL        0
 REFR        0
+SUBS		0
 REFRIOR     0
+SUBSRADIUS  0
 EMITTANCE   0
 
 // Specular white
@@ -45,37 +53,57 @@ SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
 REFR        0
+SUBS		0
 REFRIOR     0
+SUBSRADIUS  0
 EMITTANCE   0
 
-// Refractive white
+// Refractive blue
 MATERIAL 5
-RGB         .98 .98 .98
+RGB         .527 .804 .976
 SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        0
 REFR        1
-REFRIOR     0.71
+SUBS		0
+REFRIOR     1.33
+SUBSRADIUS  0
 EMITTANCE   0
 
-// Reflective white
+// Reflective blue
 MATERIAL 6
-RGB         .98 .98 .98
+RGB         .527 .804 .976
 SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
 REFR        0
+SUBS		0
 REFRIOR     0
+SUBSRADIUS  0
 EMITTANCE   0
 
-// Reflective & Refractive white
+// Reflective & Refractive blue
 MATERIAL 7
-RGB         .98 .98 .98
+RGB         .527 .804 .976
 SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
 REFR        1
+SUBS		0
+REFRIOR     0.70
+SUBSRADIUS  0
+EMITTANCE   0
+
+// Subsurface blue
+MATERIAL 8
+RGB         .527 .804 .976
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        0
+REFR        0
+SUBS		1
 REFRIOR     0.71
+SUBSRADIUS  0.02
 EMITTANCE   0
 
 // Camera
@@ -141,19 +169,21 @@ SCALE       .01 10 10
 
 // Sphere
 OBJECT 6
-sphere
-material 6
-TRANS      -3 3 -4
+objmesh
+../scenes/objFile/wahoo.obj
+material 8
+TRANS       0 5 0
 ROTAT       0 0 0
-SCALE       4 4 4
+SCALE       1 1 1
 
 // cube
-OBJECT 7
-cube
-material 3
-TRANS       2 6 -3
-ROTAT       25 45 0
-SCALE       4 4 4
+OBJECT 8
+objmesh
+../scenes/objFile/cow.obj
+material 2
+TRANS       3 6 1
+ROTAT       0 -45 0
+SCALE       1 1 1
 
 // cube
 OBJECT 9

@@ -128,8 +128,8 @@ SCALE       .01 20 20
 
 // Dragon
 OBJECT 7
-obj
+sphere
 material 5
-TRANS       0 -1 0
-ROTAT       0 180 0
-SCALE       0.01 0.01 0.01
+TRANS       0 5 0
+ROTAT       0 0 0
+SCALE       3 3 3

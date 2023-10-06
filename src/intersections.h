@@ -125,10 +125,10 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     if (t1 < 0 && t2 < 0) {
         return -1;
     } else if (t1 > 0 && t2 > 0) {
-        t = min(t1, t2);
+        t = glm::min(t1, t2);
         outside = true;
     } else {
-        t = max(t1, t2);
+        t = glm::max(t1, t2);
         outside = false;
     }
 
@@ -144,83 +144,125 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 }
 
 __host__ __device__ float triangleIntersectionTest(Geom custom_obj, Ray r,
-    glm::vec3& intersectionPoint, Triangle* triangles, int triangles_start, int triangles_end, glm::vec3& normal, bool& outside,
-    glm::vec2& uv)
+    glm::vec3& intersectionPoint, Triangle* triangles, int triangleIdStart, int triangleIdEnd,
+    glm::vec3& normal, bool& outside, glm::vec2& uv)
 {
-
-    // get the Ray in local space
+    // Convert ray to local space
     Ray ray_inversed;
     ray_inversed.origin = multiplyMV(custom_obj.inverseTransform, glm::vec4(r.origin, 1.0f));
     ray_inversed.direction = glm::normalize(multiplyMV(custom_obj.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     float min_t = FLT_MAX;
 
-    for (int i = triangles_start; i < triangles_end; i++)
+    for (int i = triangleIdStart; i < triangleIdEnd; i++)
     {
-        Triangle& triangle = triangles[i];
-        glm::vec3 vertices[3];
-        glm::vec3 normals[3];
-        glm::vec2 uvs[3];
+        const Triangle& triangle = triangles[i];
 
-        for (int j = 0; j < 3; j++) {
-            vertices[j] = triangle.vertices[j];
-            normals[j] = triangle.normals[j];
-            uvs[j] = triangle.uvs[j];
-        }
         glm::vec3 baryPos;
 
-
-        // Not intersected
-        if (glm::intersectRayTriangle(ray_inversed.origin, ray_inversed.direction, vertices[0], vertices[1], vertices[3], baryPos))
+        if (glm::intersectRayTriangle(ray_inversed.origin, ray_inversed.direction,
+            triangle.vertices[0], triangle.vertices[1], triangle.vertices[2], baryPos))
         {
-
-            // Smooth interpolate normals
-            glm::vec3 n0;
-            glm::vec3 n1;
-            glm::vec3 n2;
-
-            glm::vec3 isect_pos = (1.f - baryPos.x - baryPos.y) * vertices[1] + baryPos.x * vertices[2] + baryPos.y * vertices[3];
+            glm::vec3 isect_pos = (1.f - baryPos.x - baryPos.y) * triangle.vertices[0] +
+                baryPos.x * triangle.vertices[1] + baryPos.y * triangle.vertices[2];
             intersectionPoint = multiplyMV(custom_obj.transform, glm::vec4(isect_pos, 1.f));
             float t = glm::length(r.origin - intersectionPoint);
-            if (t > min_t)
+
+            if (t >= min_t)
             {
                 continue;
             }
             min_t = t;
 
-            if ((glm::length(normals[0]) != 0) && (glm::length(normals[1]) != 0) && (glm::length(normals[2]) != 0))
+            glm::vec3 n0, n1, n2;
+            if (glm::length(triangle.normals[0]) != 0 &&
+                glm::length(triangle.normals[1]) != 0 &&
+                glm::length(triangle.normals[2]) != 0)
             {
-                n0 = normals[0];
-                n1 = normals[1];
-                n2 = normals[2];
+                n0 = triangle.normals[0];
+                n1 = triangle.normals[1];
+                n2 = triangle.normals[2];
             }
             else
             {
-                n0 = glm::normalize(glm::cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
-                n1 = glm::normalize(glm::cross(vertices[0] - vertices[1], vertices[2] - vertices[1]));
-                n2 = glm::normalize(glm::cross(vertices[0] - vertices[2], vertices[1] - vertices[2]));
+                n0 = glm::normalize(glm::cross(triangle.vertices[1] - triangle.vertices[0], triangle.vertices[2] - triangle.vertices[0]));
+                n1 = glm::normalize(glm::cross(triangle.vertices[2] - triangle.vertices[1], triangle.vertices[0] - triangle.vertices[1]));
+                n2 = glm::normalize(glm::cross(triangle.vertices[0] - triangle.vertices[2], triangle.vertices[1] - triangle.vertices[2]));
             }
 
             // Barycentric Interpolation
-            float S = 0.5f * glm::length(glm::cross(vertices[0] - vertices[1], vertices[2] - vertices[1]));
-            float S0 = 0.5f * glm::length(glm::cross(vertices[1] - isect_pos, vertices[2] - isect_pos));
-            float S1 = 0.5f * glm::length(glm::cross(vertices[0] - isect_pos, vertices[2] - isect_pos));
-            float S2 = 0.5f * glm::length(glm::cross(vertices[0] - isect_pos, vertices[1] - isect_pos));
-            glm::vec3 newNormal = glm::normalize(n0 * S0 / S + n1 * S1 / S + n2 * S2 / S);
+            const glm::vec3 cross_v1v2_v1v3 = glm::cross(triangle.vertices[1] - triangle.vertices[0], triangle.vertices[2] - triangle.vertices[0]);
+            float S = 0.5f * glm::length(cross_v1v2_v1v3);
+            float S0 = 0.5f * glm::length(glm::cross(triangle.vertices[1] - isect_pos, triangle.vertices[2] - isect_pos));
+            float S1 = 0.5f * glm::length(glm::cross(triangle.vertices[0] - isect_pos, triangle.vertices[2] - isect_pos));
+            float S2 = S - S0 - S1;
 
-            if ((glm::length(uvs[0]) != 0) && (glm::length(uvs[1]) != 0) && (glm::length(uvs[2]) != 0))
-            {
-                uv = uvs[0] * S0 / S + uvs[1] * S1 / S + uvs[2] * S2 / S;
-            }
-
+            glm::vec3 newNormal = glm::normalize((n0 * S0 + n1 * S1 + n2 * S2) / S);
             normal = glm::normalize(multiplyMV(custom_obj.invTranspose, glm::vec4(newNormal, 0.f)));
             outside = glm::dot(normal, ray_inversed.direction) < 0;
-            isect_pos = multiplyMV(custom_obj.transform, glm::vec4(isect_pos, 1.f));
+
+            if (glm::length(triangle.uvs[0]) != 0 &&
+                glm::length(triangle.uvs[1]) != 0 &&
+                glm::length(triangle.uvs[2]) != 0)
+            {
+                uv = (triangle.uvs[0] * S0 + triangle.uvs[1] * S1 + triangle.uvs[2] * S2) / S;
+            }
         }
     }
+
     if (!outside)
     {
         normal = -normal;
     }
     return min_t;
 }
+
+
+class OctreeNode {
+public:
+    glm::vec3 minCorner, maxCorner;  // Bounding box
+    std::vector<Geom> objects;  // Objects in this node
+    OctreeNode* children[8] = { nullptr };  // Pointers to children nodes
+};
+
+__host__ __device__ OctreeNode* buildOctree(const std::vector<Geom>& objects, glm::vec3 minCorner, glm::vec3 maxCorner, int depth) {
+    if (objects.size() == 0 || depth <= 0) {
+        return nullptr;
+    }
+
+    OctreeNode* node = new OctreeNode();
+    node->minCorner = minCorner;
+    node->maxCorner = maxCorner;
+
+    if (objects.size() == 1 || depth == 1) {
+        node->objects = objects;
+        return node;
+    }
+
+    glm::vec3 center = (minCorner + maxCorner) / 2.0f;
+
+    // Partition objects into 8 octants
+    std::vector<Geom> octantObjects[8];
+
+    for (const Geom& obj : objects) {
+        glm::vec3 objPosition = obj.translation;
+
+        // Determine the octant for the object based on its position relative to center
+        int octantIndex =
+            (objPosition.x >= center.x) * 4 +
+            (objPosition.y >= center.y) * 2 +
+            (objPosition.z >= center.z);
+        octantObjects[octantIndex].push_back(obj);
+    }
+
+    // Recursive build children
+    for (int i = 0; i < 8; ++i) {
+        glm::vec3 childMinCorner = minCorner + glm::vec3((i & 4) * center.x, (i & 2) * center.y, (i & 1) * center.z);
+        glm::vec3 childMaxCorner = center + glm::vec3((i & 4) * maxCorner.x, (i & 2) * maxCorner.y, (i & 1) * maxCorner.z);
+
+        node->children[i] = buildOctree(octantObjects[i], childMinCorner, childMaxCorner, depth - 1);
+    }
+
+    return node;
+}
+
