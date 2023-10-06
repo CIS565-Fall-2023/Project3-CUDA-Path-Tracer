@@ -18,6 +18,7 @@ struct Material {
         float exponent;
         glm::vec3 color;
     } specular;
+    bool isScatterMedium;
     float hasReflective;
     float hasRefractive;
     float indexOfRefraction;
@@ -48,6 +49,7 @@ struct RenderState {
 struct PathSegment {
     Ray ray;
     glm::vec3 color;
+    bool inScatterMedium = false;
     int pixelIndex;
     int remainingBounces;
 };

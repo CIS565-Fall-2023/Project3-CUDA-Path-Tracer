@@ -339,6 +339,9 @@ int Scene::loadMaterial(string materialid) {
             } else if (strcmp(tokens[0].c_str(), "bump") == 0) {
                 newMaterial.bumpId = atof(tokens[1].c_str());
                 cout << "Connecting Material " << id << " to Bump " << newMaterial.bumpId << "..." << endl;
+            } else if (strcmp(tokens[0].c_str(), "SCATTER") == 0) {
+                cout << "Material is scatter" << endl;
+                newMaterial.isScatterMedium = true;
             }
             utilityCore::safeGetline(fp_in, line);
         }

@@ -133,8 +133,9 @@ __device__ bool sampleRay(
 	, thrust::default_random_engine& rng
 	, float& out_pdf
 	, glm::vec3& out_wi
+	, PathSegment& seg
 ) {
-	bool inside = glm::dot(norm, wo) < 0;
+	bool inside = glm::dot(norm, wo) <0;
 	glm::vec3 normal = norm;
 	if (inside) normal = -normal;
 	if (material.hasRefractive) {
@@ -153,6 +154,7 @@ __device__ bool sampleRay(
 			fresnel < u01(rng)
 			) // not reflected
 		{ 
+			if (inside && material.isScatterMedium)seg.inScatterMedium = false;
 			float absdot = glm::dot(-normal, refract);
 			out_pdf = absdot;
 			out_wi = refract;
@@ -222,4 +224,38 @@ __device__ glm::vec3 getEnvLight(
 ) {
 	glm::vec2 uv = glm::vec2(atan2f(wi.z, wi.x), asin(wi.y)) * glm::vec2(0.1591, 0.3183) + 0.5f;
 	return texture2D(uv, envMap);
+}
+
+//return hit surface
+__device__ bool marchRay(
+	PathSegment& segment
+	, ShadeableIntersection& intersect
+	, Material material
+	, float scatteringDistance
+	, float absorbAtDistance
+	, thrust::default_random_engine& rng
+) {
+	segment.inScatterMedium = segment.inScatterMedium || glm::dot(intersect.surfaceNormal, segment.ray.direction) > 0;
+	if (segment.inScatterMedium) {
+		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+		float distFactor = -logf(u01(rng));
+		float dist = distFactor * scatteringDistance;
+		glm::vec3 absorbtCoefficient = -log(glm::vec3(0,.98,.98)) / absorbAtDistance;
+		if (dist <  intersect.t) {
+			float pdf = exp(-distFactor);
+			segment.color /= pdf;
+			segment.color *= exp(-absorbtCoefficient * dist);//absorb during light transmission
+			segment.ray.origin += (segment.ray.direction * dist);
+			return false;
+		}
+		else {
+			segment.color *= exp(-absorbtCoefficient * intersect.t);//absorb during light transmission
+			segment.ray.origin += (segment.ray.direction * intersect.t);
+			return true;
+		}
+	}
+	else {
+		segment.ray.origin += (segment.ray.direction * intersect.t);
+	}
+	return true;
 }

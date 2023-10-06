@@ -22,7 +22,7 @@
 #include "bvh.h"
 
 #define ERRORCHECK 1
-#define DEBUG 1
+#define DEBUG 0
 #define GATHER 1
 #define BVH 1
 #define COMPACTION 1
@@ -409,14 +409,16 @@ __global__ void processPBR(
 
 	float pdf = 1.f;
 
+	//treat it like normal ray intersection condition
 	seg.ray.origin = intersect.t * seg.ray.direction + seg.ray.origin;
+	
 
 	glm::vec3 wo = -seg.ray.direction;
 
 	thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_idx, depth);
 
 
-	if (!sampleRay(wo, intersect.surfaceNormal, material, rng, pdf, seg.ray.direction)) {
+	if (!sampleRay(wo, intersect.surfaceNormal, material, rng, pdf, seg.ray.direction,seg)) {
 		//this is a ray need to be discarded
 		seg.remainingBounces = 0;
 		seg.color = glm::vec3(0.);
@@ -431,6 +433,84 @@ __global__ void processPBR(
 	seg.color *= (bsdf * glm::clamp(abs(glm::dot(intersect.surfaceNormal, seg.ray.direction)), 0.f, 1.f) / pdf);
 	
 #endif //DEBUG
+}
+
+
+__global__ void processPBRMedium(
+	int iter
+	, int depth
+	, int num_paths
+	, PathSegment* segments
+	, ShadeableIntersection* intersects
+	, Material* materials
+	, cudaTextureObject_t* textures
+	, cudaTextureObject_t envTexture
+	, bool hasEnvLight
+) {
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id >= num_paths)return; // no light
+	ShadeableIntersection& intersect = intersects[id];
+	PathSegment& segment = segments[id];
+	//intersect nothing
+	if (intersect.t < 0) {
+		if (hasEnvLight) {
+			segment.color *= getEnvLight(segment.ray.direction, envTexture);
+		}
+		else {
+			segment.color = glm::vec3(0.f);
+		}
+		segment.remainingBounces = 0;
+		return;
+	}
+	Material material = materials[intersect.materialId];
+	--segment.remainingBounces;
+	if (material.emittance > 0) // hit light
+	{
+		segment.color *= (material.color * material.emittance);
+		segment.remainingBounces = 0;
+		return;
+	}
+	if (segment.remainingBounces < 1) // end bounce and didn't hit light
+	{
+		segment.color = glm::vec3(0.);
+		segment.remainingBounces = 0;
+		return;
+	}
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, id, depth);
+	glm::vec3 normal = intersect.surfaceNormal;
+	if (material.bumpId != -1) {
+		normal = tangentToWorld(normal) * texture2D(intersect.surfaceUV, textures[material.bumpId]);
+	}
+	bool hitSurface = marchRay(segment, intersect, material, 0.2f, 0.1f, rng);
+	glm::vec3 wo = -segment.ray.direction;
+	float pdf = 1.f;
+	if (hitSurface) {
+		if (!sampleRay(wo, normal, material, rng, pdf, segment.ray.direction,segment)) {
+			//this is a ray need to be discarded
+			segment.remainingBounces = 0;
+			segment.color = glm::vec3(0.);
+			return;
+		}
+		//fix strange artifact
+		segment.ray.origin += 0.01f * segment.ray.direction;
+	} else {
+		//http://corysimon.github.io/articles/uniformdistn-on-sphere/
+		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+		float theta = TWO_PI * u01(rng);
+		float phi = acos(1.f - 2 * u01(rng));
+		float sinPhi = sin(phi);
+		segment.ray.direction = glm::vec3(sinPhi*cos(theta),sinPhi*sin(theta),cos(phi));
+		//fix strange artifact
+		segment.ray.origin += 0.01f * segment.ray.direction;
+	}
+
+
+
+	if (hitSurface) {
+		glm::vec3 bsdf = getBSDF(segment.ray.direction, wo, intersect.surfaceUV, material, textures);
+		//           albedo           absdot
+		segment.color *= (bsdf * glm::clamp(abs(glm::dot(normal, segment.ray.direction)), 0.f, 1.f) / pdf);
+	}
 }
 
 
@@ -631,6 +711,27 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		// TODO: compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
 
+		//processPBRMedium(
+		//	int iter
+		//	, int depth
+		//	, int num_paths
+		//	, PathSegment* segments
+		//	, ShadeableIntersection* intersects
+		//	, Material* materials
+		//	, cudaTextureObject_t* textures
+		//	, cudaTextureObject_t envTexture
+		//	, bool hasEnvLight
+		//processPBRMedium << <numblocksPathSegmentTracing, blockSize1d >> > (
+		//	iter
+		//	, depth
+		//	, num_paths
+		//	, dev_paths
+		//	, dev_intersections
+		//	, dev_materials
+		//	, dev_texObjs
+		//	, envMap
+		//	, hasEnvMap
+		//);
 		processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter, depth
 			, num_paths
