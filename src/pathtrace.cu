@@ -125,8 +125,8 @@ void pathtraceInit(Scene* scene) {
     cudaMemset(dev_first_bounce_cache, 0, pixelcount * sizeof(ShadeableIntersection));
     checkCUDAError("dev_first_bounce_cache");
 
-    //cudaMalloc(&dev_bvh_nodes, scene->bvh_nodes.size() * sizeof(BvhNode));
-    //cudaMemcpy(dev_bvh_nodes, scene->bvh_nodes.data(), scene->bvh_nodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
+    cudaMalloc(&dev_bvh_nodes, scene->bvh_nodes.size() * sizeof(BvhNode));
+    cudaMemcpy(dev_bvh_nodes, scene->bvh_nodes.data(), scene->bvh_nodes.size() * sizeof(BvhNode), cudaMemcpyHostToDevice);
     // TODO: initialize any extra device memeory you need
     first_bounce_cached = false;
     checkCUDAError("pathtraceInit");
@@ -214,7 +214,39 @@ __global__ void computeIntersections(
 
         if (using_bvh)
         {
-            intersect_bvh(geoms[MESH_INDEX], tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, root_node_index);
+            t = intersect_bvh(geoms[MESH_INDEX], tris, pathSegment.ray, tmp_intersect, tmp_normal, bvh_nodes, root_node_index);
+
+            if (t > 0.0f && t_min > t)
+			{
+				t_min = t;
+				hit_geom_index = MESH_INDEX;
+				intersect_point = tmp_intersect;
+				normal = tmp_normal;
+			}
+            for (int i = 0; i < geoms_size; i++)
+            {
+                Geom& geom = geoms[i];
+
+                if (geom.type == CUBE)
+                {
+                    t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+                }
+                else if (geom.type == SPHERE)
+                {
+                    t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+                }
+                else
+                {
+                    continue;
+                }
+                if (t > 0.0f && t_min > t)
+                {
+                    t_min = t;
+                    hit_geom_index = i;
+                    intersect_point = tmp_intersect;
+                    normal = tmp_normal;
+                }
+            }
         }
 
         // naive parse through global geoms
@@ -459,6 +491,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
         if (!(depth == 0 && first_bounce_cached))
         {
 #endif
+            checkCUDAError("before compute_intersections");
             computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
                 depth
                 , num_paths
@@ -472,6 +505,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
                 , hst_scene->root_node_index
                 , hst_scene->using_bvh()
                 );
+            checkCUDAError("compute_intersections");
+
 #if CACHE_FIRST_BOUNCE
         }
         else

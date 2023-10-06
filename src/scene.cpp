@@ -6,9 +6,10 @@
 #include <cmath>
 
 #define EMISSIVE_FACTOR 1.5f
-#define TRANSFORM_DEBUG 1
-#define MATERIAL_DEBUG 1
+#define TRANSFORM_DEBUG 0
+#define MATERIAL_DEBUG 0
 #define DEBUG 0
+#define USING_BVH 1
 
 using namespace std;
 
@@ -177,6 +178,10 @@ bool Scene::load_gltf_contents(string filename)
         cout << "and inverse transpose matrix: " << endl;
         print_mat4(geoms[i].invTranspose);
     }
+#endif
+
+#if USING_BVH
+    bvh_build();
 #endif
     return (tris.size() > 0); // look at this
 }
@@ -602,6 +607,8 @@ int Scene::loadMaterial(string materialid) {
     //}
 }
 
+//need to build a bvh per mesh? or tbh can just search for which mesh the triangle belongs to after intersecting
+// have to rework the first index, last index thing for the mesh though
 void Scene::bvh_build()
 {
     bvh_nodes.reserve(tris.size() - 1);
@@ -645,7 +652,7 @@ void Scene::bvh_update_node_bounds(uint32_t node_index)
     node.aa_bb.bmax = glm::vec3(FLT_MIN);
     for (unsigned int first = node.left_first, i = 0; i < node.tri_count; i++)
     {
-        Triangle& leaf_tri = tris[first + i];
+        Triangle& leaf_tri = tris[tri_indices[first + i]];
         node.aa_bb.grow(leaf_tri);
     }
 }

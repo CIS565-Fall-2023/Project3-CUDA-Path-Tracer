@@ -226,6 +226,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
     int stack[64];
     int stack_ptr = 0;
     Ray r = ray;
+    bool intersected = false;
     r.origin = multiplyMV(geom.inverseTransform, glm::vec4(ray.origin, 1.0f));
     r.direction = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(ray.direction, 0.0f)));
     glm::vec3 ray_origin = r.origin;
@@ -250,6 +251,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
                 if (glm::intersectRayTriangle(ray_origin, ray_direction, tri_v0, tri_v1, tri_v2, bary) 
                     && (bary.z < curr_t))
                 {
+                    intersected = true;
                     curr_t = bary.z;
                     float bary_w = 1.0f - bary.x - bary.y;
                     intersect = getPointOnRay(r, curr_t);
@@ -310,12 +312,12 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
                 }
             }
         }
-    } while (stack_ptr != 0); //double check iterations
+    } while (stack_ptr >= 0); //double check iterations
     intersect = multiplyMV(geom.transform, glm::vec4(intersect, 1.0f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(normal, 0.0f)));
 #if DEBUG
     float length = glm::length(ray.origin - intersect);
     printf("curr_t is %f, length is %f", curr_t, length);
 #endif DEBUG
-    return glm::length(ray.origin - intersect); // return distance
+    return intersected ? glm::length(ray.origin - intersect) : -1.0f; // return distance
 }

@@ -100,7 +100,7 @@ void scatterRay(
 #endif
 #if BOTH
     // use specular.factor here instead of rng for mesh
-    if (m.hasReflective && (u01(rng) > 0.07))
+    if (m.hasReflective && (u01(rng) > 0.7))
     {
         /*sampled_direction = u01(rng) > 0.8 ? glm::reflect(pathSegment.ray.direction, normal) 
                                            : calculateRandomDirectionInHemisphere(normal, rng);*/

@@ -9,8 +9,8 @@ FOVY        45
 ITERATIONS  5000
 DEPTH       3
 FILE        cornell
-EYE         0.0 13 23
-LOOKAT      0 13 0
+EYE         0.0 15 23
+LOOKAT      0 15 0
 UP          0 1 0
 
 // Emissive material (light)
@@ -91,7 +91,7 @@ SCALE       0.01 30 30
 OBJECT 5
 cube
 material 3
-TRANS       0 12.5 -12.5
+TRANS       0 12.5 -15
 ROTAT       0 90 0
 SCALE       0.01 35 30
 
@@ -99,7 +99,7 @@ SCALE       0.01 35 30
 OBJECT 6
 cube
 material 4
-TRANS       -12.5 12.5 0
+TRANS       -15 12.5 0
 ROTAT       0 0 0
 SCALE       0.01 35 30
 
@@ -107,7 +107,7 @@ SCALE       0.01 35 30
 OBJECT 7
 cube
 material 5
-TRANS       12.5 12.5 0
+TRANS       15 12.5 0
 ROTAT       0 0 0
 SCALE       0.01 35 30
 
@@ -115,7 +115,7 @@ SCALE       0.01 35 30
 OBJECT 8
 cube
 material 2
-TRANS       12.5 10 0
+TRANS       15 10 0
 ROTAT       0 0 0
 SCALE       .3 3 3
 
@@ -123,7 +123,7 @@ SCALE       .3 3 3
 OBJECT 9
 cube
 material 2
-TRANS       -12.5 10 0
+TRANS       -15 10 0
 ROTAT       0 0 0
 SCALE       .3 3 3
 
@@ -131,7 +131,7 @@ SCALE       .3 3 3
 //OBJECT 8
 //cube
 //material 2
-//TRANS       12.5 10 7
+//TRANS       15 10 7
 //ROTAT       0 0 0
 //SCALE       .3 3 3
 //
@@ -139,7 +139,7 @@ SCALE       .3 3 3
 //OBJECT 8
 //cube
 //material 2
-//TRANS       -12.5 10 7
+//TRANS       -15 10 7
 //ROTAT       0 0 0
 //SCALE       .3 3 3
 
