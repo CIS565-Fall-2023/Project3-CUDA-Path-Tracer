@@ -29,8 +29,13 @@ The last basic optimization made was caching the intersections from the first pa
 
 
 ## **glTF File Mesh Loading & Rendering**
-One advanced feature that was added was the loading and rendering of arbitrary meshes from glTF files. 
+One advanced feature that was added was the loading and rendering of arbitrary meshes from one *or multiple* glTF files. To do this, a "GLTF" entry can be included in the `.txt` file used to load the scene for each glTF file to be loaded; the path and filename of the `.gltf` file must be included on the next line. The meshes included in these files were parsed and read using the `tinygltf` library, which can be found here. This functionality is currently limited to meshes without textures; only meshes purely using RGB values to color the scene can be loaded.
 
 
 ## **Hierarchical Spatial Data Structure - BVH**
+One advanced feature that was 
+This greatly helped with the performance of rendering the much more advanced meshes loaded in through 
 
+https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+
+https://github.com/syoyo/tinygltf

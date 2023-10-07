@@ -156,9 +156,9 @@
       "name": "plastic",
       "pbrMetallicRoughness": {
         "baseColorFactor": [
-          1.0,
-          0.325,
-          0.894104,
+          0.324,
+          0.734,
+          0.924104,
           1.0
         ],
         "metallicFactor": 0.0,

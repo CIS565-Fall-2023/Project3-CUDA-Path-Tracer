@@ -81,6 +81,7 @@ void scatterRay(
     if (m.hasReflective)
     {
         sampled_direction = glm::reflect(pathSegment.ray.direction, normal);
+        pathSegment.color *= m.specular.color;
     }
 
     else
@@ -95,7 +96,7 @@ void scatterRay(
 #endif
 #if BOTH
     // use specular.factor here instead of rng for mesh
-    if (m.hasReflective && (u01(rng) < m.specular.factor))
+    if (m.hasReflective && (u01(rng) < ((m.specular.factor > 0) ? m.specular.factor : 0.3f)))
     {
         sampled_direction = glm::reflect(pathSegment.ray.direction, normal);
         pathSegment.color *= m.specular.color;
@@ -107,5 +108,5 @@ void scatterRay(
 	}
 #endif
     pathSegment.ray.direction = glm::normalize(sampled_direction);
-    pathSegment.ray.origin = intersect + 0.010f * pathSegment.ray.direction;
+    pathSegment.ray.origin = intersect + 0.015f * pathSegment.ray.direction;
 }

@@ -25,6 +25,7 @@ Scene::Scene(string filename) {
     }
     else
     {
+        bool using_gltf = false;
         while (fp_in.good()) {
             string line;
             utilityCore::safeGetline(fp_in, line);
@@ -45,11 +46,15 @@ Scene::Scene(string filename) {
                 else if (strcmp(tokens[0].c_str(), "GLTF") == 0) {
                     load_gltf(tokens[1]);
                     cout << " " << endl;
+                    using_gltf = true;
                 }
             }
         }
 #if USING_BVH
-        bvh_build();
+        if (using_gltf)
+        {
+            bvh_build();
+        }
 #endif
     }
 }
