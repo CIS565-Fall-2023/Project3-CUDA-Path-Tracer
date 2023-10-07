@@ -40,6 +40,7 @@ Scene::Scene(string filename) {
     //build bvh tree for entire scene
     cout << "Constructing BVH tree for scene" << endl;
     buildBvhTree();
+    cout << "Finished parsing scene" << endl;
 #endif
 }
 #if BVH
@@ -299,7 +300,7 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
         std::vector<Triangle> curr_tris;
         std::vector<glm::vec3> vertices;
         std::vector<glm::vec3> normals;
-        std::vector<int> curr_indices;
+        std::vector<unsigned int> curr_indices;
         std::vector<glm::vec2> uvs;
         std::vector<MeshPoint> curr_mesh_pts;
         for (const std::pair<const std::string, int>& attribute : prim.attributes) {
@@ -335,8 +336,9 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
                 //assuming vec2 float
                 glm::vec2* tex = (glm::vec2*)attrib_data;
                 for (int i = 0; i < accessor.count; i++) {
-                    uvs.push_back(tex[i]);
+                    uvs.push_back(glm::vec2(glm::mod(tex[i].x, 1.f), glm::mod(tex[i].y, 1.f)));
                 }
+
             }
         }
         
@@ -346,10 +348,18 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
         tinygltf::Buffer& buf = model.buffers[buf_view.buffer];
         unsigned char* indices_data = buf.data.data() + buf_view.byteOffset;
 
-        //assuming unsigned short indices bc lazy FIXME
-        unsigned short* casted_indices = (unsigned short*)indices_data;
-        for (int i = 0; i < indices_acc.count; i++) {
-            curr_indices.push_back((int)(casted_indices[i]));
+        //assuming unsigned short or unsigned int indices bc lazy(basically up to 4294967296 vertices) FIXME
+        if (indices_acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+            unsigned short* casted_indices = (unsigned short*)indices_data;
+            for (int i = 0; i < indices_acc.count; i++) {
+                curr_indices.push_back((unsigned int)(casted_indices[i]));
+            }
+        }
+        else if (indices_acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
+            unsigned int* casted_indices = (unsigned int*)indices_data;
+            for (int i = 0; i < indices_acc.count; i++) {
+                curr_indices.push_back(casted_indices[i]);
+            }
         }
 
         for (int i = 0; i < vertices.size(); i++) {

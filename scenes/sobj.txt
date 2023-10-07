@@ -21,8 +21,8 @@ UP          0 1 0
 
 // Sphere
 OBJECT 0
-sphere
+C:\Users\genel\Documents\cis5650\glTF-Sample-Models\2.0\DamagedHelmet\glTF\DamagedHelmet.gltf
 material 0
-TRANS       -1 1 2
-ROTAT      -30 0 30
-SCALE       10 10 10
+TRANS        0 5 0
+ROTAT        0 0 0
+SCALE       1 1 1

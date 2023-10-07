@@ -110,8 +110,8 @@ SCALE       .01 10 10
 
 // avocado
 OBJECT 6
-C:\Users\genel\Documents\cis5650\glTF-Sample-Models\2.0\Avocado\glTF\Avocado.gltf
+C:\Users\genel\Documents\cis5650\glTF-Sample-Models\2.0\DamagedHelmet\glTF\DamagedHelmet.gltf
 material 3
 TRANS       -1 1 2
-ROTAT      -30 180 30
-SCALE       100 100 100
+ROTAT        0 0 0
+SCALE       10 10 10

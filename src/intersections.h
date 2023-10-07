@@ -235,15 +235,11 @@ __host__ __device__ float bvh_intersection_test(Ray r, glm::vec3& int_pt, glm::v
     BVHNode* bvh_tree, BVHTriIndex* bvh_tri_indices, BVHGeomIndex* bvh_geom_indices) {
     //stack based traversal from same bvh blog post
     //root at index 0
-    BVHNode* stack[64];
+    BVHNode* stack[128];
     int stack_ptr = 0;
-    stack[stack_ptr++] = &bvh_tree[0]; //start at root
     float min_t = 1e30;
-    while (stack_ptr > 0) {
-        BVHNode* node = stack[--stack_ptr];
-        // if this bb does not intersect or intersects farther
-        // than found already skip
-        if (aabbRayIntTest(node->min, node->max, r, min_t) >= min) continue;
+    BVHNode* node = &bvh_tree[0];
+    while (1) {
         // no left child = a leaf
         if (node->leftNode == -1) {
             //test ray intersection on each prim at this leaf
@@ -295,15 +291,34 @@ __host__ __device__ float bvh_intersection_test(Ray r, glm::vec3& int_pt, glm::v
                     }
                 }
             }
+            if (stack_ptr == 0) break;
+            else node = stack[--stack_ptr];
             continue;
         }
-        stack[stack_ptr++] = &bvh_tree[node->leftNode];
-        stack[stack_ptr++] = &bvh_tree[node->leftNode + 1];
+        BVHNode *c1 = &bvh_tree[node->leftNode];
+        BVHNode *c2 = &bvh_tree[node->leftNode+1];
+        float d1 = aabbRayIntTest(c1->min, c1->max, r, min_t);
+        float d2 = aabbRayIntTest(c2->min, c2->max, r, min_t);
+        if (d1 > d2) {
+            BVHNode* t = c1;
+            c1 = c2;
+            c2 = t;
+            float tf = d1;
+            d1 = d2;
+            d2 = tf;
+        }
+        if (d1 >= min_t) {
+            if (stack_ptr == 0) break;
+            node = stack[--stack_ptr];
+        }
+        else {
+            node = c1;
+            if (d2 < min_t) stack[stack_ptr++] = c2;
+        }
     }
     //return if any intersection(this should be closest int)
     if (geom_index >= 0) {
-        //if tri intersection do normal interp
-        //FIXME bring to global frame
+        // if tri intersection do normal interp
         if (tri_index >= 0) {
             Triangle& tri = triangles[tri_index];
             Geom& mesh = geoms[tri.mesh_index];
@@ -325,6 +340,7 @@ __host__ __device__ float bvh_intersection_test(Ray r, glm::vec3& int_pt, glm::v
         }
         return min_t;
     }
+    return -1;
 }
 
 #endif

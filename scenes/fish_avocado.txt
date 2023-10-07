@@ -108,10 +108,18 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// avocado
+// fish
 OBJECT 6
+C:\Users\genel\Documents\cis5650\glTF-Sample-Models\2.0\BarramundiFish\glTF\BarramundiFish.gltf
+material 1
+TRANS       1 6 1
+ROTAT       -45 90 0
+SCALE       10 10 10
+
+// avocado
+OBJECT 7
 C:\Users\genel\Documents\cis5650\glTF-Sample-Models\2.0\Avocado\glTF\Avocado.gltf
 material 3
 TRANS       -1 1 2
-ROTAT      -30 180 30
+ROTAT       -30 180 30
 SCALE       100 100 100
