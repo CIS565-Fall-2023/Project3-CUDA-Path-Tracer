@@ -13,30 +13,30 @@
 
 # Visual Features
  ## GLTF Model & Procedural CheckerBoard Texture & HDR SkyBox
- ![](Chess.png)
+ ![](./img/Chess.png)
 
  ## Infinite Procedural Shapes & Procedural Textures
- ![](InfiniteRayMarch.png)  
+ ![](./img/InfiniteRayMarch.png)  
   Showing:
   * Material: PBR Diffuse, PBR Glass, PBR Metal, Texture Map, Perlin Noise Texture, Ring Texture
   * Shape: Torus with Displacement, Cylinder, Capsule, Displacement+ SmoothUnion of Bended Cube and Sphere
 
- ![](MainScene1.png)
+ ![](./img/MainScene1.png)
 
  ## PBR depth-of-field (by jittering rays within an aperture)
- ![](pbrDOF.png)
+ ![](./img/pbrDOF.png)
 
  ## PBR Schlick's approximation of Diffuse, Glass, Metal with random sphere scene
- ![](pbrMetal.png)
- ![](pbrGlass.png)
+ ![](./img/pbrMetal.png)
+ ![](./img/pbrGlass.png)
 
  ## MSAA Antialising with random ray
  * Without Antialising  
 
- ![](WithoutAntiAli.png)
+ ![](./img/WithoutAntiAli.png)
  * With Antialising(50 x more random ray per pixel) 
 
- ![](WithAntiAli.png)
+ ![](./img/WithAntiAli.png)
 
 
 # Optimize Feature & Analysis
@@ -46,20 +46,20 @@
 
  * Material Sorting: When rays bounce and hit materials, the resulting data can be mixed up and out of order. During shading, threads can work on different materials at once, causing inefficiency. To fix this, we sort the data by material type first, so threads work on the same materials together.
 
- * BVH: TODO  
+ * Denoise: TODO until next project
 
- ![](chart.png)
+ ![](./img/chart.png)
  Based on the provided chart, compaction significantly impacts the open box scene because there are more terminated rays in this setting. Refer to the chart below for a comparison of ray numbers between the closed box and the open scene. Furthermore, as the number of material types increases, the sorting of materials becomes more pronounced.
- ![](chart2.png)
+ ![](./img/chart2.png)
 
 # Bugs
   Solution to this bug: make sure z axis is positive for both left and right hand coordinate
-  ![](Bug.png)
-  ![](Bug1.png)  
+  ![](./img/Bug.png)
+  ![](./img/Bug1.png)  
   AntiAlising isn't correct(Solution: make sure random ray apply to all stages including generate ray, intersection, shading etc.)  
-  ![](Bug3.png)  
+  ![](./img/Bug3.png)  
   Material Sorting will mess up if turn on antialising
-  ![](Bug4.jpg)  
+  ![](./img/Bug4.jpg)  
   Other intersting bugs that can't show directly through picture:
   * Glass material keep showing error(Solution: rewrite sphere intersection)
   * GLTF obj not loading(Solution: reExport from modeling application and make sure the format is match the triangle intersection in accesor, bufferview, mesh etc.)

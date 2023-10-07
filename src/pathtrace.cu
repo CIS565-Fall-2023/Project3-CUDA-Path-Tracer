@@ -665,7 +665,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				current_num_paths = dev_path_end - dev_paths;
 			}
 
-			printf("%d\n", current_num_paths);
+			//printf("%d\n", current_num_paths);
 
 			iterationComplete = (depth >= traceDepth || current_num_paths <= 0);
 		}
