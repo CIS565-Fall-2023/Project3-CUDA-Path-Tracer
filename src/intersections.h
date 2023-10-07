@@ -6,6 +6,7 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -103,6 +104,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
         glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
     float radius = .5;
 
+    // transform the ray from worldspace to the object space
     glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(sphere.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
@@ -180,32 +182,36 @@ __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
     return -1;  // No intersection
 }
 
-__host__ __device__ void swap(float& a, float& b) {
-    float temp = a;
-    a = b;
-    b = temp;
-}
+ __host__ __device__ bool intersectBVHNode(const Ray& ray, const LinearBVHNode& node, 
+     const int dirIsNeg[3], glm::vec3& invDir) {
 
-__host__ __device__ bool intersectBVHNode(const Ray& ray, const LinearBVHNode& node) {
-    float t0 = -1e38f, t1 = 1e38f;
+    const Bound& bounds = node.bounds;
 
-    for (int i = 0; i < 3; ++i) {
-        float invRayDir = 1 / ray.direction[i];
-        float tNear = (node.bounds.pMin[i] - ray.origin[i]) * invRayDir;
-        float tFar = (node.bounds.pMax[i] - ray.origin[i]) * invRayDir;
+    float tMin = (bounds[dirIsNeg[0]].x - ray.origin.x) * invDir.x;
+    float tMax = (bounds[1 - dirIsNeg[0]].x - ray.origin.x) * invDir.x;
+    float tyMin = (bounds[dirIsNeg[1]].y - ray.origin.y) * invDir.y;
+    float tyMax = (bounds[1 - dirIsNeg[1]].y - ray.origin.y) * invDir.y;
 
-        if (tNear > tFar) {
-            swap(tNear, tFar);
-        }
-        // ensure robust ray-bounds intersection
-        tFar *= 1 + 2 * 1e-20f;
-
-        t0 = tNear > t0 ? tNear : t0;
-        t1 = tFar < t1 ? tFar : t1;
-
-        if (t0 > t1) {
-            return false;
-        }
+    tMax *= 1 + 2 * utilityCore::gamma(3);
+    tyMax *= 1 + 2 * utilityCore::gamma(3);
+    if (tMin > tyMax || tyMin > tMax) {
+        return false;
     }
-    return true;
+        
+    if (tyMin > tMin) tMin = tyMin;
+    if (tyMax < tMax) tMax = tyMax;
+
+    float tzMin = (bounds[dirIsNeg[2]].z - ray.origin.z) * invDir.z;
+    float tzMax = (bounds[1 - dirIsNeg[2]].z - ray.origin.z) * invDir.z;
+
+    tzMax *= 1 + 2 * utilityCore::gamma(3);
+    if (tMin > tzMax || tzMin > tMax) {
+        return false;
+    }
+    if (tzMin > tMin)
+        tMin = tzMin;
+    if (tzMax < tMax)
+        tMax = tzMax;
+
+    return (tMin < ray.tMax) && (tMax > 0);
 }

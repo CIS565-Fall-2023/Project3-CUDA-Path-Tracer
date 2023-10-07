@@ -72,11 +72,6 @@ Scene::~Scene()
 
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
-    /*if (id > geoms.size()) {
-        cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-        return -1;
-    }
-    else {*/
     cout << "Loading Geom " << id << "..." << endl;
 
     GeomType type = TRIANGLE;
@@ -137,17 +132,9 @@ int Scene::loadGeom(string objectid) {
     inverseTransform = glm::inverse(transform);
     invTranspose = glm::inverseTranspose(transform);
 
-    Geom newGeom;
     if (type == CUBE || type == SPHERE) {
-        newGeom.type = type;
-        newGeom.materialid = materialid;
-        newGeom.translation = translation;
-        newGeom.rotation = rotation;
-        newGeom.scale = scale;
-        newGeom.transform = transform;
-        newGeom.inverseTransform = inverseTransform;
-        newGeom.invTranspose = invTranspose;
-        geoms.push_back(newGeom);
+        geoms.push_back(Geom(type, materialid, translation, rotation, 
+            scale, transform, inverseTransform, invTranspose));
     }
     else {
         string dir = getDirectory(filename);
@@ -349,29 +336,47 @@ int Scene::loadObj(const string& objFilePath, int materialid,
 
                     // Fetch the vertices of the polygon
                     std::vector<glm::vec3> vertices;
+                    std::vector<glm::vec3> normals;
+                    std::vector<glm::vec2> uvs;
                     for (size_t v = 0; v < fv; v++) {
                         tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+
+                        // Vertex positions
                         tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
                         tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                         tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
                         vertices.push_back(glm::vec3(vx, vy, vz));
+
+                        // Vertex normals
+                        if (idx.normal_index != -1) {  // Check if the normal exists
+                            tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                            tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                            tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+                            normals.push_back(glm::vec3(nx, ny, nz));
+                        }
+
+                        // Vertex UVs (texture coordinates)
+                        if (idx.texcoord_index != -1) {  // Check if the UV exists
+                            tinyobj::real_t u = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
+                            tinyobj::real_t v = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
+                            uvs.push_back(glm::vec2(u, v));
+                        }
                     }
 
                     // Triangulate the polygon using a fan triangulation
                     for (size_t v = 1; v < fv - 1; v++) {
-                        Geom newGeom;
-                        newGeom.type = TRIANGLE;
-                        newGeom.materialid = materialid;
-                        newGeom.translation = translation;
-                        newGeom.rotation = rotation;
-                        newGeom.scale = scale;
-                        newGeom.transform = transform;
-                        newGeom.inverseTransform = inverseTransform;
-                        newGeom.invTranspose = invTranspose;
+                        Geom newGeom(TRIANGLE, materialid, translation, rotation,
+                            scale, transform, inverseTransform, invTranspose);
 
-                        newGeom.v0 = vertices[0];
-                        newGeom.v1 = vertices[v];
-                        newGeom.v2 = vertices[v + 1];
+                        newGeom.setVertices(vertices[0], vertices[v], vertices[v + 1]);
+                        
+                        if (normals.size() == vertices.size()) {
+                            newGeom.setNormals(normals[0], normals[v], normals[v + 1]);
+                        }
+
+                        if (uvs.size() == vertices.size()) {
+                            newGeom.setUVs(uvs[0], uvs[v], uvs[v + 1]);
+                        }
 
                         geoms.push_back(newGeom);
                     }
@@ -381,6 +386,7 @@ int Scene::loadObj(const string& objFilePath, int materialid,
             }
         }
     }
+    return 1;
 }
 
 
@@ -545,7 +551,7 @@ void Scene::buildBVH() {
     std::vector<BVHGeomInfo> geomInfo;
 
     for (size_t i = 0; i < geoms.size(); ++i) {
-        Bound bounds = geoms[i].getBounds();
+        Bound bounds = geoms[i].getWorldBounds();
         geomInfo.push_back(BVHGeomInfo(i, bounds));
     } 
     

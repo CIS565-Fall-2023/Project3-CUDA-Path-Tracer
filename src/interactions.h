@@ -77,10 +77,10 @@ __host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersec
     glm::vec3 normal, const Material& m, thrust::default_random_engine& rng) {
 
     thrust::uniform_real_distribution<float> u01(0, 1);
-    glm::vec3 incident = pathSegment.ray.direction;
+    glm::vec3 incomingDir = pathSegment.ray.direction;
     glm::vec3 n = normal;
 
-    float cosT = glm::dot(n, -incident);
+    float cosT = glm::dot(n, -incomingDir);
     float n1, n2;
     if (cosT < 0.0) {
         n = glm::normalize(-n);
@@ -97,83 +97,47 @@ __host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersec
     if (m.hasRefractive && m.hasReflective) {
         thrust::uniform_real_distribution<float> u01(0, 1);
         if (u01(rng) < fresnel) {
-            glm::vec3 reflect = glm::reflect(incident, n);
+            glm::vec3 reflect = glm::reflect(incomingDir, n);
             pathSegment.ray.direction = reflect;
             pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
-            pathSegment.color *= m.color;
+            pathSegment.color *= glm::mix(m.diffuse, m.specular.color, fresnel);
         }
         else {
-            glm::vec3 refract = glm::normalize(glm::refract(incident, n, n1 / n2));
+            glm::vec3 refract = glm::normalize(glm::refract(incomingDir, n, n1 / n2));
             pathSegment.ray.direction = refract;
             pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
-            pathSegment.color *= m.color;
+            pathSegment.color *= m.diffuse;
         }
     }
     else if (m.hasReflective) {
-        glm::vec3 reflect = glm::reflect(incident, n);
+        glm::vec3 reflect = glm::reflect(incomingDir, n);
         pathSegment.ray.direction = reflect;
         pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
-        pathSegment.color *= m.color;
+        pathSegment.color *= glm::mix(m.diffuse, m.specular.color, fresnel);
     }
     else {
         auto direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
         pathSegment.ray.direction = direction;
         pathSegment.ray.origin = intersect + 0.001f * normal;
-        pathSegment.color *= m.color;
+        pathSegment.color *= m.diffuse;
     }
 
     pathSegment.remainingBounces--;
 }
 
-//__host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersect,
+//void scatterRay(PathSegment& pathSegment, glm::vec3 intersect,
 //    glm::vec3 normal, const Material& m, thrust::default_random_engine& rng) {
 //
 //    thrust::uniform_real_distribution<float> u01(0, 1);
-//
-//    glm::vec3 incomingDirection = pathSegment.ray.direction;
-//    float cosTheta = glm::clamp(glm::dot(normal, -incomingDirection), -1.0f, 1.0f);
-//
-//    float eta1 = 1.0, eta2 = m.indexOfRefraction;
-//    if (cosTheta < 0.f) {
-//        // leaving the object
-//        normal = -normal;
-//        swap(eta1, eta2);
-//    }
-//    float fresnelEffect = schlickFresnel(cosTheta, eta1, eta2);
-//
-//    float specularChance = m.hasReflective > 0.f ? fresnelEffect : 0.f;
-//    float refractionChance = m.hasRefractive > 0.f ? (1 - specularChance) * 0.5f : 0.0f;
-//    float scatterChoice = u01(rng);
-//
-//    if (scatterChoice < specularChance) {
-//        // reflect
-//        glm::vec3 perfectReflect = glm::reflect(incomingDirection, normal);
-//        glm::vec3 imperfectReflect = glm::mix(perfectReflect, calculateRandomDirectionInHemisphere(normal, rng),
-//            m.specular.exponent);
-//        pathSegment.ray.direction = glm::normalize(imperfectReflect);
-//        pathSegment.ray.origin = intersect + OFFSET * pathSegment.ray.direction;
-//        pathSegment.color *= m.color;
-//    }
-//    else if (scatterChoice < (specularChance + refractionChance)) {
-//        // refraction
-//        glm::vec3 refractDir = glm::normalize(glm::refract(incomingDirection, normal, eta1 / eta2));
-//        if (glm::length(refractDir) == 0.f) { // Total internal reflection
-//            glm::vec3 reflectDir = glm::reflect(incomingDirection, normal);
-//            pathSegment.ray.direction = reflectDir;
-//        }
-//        else {
-//            pathSegment.ray.direction = refractDir;
-//        }
-//        pathSegment.ray.origin = intersect + OFFSET * pathSegment.ray.direction;
-//        pathSegment.color *= m.color;
-//    }
-//    else {
-//        // diffuse scatter
-//        pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
-//        pathSegment.color *= m.color;
-//        pathSegment.ray.origin = intersect + OFFSET * normal;
+//    glm::vec3 incomingDir = pathSegment.ray.direction;
+//    bool inside = false;
+//    float cosTheta = glm::dot(-incomingDir, normal);
+//    if (cosTheta < 0) {
+//        inside = true;
 //    }
 //
-//    pathSegment.remainingBounces--;
+//    //    glm::vec3 incomingDir = pathSegment.ray.direction;
+//    //    glm::vec3 n = normal;
+//    //
+//    //    float cosT = glm::dot(n, -incomingDir);
 //}
-
