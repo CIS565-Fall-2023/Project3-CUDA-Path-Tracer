@@ -182,7 +182,16 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 		case GLFW_KEY_1:
 			sortMaterial = !sortMaterial;
 			break;
+
+		case GLFW_KEY_2:
+			Compaction = !Compaction;
+			break;
+
+		case GLFW_KEY_3:
+			CacheFirstBound = !CacheFirstBound;
+			break;
 		}
+
 	}
 }
 

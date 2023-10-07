@@ -133,7 +133,9 @@ static ShadeableIntersection* dev_intersections = NULL;
 
 int samplesPerPixel = 1;
 
-bool sortMaterial = false;
+bool sortMaterial = true;
+bool Compaction = false;
+bool CacheFirstBound = true;
 
 int* dev_perm_x = nullptr;
 int* dev_perm_y = nullptr;
@@ -205,6 +207,28 @@ void pathtraceInit(Scene* scene) {
 	checkCUDAError("pathtraceInit");
 }
 
+__device__ glm::vec2 ConcentricSampleDisk(thrust::default_random_engine& rng) {
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	float r1 = 2.0f * u01(rng) - 1.0f;
+	float r2 = 2.0f * u01(rng) - 1.0f;
+
+	if (r1 == 0.0f && r2 == 0.0f) {
+		return glm::vec2(0, 0);
+	}
+
+	float r, theta;
+	if (fabs(r1) > fabs(r2)) {
+		r = r1;
+		theta = (3.1415926535 / 4.0f) * (r2 / r1);
+	}
+	else {
+		r = r2;
+		theta = (3.1415926535 / 2.0f) - (r1 / r2) * (3.1415926535 / 4.0f);
+	}
+
+	return r * glm::vec2(cos(theta), sin(theta));
+}
+
 void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
@@ -259,11 +283,25 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 				- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + jitter[0])
 				- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + jitter[1]));
 
+			if (cam.aperture > 0) {
+				glm::vec2 pLens = cam.aperture * ConcentricSampleDisk(rng);
+				float ft = cam.focalDistance / glm::abs(segment.ray.direction.z); //abs handel left and right hand coordinate system where z value might be negative
+				glm::vec3 pFocus = segment.ray.direction * ft + segment.ray.origin;
+
+				glm::vec3 newOri = pLens.x * cam.right + pLens.y * cam.up + cam.position;
+				segment.ray.origin = newOri;
+				segment.ray.direction = glm::normalize(pFocus - segment.ray.origin);
+			}
+
+
 			segment.pixelIndex = index;
 			segment.remainingBounces = traceDepth;
 		}
 	}
 }
+
+
+
 
 
 __global__ void computeIntersections(
@@ -544,7 +582,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
-		if (depth == 0)
+		if (depth == 0 && CacheFirstBound)
 		{
 			if (iter == 1) {
 				// tracing
@@ -621,11 +659,13 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			thrust::sort_by_key(thrust::device, dev_materialSortBuffer2, dev_materialSortBuffer2 + num_paths, dev_paths);
 
 			//timer.stop();
+			if (Compaction)
+			{
+				dev_path_end = thrust::partition(thrust::device, dev_paths, dev_paths + num_paths, dev_path_end, returnRemainBounce());
+				current_num_paths = dev_path_end - dev_paths;
+			}
 
-			dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, returnRemainBounce());
-			current_num_paths = dev_path_end - dev_paths;
-
-			//printf("%d\n", current_num_paths);
+			printf("%d\n", current_num_paths);
 
 			iterationComplete = (depth >= traceDepth || current_num_paths <= 0);
 		}

@@ -356,7 +356,7 @@ __device__ float getCylinderDist(glm::vec3 p)
 
 __device__ float getCubeDist(glm::vec3 p)
 {
-    const float k = 2.0;
+    const float k = -2.0;
     float c = cos(k * p.x);
     float s = sin(k * p.x);
     glm::mat2  m = glm::mat2(c, -s, s, c);
@@ -402,8 +402,8 @@ __device__ float getDist(glm::vec3 p, ProceduralType type)
     float d1 = 0.0f;
     float d2 = 0.0f;
     glm::vec4 s = glm::vec4(0.0f, 0.0f, 0.0f, 0.5);
-    glm::vec4 s1 = glm::vec4(0.0f, 1.0f, 0.0f, 0.5);
-    glm::vec4 s2 = glm::vec4(0.0f, 0.5f, 0.0f, 0.5);
+    glm::vec4 s1 = glm::vec4(0.0f, 0.7f, 0.0f, 0.5);
+    glm::vec4 s2 = glm::vec4(0.0f, 0.0f, 0.0f, 0.5);
     glm::vec4 s3 = glm::vec4(0.0f, 1.0f, 0.0f, 0.5);
 
     switch (type)

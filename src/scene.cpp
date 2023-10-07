@@ -313,7 +313,7 @@ void Scene::randomScene()
     for (int i = 0; i < 20; i++)
     {
 		Material metalMaterial;
-		metalMaterial.type = MaterialType::Metal;
+		metalMaterial.type = MaterialType::Glass;
 		metalMaterial.color = utilityCore::random(0.1f, 1.0f);
 		metalMaterial.emittance = 0.0f;
 		metalMaterial.hasReflective = 1.0f;

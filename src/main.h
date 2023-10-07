@@ -35,6 +35,8 @@ extern int width;
 extern int height;
 
 extern bool sortMaterial;
+extern bool Compaction;
+extern bool CacheFirstBound;
 
 void runCuda();
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
