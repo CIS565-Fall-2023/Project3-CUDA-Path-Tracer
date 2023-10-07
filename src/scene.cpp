@@ -63,19 +63,9 @@ int Scene::loadGeom(string objectid) {
                 vector<string> tokens = utilityCore::tokenizeString(line);
                 if (strcmp(tokens[0].c_str(), "gltf") == 0)
                 {
+                    // this is a gltf mesh. Load it separately.
                     newGeom.type = GLTF_MESH;
-                    string path = tokens[1].c_str();
-                    std::string err;
-                    std::string warn;
-
-                    cout << "Creating new gltf scene at path " << path << "..." << endl;
-
-                    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
-
-                    for (tinygltf::Mesh mesh : model.meshes)
-                    {
-                        std::cout << mesh.name << std::endl;
-                    }
+                    loadGltfMesh(tokens[1].c_str());
                 }
             }
         }
@@ -114,6 +104,96 @@ int Scene::loadGeom(string objectid) {
         return 1;
     }
 }
+
+int Scene::loadGltfMesh(string path)
+{
+    std::string err;
+    std::string warn;
+
+    cout << "Creating new gltf scene at path " << path << "..." << endl;
+
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
+    if (!warn.empty()) {
+        printf("Warning: %s\n", warn.c_str());
+    }
+
+    if (!err.empty()) {
+        printf("Error: %s\n", err.c_str());
+    }
+
+    if (!ret) {
+        cout << "Failed to parse glTF " << path << endl;
+        return -1;
+    }
+
+    // Just iterate over the default scene
+    for (int nodeIdx : model.scenes[model.defaultScene].nodes)
+    {
+        const tinygltf::Node& node = model.nodes[nodeIdx];
+        parseGltfNode(model, node);
+    }
+
+    return 0;
+}
+
+void Scene::parseGltfNode(const tinygltf::Model& model, const tinygltf::Node& node)
+{
+    for (int childNodeIdx : node.children)
+    {
+        // if there are children, parse those here
+        parseGltfNode(model, model.nodes[childNodeIdx]);
+    }
+
+    if (node.mesh > -1)
+    {
+        // has a mesh
+        const tinygltf::Mesh& mesh = model.meshes[node.mesh];
+        for (const tinygltf::Primitive& prim : mesh.primitives)
+        {
+            auto& it = prim.attributes.find("POSITION");
+            if (it != prim.attributes.end())
+            {
+                // get vertex positions data
+                const tinygltf::Accessor& posAccessor = model.accessors[it->second];
+                // use accessor to get buffer view
+                const tinygltf::BufferView& posBufView = model.bufferViews[posAccessor.bufferView];
+                // use buffer view to get buffer
+                const tinygltf::Buffer& posBuffer = model.buffers[posBufView.buffer];
+                // use posBuffer to get the positions data... finally :)
+                // the smiley above is sarcastic and I should have just gone with tinyobjloader why did I chose GLTF
+                const unsigned char* posDataChars = &posBuffer.data[posBufView.byteOffset + posAccessor.byteOffset];
+                // oh wait I lied I still have to cast the data to a float array wups
+                // we know positions are vec3s which are floats so we can simply cast it to floats
+                const glm::vec3* posData = reinterpret_cast<const glm::vec3*>(posDataChars);
+                // welp. we finally have positions. Now do this for everything else. 
+                // I thought I took this class for GPU programming but here I am managing data parsing in C++
+
+                // get vertex indices data
+                // get accessor of prim
+                const tinygltf::Accessor& idxAccessor = model.accessors[prim.indices];
+                // use accessor to get buffer view
+                const tinygltf::BufferView& idxBufView = model.bufferViews[idxAccessor.bufferView];
+                // use buffer view to get buffer
+                const tinygltf::Buffer& idxBuffer = model.buffers[idxBufView.buffer];
+                const unsigned char* idxDataChars = &idxBuffer.data[idxBufView.byteOffset + idxAccessor.byteOffset];
+                // positions are unsigned short in GLTF 2.0 spec
+                const unsigned short* idxData = reinterpret_cast<const unsigned short*>(idxDataChars);
+
+                cout << "========= POSITIONS =========" << endl;
+                for (int i = 0; i < posBufView.byteLength / sizeof(glm::vec3); i++)
+                {
+                    cout << "(" << posData[i].x << "," << posData[i].y << "," << posData[i].z << ")" << endl;
+                }
+                cout << "========= INDICES =========" << endl;
+                for (int i = 0; i < idxBufView.byteLength / sizeof(unsigned short); i++)
+                {
+                    cout << idxData[i] << endl;
+                }
+            }
+        }
+    }
+}
+
 
 int Scene::loadCamera() {
     cout << "Loading Camera ..." << endl;
