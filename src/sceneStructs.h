@@ -186,6 +186,8 @@ struct Material {
     struct Specular {
         float specularFactor = 0.f;
         glm::vec3 specularColorFactor = glm::vec3(0.f);
+        TextureInfo specularColorTexture;
+        TextureInfo specularTexture;
     }specular;
 
     struct Metal {

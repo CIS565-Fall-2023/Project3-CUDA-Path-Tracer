@@ -502,6 +502,20 @@ void Scene::loadExtensions(Material& material, const tinygltf::ExtensionMap& ext
             if (glm::length(material.specular.specularFactor) == 0.f) {
                 material.specular.specularFactor = 1.f;
             }
+            size_t specularTextureIdx = -1;
+            if (extensionValue.Get("specularTexture").Has("index")) {
+                specularTextureIdx = extensionValue.Get("specularTexture").Get("index").Get<int>();
+                if (specularTextureIdx >= 0) {
+                    material.specular.specularTexture = textures[specularTextureIdx];
+                }
+            }
+            if (extensionValue.Get("specularColorTexture").Has("index")) {
+                specularTextureIdx = extensionValue.Get("specularColorTexture").Get("index").Get<int>();
+                if (specularTextureIdx >= 0) {
+                    material.specular.specularColorTexture = textures[specularTextureIdx];
+                }
+            }
+
         }
         else if (extensionName == "KHR_materials_transmission") {
             material.type = Material::Type::DIELECTRIC;

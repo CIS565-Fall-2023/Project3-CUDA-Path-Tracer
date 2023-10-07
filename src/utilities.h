@@ -66,6 +66,7 @@ __host__ __device__ inline float AbsDot(glm::vec3 a, glm::vec3 b)
     return abs(dot(a, b));
 }
 
+__host__ __device__ inline float Min(glm::vec3 v){return glm::min(glm::min(v.x, v.y), v.z);}
 __host__ __device__ inline float CosTheta(glm::vec3 w) { return w.z; }
 __host__ __device__ inline float Cos2Theta(glm::vec3 w) { return w.z * w.z; }
 __host__ __device__ inline float AbsCosTheta(glm::vec3 w) { return abs(w.z); }

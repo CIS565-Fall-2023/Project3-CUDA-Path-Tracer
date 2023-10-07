@@ -29,6 +29,11 @@ __device__ __inline__ glm::vec3 sampleEnvTexture(cudaTextureObject_t tex, glm::v
     return glm::clamp(glm::vec3(color.x, color.y, color.z), 0.f, 1.f);
 }
 
+__device__ __inline__ glm::vec4 sampleSpecularTexture(cudaTextureObject_t tex, glm::vec2 const& uv) {
+    auto color = tex2D<float4>(tex, uv.x, uv.y);
+    return glm::vec4(color.x, color.y, color.z, color.w);
+}
+
 __device__ __inline__ float2 texMetallicRoughness(cudaTextureObject_t tex, glm::vec2 const& uv) {
     auto color = tex2D<float4>(tex, uv.x, uv.y);
     return float2{ color.z, color.y };
@@ -354,45 +359,47 @@ __device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, g
 }
 
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_specular
-__device__ glm::vec3 sample_f_pbrMetRough(glm::vec3 albedo, const float2& metallicRoughness, const Material& material, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
+__device__ glm::vec3 sample_f_pbrMetRough(glm::vec3 albedo, const float2& metallicRoughness, const glm::vec4& specularTexture, const glm::vec4& specularColorTextutre, const Material& material, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
 {
     float random = xi.z;
     float metallic = metallicRoughness.x, roughness = metallicRoughness.y;
     glm::vec3 wh = sample_wh(wo, xi, roughness);
     float ior = material.dielectric.eta;
-    glm::vec3 fr = fresnelSchlick(AbsDot(wo, wh), glm::min(pow(((1 - ior) / (1 + ior)), 2.f) * material.specular.specularColorFactor, glm::vec3(1.f)));
-    glm::vec3 weightSpec = material.specular.specularFactor * fr;
-    float pSpec = colorToGreyscale(weightSpec) * (1 - metallic);
-    float pDiff = (1.f - material.specular.specularFactor * glm::min(glm::min(fr.x, fr.y), fr.z)) * (1 - metallic);
-    float pMetal = metallic;
-    float total = pSpec + pDiff + pMetal;
+    const float specularFactor = material.specular.specularFactor;
+    const glm::vec3& specularColorFactor = material.specular.specularColorFactor;
+    float factor = pow(((1 - ior) / (1 + ior)), 2.f);
+    glm::vec3 fr = fresnelSchlick(AbsDot(wo, wh), glm::min(factor * specularColorFactor, glm::vec3(1.f)));
+    glm::vec3 weightSpec = specularFactor * fr;
+
+    glm::vec3 dielectricSpecularF0 = glm::min(factor * specularColorFactor * glm::vec3(specularColorTextutre), glm::vec3(1.0)) *
+        specularFactor * specularTexture.a;
+    float dielectricSpecularF90 = specularFactor * specularTexture.w;
+
+    glm::vec3 F0 = glm::mix(dielectricSpecularF0, albedo, metallic);
+    float F90 = glm::mix(dielectricSpecularF90, 1.f, metallic);
+
+    glm::vec3 F = glm::mix(F0, glm::vec3(F90), AbsDot(wo, wh));
+
+    float pSpec = colorToGreyscale(weightSpec);
+    float pDiff = (1.f - specularFactor * Min(fr)) * (1 - Min(F));
+    float total = pSpec + pDiff;
     pSpec /= total;
     pDiff /= total;
-    pMetal /= total;
+
+    glm::vec3 c_diff = glm::mix(albedo, glm::vec3(0.f), metallic);
 
     if (random < pSpec) {
         glm::vec3 R;
         if (roughness == 0.f) {
             sample.pdf = 1.f;
-            R = sample_f_specular_refl(albedo, nor, wo, sample);
+            R = sample_f_specular_refl(F, nor, wo, sample);
         }
         else
-            R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness * roughness, sample);
-        return R;
-    }
-    else if (random < pSpec + pMetal) {
-        glm::vec3 wh = sample_wh(wo, xi, roughness);
-        glm::vec3 R;
-        if (roughness == 0.f) {
-            sample.pdf = 1.f;
-            R = sample_f_specular_refl(albedo, nor, wo, sample);
-        }
-        else
-            R = sample_f_microfacet_refl(albedo, nor, xi, wo, roughness * roughness, sample);
+            R = sample_f_microfacet_refl(F, nor, xi, wo, roughness * roughness, sample);
         return R;
     }
     else {
-        glm::vec3 D = sample_f_diffuse(albedo, xi, nor, sample);
+        glm::vec3 D = sample_f_diffuse(c_diff, xi, nor, sample);
         return D;
     }
 }
@@ -417,6 +424,22 @@ __device__ float2 getMetallic(const Material& mat, glm::vec2 uv) {
     else
         metallicRoughness = float2{ (float)mat.pbrMetallicRoughness.metallicFactor,(float)mat.pbrMetallicRoughness.roughnessFactor };
     return metallicRoughness;
+}
+
+__device__ glm::vec4 getSpecularColor(const Material& mat, glm::vec2 uv) {
+    glm::vec4 specularColor{ 1.f };
+    auto& tex = mat.specular.specularColorTexture;
+    if (tex.index != -1)
+        specularColor = sampleSpecularTexture(tex.cudaTexObj, uv);
+    return specularColor;
+}
+
+__device__ glm::vec4 getSpecular(const Material& mat, glm::vec2 uv) {
+    glm::vec4 specularTexture{ 1.f };
+    auto& tex = mat.specular.specularTexture;
+    if (tex.index != -1)
+        specularTexture = sampleSpecularTexture(tex.cudaTexObj, uv);
+    return specularTexture;
 }
 
 __device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor, glm::vec2 uv, bool isProcedural, float scale)
@@ -469,7 +492,7 @@ __device__ glm::vec3 sample_f(const Material& mat, bool isProcedural, float scal
     }
     else if (mat.type == Material::Type::PBR)
     {
-        return sample_f_pbrMetRough(albedo, getMetallic(mat, uv), mat, nor, xi, wo, sample);
+        return sample_f_pbrMetRough(albedo, getMetallic(mat, uv), getSpecular(mat, uv), getSpecularColor(mat, uv), mat, nor, xi, wo, sample);
     }
     sample.pdf = -1.f;
     return glm::vec3(0.f);
