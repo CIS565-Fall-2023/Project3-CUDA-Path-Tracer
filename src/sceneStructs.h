@@ -30,7 +30,7 @@ struct Geom {
 
     //mesh only properties
     //mesh tri indices
-    int tri_start_index, tri_end_index;
+    int tri_start_index{ -1 }, tri_end_index{ -1 };
 
     //bounding box min, max
     glm::vec3 bb_min, bb_max;
@@ -47,6 +47,7 @@ struct MeshPoint {
 
 struct Triangle {
     MeshPoint points[3];
+    int mesh_index{ -1 };
 };
 
 struct ImageInfo {
@@ -105,4 +106,24 @@ struct ShadeableIntersection {
   glm::vec3 bary;
   Geom* geom;
   Triangle* int_tri;
+};
+
+//BVH tree node
+struct BVHNode {
+    glm::vec3 min, max;
+    int leftNode{ -1 };
+    int triIndexStart, triCount{ 0 };
+    int geomIndexStart, geomCount{ 0 };
+};
+
+//used to partition triangles in BVH construction and indexing
+struct BVHTriIndex {
+    int triIndex;
+    glm::vec3 gFrameCentroid; //compute once in BVH construction
+};
+
+//used to partition geoms in BVH construction + indexing
+struct BVHGeomIndex {
+    int geomIndex;
+    glm::vec3 gFrameCentroid; //compute once in BVH construction
 };

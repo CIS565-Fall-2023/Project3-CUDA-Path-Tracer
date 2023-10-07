@@ -35,8 +35,258 @@ Scene::Scene(string filename) {
             }
         }
     }
+
+#if BVH
+    //build bvh tree for entire scene
+    cout << "Constructing BVH tree for scene" << endl;
+    buildBvhTree();
+#endif
+}
+#if BVH
+void Scene::print_tree(BVHNode& node) {
+    if (node.leftNode != -1) {
+        cout << " ------ left node ------ " << endl;
+        print_tree(bvh_nodes[node.leftNode]);
+    }
+    cout << "--- node ---" << endl;
+    cout << glm::to_string(node.min) << ", " << glm::to_string(node.max) << endl;
+    cout << node.leftNode << endl;
+    cout << node.triIndexStart << ", " << node.triCount << endl;
+    cout << node.geomIndexStart << ", " << node.geomCount << endl;
+    if (node.leftNode != -1) {
+        cout << " ------ right node ------ " << endl;
+        print_tree(bvh_nodes[node.leftNode+1]);
+    }
 }
 
+void Scene::buildBvhTree() {
+    //global root bbs
+    initBvhIndexArrs();
+    //calculate min and max for root(same code as the grow but im lazy to refactor)
+    glm::vec3 g_bb_min, g_bb_max;
+    for (int i = 0; i < bvh_tri_indices.size(); i++) {
+        BVHTriIndex bti = bvh_tri_indices[i];
+        Triangle& tri = mesh_triangles[bti.triIndex];
+        Geom& g = geoms[tri.mesh_index];
+        glm::vec3 p1 = glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
+        glm::vec3 p2 = glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
+        glm::vec3 p3 = glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
+
+        g_bb_min = glm::min(g_bb_min, p1);
+        g_bb_max = glm::max(g_bb_max, p1);
+        g_bb_min = glm::min(g_bb_min, p2);
+        g_bb_max = glm::max(g_bb_max, p2);
+        g_bb_min = glm::min(g_bb_min, p3);
+        g_bb_max = glm::max(g_bb_max, p3);
+    }
+
+    //for geoms as well
+    for (int i = 0; i < bvh_geom_indices.size(); i++) {
+        BVHGeomIndex bgi = bvh_geom_indices[i];
+        Geom& g = geoms[bgi.geomIndex];
+        //to grow bb for geoms, need to grow on the min and max corners for spheres + cubes
+        // since scaling on individual axes is a thing need to find max and min of transformed standard bbs
+        // buh there has to be an easier way to do this
+        glm::vec3 vs[8];
+        vs[0] = glm::vec3(-0.5, -0.5, -0.5);
+        vs[1] = glm::vec3(-0.5, -0.5, 0.5);
+        vs[2] = glm::vec3(-0.5, 0.5, -0.5);
+        vs[3] = glm::vec3(-0.5, 0.5, 0.5);
+        vs[4] = glm::vec3(0.5, -0.5, -0.5);
+        vs[5] = glm::vec3(0.5, -0.5, 0.5);
+        vs[6] = glm::vec3(0.5, 0.5, -0.5);
+        vs[7] = glm::vec3(0.5, 0.5, 0.5);
+        for (int j = 0; j < 8; j++) {
+            glm::vec3 transformed = glm::vec3(g.transform * glm::vec4(vs[j], 1.f));
+            g_bb_min = glm::min(g_bb_min, transformed);
+            g_bb_max = glm::max(g_bb_max, transformed);
+        }
+    }
+    //root node
+    BVHNode root_node = { g_bb_min, g_bb_max, -1, 0, bvh_tri_indices.size(), 0, bvh_geom_indices.size() };
+    bvh_nodes.push_back(root_node);
+    subdivide_bvh(bvh_nodes[0]);
+}
+
+void Scene::initBvhIndexArrs() {
+    //create array for bvh operations
+    for (int i = 0; i < mesh_triangles.size(); i++) {
+        Triangle& tri = mesh_triangles[i];
+        BVHTriIndex bti;
+        bti.triIndex = i;
+        glm::mat4 local_to_global = geoms[tri.mesh_index].transform;
+        //calculate centroid by transforming local frame pts to global, then average
+        bti.gFrameCentroid = (glm::vec3(local_to_global * glm::vec4(tri.points[0].pos, 1.f)) + glm::vec3(local_to_global * glm::vec4(tri.points[1].pos, 1.f)) + glm::vec3(local_to_global * glm::vec4(tri.points[2].pos, 1.f))) / 3.f;
+        bvh_tri_indices.push_back(bti);
+    }
+    //do the same for non mesh geoms
+    for (int i = 0; i < geoms.size(); i++) {
+        Geom& g = geoms[i];
+        if (g.type != MESH_PRIM) {
+            BVHGeomIndex bgi;
+            bgi.geomIndex = i;
+            //spheres, cubes centered at origin pre transform
+            bgi.gFrameCentroid = glm::vec3(g.transform * glm::vec4(0.f, 0.f, 0.f, 1.f));
+            bvh_geom_indices.push_back(bgi);
+        }
+    }
+}
+
+float Scene::eval_sah(BVHNode& node, int axis, float pos, glm::vec3 &l_bb_min, glm::vec3& l_bb_max, 
+    glm::vec3& r_bb_min, glm::vec3& r_bb_max) {
+    int left_count = 0, right_count = 0;
+    // count and grow bb for left and right divisions from tris
+    for (int i = 0; i < node.triCount; i++) {
+        BVHTriIndex bti = bvh_tri_indices[node.triIndexStart + i];
+        Triangle& tri = mesh_triangles[bti.triIndex];
+        Geom& g = geoms[tri.mesh_index];
+        // need to be in global frame for bbs
+        glm::vec3 p1 = glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
+        glm::vec3 p2 = glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
+        glm::vec3 p3 = glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
+        if (bti.gFrameCentroid[axis] < pos) {
+            left_count++;
+            l_bb_min = glm::min(l_bb_min, p1);
+            l_bb_max = glm::max(l_bb_max, p1);
+            l_bb_min = glm::min(l_bb_min, p2);
+            l_bb_max = glm::max(l_bb_max, p2);
+            l_bb_min = glm::min(l_bb_min, p3);
+            l_bb_max = glm::max(l_bb_max, p3);
+        }
+        else {
+            right_count++;
+            r_bb_min = glm::min(r_bb_min, p1);
+            r_bb_max = glm::max(r_bb_max, p1);
+            r_bb_min = glm::min(r_bb_min, p2);
+            r_bb_max = glm::max(r_bb_max, p2);
+            r_bb_min = glm::min(r_bb_min, p3);
+            r_bb_max = glm::max(r_bb_max, p3);
+        }
+    }
+    // continue for geoms
+    for (int i = 0; i < node.geomCount; i++) {
+        BVHGeomIndex bgi = bvh_geom_indices[node.geomIndexStart + i];
+        Geom& g = geoms[bgi.geomIndex];
+        //to grow bb for geoms, need to grow on the min and max corners for spheres + cubes
+        // since scaling on individual axes is a thing need to find max and min of transformed standard bbs
+        // buh there has to be an easier way to do this
+        glm::vec3 vs[8];
+        vs[0] = glm::vec3(-0.5, -0.5, -0.5);
+        vs[1] = glm::vec3(-0.5, -0.5, 0.5);
+        vs[2] = glm::vec3(-0.5, 0.5, -0.5);
+        vs[3] = glm::vec3(-0.5, 0.5, 0.5);
+        vs[4] = glm::vec3(0.5, -0.5, -0.5);
+        vs[5] = glm::vec3(0.5, -0.5, 0.5);
+        vs[6] = glm::vec3(0.5, 0.5, -0.5);
+        vs[7] = glm::vec3(0.5, 0.5, 0.5);
+        for (int j = 0; j < 8; j++) {
+            glm::vec3 transformed = glm::vec3(g.transform * glm::vec4(vs[j], 1.f));
+            if (bgi.gFrameCentroid[axis] < pos) {
+                left_count++;
+                l_bb_min = glm::min(l_bb_min, transformed);
+                l_bb_max = glm::max(l_bb_max, transformed);
+            }
+            else {
+                right_count++;
+                r_bb_min = glm::min(r_bb_min, transformed);
+                r_bb_max = glm::max(r_bb_max, transformed);
+            }
+        }
+    }
+
+    //calculate cost for split
+    glm::vec3 r_span = r_bb_max - r_bb_min;
+    glm::vec3 l_span = l_bb_max - l_bb_min;
+
+    float cost = left_count * (l_span.x * l_span.y + l_span.y * l_span.z + l_span.z * l_span.x) + right_count * (r_span.x * r_span.y + r_span.y * r_span.z + r_span.z * r_span.x);
+    return cost > 0 ? cost : FLT_MAX;
+}
+
+void Scene::subdivide_bvh(BVHNode& node) {
+    // determine best place to split thru sah
+    int best_axis = -1;
+    float best_split = 0, best_cost = FLT_MAX;
+    glm::vec3 best_lbb_min, best_lbb_max, best_rbb_min, best_rbb_max;
+    for (int axis = 0; axis < 3; axis++) {
+        //test all tri centroids for best sah
+        for (int i = 0; i < node.triCount; i++) {
+            glm::vec3 centroid = bvh_tri_indices[node.triIndexStart + i].gFrameCentroid;
+            glm::vec3 l_bb_min(FLT_MAX), l_bb_max(FLT_MIN), r_bb_min(FLT_MAX), r_bb_max(FLT_MIN);
+            float cost = eval_sah(node, axis, centroid[axis], l_bb_min, l_bb_max, r_bb_min, r_bb_max);
+            if (cost < best_cost) {
+                best_cost = cost;
+                best_split = centroid[axis];
+                best_axis = axis;
+                best_lbb_min = l_bb_min;
+                best_lbb_max = l_bb_max;
+                best_rbb_min = r_bb_min;
+                best_rbb_max = r_bb_max;
+            }
+        }
+
+        //test all geom centroids for best sah
+        for (int i = 0; i < node.geomCount; i++) {
+            glm::vec3 centroid = bvh_geom_indices[node.geomIndexStart + i].gFrameCentroid;
+            glm::vec3 l_bb_min(FLT_MAX), l_bb_max(FLT_MIN), r_bb_min(FLT_MAX), r_bb_max(FLT_MIN);
+            float cost = eval_sah(node, axis, centroid[axis], l_bb_min, l_bb_max, r_bb_min, r_bb_max);
+            if (cost < best_cost) {
+                best_cost = cost;
+                best_split = centroid[axis];
+                best_axis = axis;
+                best_lbb_min = l_bb_min;
+                best_lbb_max = l_bb_max;
+                best_rbb_min = r_bb_min;
+                best_rbb_max = r_bb_max;
+            }
+        }
+    }
+
+    // if best sah is worse than cur parent one dont split and return
+    glm::vec3 parent_dim = node.max - node.min;
+    float parent_area = parent_dim.x * parent_dim.y + parent_dim.y * parent_dim.z + parent_dim.z * parent_dim.x;
+    float parent_sah_cost = (node.triCount + node.geomCount) * parent_area;
+    if (best_cost >= parent_sah_cost) return;
+
+    //split on the best axis and pos
+    //partition tri and geom indices
+    int i = node.triIndexStart;
+    int j = i + node.triCount - 1;
+    while (i <= j) {
+        if (bvh_tri_indices[i].gFrameCentroid[best_axis] < best_split) {
+            i++;
+        }
+        else {
+            std::swap(bvh_tri_indices[i], bvh_tri_indices[j--]);
+        }
+    }
+    int rchild_tri_start = i;
+    i = node.geomIndexStart;
+    j = i + node.geomCount - 1;
+    while (i <= j) {
+        if (bvh_geom_indices[i].gFrameCentroid[best_axis] < best_split) {
+            i++;
+        }
+        else {
+            std::swap(bvh_geom_indices[i], bvh_geom_indices[j--]);
+        }
+    }
+    int rchild_geom_start = i;
+
+    //create new child nodes + link them to parent
+    BVHNode l_node = { best_lbb_min, best_lbb_max, -1, node.triIndexStart, rchild_tri_start - node.triIndexStart, 
+        node.geomIndexStart, rchild_geom_start - node.geomIndexStart };
+    BVHNode r_node = { best_rbb_min, best_rbb_max, -1, rchild_tri_start, node.triCount - l_node.triCount,
+        rchild_geom_start, node.geomCount - l_node.geomCount };
+    int lnindex = bvh_nodes.size();
+    node.leftNode = lnindex; //right node will always be at this index +1
+    bvh_nodes.push_back(l_node);
+    bvh_nodes.push_back(r_node);
+
+    subdivide_bvh(bvh_nodes[lnindex]);
+    subdivide_bvh(bvh_nodes[lnindex +1]);
+}
+
+#endif
 // from tinygltf example basic
 // recursively iter through scene nodes to parse meshes and associated maps
 void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<Geom>& newGeoms) {
@@ -111,7 +361,12 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
         }
 
         for (int i = 0; i < curr_indices.size() / 3; i++) {
-            Triangle tri = { curr_mesh_pts[curr_indices[(3 * i)]], curr_mesh_pts[curr_indices[(3 * i) + 1]] , curr_mesh_pts[curr_indices[(3 * i) + 2]] };
+            //construct tri from vertices + mesh index in final arr
+            Triangle tri;
+            tri.points[0] = curr_mesh_pts[curr_indices[(3 * i)]];
+            tri.points[1] = curr_mesh_pts[curr_indices[(3 * i) + 1]];
+            tri.points[2] = curr_mesh_pts[curr_indices[(3 * i) + 2]];
+            tri.mesh_index = geoms.size() + newGeoms.size();
             curr_tris.push_back(tri);
         }
 
@@ -147,13 +402,13 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
                 } else if (bytes_p_channel == 2) {
                     unsigned short* casted_2b = (unsigned short*)img.image.data();
                     for (int i = 0; i < img.image.size() / 2; i += 4) {
-                        //each byte is 1 channel
+                        //2 byte is 1 channel
                         rgb_data.push_back(glm::vec3(casted_2b[i] / 65535.f, casted_2b[i + 1] / 65535.f, casted_2b[i + 2] / 65535.f));
                     }
                 } else if (bytes_p_channel == 4) {
                     unsigned int* casted_4b = (unsigned int*)img.image.data();
                     for (int i = 0; i < img.image.size() / 4; i += 4) {
-                        //each byte is 1 channel
+                        //4 byte is 1 channel
                         rgb_data.push_back(glm::vec3(casted_4b[i] / 4294967295.f, casted_4b[i + 1] / 4294967295.f, casted_4b[i + 2] / 4294967295.f));
                     }
                 }

@@ -88,6 +88,13 @@ static Triangle* dev_mesh_tris = NULL;
 static ImageInfo* dev_mesh_img_infos = NULL;
 static glm::vec3* dev_mesh_img_data = NULL;
 
+#if BVH
+//bvh tree structs
+static BVHNode* dev_bvh_scene_tree = NULL;
+static BVHTriIndex* dev_bvh_tri_indices = NULL;
+static BVHGeomIndex* dev_bvh_geom_indices = NULL;
+#endif
+
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
@@ -125,6 +132,18 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_mesh_img_data, scene->image_data.size() * sizeof(glm::vec3));
 	cudaMemcpy(dev_mesh_img_data, scene->image_data.data(), scene->image_data.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
 
+#if BVH
+	cudaMalloc(&dev_bvh_scene_tree, scene->bvh_nodes.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvh_scene_tree, scene->bvh_nodes.data(), scene->bvh_nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_bvh_tri_indices, scene->bvh_tri_indices.size() * sizeof(BVHTriIndex));
+	cudaMemcpy(dev_bvh_tri_indices, scene->bvh_tri_indices.data(), scene->bvh_tri_indices.size() * sizeof(BVHTriIndex), cudaMemcpyHostToDevice);
+
+
+	cudaMalloc(&dev_bvh_geom_indices, scene->bvh_geom_indices.size() * sizeof(BVHGeomIndex));
+	cudaMemcpy(dev_bvh_geom_indices, scene->bvh_geom_indices.data(), scene->bvh_geom_indices.size() * sizeof(BVHGeomIndex), cudaMemcpyHostToDevice);
+#endif
+
 	checkCUDAError("pathtraceInit");
 }
 
@@ -142,6 +161,11 @@ void pathtraceFree() {
 	cudaFree(dev_fb_int_cache);
 #endif
 
+#if BVH
+	cudaFree(dev_bvh_scene_tree);
+	cudaFree(dev_bvh_tri_indices);
+	cudaFree(dev_bvh_geom_indices);
+#endif
 	checkCUDAError("pathtraceFree");
 }
 
@@ -175,8 +199,60 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.remainingBounces = traceDepth;
 	}
 }
+#if BVH
+__global__ void computeIntersectionsBvh(
+	int depth
+	, int num_paths
+	, PathSegment* pathSegments
+	, Geom* geoms
+	, int geoms_size
+	, ShadeableIntersection* intersections
+	, Triangle* triangles
+	, ImageInfo* img_infos
+	, glm::vec3* img_data
+	, BVHNode* bvh_tree
+	, BVHTriIndex* bvh_tri_indices
+	, BVHGeomIndex* bvh_geom_indices
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
-// TODO:
+	if (path_index < num_paths)
+	{
+		PathSegment pathSegment = pathSegments[path_index];
+
+		glm::vec3 intersect_point;
+		glm::vec3 normal;
+		float t_min = FLT_MAX;
+		int hit_geom_index = -1;
+		bool outside = true;
+		glm::vec3 int_bary;
+		int tri_index = -1;
+
+		t_min = bvh_intersection_test(pathSegment.ray, intersect_point, normal, outside,
+			triangles, geoms, img_infos, img_data, int_bary, tri_index, hit_geom_index,
+			bvh_tree, bvh_tri_indices, bvh_geom_indices);
+
+		if (hit_geom_index == -1)
+		{
+			intersections[path_index].t = -1.0f;
+		}
+		else
+		{
+			//The ray hits something
+			intersections[path_index].t = t_min;
+			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
+			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].geom = &geoms[hit_geom_index];
+			//if tri note tri index and bary coords
+			if (tri_index >= 0) {
+				intersections[path_index].int_tri = &triangles[tri_index];
+				intersections[path_index].bary = int_bary;
+			}
+		}
+	}
+}
+#else
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
 // Feel free to modify the code below.
@@ -192,6 +268,7 @@ __global__ void computeIntersections(
 	, glm::vec3* img_data
 )
 {
+
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (path_index < num_paths)
@@ -209,9 +286,9 @@ __global__ void computeIntersections(
 		glm::vec3 tmp_normal;
 		glm::vec3 int_bary;
 		int tri_index;
+		int geom_index;
 
 		// naive parse through global geoms
-
 		for (int i = 0; i < geoms_size; i++)
 		{
 			Geom& geom = geoms[i];
@@ -250,13 +327,15 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
-			intersections[path_index].bary = int_bary;
 			intersections[path_index].geom = &geoms[hit_geom_index];
-			intersections[path_index].int_tri = &triangles[tri_index];
+			if (tri_index >= 0) {
+				intersections[path_index].int_tri = &triangles[tri_index];
+				intersections[path_index].bary = int_bary;
+			}
 		}
 	}
 }
-
+#endif
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -432,6 +511,22 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 			// tracing
+#if BVH
+			computeIntersectionsBvh << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, num_paths
+				, dev_paths
+				, dev_geoms
+				, hst_scene->geoms.size()
+				, dev_intersections
+				, dev_mesh_tris
+				, dev_mesh_img_infos
+				, dev_mesh_img_data
+				, dev_bvh_scene_tree
+				, dev_bvh_tri_indices
+				, dev_bvh_geom_indices
+				);
+#else
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
 				, num_paths
@@ -443,6 +538,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_mesh_img_infos
 				, dev_mesh_img_data
 				);
+#endif
+
 			checkCUDAError("trace one bounce");
 
 #if FIRSTBOUNCECACHE

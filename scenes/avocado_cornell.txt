@@ -113,5 +113,5 @@ OBJECT 6
 C:\Users\genel\Documents\cis5650\CIS5650-Project3-CUDA-Path-Tracer\scenes\gltf_assets\avocado\Avocado.gltf
 material 3
 TRANS       -1 1 2
-ROTAT       -30 180 30
+ROTAT      -30 180 30
 SCALE       100 100 100
