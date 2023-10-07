@@ -23,7 +23,7 @@ public:
 	}
 	void malloc(int size, const char* error_msg = "malloc error") {
 		free();
-		cudaMalloc(&dev_ptr, size * sizeof(*dev_ptr));
+		cudaMalloc((void**)&dev_ptr, size * sizeof(T));
 
 		cudaError_t err = cudaGetLastError();
 		if (cudaSuccess != err) {

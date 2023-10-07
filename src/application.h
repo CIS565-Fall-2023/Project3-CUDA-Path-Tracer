@@ -1,7 +1,6 @@
 #pragma once
 #include <ctime>
 //#include "main.h"
-#include "preview.h"
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_glfw.h"
 #include "ImGui/imgui_impl_opengl3.h"
@@ -37,21 +36,22 @@ private:
     
     GLuint m_imgId;
     GLuint m_pbo = (GLuint)NULL;
+    GLuint m_vertBuff[3] = { (GLuint)NULL,(GLuint)NULL ,(GLuint)NULL };
     
     Application();
     Application(const Application& _ref);
     Application& operator=(const Application& ref);
     
     bool init();
-    void initTextures();
+    void initOutputTexture();
     void initPBO();
     void initCuda();
     void initVAO();
     void initCallbacks();
     void initCamera();
+    void resizeWindow(int width,int height);
     GLuint initShader();
     
-    void deleteTexture(GLuint* tex);
     void deletePBO(GLuint* pbo);
     
     void renderImGui();
@@ -63,10 +63,11 @@ private:
 public:
     UserInput m_input;
     static Application& getInstance();
+    ~Application();
     void loadScene(const char* path);
     void saveImage(const char* filename);
     std::string getOutputImageName();
-    void cleanupCuda();
+    void cleanupGL();
     void run();
 
     Camera& getCamera();

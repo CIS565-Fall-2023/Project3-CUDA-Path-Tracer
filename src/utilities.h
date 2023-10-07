@@ -20,6 +20,8 @@ class GuiDataContainer
 public:
     GuiDataContainer() : TracedDepth(0) {}
     int TracedDepth;
+    float lensRadius = 0.00f;
+    float focusLength = 1.f;
 };
 
 namespace utilityCore {

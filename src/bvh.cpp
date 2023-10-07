@@ -1,5 +1,6 @@
 #include "bvh.h"
 #include <algorithm>
+#include <iostream>
 BoundingBox BoundingBox::unionBound(const BoundingBox& b1, const BoundingBox& b2)
 {
 	return BoundingBox(
@@ -32,91 +33,150 @@ BoundingBox BoundingBox::unionBound(const BoundingBox& b, const glm::vec3& pt)
 	);
 }
 
-void BVHNode::initLeaf(int first, int n, const BoundingBox& b)
+std::vector<BVHPrimitiveInfo> BVHTreeBuilder::initPrimitiveInfo(const std::vector<Triangle>& trigs)
 {
-	primIdxBegin = first;
-	primNum = n;
-	boundingBox = b;
-	children[0] = children[1] = nullptr;
+	std::vector<BVHPrimitiveInfo> ans;
+	int n = trigs.size();
+	for (int i = 0;i < n;++i) {
+		auto& trig = trigs[i];
+		float minX = std::min(std::min(trig.v1.pos.x, trig.v2.pos.x), trig.v3.pos.x);
+		float maxX = std::max(std::max(trig.v1.pos.x, trig.v2.pos.x), trig.v3.pos.x);
+		float minY = std::min(std::min(trig.v1.pos.y, trig.v2.pos.y), trig.v3.pos.y);
+		float maxY = std::max(std::max(trig.v1.pos.y, trig.v2.pos.y), trig.v3.pos.y);
+		float minZ = std::min(std::min(trig.v1.pos.z, trig.v2.pos.z), trig.v3.pos.z);
+		float maxZ = std::max(std::max(trig.v1.pos.z, trig.v2.pos.z), trig.v3.pos.z);
+		ans.push_back(BVHPrimitiveInfo(i, BoundingBox(glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ))));
+	}
+	return ans;
 }
 
-void BVHNode::initInterior(PARTITION_AXIS _axis, BVHNode* c0, BVHNode* c1)
+int BVHTreeBuilder::recursiveLBuildTree(int start, int end, std::vector<BVHPrimitiveInfo>& primInfo)
 {
-	children[0] = c0;
-	children[1] = c1;
-	boundingBox = BoundingBox::unionBound(c0->boundingBox, c1->boundingBox);
-	axis = _axis;
-	primNum = 0;
+	if (start == end)return -1;
+	BoundingBox nodeBBox;
+	for (int i = start; i < end; ++i) {
+		nodeBBox = BoundingBox::unionBound(nodeBBox, primInfo[i].boundingBox);
+	}
+	int primNum = end - start;
+	if (primNum < 5) {
+		//leaf node
+		m_lnodes.push_back(BVHNode(nodeBBox, LEAF_NODE, primNum, start));
+		return m_lnodes.size()-1;
+	}
+	else {
+		float maxAxisDiff = 0.f;
+		PARTITION_AXIS axis = calPartitionAxis(start, end, primInfo, maxAxisDiff);
+		if (maxAxisDiff < 0.01f) {
+			//leaf node
+			m_lnodes.push_back(BVHNode(nodeBBox, LEAF_NODE, primNum, start));
+			return m_lnodes.size() - 1;
+		}
+		else {
+			int mid = (start + end) / 2;
+			std::nth_element(&primInfo[start]
+				, &primInfo[mid]
+				, &primInfo[end - 1] + 1,
+				[axis](const BVHPrimitiveInfo& a, const BVHPrimitiveInfo& b) {
+					switch (axis)
+					{
+					case X:
+						return a.center[axis] < b.center.x;
+					case Y:
+						return a.center.y < b.center.y;
+					case Z:
+						return a.center.z < b.center.z;
+					}
+					return a.center.x < b.center.x;
+				});
+			m_lnodes.push_back(BVHNode(nodeBBox, INTERIOR_NODE, 0, -1,axis));
+			int posId = m_lnodes.size() - 1;
+			recursiveLBuildTree(start, mid, primInfo);
+			int secondChildId = recursiveLBuildTree(mid, end, primInfo);
+			if (secondChildId != -1) {
+				m_lnodes[posId].secondChildOffset = secondChildId - posId;
+			}
+			return posId;
+		}	
+	}
+	return -1;
 }
 
-BVHNode::BVHNode(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo, std::vector<int>& ordered_primId)
-	:primNum(end - start)
+PARTITION_AXIS BVHTreeBuilder::calPartitionAxis(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo, float& out_maxAxisDiff)
 {
-	//for (int i = start; i < end; ++i) {
-	//	boundingBox = BoundingBox::unionBound(boundingBox, primInfo[i].boundingBox);
-	//}
-	//if (primNum == 1) {
-	//	int startId = ordered_primId.size();
-	//	for (int i = start;i < end;++i) {
-	//		ordered_primId.push_back(primInfo[i].idx);
-	//	}
-	//	initLeaf(startId, primNum, boundingBox);
-	//	return;
-	//}
-	//else {
-	//	BoundingBox centerBox;
-	//	for (int i = start; i < end; ++i) {
-	//		centerBox = BoundingBox::unionBound(centerBox, primInfo[i].center);
-	//	}
-	//	PARTITION_AXIS axis;
-	//	glm::vec3 dimDiff = centerBox.maxBound - centerBox.minBound;
-	//	float axisMaxDiff = 0;
-	//	if (dimDiff.x > dimDiff.y && dimDiff.x > dimDiff.z) {
-	//		axis = X;
-	//		axisMaxDiff = dimDiff.x;
-	//	}
-	//	else if (dimDiff.y > dimDiff.z) {
-	//		axis = Y;
-	//		axisMaxDiff = dimDiff.y;
-	//	}
-	//	else {
-	//		axis = Z;
-	//		axisMaxDiff = dimDiff.z;
-	//	}
-	//	if (axisMaxDiff < 0.01) {
-	//		int startId = ordered_primId.size();
-	//		for (int i = start;i < end;++i) {
-	//			ordered_primId.push_back(primInfo[i].idx);
-	//		}
-	//		initLeaf(startId, primNum, boundingBox);
-	//		return;
-	//	}
-	//	else {
-	//		int mid = (start + end) / 2;
-	//		std::nth_element(&primInfo[start]
-	//			, &primInfo[mid]
-	//			, &primInfo[end - 1] + 1,
-	//			[axis](const BVHPrimitiveInfo& a, const BVHPrimitiveInfo& b) {
-	//				switch (axis)
-	//				{
-	//				case X:
-	//					return a.center.x < b.center.x;
-	//				case Y:
-	//					return a.center.y < b.center.y;
-	//				case Z:
-	//					return a.center.z < b.center.z;
-	//				}
-	//				return a.center.x < b.center.x;
-	//			});
-	//		children[0] = new BVHNode(start, mid, primInfo, ordered_primId);
-	//		children[1] = new BVHNode(mid, end, primInfo, ordered_primId);
-	//		initInterior(axis, children[0], children[1]);
-	//	}
-	//}
+	BoundingBox centerBox;
+	PARTITION_AXIS axis;
+	for (int i = start; i < end; ++i) {
+		centerBox = BoundingBox::unionBound(centerBox, primInfo[i].center);
+	}
+	glm::vec3 dimDiff = centerBox.maxBound - centerBox.minBound;
+	if (dimDiff.x > dimDiff.y && dimDiff.x > dimDiff.z) {
+		axis = X;
+		out_maxAxisDiff = dimDiff.x;
+	}
+	else if (dimDiff.y > dimDiff.z) {
+		axis = Y;
+		out_maxAxisDiff = dimDiff.y;
+	}
+	else {
+		axis = Z;
+		out_maxAxisDiff = dimDiff.z;
+	}
+	return axis;
 }
 
-BVHNode::~BVHNode()
+std::vector<Triangle> BVHTreeBuilder::rearrangeBasedOnPrimtiveInfo(const std::vector<BVHPrimitiveInfo>& primInfo, const std::vector<Triangle>& trigs)
 {
-	delete children[0];
-	delete children[1];
+	int n = trigs.size();
+	std::vector<Triangle> ans(n);
+	for (int i = 0;i < n;++i) {
+		ans[i] = trigs[primInfo[i].idx];
+	}
+	return ans;
+}
+
+void BVHTreeBuilder::displayBVHTree(const std::vector<BVHNode>& m_lnodes, int depth, int curId)
+{
+	std::string space(depth*2, ' ');
+	BVHNode node = m_lnodes[curId];
+	if (node.primNum == 0) {
+		std::cout << space << "interior: " << std::endl;
+		std::cout << space << "[ " << node.boundingBox.maxBound.x << ", " << node.boundingBox.maxBound.y << ", " << node.boundingBox.maxBound.z << "]" << std::endl;
+		std::cout << space << "[ " << node.boundingBox.minBound.x << ", " << node.boundingBox.minBound.y << ", " << node.boundingBox.minBound.z << "]" << std::endl;
+		displayBVHTree(m_lnodes, depth + 1, curId + 1);
+		if (node.secondChildOffset != -1)
+			displayBVHTree(m_lnodes, depth + 1, curId + node.secondChildOffset);
+	}
+	else {
+		std::cout << space << "leaf: " << node.firstPrimId << "->" << node.primNum << "triangles" << std::endl;
+	}
+}
+
+std::vector<BVHNode> BVHTreeBuilder::buildBVHTree(std::vector<Triangle>& trigs)
+{
+	auto info = initPrimitiveInfo(trigs);
+	if (!m_lnodes.empty())m_lnodes.clear();
+	recursiveLBuildTree(0, trigs.size(), info);
+	trigs = rearrangeBasedOnPrimtiveInfo(info, trigs);
+	//displayBVHTree(m_lnodes, 0, 0);
+	return m_lnodes;
+}
+
+BVHTreeBuilder::BVHTreeBuilder()
+{}
+
+BVHNode::BVHNode(const BoundingBox& _boundingBox, NODE_TYPE type, int _primNum, int unionVal, PARTITION_AXIS _axis)
+	:boundingBox(_boundingBox), primNum(_primNum), axis(_axis)
+{
+	switch (type)
+	{
+	case LEAF_NODE:
+		firstPrimId = unionVal;
+		break;
+	case INTERIOR_NODE:
+		secondChildOffset = unionVal;
+		break;
+	default:
+		std::cout << "Invalid node type" << std::endl;
+		break;
+	}
 }

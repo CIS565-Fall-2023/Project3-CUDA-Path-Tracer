@@ -6,13 +6,16 @@ const GLuint VS_UV_HANDLE = 1;
 static float zoom, theta, phi;
 static glm::vec3 ogLookAt;
 
-Application::Application(){
-	m_guiData = make_unique<GuiDataContainer>();
-	m_tracer = make_unique<PathTracer>();
+Application::Application()
+	:m_width(100),m_height(100)
+{
+	init();
 }
 
 bool Application::init()
 {
+	m_guiData = make_unique<GuiDataContainer>();
+	m_tracer = make_unique<PathTracer>();
 	glfwSetErrorCallback([](int error, const char* msg){
 		fprintf(stderr, "%s\n", msg);
 	});
@@ -20,23 +23,25 @@ bool Application::init()
 	if (!glfwInit()) {
 		exit(EXIT_FAILURE);
 	}
-
+	
 	m_window = glfwCreateWindow(m_width, m_height, "CIS 565 Path Tracer", NULL, NULL);
 	if (!m_window) {
 		glfwTerminate();
 		return false;
 	}
 	glfwMakeContextCurrent(m_window);
-	initCallbacks();
-
+	
 	// Set up GL context
 	glewExperimental = GL_TRUE;
 	if (glewInit() != GLEW_OK) {
 		return false;
 	}
 	printf("Opengl Version:%s\n", glGetString(GL_VERSION));
+	
+	//https://stackoverflow.com/questions/71680516/how-do-i-handle-mouse-events-in-general-in-imgui-with-glfw#:~:text=This%20is%20answered%20in%20the%20Dear%20ImGui%20FAQ%3A,https%3A%2F%2Fgithub.com%2Focornut%2Fimgui%2Fblob%2Fmaster%2Fdocs%2FFAQ.md%23q-how-can-i-tell-whether-to-dispatch-mousekeyboard-to-dear-imgui-or-my-application%20TL%3BDR%20check%20the%20io.WantCaptureMouse%20flag%20for%20mouse.
+	initCallbacks();
+	
 	//Set up ImGui
-
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	auto io = &ImGui::GetIO(); (void)io;
@@ -44,12 +49,12 @@ bool Application::init()
 	ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 	ImGui_ImplOpenGL3_Init("#version 120");
 
-	// Initialize other stuff
-	initVAO();
-	initTextures();
+	
 	initCuda();
+	initOutputTexture();
+	initVAO();
 	initPBO();
-	initCamera();
+	
 	GLuint passthroughProgram = initShader();
 
 	glUseProgram(passthroughProgram);
@@ -60,7 +65,7 @@ bool Application::init()
 	return true;
 }
 
-void Application::initTextures()
+void Application::initOutputTexture()
 {
     glGenTextures(1, &m_imgId);
     glBindTexture(GL_TEXTURE_2D, m_imgId);
@@ -84,17 +89,30 @@ void Application::initPBO()
 
 	// Allocate data for the buffer. 4-channel 8-bit image
 	glBufferData(GL_PIXEL_UNPACK_BUFFER, size_tex_data, NULL, GL_DYNAMIC_COPY);
+	{
+		cudaError_t err = cudaGetLastError();
+		if (cudaSuccess != err) {
+			fprintf(stderr, "Cuda error: %s: %s.\n", "before", cudaGetErrorString(err));
+			exit(EXIT_FAILURE);
+		}
+	}
 	cudaGLRegisterBufferObject(m_pbo);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err) {
+		fprintf(stderr, "Cuda error: %s: %s.\n", "register", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+	}
+	//cudaGraphicsGLRegisterBuffer()
 }
 
 void Application::initCuda()
 {
-	cudaGLSetGLDevice(0);
+	cudaSetDevice(0);
 
 	// Clean up on program exit
 	atexit([] {
 		Application& app = Application::getInstance();
-		app.cleanupCuda();
+		app.cleanupGL();
 	});
 }
 
@@ -116,20 +134,19 @@ void Application::initVAO()
 
 	GLushort indices[] = { 0, 1, 3, 3, 1, 2 };
 
-	GLuint vertexBufferObjID[3];
-	glGenBuffers(3, vertexBufferObjID);
+	glGenBuffers(3, m_vertBuff);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObjID[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vertBuff[0]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glVertexAttribPointer(VS_POS_HANDLE, 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(VS_POS_HANDLE);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObjID[1]);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vertBuff[1]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(texcoords), texcoords, GL_STATIC_DRAW);
 	glVertexAttribPointer(VS_UV_HANDLE, 2, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(VS_UV_HANDLE);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertexBufferObjID[2]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_vertBuff[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 }
 
@@ -137,6 +154,7 @@ void Application::initCallbacks()
 {
 	glfwSetKeyCallback(m_window,[](GLFWwindow * window, int key, int scancode, int action, int mods) {
 		Application& app = Application::getInstance();
+
 		if (action == GLFW_PRESS) {
 			switch (key) {
 			case GLFW_KEY_ESCAPE:
@@ -152,49 +170,53 @@ void Application::initCallbacks()
 				app.updateCameraView();
 				break;
 			}
+			
 		}
 	});
-	glfwSetCursorPosCallback(m_window, [](GLFWwindow * window, double xpos, double ypos) {
-		Application& app = Application::getInstance();
-		if (xpos == app.m_input.lastX || ypos == app.m_input.lastY) return; // otherwise, clicking back into window causes re-start
-		if (app.m_input.leftMousePressed) {
-			// compute new camera parameters
-			phi -= (xpos - app.m_input.lastX) / app.m_width;
-			theta -= (ypos - app.m_input.lastY) / app.m_height;
-			theta = std::fmax(0.001f, std::fmin(theta, PI));
-			app.updateCameraView();
-		}
-		else if (app.m_input.rightMousePressed) {
-			zoom += (ypos - app.m_input.lastY) / app.m_height;
-			zoom = std::fmax(0.1f, zoom);
-			app.updateCameraView();
-		}
-		else if (app.m_input.middleMousePressed) {
-			Camera& cam = app.getCamera();
-			glm::vec3 forward = cam.view;
-			forward.y = 0.0f;
-			forward = glm::normalize(forward);
-			glm::vec3 right = cam.right;
-			right.y = 0.0f;
-			right = glm::normalize(right);
 
-			cam.lookAt -= (float)(xpos - app.m_input.lastX) * right * 0.01f;
-			cam.lookAt += (float)(ypos - app.m_input.lastY) * forward * 0.01f;
-			app.updateCameraView();
-		}
-		app.m_input.lastX = xpos;
-		app.m_input.lastY = ypos;
-	});
 	glfwSetMouseButtonCallback(m_window, [](GLFWwindow * window, int button, int action, int mods) {
 		Application& app = Application::getInstance();
-		if (app.m_input.mouseOverGuiWindow)
-		{
+		if (app.m_input.mouseOverGuiWindow) {
 			return;
 		}
 		app.m_input.leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
 		app.m_input.rightMousePressed = (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
 		app.m_input.middleMousePressed = (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
 	});
+	glfwSetCursorPosCallback(m_window, [](GLFWwindow * window, double xpos, double ypos) {
+	Application& app = Application::getInstance();
+	if (app.m_input.mouseOverGuiWindow) {
+		return;
+	}
+	if (xpos == app.m_input.lastX || ypos == app.m_input.lastY) return; // otherwise, clicking back into window causes re-start
+	if (app.m_input.leftMousePressed) {
+		// compute new camera parameters
+		phi -= (xpos - app.m_input.lastX) / app.m_width;
+		theta -= (ypos - app.m_input.lastY) / app.m_height;
+		theta = std::fmax(0.001f, std::fmin(theta, PI));
+		app.updateCameraView();
+	}
+	else if (app.m_input.rightMousePressed) {
+		zoom += (ypos - app.m_input.lastY) / app.m_height;
+		zoom = std::fmax(0.1f, zoom);
+		app.updateCameraView();
+	}
+	else if (app.m_input.middleMousePressed) {
+		Camera& cam = app.getCamera();
+		glm::vec3 forward = cam.view;
+		forward.y = 0.0f;
+		forward = glm::normalize(forward);
+		glm::vec3 right = cam.right;
+		right.y = 0.0f;
+		right = glm::normalize(right);
+
+		cam.lookAt -= (float)(xpos - app.m_input.lastX) * right * 0.01f;
+		cam.lookAt += (float)(ypos - app.m_input.lastY) * forward * 0.01f;
+		app.updateCameraView();
+	}
+	app.m_input.lastX = xpos;
+	app.m_input.lastY = ypos;
+});
 }
 
 void Application::initCamera()
@@ -217,6 +239,22 @@ void Application::initCamera()
 	updateCameraView();
 }
 
+void Application::resizeWindow(int width, int height)
+{
+	if (m_window == nullptr) {
+		std::cout << "window uninitialized" << std::endl;
+	}
+	std::cout << "resize window" << std::endl;
+	m_width = width;
+	m_height = height;
+	glfwSetWindowSize(m_window, m_width, m_height);
+	glViewport(0, 0, m_width, m_height);
+	cleanupGL();
+	initOutputTexture();
+	initVAO();
+	initPBO();
+}
+
 GLuint Application::initShader()
 {
 	const char* attribLocations[] = { "Position", "Texcoords" };
@@ -231,18 +269,16 @@ GLuint Application::initShader()
 	return program;
 }
 
-void Application::deleteTexture(GLuint* tex)
-{
-	glDeleteTextures(1, tex);
-	*tex = (GLuint)NULL;
-}
-
 void Application::deletePBO(GLuint* pbo)
 {
-	if (pbo) {
+	if (*pbo) {
 		// unregister this buffer object with CUDA
 		cudaGLUnregisterBufferObject(*pbo);
-
+		cudaError_t err = cudaGetLastError();
+		if (cudaSuccess != err) {
+			fprintf(stderr, "Cuda error: %s: %s.\n", "unregister", cudaGetErrorString(err));
+			exit(EXIT_FAILURE);
+		}
 		glBindBuffer(GL_ARRAY_BUFFER, *pbo);
 		glDeleteBuffers(1, pbo);
 
@@ -250,20 +286,27 @@ void Application::deletePBO(GLuint* pbo)
 	}
 }
 
-void Application::cleanupCuda()
+void Application::cleanupGL()
 {
 	if (m_pbo) {
 		deletePBO(&m_pbo);
 	}
+	if (m_vertBuff[0]) {
+		glDeleteBuffers(3, m_vertBuff);
+		m_vertBuff[0] = (GLuint)NULL;
+		m_vertBuff[1] = (GLuint)NULL;
+		m_vertBuff[2] = (GLuint)NULL;
+	}
 	if (m_imgId) {
-		deleteTexture(&m_imgId);
+		glDeleteTextures(1, &m_imgId);
+		m_imgId = (GLuint)NULL;
 	}
 }
 
 void Application::renderImGui()
 {
-	auto io = &ImGui::GetIO(); (void)io;
-	m_input.mouseOverGuiWindow = io->WantCaptureMouse;
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	m_input.mouseOverGuiWindow = io.WantCaptureMouse;
 
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -279,10 +322,10 @@ void Application::renderImGui()
 
 	// LOOK: Un-Comment to check the output window and usage
 	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-	//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+	ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 	//ImGui::Checkbox("Another Window", &show_another_window);
 
-	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+	ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 	//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
 	//if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
@@ -290,6 +333,16 @@ void Application::renderImGui()
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
 	//ImGui::Text("Traced Depth %d", m_guiData->TracedDepth);
+	float lastRadius = m_guiData->lensRadius;
+	float lastLength = m_guiData->focusLength;
+
+	ImGui::SliderFloat("lens radius", &m_guiData->lensRadius, 0.0f, 5.f);
+	ImGui::SliderFloat("focus length", &m_guiData->focusLength, 0.0, 50.f);
+
+	if (lastRadius != m_guiData->lensRadius || lastLength!=m_guiData->focusLength) {
+		updateCameraView();
+	}
+
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::End();
 
@@ -316,14 +369,13 @@ glm::vec3 Application::getPixelColor(int x, int y)
 
 void Application::saveImage(const char* filename)
 {
-	float samples = m_iteration;
 	// output image file
 	Image img(m_width, m_height);
 
 	for (int x = 0; x < m_width; x++) {
 		for (int y = 0; y < m_height; y++) {
 			glm::vec3 pix = getPixelColor(x, y);
-			img.setPixel(m_width - 1 - x, y, glm::vec3(pix) / samples);
+			img.setPixel(m_width - 1 - x, y, glm::vec3(pix));
 		}
 	}
 	// CHECKITOUT
@@ -388,8 +440,6 @@ void Application::updateCameraView()
 	glm::vec3 r = glm::cross(v, u);
 	cam.up = glm::cross(r, v);
 	cam.right = r;
-
-	cam.position = cameraPosition;
 	cameraPosition += cam.lookAt;
 	cam.position = cameraPosition;
 }
@@ -400,14 +450,18 @@ Application& Application::getInstance()
 	return instance;
 }
 
+Application::~Application()
+{
+	cleanupGL();
+}
+
 void Application::loadScene(const char* path)
 {
 	m_scene = make_unique<Scene>(path);
 	m_iteration = 0;
 	Camera& cam = getCamera();
-	m_width = cam.resolution.x;
-	m_height = cam.resolution.y;
-	init();
+	initCamera();
+	resizeWindow(cam.resolution.x, cam.resolution.y);
 }
 
 void Application::run()

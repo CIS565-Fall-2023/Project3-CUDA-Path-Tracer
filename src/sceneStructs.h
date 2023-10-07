@@ -7,28 +7,9 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
-enum GeomType {
-    SPHERE,
-    CUBE,
-    MESH
-};
-
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
-};
-
-struct Geom {
-    enum GeomType type;
-    int materialid;
-    glm::vec3 translation;
-    glm::vec3 rotation;
-    glm::vec3 scale;
-    glm::mat4 transform;
-    glm::mat4 inverseTransform;
-    glm::mat4 invTranspose;
-    int vertStartId;
-    int vertEndId;
 };
 
 struct Material {
@@ -37,10 +18,13 @@ struct Material {
         float exponent;
         glm::vec3 color;
     } specular;
+    bool isScatterMedium;
     float hasReflective;
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    int textureId = -1;
+    int bumpId = -1;
 };
 
 struct Camera {
@@ -65,6 +49,7 @@ struct RenderState {
 struct PathSegment {
     Ray ray;
     glm::vec3 color;
+    bool inScatterMedium = false;
     int pixelIndex;
     int remainingBounces;
 };
@@ -74,12 +59,30 @@ struct PathSegment {
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection {
   float t;
-  glm::vec3 surfaceNormal;
   int materialId;
+  glm::vec3 surfaceNormal;
+  glm::vec2 surfaceUV;
 };
 
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 normal;
     glm::vec2 uv;
+};
+
+struct Triangle {
+    Vertex v1;
+    Vertex v2;
+    Vertex v3;
+    int meshId;
+};
+
+struct Mesh {
+    int materialId;
+    glm::vec3 translation;
+    glm::vec3 rotation;
+    glm::vec3 scale;
+    glm::mat4 transform;
+    glm::mat4 inverseTransform;
+    glm::mat4 invTranspose;
 };

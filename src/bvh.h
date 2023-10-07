@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <memory>
+#include "sceneStructs.h"
 struct BoundingBox {
 	glm::vec3 minBound;
 	glm::vec3 maxBound;
@@ -26,20 +27,36 @@ struct BVHPrimitiveInfo {
 
 enum PARTITION_AXIS{X,Y,Z};
 
+enum NODE_TYPE{LEAF_NODE,INTERIOR_NODE};
+
 struct BVHNode {
 	BoundingBox boundingBox;
-	BVHNode* children[2];
+	union
+	{
+		int firstPrimId;
+		int secondChildOffset;//first child offset is 1
+	};
+	int primNum;
 	PARTITION_AXIS axis;
-	int primIdxBegin, primNum;
-private:
-	void initLeaf(int first, int n, const BoundingBox& b);
-	void initInterior(PARTITION_AXIS _axis, BVHNode* c0, BVHNode* c1);
-	//PARTITION_AXIS getPartitionAxis(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo);
-public:
 	BVHNode(
-		int start, int end,
-		const std::vector<BVHPrimitiveInfo>& primInfo,
-		std::vector<int>& ordered_primId
-	);
-	~BVHNode();
+		const BoundingBox& boundingBox
+		, NODE_TYPE type
+		, int primNum
+		, int unionVal
+		, PARTITION_AXIS _axis = X);
 };
+
+class BVHTreeBuilder {
+	std::vector<BVHNode> m_lnodes;
+	std::vector<BVHPrimitiveInfo> initPrimitiveInfo(const std::vector<Triangle>& trigs);
+	int recursiveLBuildTree(int start, int end, std::vector<BVHPrimitiveInfo>& primInfo);
+	PARTITION_AXIS calPartitionAxis(int start, int end, const std::vector<BVHPrimitiveInfo>& primInfo, float& out_maxAxisDiff);
+	std::vector<Triangle> rearrangeBasedOnPrimtiveInfo(const std::vector<BVHPrimitiveInfo>& primInfo, const std::vector<Triangle>& trigs);
+	void displayBVHTree(const std::vector<BVHNode>& m_lnodes, int depth, int curId);
+public:
+	BVHTreeBuilder();
+	std::vector<BVHNode> buildBVHTree(std::vector<Triangle>& trigs);
+};
+
+
+
