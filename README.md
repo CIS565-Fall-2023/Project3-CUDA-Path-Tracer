@@ -39,3 +39,13 @@ This greatly helped with the performance of rendering the much more advanced mes
 https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
 
 https://github.com/syoyo/tinygltf
+
+Piplup	https://skfb.ly/6Vt7x
+
+Trees	https://skfb.ly/6BOWV
+
+Water Bottle	https://skfb.ly/o7CKp
+
+McCree	https://skfb.ly/6sBDo
+
+Bulbasaur	https://skfb.ly/6SZ9B
