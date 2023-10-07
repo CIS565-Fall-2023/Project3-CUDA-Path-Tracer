@@ -84,6 +84,6 @@ void scatterRay(
         wo = calculateRandomDirectionInHemisphere(normal, rng);
     }
     pathSegment.color *= m.color;
-    pathSegment.ray.direction = wo;
+    pathSegment.ray.direction = glm::normalize(wo);
     pathSegment.ray.origin = intersect;
 }

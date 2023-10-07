@@ -8,7 +8,7 @@
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
 struct EnvironmentMap {
-    float* image_data;
+    std::vector<float> imgdata;
     int width;
     int height;
     int channels;

@@ -330,8 +330,14 @@ int Scene::loadEnv(string envid) {
     char* fname = (char*)address.c_str();
     if (fp_in.good()) {
         float* img = stbi_loadf(fname, &mp.width, &mp.height, &mp.channels, 0);
-        mp.image_data = new float[mp.width * mp.height * 4];
-        memcpy(mp.image_data, img, mp.width * mp.height * 4);
+        for (size_t i = 0; i < mp.width * mp.height; i++) {
+            for (size_t c = 0; c < mp.channels; c++) {
+                mp.imgdata.push_back(img[mp.channels * i + c]);
+            }
+            for (size_t c = mp.channels; c < 4; c++) {
+                mp.imgdata.push_back(1.0f);
+            }
+        }
         hasEnvMap = true;
     }
     return 1;

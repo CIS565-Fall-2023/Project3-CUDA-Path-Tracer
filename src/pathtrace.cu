@@ -136,7 +136,7 @@ void pathtraceInit(Scene* scene) {
 	if (scene->hasEnvMap) {
 		auto channelDesc = cudaCreateChannelDesc<float4>();
 		cudaMallocArray(&imgArray, &channelDesc, scene->mp.width, scene->mp.height);
-		cudaMemcpy2DToArray(imgArray, 0, 0, scene->mp.image_data, scene->mp.width * sizeof(float4), scene->mp.width * sizeof(float4), scene->mp.height, cudaMemcpyHostToDevice);
+		cudaMemcpy2DToArray(imgArray, 0, 0, scene->mp.imgdata.data(), scene->mp.width * sizeof(float4), scene->mp.width * sizeof(float4), scene->mp.height, cudaMemcpyHostToDevice);
 
 		cudaResourceDesc resDesc;
 		memset(&resDesc, 0, sizeof(resDesc));
@@ -247,7 +247,6 @@ __global__ void computeIntersections(
 		for (int i = 0; i < geoms_size; i++)
 		{
 			Geom& geom = geoms[i];
-
 			if (geom.type == CUBE)
 			{
 				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
@@ -259,7 +258,6 @@ __global__ void computeIntersections(
 			else {
 				t = meshIntersectionTest(geom, tris, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
 			if (t > 0.0f && t_min > t)
@@ -302,6 +300,7 @@ __global__ void shadeFakeMaterial(
 	, PathSegment* pathSegments
 	, Material* materials,
 	const int depth
+	, cudaTextureObject_t textureObject
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -350,9 +349,16 @@ __global__ void shadeFakeMaterial(
 			}
 			else {
 				// sample environment map 
+				glm::vec3 d = path.ray.direction;
+				glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
+				uv *= glm::vec2(0.1591, -0.3183);
+				uv += 0.5;
 
+				float4 env_color = tex2D<float4>(textureObject, uv.x, uv.y);
+				path.color.x = env_color.x;
+				path.color.y = env_color.y;
+				path.color.z = env_color.z;
 
-				path.color = glm::vec3(0.0f);
 				path.dead = true;
 			}
 		}
@@ -506,7 +512,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_intersections,
 			dev_paths,
 			dev_materials,
-			depth
+			depth,
+			textureObject
 			);
 		iterationComplete = (depth == hst_scene->state.traceDepth); // TODO: should be based off stream compaction results.
 
