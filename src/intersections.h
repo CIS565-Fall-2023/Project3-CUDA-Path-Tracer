@@ -35,6 +35,43 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+__host__ __device__ bool hasIntersection(const Ray& ray, const Geom& geom)
+{
+    Ray q;
+    q.origin = multiplyMV(geom.inverseTransform, glm::vec4(ray.origin, 1.0f));
+    q.direction = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(ray.direction, 0.0f)));
+
+    float tmin = -1e38f;
+    float tmax = 1e38f;
+    glm::vec3 tmin_n;
+    glm::vec3 tmax_n;
+    for (int xyz = 0; xyz < 3; ++xyz) {
+        float qdxyz = q.direction[xyz];
+        if (glm::abs(qdxyz) > 0.00001f) {
+            float t1 = (geom.bbMin[xyz] - q.origin[xyz]) / qdxyz;
+            float t2 = (geom.bbMax[xyz] - q.origin[xyz]) / qdxyz;
+            float ta = glm::min(t1, t2);
+            float tb = glm::max(t1, t2);
+            glm::vec3 n;
+            n[xyz] = t2 < t1 ? +1 : -1;
+            if (ta > 0 && ta > tmin) {
+                tmin = ta;
+                tmin_n = n;
+            }
+            if (tb < tmax) {
+                tmax = tb;
+                tmax_n = n;
+            }
+        }
+    }
+
+    if (tmax >= tmin && tmax > 0) {
+        glm::vec3 intersectionPoint = getPointOnRay(ray, tmin);
+        return true;
+    }
+    return false;
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,
@@ -146,6 +183,11 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* triangles, int triSize,
     glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside) 
 {
+    if (!hasIntersection(r, mesh)) 
+    {
+        return -1;
+    }
+
     Ray q;
     q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
     q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));

@@ -14,16 +14,44 @@ enum GeomType {
     OBJ
 };
 
-struct Triangle 
+struct Ray {
+    glm::vec3 origin;
+    glm::vec3 direction;
+};
+
+struct BBox
+{
+    glm::vec3 minP;
+    glm::vec3 maxP;
+
+    BBox() : minP(glm::vec3(0.f)), maxP(glm::vec3(0.f)) {}
+    BBox(const glm::vec3& min, const glm::vec3& max)
+    {
+        minP = min;
+        maxP = max;
+    }
+    BBox(const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3)
+    {
+        minP = glm::vec3(glm::min(p1.x, p2.x), glm::min(p1.y, p2.y), glm::min(p1.z, p2.z));
+        maxP = glm::vec3(glm::max(p1.x, p2.x), glm::max(p1.y, p2.y), glm::max(p1.z, p2.z));
+
+        minP = glm::vec3(glm::min(p3.x, minP.x), glm::min(p3.y, minP.y), glm::min(p3.z, minP.z));
+        maxP = glm::vec3(glm::max(p3.x, maxP.x), glm::max(p3.y, maxP.y), glm::max(p3.z, maxP.z));
+    }
+
+};
+
+static BBox Union(const BBox& bb1, const BBox& bb2)
+{
+    return BBox(glm::vec3(glm::min(bb1.minP.x, bb2.minP.x), glm::min(bb1.minP.y, bb2.minP.y), glm::min(bb1.minP.z, bb2.minP.z)),
+        glm::vec3(glm::max(bb1.maxP.x, bb2.maxP.x), glm::max(bb1.maxP.y, bb2.maxP.y), glm::max(bb1.maxP.z, bb2.maxP.z)));
+}
+
+struct Triangle
 {
     glm::vec3 verts[3];
     glm::vec3 nors[3];
     glm::vec2 uvs[3];
-};
-
-struct Ray {
-    glm::vec3 origin;
-    glm::vec3 direction;
 };
 
 struct Geom {
@@ -38,6 +66,9 @@ struct Geom {
 
     int triStart;
     int triEnd;
+
+    glm::vec3 bbMin;
+    glm::vec3 bbMax;
 };
 
 struct Material {

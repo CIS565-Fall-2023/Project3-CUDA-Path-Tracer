@@ -222,6 +222,8 @@ int Scene::loadObj(const char* filename)
 
     newGeom.triStart = triangles.size();
 
+    BBox curBB;
+
     for (size_t i = 0; i < shapes.size(); i++) 
     {
         size_t index_offset = 0;
@@ -258,10 +260,14 @@ int Scene::loadObj(const char* filename)
             }
             index_offset += 3;
             triangles.push_back(tri);
+            if (f == 0) curBB = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
+            else curBB = Union(curBB, BBox(tri.verts[0], tri.verts[1], tri.verts[2]));
         }
     }
 
     newGeom.triEnd = triangles.size();
+    newGeom.bbMin = curBB.minP;
+    newGeom.bbMax = curBB.maxP;
     geoms.push_back(newGeom);
 
     return 1;
