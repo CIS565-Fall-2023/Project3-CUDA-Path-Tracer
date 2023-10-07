@@ -142,3 +142,42 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float meshIntersectionTest(Geom mesh, Triangle* meshes, Ray r,
+  glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+  Ray q;
+  q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+  q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+  //use glm::intersectRayTriangle to test intersection between ray and mesh
+  float t = -1;
+  float tmin = FLT_MAX;
+
+  glm::vec3 baryPosition;
+  glm::vec3 baryNormal;
+  
+  for (int i = 0; i < mesh.meshNum; i++) {
+    glm::vec3 v0 = meshes[mesh.meshStartIdx + i].vertexs[0];
+    glm::vec3 v1 = meshes[mesh.meshStartIdx + i].vertexs[1];
+    glm::vec3 v2 = meshes[mesh.meshStartIdx + i].vertexs[2];
+
+    bool intersect = glm::intersectRayTriangle(q.origin, q.direction, v0, v1, v2, baryPosition);
+    if (intersect) {
+      t = baryPosition.z;
+      if (t < tmin) {
+        tmin = t;
+        baryNormal = glm::normalize(baryPosition.x * meshes[mesh.meshStartIdx + i].normals[1] +
+          baryPosition.y * meshes[mesh.meshStartIdx + i].normals[2] +
+          (1 - baryPosition.x - baryPosition.y) * meshes[mesh.meshStartIdx + i].normals[0]);
+      }
+    }
+  }
+
+	if(tmin < FLT_MAX) {
+		intersectionPoint = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
+		normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(baryNormal, 0.0f)));
+		return glm::length(r.origin - intersectionPoint);
+	}
+	return -1;
+
+}

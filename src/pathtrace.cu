@@ -80,6 +80,7 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
+static Triangle *dev_meshes = NULL;
 
 # ifdef CACHE_FIRST_BOUNCE
 static ShadeableIntersection* dev_first_bounce_intersections = NULL;
@@ -120,8 +121,11 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_first_bounce_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 	cudaMalloc(&dev_first_bounce_paths, pixelcount * sizeof(PathSegment));
 #endif
+	cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Triangle));
+	cudaMemcpy(dev_meshes, scene->meshes.data(), scene->meshes.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 	checkCUDAError("pathtraceInit");
+	cout << "pathtraceInit finished" << endl;
 }
 
 void pathtraceFree() {
@@ -130,6 +134,7 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
+	cudaFree(dev_meshes);
 	// TODO: clean up any extra device memory you created
 #if CACHE_FIRST_BOUNCE
 	cudaFree(dev_first_bounce_intersections);
@@ -180,6 +185,7 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
+	, Triangle* meshes
 	, ShadeableIntersection* intersections
 )
 {
@@ -214,7 +220,10 @@ __global__ void computeIntersections(
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
-
+			else if (geom.type == MESH)
+			{
+				t = meshIntersectionTest(geom, meshes, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			}
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
 			if (t > 0.0f && t_min > t)
@@ -348,6 +357,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
+	cout << "iter: " << iter << endl;
+
 	///////////////////////////////////////////////////////////////////////////
 
 	// Recap:
@@ -412,16 +423,19 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			cudaMemset(dev_first_bounce_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 			// tracing
 
+			cout << "doing first bounce" << endl;
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
 				, num_paths
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
+				, dev_meshes
 				, dev_first_bounce_intersections
 				);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
+			cout << "done first bounce" << endl;
 
 			
 
@@ -441,6 +455,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
+				, dev_meshes
 				, dev_intersections
 				);
 			checkCUDAError("trace one bounce");
@@ -458,6 +473,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
+			, dev_meshes
 			, dev_intersections
 			);
 		checkCUDAError("trace one bounce");
@@ -478,6 +494,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, material_sort());
 #endif
 
+		cout << "shading" << endl;
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
@@ -485,13 +502,16 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials
 			);
+		cout << "done shading" << endl;
 
 		/*iterationComplete = depth == 5;*/
+		cout << "old num_paths: " << num_paths << endl;
 		dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_paths + num_paths, is_path_terminated());
 		num_paths = dev_path_end - dev_paths;
+		cout << "new num_paths: " << num_paths << endl;
 
 		if (num_paths == 0) {
-			//cout << "num_paths == 0" << endl;
+			cout << "num_paths == 0" << endl;
 			iterationComplete = true; // TODO: should be based off stream compaction results.
 		};
 
@@ -503,13 +523,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
+	cout << "starting finalGather" << endl;
+	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
+	cout << "ending finalGather" << endl;
 	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
-
+	cout << "sendImageToPBO finished" << endl;
 	// Retrieve image from GPU
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);

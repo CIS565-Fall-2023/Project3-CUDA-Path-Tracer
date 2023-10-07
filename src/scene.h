@@ -15,6 +15,7 @@ private:
     ifstream fp_in;
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
+    int Scene::loadObj(string path, Geom& geom, int meshStartIdx);
     int loadCamera();
 public:
     Scene(string filename);
@@ -22,5 +23,6 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
+    std::vector<Triangle> meshes;
     RenderState state;
 };
