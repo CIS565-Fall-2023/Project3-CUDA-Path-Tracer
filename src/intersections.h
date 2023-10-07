@@ -6,6 +6,8 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+#define BOUND_BOX 1
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -143,6 +145,47 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
+__host__ __device__ float boundBoxIntersectionTest(Geom box, Ray r,
+	glm::vec3 intersectionPoint, bool& outside) {
+  Ray q = r;
+
+	float tmin = -1e38f;
+	float tmax = 1e38f;
+	glm::vec3 tmin_n;
+	glm::vec3 tmax_n;
+	for (int xyz = 0; xyz < 3; ++xyz) {
+		float qdxyz = q.direction[xyz];
+		/*if (glm::abs(qdxyz) > 0.00001f)*/ {
+			float t1 = (box.boundingBox.min[xyz] - q.origin[xyz]) / qdxyz;
+			float t2 = (box.boundingBox.max[xyz] - q.origin[xyz]) / qdxyz;
+			float ta = glm::min(t1, t2);
+			float tb = glm::max(t1, t2);
+			glm::vec3 n;
+			n[xyz] = t2 < t1 ? +1 : -1;
+			if (ta > 0 && ta > tmin) {
+				tmin = ta;
+				tmin_n = n;
+			}
+			if (tb < tmax) {
+				tmax = tb;
+				tmax_n = n;
+			}
+		}
+	}
+
+	if (tmax >= tmin && tmax > 0) {
+		outside = true;
+		if (tmin <= 0) {
+			tmin = tmax;
+			tmin_n = tmax_n;
+			outside = false;
+		}
+		intersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
+		return glm::length(r.origin - intersectionPoint);
+	}
+	return -1;
+}
+
 __host__ __device__ float meshIntersectionTest(Geom mesh, Triangle* meshes, Ray r,
   glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
   Ray q;
@@ -156,6 +199,14 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Triangle* meshes, Ray 
   glm::vec3 baryPosition;
   glm::vec3 baryNormal;
   
+#ifdef BOUND_BOX
+  float tBox = boundBoxIntersectionTest(mesh, r, intersectionPoint, outside);
+  if (tBox < 0) {
+		return -1;
+	}
+#endif // 
+
+
   for (int i = 0; i < mesh.meshNum; i++) {
     glm::vec3 v0 = meshes[mesh.meshStartIdx + i].vertexs[0];
     glm::vec3 v1 = meshes[mesh.meshStartIdx + i].vertexs[1];
@@ -176,6 +227,9 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Triangle* meshes, Ray 
 	if(tmin < FLT_MAX) {
 		intersectionPoint = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
 		normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(baryNormal, 0.0f)));
+    //if (!outside) {
+    //  normal = -normal;
+    //}
 		return glm::length(r.origin - intersectionPoint);
 	}
 	return -1;

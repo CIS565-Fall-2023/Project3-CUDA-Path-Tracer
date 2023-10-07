@@ -144,6 +144,29 @@ void pathtraceFree() {
 	checkCUDAError("pathtraceFree");
 }
 
+__host__ __device__ void concentricSampleDisk(float* sampledX, float* sampledY, thrust::default_random_engine& rng) {
+	// Generate two random numbers between -1 and 1
+	thrust::uniform_real_distribution<float> uniformDistribution(-1, 1);
+	float randomX = uniformDistribution(rng);
+	float randomY = uniformDistribution(rng);
+
+	// Map random points to concentric disk
+	float radius, theta;
+	if (randomX * randomX > randomY * randomY) {
+		radius = randomX;
+		theta = (PI / 4.f) * (randomY / randomX);
+	}
+	else {
+		radius = randomY;
+		theta = (PI / 2.f) - (PI / 4.f) * (randomX / randomY);
+	}
+
+	// Convert polar coordinates to Cartesian coordinates
+	*sampledX = radius * cosf(theta);
+	*sampledY = radius * sinf(theta);
+}
+
+
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -169,6 +192,30 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
+
+		if (cam.lensRadius > 0) {
+			// Initialize random number generator
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+			//thrust::uniform_real_distribution<float> uniformDistribution(-1, 1);
+
+			// Sample a point on the lens using the concentricSampleDisk function
+			float lensSampleX, lensSampleY;
+			concentricSampleDisk(&lensSampleX, &lensSampleY, rng);
+
+			// Scale the sample by the lens radius
+			glm::vec3 lensPosition = cam.lensRadius * glm::vec3(lensSampleX, lensSampleY, 0.f);
+
+			// Calculate the distance from the lens to the focal plane
+			float focalPlaneIntersectionDistance = cam.focalLength / -segment.ray.direction.z;
+
+			// Determine the point of intersection on the focal plane
+			glm::vec3 focalPlaneIntersection = focalPlaneIntersectionDistance * segment.ray.direction;
+
+			// Update ray origin and direction for the effect of the lens
+			segment.ray.origin += lensPosition;
+			segment.ray.direction = glm::normalize(focalPlaneIntersection - lensPosition);
+		}
+
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
@@ -357,7 +404,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
-	cout << "iter: " << iter << endl;
+	//cout << "iter: " << iter << endl;
 
 	///////////////////////////////////////////////////////////////////////////
 
@@ -423,7 +470,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			cudaMemset(dev_first_bounce_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 			// tracing
 
-			cout << "doing first bounce" << endl;
+			//cout << "doing first bounce" << endl;
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
 				, num_paths
@@ -435,7 +482,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
-			cout << "done first bounce" << endl;
+			//cout << "done first bounce" << endl;
 
 			
 
@@ -494,7 +541,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, material_sort());
 #endif
 
-		cout << "shading" << endl;
+		//cout << "shading" << endl;
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
@@ -502,16 +549,16 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials
 			);
-		cout << "done shading" << endl;
+		//cout << "done shading" << endl;
 
 		/*iterationComplete = depth == 5;*/
-		cout << "old num_paths: " << num_paths << endl;
+		//cout << "old num_paths: " << num_paths << endl;
 		dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_paths + num_paths, is_path_terminated());
 		num_paths = dev_path_end - dev_paths;
-		cout << "new num_paths: " << num_paths << endl;
+		//cout << "new num_paths: " << num_paths << endl;
 
 		if (num_paths == 0) {
-			cout << "num_paths == 0" << endl;
+			//cout << "num_paths == 0" << endl;
 			iterationComplete = true; // TODO: should be based off stream compaction results.
 		};
 
@@ -524,14 +571,14 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 
-	cout << "starting finalGather" << endl;
+	//cout << "starting finalGather" << endl;
 	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
-	cout << "ending finalGather" << endl;
+	//cout << "ending finalGather" << endl;
 	///////////////////////////////////////////////////////////////////////////
 
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
-	cout << "sendImageToPBO finished" << endl;
+	//cout << "sendImageToPBO finished" << endl;
 	// Retrieve image from GPU
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);

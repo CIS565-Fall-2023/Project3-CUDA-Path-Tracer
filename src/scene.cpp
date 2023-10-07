@@ -61,6 +61,11 @@ int Scene::loadObj(string path, Geom& geom, int meshStartIdx) {
 
   geom.meshNum = 0;
   geom.meshStartIdx = meshStartIdx;
+
+  AABB boundingBox;
+  boundingBox.min = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+  boundingBox.max = glm::vec3(FLT_MIN, FLT_MIN, FLT_MIN);
+
   // Loop over shapes
   for (size_t s = 0; s < shapes.size(); s++) {
     // Loop over faces(polygon)
@@ -79,6 +84,8 @@ int Scene::loadObj(string path, Geom& geom, int meshStartIdx) {
         tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
         tri.vertexs[v] = glm::vec3(vx, vy, vz);
 
+        boundingBox.min = glm::min(boundingBox.min, tri.vertexs[v]);
+        boundingBox.max = glm::max(boundingBox.max, tri.vertexs[v]);
         // Check if `normal_index` is zero or positive. negative = no normal data
         if (idx.normal_index >= 0) {
           tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
@@ -108,6 +115,8 @@ int Scene::loadObj(string path, Geom& geom, int meshStartIdx) {
       geom.meshNum++;
     }
   }
+  // set the entire item's bounding box
+  geom.boundingBox = boundingBox;
 }
 
 int Scene::loadGeom(string objectid) {
@@ -212,6 +221,10 @@ int Scene::loadCamera() {
             camera.lookAt = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         } else if (strcmp(tokens[0].c_str(), "UP") == 0) {
             camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        } else if (strcmp(tokens[0].c_str(), "LENSR") == 0) {
+            camera.lensRadius = atof(tokens[1].c_str());
+        } else if (strcmp(tokens[0].c_str(), "FOCALLEN") == 0) {
+            camera.focalLength = atof(tokens[1].c_str());
         }
 
         utilityCore::safeGetline(fp_in, line);

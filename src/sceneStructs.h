@@ -18,6 +18,11 @@ struct Ray {
     glm::vec3 direction;
 };
 
+struct AABB {
+  glm::vec3 min;
+  glm::vec3 max;
+};
+
 struct Geom {
     enum GeomType type;
     int materialid;
@@ -29,6 +34,7 @@ struct Geom {
     glm::mat4 invTranspose;
     int meshNum;
     int meshStartIdx;
+    AABB boundingBox;
 };
 
 struct Material {
@@ -49,6 +55,8 @@ struct Triangle {
   glm::vec2 uv[3];
 };
 
+
+
 struct Camera {
     glm::ivec2 resolution;
     glm::vec3 position;
@@ -58,6 +66,8 @@ struct Camera {
     glm::vec3 right;
     glm::vec2 fov;
     glm::vec2 pixelLength;
+    float focalLength;
+    float lensRadius;
 };
 
 struct RenderState {
