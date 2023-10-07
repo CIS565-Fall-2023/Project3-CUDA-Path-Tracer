@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   5
+EMITTANCE   25
 
 // Diffuse white
 MATERIAL 1
@@ -30,7 +30,7 @@ EMITTANCE   0
 
 // Diffuse green
 MATERIAL 3
-RGB         .35 .85 .35
+RGB         .35 .35 .85
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -45,6 +45,16 @@ SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
 REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Refractive white
+MATERIAL 5
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        0
+REFR        1.5
 REFRIOR     0
 EMITTANCE   0
 
@@ -64,6 +74,7 @@ UP          0 1 0
 OBJECT 0
 cube
 material 0
+texture -1
 TRANS       0 10 0
 ROTAT       0 0 0
 SCALE       3 .3 3
@@ -72,6 +83,7 @@ SCALE       3 .3 3
 OBJECT 1
 cube
 material 1
+texture -1
 TRANS       0 0 0
 ROTAT       0 0 0
 SCALE       10 .01 10
@@ -80,6 +92,7 @@ SCALE       10 .01 10
 OBJECT 2
 cube
 material 1
+texture -1
 TRANS       0 10 0
 ROTAT       0 0 90
 SCALE       .01 10 10
@@ -88,6 +101,7 @@ SCALE       .01 10 10
 OBJECT 3
 cube
 material 1
+texture -1
 TRANS       0 5 -5
 ROTAT       0 90 0
 SCALE       .01 10 10
@@ -96,6 +110,7 @@ SCALE       .01 10 10
 OBJECT 4
 cube
 material 2
+texture -1
 TRANS       -5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
@@ -104,14 +119,65 @@ SCALE       .01 10 10
 OBJECT 5
 cube
 material 3
+texture -1
 TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
+
+// Mesh cube
 OBJECT 6
-sphere
+mesh
 material 4
-TRANS       -1 4 -1
+texture 0
+TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       0.1 0.1 0.1
+LINK        C:/Users/2000/Downloads/stanford_dragon_pbr/scene.gltf
+//C:/Users/2000/Downloads/stanford_bunny_pbr/scene.gltf
+//C:/Users/2000/Downloads/stanford_dragon_vrip_res_3/scene.gltf
+//C:/Users/2000/Downloads/stanford_bunny_pbr/scene.gltf
+//C:/Users/2000/Downloads/glTF-Sample-Models-2.0-Duck/glTF/Duck.gltf
+//C:/Users/2000/Downloads/deino/scene.gltf
+//C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//C:/Users/2000/Downloads/deino/scene.gltf
+//C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//C:/Users/2000/Downloads/deino/scene.gltf
+//C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//C:/Users/2000/Downloads/deino/scene.glt
+//C:/Users/2000/Downloads/trapezo-rhombic_dodecahedron/scene.gltf
+//C:/Users/2000/Downloads/low-poly-fox/source/LowPolyAnimal.obj
+//C:/Users/2000/Downloads/deino/scene.gltf
+//C:/Users/2000/Downloads/low-poly-fox/source/LowPolyAnimal.obj
+//C:/Users/2000/Downloads/glTF-Sample-Models-2.0-Duck/glTF/Duck.gltf
+//C:/Users/2000/Downloads/minecraft-kirby/source/model.gltf
+//C:/Users/2000/Downloads/mimikyu/scene.gltf
+//C:/Users/2000/Downloads/minecraft-grass-block/source/Minecraft_Grass_Block_OBJ/Grass_Block.obj
+//C:/Users/2000/Downloads/mimikyu/scene.gltf
+//C:/Users/2000/Downloads/crystal1/scene.gltf       
+//C:/Users/2000/Downloads/low-poly_head/scene.gltf      
+//C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+
+
+TEXTURE 0
+LINK    C:/Users/2000/Downloads/stanford_dragon_vrip_res_3/jade.png
+//C:/Users/2000/Downloads/stanford_bunny_pbr/textures/DefaultMaterial_baseColor.png
+//C:/Users/2000/Downloads/deino/textures/body_mat_baseColor.png
+//C:/Users/2000/Downloads/low-poly-fox/textures/TextureDiff3.png
+//C:/Users/2000/Downloads/deino/textures/body_mat_baseColor.png
+//C:/Users/2000/Downloads/trapezo-rhombic_dodecahedron/textures/Material1_baseColor.png
+//C:/Users/2000/Downloads/deino/textures/body_mat_baseColor.png
+//C:/Users/2000/Downloads/low-poly-fox/textures/TextureDiff3.png
+//C:/Users/2000/Downloads/deino/textures/body_mat_baseColor.png
+//C:/Users/2000/Downloads/low-poly-fox/textures/TextureDiff3.png
+//C:/Users/2000/Downloads/glTF-Sample-Models-2.0-Duck/glTF/DuckCM.png
+//C:/Users/2000/Downloads/minecraft-kirby/textures/gltf_embedded_0.png
+//C:/Users/2000/Downloads/minecraft-grass-block/source/Minecraft_Grass_Block_OBJ/Grass_Block_TEX.png 
+//C:/Users/2000/Downloads/mimikyu/textures/body_baseColor.png
+// Sphere
+//OBJECT 6
+//sphere
+//material 1
+//TRANS       -1 4 -1
+//ROTAT       0 0 0
+//SCALE       3 3 3

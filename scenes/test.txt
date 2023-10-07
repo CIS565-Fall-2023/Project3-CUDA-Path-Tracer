@@ -1,0 +1,60 @@
+// Emissive material (light)
+MATERIAL 0
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   5
+
+// Diffuse red
+MATERIAL 1
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Camera
+CAMERA
+RES         800 800
+FOVY        70
+ITERATIONS  5000
+DEPTH       8
+FILE        sphere
+EYE         0.0 5.0 10.5
+LOOKAT      0 5 0
+UP          0 1 0
+
+// Ceiling light
+OBJECT 0
+cube
+material 0
+TRANS       0 15.0 0
+ROTAT       0 0 0
+SCALE       4 .4 4
+
+// Ceiling light
+OBJECT 1
+cube
+material 0
+TRANS       0 10.0 5.0
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Sphere
+OBJECT 2
+mesh
+material 1
+TRANS       0.0 -1.0 0.0
+ROTAT       0 90 0
+SCALE       5 5 5
+LINK        C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//LINK        C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//LINK        C:/Users/2000/Downloads/pixeled_eagle/scene.gltf
+//LINK        C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//LINK        C:/Users/2000/Downloads/Fox/Fox.gltf
+//LINK        C:/Users/2000/Downloads/glTF-Sample-Models-2.0-Cube/glTF/Cube.gltf

@@ -1,6 +1,13 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+/**
+#define TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_NO_EXTERNAL_IMAGE
+#define TINYGLTF_NO_STB_IMAGE
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+
+#include "tinygltf/tiny_gltf.h"*/
 
 static std::string startTimeString;
 
@@ -32,6 +39,7 @@ int height;
 //-------------------------------
 
 int main(int argc, char** argv) {
+	
 	startTimeString = currentTimeString();
 
 	if (argc < 2) {
@@ -73,6 +81,8 @@ int main(int argc, char** argv) {
 	// Initialize CUDA and GL components
 	init();
 
+	//buildBVHTree((scene->gltfMeshes)[0], (scene->gltfMeshes)[0].triangles.size());
+	
 	// Initialize ImGui Data
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
@@ -124,6 +134,7 @@ void runCuda() {
 		cam.position = cameraPosition;
 		cameraPosition += cam.lookAt;
 		cam.position = cameraPosition;
+		
 		camchanged = false;
 	}
 
@@ -133,8 +144,9 @@ void runCuda() {
 	if (iteration == 0) {
 		pathtraceFree();
 		pathtraceInit(scene);
+		buildBVHTree((scene->gltfMeshes)[0], (scene->gltfMeshes)[0].triangles.size());
 	}
-
+	
 	if (iteration < renderState->iterations) {
 		uchar4* pbo_dptr = NULL;
 		iteration++;
