@@ -146,6 +146,8 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static Intersection* dev_intersections = NULL;
+static Triangle* dev_tris = NULL;
+
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -172,6 +174,9 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
+	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
@@ -192,6 +197,7 @@ void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
+	cudaFree(dev_tris);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
@@ -268,6 +274,8 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, int geoms_size
+	, Triangle* tris
+	, int tri_size
 	, Intersection* intersections
 )
 {
@@ -301,6 +309,11 @@ __global__ void computeIntersections(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
+			else if (geom.type == GLTF_MESH)
+			{
+				t = geomIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tris);
+			}
+
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
 			// Compute the minimum t from the intersection tests to determine what
@@ -536,6 +549,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, hst_scene->geoms.size()
+				, dev_tris
+				, hst_scene->tris.size()
 				, dev_intersections
 				);
 			checkCUDAError("trace one bounce");

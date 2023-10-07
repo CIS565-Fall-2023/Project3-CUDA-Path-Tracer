@@ -18,10 +18,15 @@ struct Ray {
     glm::vec3 direction;
 };
 
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 nor;
+};
 
 struct Triangle
 {
-    std::vector<glm::vec3> pos{ std::vector<glm::vec3>() };
+    Vertex v0, v1, v2;
 };
 
 struct SceneMesh
@@ -54,7 +59,6 @@ struct SceneMeshGroup
 
 struct Geom {
     enum GeomType type;
-    SceneMeshGroup meshGroup;
     int materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
@@ -62,6 +66,9 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+
+    int startTriIdx;
+    int endTriIdx;
 };
 
 struct Material {

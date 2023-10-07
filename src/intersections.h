@@ -142,3 +142,54 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, Triangle* tris)
+{
+    glm::vec3 minBary = glm::vec3(FLT_MAX);
+    glm::vec3 bary;
+    int triIdx = -1;
+
+    const glm::vec3 rayOriginLocal = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+    const glm::vec3 rayDirLocal = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    // Go through every single triangle
+    for (int i = mesh.startTriIdx; i <= mesh.endTriIdx; i++)
+    {
+        if (glm::intersectRayTriangle(rayOriginLocal, rayDirLocal, tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, bary))
+        {
+            if (bary.z < minBary.z)
+            {
+                minBary.z = bary.z;
+                triIdx = i;
+            }
+        }
+    }
+
+    if (triIdx >= 0)
+    {
+        glm::vec3 ptLocal = rayOriginLocal + rayDirLocal * minBary.t;
+        intersectionPoint = multiplyMV(mesh.transform, glm::vec4(ptLocal, 1.0f));
+
+        Triangle& tri = tris[triIdx];
+        //glm::vec3 d1 = glm::normalize(tri.v1.pos - tri.v0.pos);
+        //glm::vec3 d2 = glm::normalize(tri.v2.pos - tri.v0.pos);
+        //glm::vec3 norLocal = glm::cross(d2, d1);
+
+        float u = minBary.x;
+        float v = minBary.y;
+        float w = 1.0f - u - v;
+
+        glm::vec3 norLocal = u * tri.v0.nor + v * tri.v1.nor + w * tri.v2.nor;
+
+        normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(norLocal, 0.0f)));
+    }
+    else
+    {
+        intersectionPoint = r.origin + r.direction * 10.0f;
+        normal = glm::vec3(0.0f, 0.0f, 1.0f);
+        return 10.0f;
+    }
+
+    return triIdx == -1 ? -1 : glm::length(intersectionPoint - r.origin);
+}

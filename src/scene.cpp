@@ -69,7 +69,8 @@ int Scene::loadGeom(string objectid) {
                         return -1;
                     }
 
-                    newGeom.meshGroup = meshGroup;
+                    newGeom.startTriIdx = meshGroup.startTriIdx;
+                    newGeom.endTriIdx = meshGroup.endTriIdx;
                 }
             }
         }
@@ -212,15 +213,16 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 // welp. we finally have positions. Now do this for everything else. 
                 // I thought I took this class for GPU programming but here I am managing data parsing in C++
 
-                //cout << "========= POSITIONS =========" << endl;
+                cout << "========= POSITIONS =========" << endl;
                 int size = posBufView.byteLength / sizeof(float);
-                int stride = posBufView.byteStride == 0 ? 1 : posBufView.byteStride / sizeof(float);
+                int stride = posBufView.byteStride == 0 ? 3 : posBufView.byteStride / sizeof(float);
                 int pCount = 0;
                 for (int i = 0; i < size; i += stride)
                 {
                     // positions are vec3s of 3 floats in GLTF 2.0 spec
                     gltfMesh.positions.push_back(glm::vec3(posData[i], posData[i + 1], posData[i + 2]));
-                    //cout << "(" << gltfMesh.positions[pCount].x << "," << gltfMesh.positions[pCount].y << "," << gltfMesh.positions[pCount++].z << ")" << endl;
+                    cout << "(" << gltfMesh.positions[pCount].x << "," << gltfMesh.positions[pCount].y << "," << gltfMesh.positions[pCount].z << ")" << endl;
+                    pCount++;
                 }
             }
             else
@@ -249,15 +251,16 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
 
                 gltfMesh.hasNormals = true;
 
-                //cout << "========= NORMALS =========" << endl;
+                cout << "========= NORMALS =========" << endl;
                 int size = norBufView.byteLength / sizeof(float);
-                int stride = norBufView.byteStride == 0 ? 1 : norBufView.byteStride / sizeof(float);
+                int stride = norBufView.byteStride == 0 ? 3 : norBufView.byteStride / sizeof(float);
                 int pCount = 0;
                 for (int i = 0; i < size; i += stride)
                 {
                     // positions are vec3s of 3 floats in GLTF 2.0 spec
                     gltfMesh.normals.push_back(glm::vec3(norData[i], norData[i + 1], norData[i + 2]));
-                    //cout << "(" << gltfMesh.normals[pCount].x << "," << gltfMesh.normals[pCount].y << "," << gltfMesh.normals[pCount++].z << ")" << endl;
+                    cout << "(" << gltfMesh.normals[pCount].x << "," << gltfMesh.normals[pCount].y << "," << gltfMesh.normals[pCount].z << ")" << endl;
+                    pCount++;
                 }
             }
 
@@ -282,26 +285,27 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 //    cout << gltfMesh.indices[i] << endl;
                 //}
 
-                //cout << "========= TRIANGLE INDICES AND VTX. POS. =========" << endl;
+                cout << "========= TRIANGLE INDICES AND VTX. POS. =========" << endl;
                 // Triangulate with indices
                 Triangle tri;
                 for (int i = 0; i < idxAccessor.count; i += 3)
                 {
-                    tri.pos.push_back(gltfMesh.positions[gltfMesh.indices[i]]);
-                    tri.pos.push_back(gltfMesh.positions[gltfMesh.indices[i + 1]]);
-                    tri.pos.push_back(gltfMesh.positions[gltfMesh.indices[i + 2]]);
+                    tri.v0.pos = gltfMesh.positions[gltfMesh.indices[i]];
+                    tri.v1.pos = gltfMesh.positions[gltfMesh.indices[i+1]];
+                    tri.v2.pos = gltfMesh.positions[gltfMesh.indices[i+2]];
+
                     totalTris++;
 
                     if (gltfMesh.hasNormals)
                     {
-                        tri.pos.push_back(gltfMesh.normals[gltfMesh.indices[i]]);
-                        tri.pos.push_back(gltfMesh.normals[gltfMesh.indices[i + 1]]);
-                        tri.pos.push_back(gltfMesh.normals[gltfMesh.indices[i + 2]]);
+                        tri.v0.nor = gltfMesh.normals[gltfMesh.indices[i]];
+                        tri.v1.nor = gltfMesh.normals[gltfMesh.indices[i + 1]];
+                        tri.v2.nor = gltfMesh.normals[gltfMesh.indices[i + 2]];
                     }
 
                     tris.push_back(tri);
 
-                    //cout << "(" << gltfMesh.indices[i] << "," << gltfMesh.indices[i+1] << "," << gltfMesh.indices[i+2] << ")" << endl;
+                    cout << "(" << gltfMesh.indices[i] << "," << gltfMesh.indices[i+1] << "," << gltfMesh.indices[i+2] << ")" << endl;
 
                     //cout << "(" << gltfMesh.positions[gltfMesh.indices[i]].x << "," << gltfMesh.positions[gltfMesh.indices[i]].y << "," << gltfMesh.positions[gltfMesh.indices[i]].z << "), ("
                     //     << "(" << gltfMesh.positions[gltfMesh.indices[i+1]].x << "," << gltfMesh.positions[gltfMesh.indices[i+1]].y << "," << gltfMesh.positions[gltfMesh.indices[i+1]].z << "), ("
@@ -314,16 +318,17 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 Triangle tri;
                 for (int i = 0; i < gltfMesh.positions.size(); i += 3)
                 {
-                    tri.pos.push_back(gltfMesh.positions[i * 3]);
-                    tri.pos.push_back(gltfMesh.positions[i * 3 + 1]);
-                    tri.pos.push_back(gltfMesh.positions[i * 3 + 2]);
+                    tri.v0.pos = gltfMesh.positions[i * 3];
+                    tri.v1.pos = gltfMesh.positions[i * 3 + 1];
+                    tri.v2.pos = gltfMesh.positions[i * 3 + 2];
+
                     totalTris++;
 
                     if (gltfMesh.hasNormals)
                     {
-                        tri.pos.push_back(gltfMesh.normals[i * 3]);
-                        tri.pos.push_back(gltfMesh.normals[i * 3 + 1]);
-                        tri.pos.push_back(gltfMesh.normals[i * 3 + 2]);
+                        tri.v0.nor = gltfMesh.normals[i * 3];
+                        tri.v1.nor = gltfMesh.normals[i * 3 + 1];
+                        tri.v2.nor = gltfMesh.normals[i * 3 + 2];
                     }
                 }
             }
