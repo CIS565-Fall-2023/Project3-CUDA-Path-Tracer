@@ -36,6 +36,7 @@ public:
     bool UseBVH;
     bool ACESFilm;
     bool NoGammaCorrection;
+    bool CacheFirstBounce;
     float focalLength;
     float apertureSize;
     float theta, phi;

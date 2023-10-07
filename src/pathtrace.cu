@@ -78,6 +78,7 @@ void InitDataContainer(GuiDataContainer* imGuiData, Scene* scene)
     guiData->UseBVH = true;
     guiData->ACESFilm = false;
     guiData->NoGammaCorrection = false;
+    guiData->CacheFirstBounce = scene->settings.trSettings.cacheFirstBounce;
     guiData->focalLength = scene->state.camera.focalLength;
     guiData->apertureSize = scene->state.camera.apertureSize;
     guiData->theta = 0.f;
@@ -456,7 +457,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
-    if (!hst_scene->state.isCached) {
+    if (!hst_scene->state.isCached && guiData->CacheFirstBounce) {
         hst_scene->state.isCached = true;
         cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
@@ -478,7 +479,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
             , hst_scene->cubemap.texObj
             );
         checkCUDAError("trace one bounce");
-        cudaDeviceSynchronize();
         if (guiData->SortByMaterial) {
             cudaMemcpy(dev_materialSegIndices, dev_materialIsectIndices, num_paths * sizeof(int), cudaMemcpyDeviceToDevice);
             cudaMemcpy(dev_materialIsectIndicesCache, dev_materialIsectIndices, num_paths * sizeof(int), cudaMemcpyDeviceToDevice);
@@ -493,8 +493,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
         // tracing
         if (depth == 0 && hst_scene->state.isCached) {
             cudaMemcpy(dev_intersections, dev_intersections_cache, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
-            cudaMemcpy(dev_materialSegIndices, dev_materialIsectIndicesCache, pixelcount * sizeof(int), cudaMemcpyDeviceToDevice);
-            thrust::sort_by_key(dev_materialSegIndices_thrust, dev_materialSegIndices_thrust + pixelcount, dev_paths_thrust);
+            if (guiData->SortByMaterial) {
+                cudaMemcpy(dev_materialSegIndices, dev_materialIsectIndicesCache, pixelcount * sizeof(int), cudaMemcpyDeviceToDevice);
+                thrust::sort_by_key(dev_materialSegIndices_thrust, dev_materialSegIndices_thrust + pixelcount, dev_paths_thrust);
+            }
         }
         else {
             // clean shading chunks
@@ -514,7 +516,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
                 , hst_scene->cubemap.texObj
                 );
             checkCUDAError("trace one bounce");
-            cudaDeviceSynchronize();
             if (guiData->SortByMaterial) {
                 cudaMemcpy(dev_materialSegIndices, dev_materialIsectIndices, num_paths * sizeof(int), cudaMemcpyDeviceToDevice);
                 thrust::sort_by_key(dev_materialIsectIndices_thrust, dev_materialIsectIndices_thrust + num_paths, dev_intersections);

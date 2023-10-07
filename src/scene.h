@@ -80,6 +80,7 @@ public:
             bool testNormal;
             bool testIntersect;
             glm::vec3 testColor;
+            bool cacheFirstBounce;
         }trSettings;
         struct CameraSettings {
             bool dof;

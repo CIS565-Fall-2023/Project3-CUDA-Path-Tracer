@@ -241,6 +241,7 @@ void Scene::loadSettings() {
         settings.envMapFilename = jsonData["environmentMap"]["path"];
 
         nlohmann::json renderStateData = jsonData["RenderState"];
+        settings.trSettings.cacheFirstBounce = renderStateData["cache first bounce"];
         settings.trSettings.testNormal = renderStateData["test normal"];
         settings.trSettings.testIntersect = renderStateData["test intersect"];
         settings.trSettings.testColor = glm::vec3(renderStateData["test color"][0], renderStateData["test color"][1], renderStateData["test color"][2]);
@@ -405,7 +406,7 @@ Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transfor
     if (tinygltf::GetComponentSizeInBytes(model->accessors[primitive.indices].componentType) == sizeof(uint16_t)) {
         s->loadTriangle<uint16_t>(primitive, t, positions, normals, uvs, tangents, materialid);
     }
-    else if(tinygltf::GetComponentSizeInBytes(model->accessors[primitive.indices].componentType) == sizeof(uint32_t)){
+    else if (tinygltf::GetComponentSizeInBytes(model->accessors[primitive.indices].componentType) == sizeof(uint32_t)) {
         s->loadTriangle<uint32_t>(primitive, t, positions, normals, uvs, tangents, materialid);
     }
     else {
@@ -493,7 +494,10 @@ void Scene::loadExtensions(Material& material, const tinygltf::ExtensionMap& ext
         }
         else if (extensionName == "KHR_materials_specular") {
             auto data = extensionValue.Get("specularColorFactor").Get<tinygltf::Value::Array>();
-            material.specular.specularColorFactor = glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>());
+            if (!data.empty())
+                material.specular.specularColorFactor = glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>());
+            else
+                material.specular.specularColorFactor = glm::vec3(1.f);
             material.specular.specularFactor = extensionValue.Get("specularFactor").Get<double>();
             if (glm::length(material.specular.specularFactor) == 0.f) {
                 material.specular.specularFactor = 1.f;

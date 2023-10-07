@@ -224,6 +224,7 @@ void RenderImGui()
 	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
 	ImGui::Checkbox("Enable ACES Film", &imguiData->ACESFilm);
 	ImGui::Checkbox("Disable Gamma Correction", &imguiData->NoGammaCorrection);
+	bool cacheFirstBounce = ImGui::Checkbox("Cache First Bounce", &imguiData->CacheFirstBounce);
 	float availWidth = ImGui::GetContentRegionAvail().x;
 	ImGui::SetNextItemWidth(availWidth * 0.25f);
 	bool focalLengthChanged = ImGui::DragFloat("Focal Length", &imguiData->focalLength, 0.1f, 0.0f, 8.0f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
@@ -245,7 +246,7 @@ void RenderImGui()
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-	if (focalLengthChanged || apertureSizeChanged || cameraPhiChanged || cameraThetaChanged || cameraLookAtChanged || zoomChanged) {
+	if (focalLengthChanged || apertureSizeChanged || cameraPhiChanged || cameraThetaChanged || cameraLookAtChanged || zoomChanged || cacheFirstBounce) {
 		valChanged = true;
 	}
 }
