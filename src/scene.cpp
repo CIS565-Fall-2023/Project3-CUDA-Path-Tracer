@@ -463,7 +463,7 @@ bool Scene::loadCamera(const tinygltf::Node& node, const glm::mat4& transform)
 std::pair<PbrMetallicRoughness, Material::Type> Scene::loadPbrMetallicRoughness(const tinygltf::PbrMetallicRoughness& pbrMat)
 {
     PbrMetallicRoughness result;
-    auto matType = Material::Type::DIFFUSE;
+    auto matType = Material::Type::PBR;
     result.baseColorFactor = glm::make_vec4(pbrMat.baseColorFactor.data());
     const int textureIndex = pbrMat.baseColorTexture.index;
     if (textureIndex >= 0) {
@@ -493,26 +493,32 @@ void Scene::loadExtensions(Material& material, const tinygltf::ExtensionMap& ext
             material.dielectric.eta = extensionValue.Get("ior").Get<double>();
         }
         else if (extensionName == "KHR_materials_specular") {
-            auto data = extensionValue.Get("specularColorFactor").Get<tinygltf::Value::Array>();
-            if (!data.empty())
+            if (extensionValue.Has("specularColorFactor")) {
+                material.type = Material::Type::PBR_SPECULAR;
+                auto data = extensionValue.Get("specularColorFactor").Get<tinygltf::Value::Array>();
                 material.specular.specularColorFactor = glm::vec3(data[0].Get<double>(), data[1].Get<double>(), data[2].Get<double>());
+            }
             else
                 material.specular.specularColorFactor = glm::vec3(1.f);
-            material.specular.specularFactor = extensionValue.Get("specularFactor").Get<double>();
-            if (glm::length(material.specular.specularFactor) == 0.f) {
-                material.specular.specularFactor = 1.f;
+            if (extensionValue.Has("specularFactor")) {
+                material.specular.specularFactor = extensionValue.Get("specularFactor").Get<double>();
+                material.type = Material::Type::PBR_SPECULAR;
             }
+            else
+                material.specular.specularFactor = 1.f;
             size_t specularTextureIdx = -1;
             if (extensionValue.Get("specularTexture").Has("index")) {
                 specularTextureIdx = extensionValue.Get("specularTexture").Get("index").Get<int>();
                 if (specularTextureIdx >= 0) {
                     material.specular.specularTexture = textures[specularTextureIdx];
+                    material.type = Material::Type::PBR_SPECULAR;
                 }
             }
             if (extensionValue.Get("specularColorTexture").Has("index")) {
                 specularTextureIdx = extensionValue.Get("specularColorTexture").Get("index").Get<int>();
                 if (specularTextureIdx >= 0) {
                     material.specular.specularColorTexture = textures[specularTextureIdx];
+                    material.type = Material::Type::PBR_SPECULAR;
                 }
             }
 
@@ -663,24 +669,18 @@ void Scene::createCubemapTextureObj() {
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<int>();
     cudaError_t cudaError;
 
-    cudaError = cudaMalloc3DArray(&cubemap.cubemapArray, &channelDesc, make_cudaExtent(1, 1, 6), cudaArrayCubemap);
+    cudaArray* cubemapArray;
+    cudaError = cudaMallocArray(&cubemapArray, &channelDesc, 1, 6);
     if (cudaError != cudaSuccess) {
-        fprintf(stderr, "CUDA error cudaMalloc3DArray: %s\n", cudaGetErrorString(cudaError));
+        fprintf(stderr, "CUDA error cudaMallocArray: %s\n", cudaGetErrorString(cudaError));
     }
-    cudaMemcpy3DParms copyParams = { 0 };
-    copyParams.srcPtr = make_cudaPitchedPtr((void*)cubemapData, sizeof(int), 1, 1);
-    copyParams.dstArray = cubemap.cubemapArray;
-    copyParams.extent = make_cudaExtent(1, 1, 6);
-    copyParams.kind = cudaMemcpyHostToDevice;
 
-    cudaError = cudaMemcpy3D(&copyParams);
-    if (cudaError != cudaSuccess) {
-        fprintf(stderr, "CUDA error cudaMemcpy3D: %s\n", cudaGetErrorString(cudaError));
-    }
+    cudaMemcpy2DToArray(cubemapArray, 0, 0, cubemapData, sizeof(int), sizeof(int), 6, cudaMemcpyHostToDevice);
+
     struct cudaResourceDesc resDesc;
     memset(&resDesc, 0, sizeof(resDesc));
     resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = cubemap.cubemapArray;
+    resDesc.res.array.array = cubemapArray;
 
     struct cudaTextureDesc texDesc;
     memset(&texDesc, 0, sizeof(texDesc));
@@ -688,9 +688,12 @@ void Scene::createCubemapTextureObj() {
     texDesc.addressMode[1] = cudaAddressModeWrap;
     texDesc.filterMode = cudaFilterModePoint;
 
-    cudaError = cudaCreateTextureObject(&cubemap.texObj, &resDesc, &texDesc, nullptr);
+    cudaTextureObject_t texObj = 0;
+    cudaError = cudaCreateTextureObject(&texObj, &resDesc, &texDesc, nullptr);
     if (cudaError != cudaSuccess) {
         fprintf(stderr, "CUDA error creating texture object: %s\n", cudaGetErrorString(cudaError));
         exit(-1);
     }
+
+    cubemap.texObj = texObj;  // Assuming cubemap.texObj is a member variable to store the texture object.
 }

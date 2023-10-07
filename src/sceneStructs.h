@@ -159,10 +159,10 @@ struct Material {
         UNKNOWN = 0,
         DIFFUSE = BsdfSampleType::DIFFUSE_REFL,
         DIELECTRIC = BsdfSampleType::SPEC_REFL | BsdfSampleType::SPEC_TRANS,
-        SPECULAR = BsdfSampleType::SPEC_REFL,
         METAL = BsdfSampleType::SPEC_REFL | BsdfSampleType::SPEC_TRANS | 1,
         ROUGH_DIELECTRIC = BsdfSampleType::MICROFACET_REFL | BsdfSampleType::MICROFACET_TRANS,
         PBR = DIFFUSE | DIELECTRIC,
+        PBR_SPECULAR = PBR | BsdfSampleType::SPEC_REFL | 1,
         LIGHT = 1 << 7
     };
     uint32_t type = Type::DIFFUSE;
