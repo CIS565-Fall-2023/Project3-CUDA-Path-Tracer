@@ -21,6 +21,7 @@ struct Geom {
     enum GeomType type;
     int materialid;
     glm::vec3 translation;
+    glm::vec3 origionalTranslation;
     glm::vec3 rotation;
     glm::vec3 scale;
     glm::mat4 transform;

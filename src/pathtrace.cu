@@ -7,6 +7,8 @@
 
 #include <thrust/device_ptr.h>
 #include <thrust/partition.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -20,6 +22,10 @@
 #define ERRORCHECK 1
 #define ANTIALIA 1
 #define DEPTHOFFIELD 0
+#define MOTIONBLUR 1
+#define MOVESPEED 0.5
+#define LOOPTIME 100.f
+#define MOVEDIRECTION glm::vec4(1,0,0,0)
 #define blockSize 128
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -223,6 +229,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
+
 // TODO:
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
@@ -234,6 +241,7 @@ __global__ void computeIntersections(
 	, Geom* geoms
 	, int geoms_size
 	, ShadeableIntersection* intersections
+	, int iter
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -251,12 +259,13 @@ __global__ void computeIntersections(
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
-
+		glm::mat4 origTrans;
 		// naive parse through global geoms
 
 		for (int i = 0; i < geoms_size; i++)
 		{
 			Geom& geom = geoms[i];
+			origTrans = geom.transform;
 
 			if (geom.type == CUBE)
 			{
@@ -266,6 +275,26 @@ __global__ void computeIntersections(
 			}
 			else if (geom.type == SPHERE)
 			{
+//we modify the gemo position in each iter to make it realize motion blur effect
+#if MOTIONBLUR
+				float current_move = glm::sin(iter / LOOPTIME);
+				glm::vec3 curr_vec = glm::vec3(0, 2*current_move, 0);
+				//geom.transform = origTrans;
+				geom.translation = geom.origionalTranslation + curr_vec;
+
+				glm::mat4 translationMat = glm::translate(glm::mat4(), geom.translation);
+				glm::mat4 rotationMat = glm::rotate(glm::mat4(), geom.rotation.x * (float)PI / 180, glm::vec3(1, 0, 0));
+				rotationMat = rotationMat * glm::rotate(glm::mat4(), geom.rotation.y * (float)PI / 180, glm::vec3(0, 1, 0));
+				rotationMat = rotationMat * glm::rotate(glm::mat4(), geom.rotation.z * (float)PI / 180, glm::vec3(0, 0, 1));
+				glm::mat4 scaleMat = glm::scale(glm::mat4(), geom.scale);
+
+				geom.transform = translationMat * rotationMat * scaleMat;
+
+				//geom.transform[3][3] += current_move*10;
+				geom.inverseTransform = glm::inverse(geom.transform);
+				geom.invTranspose = glm::transpose(geom.inverseTransform);
+
+#endif
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 				pathSegment.outside = outside;
 
@@ -514,6 +543,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_geoms
 			, hst_scene->geoms.size()
 			, dev_intersections
+			, iter
 			);
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
