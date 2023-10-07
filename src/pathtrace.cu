@@ -87,8 +87,8 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution, glm::vec3* im
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		//glm::vec3 pix = image[index];
 		
+		//glm::vec3 pix = image[index];
 		glm::vec3 pix = glm::pow(image[index]/(image[index] + 1.f),glm::vec3(1.f/2.2));
 
 		glm::ivec3 color;
@@ -379,7 +379,7 @@ __global__ void processPBR(
 	}
 #if DEBUG
 	seg.color = normal * 0.5f + glm::vec3(0.5);
-	seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
+	//seg.color = getBSDF(seg.ray.direction, glm::vec3(0.f), intersect.surfaceUV, material, textures);
 	seg.remainingBounces = 0;
 	return;
 #else
@@ -420,7 +420,7 @@ __global__ void processPBR(
 
 	glm::vec3 bsdf = getBSDF(seg.ray.direction, wo, intersect.surfaceUV, material,textures);
 	//           albedo           absdot
-	seg.color *= (bsdf * glm::clamp(abs(glm::dot(intersect.surfaceNormal, seg.ray.direction)), 0.f, 1.f) / pdf);
+	seg.color *= (bsdf * glm::clamp(abs(glm::dot(normal, seg.ray.direction)), 0.f, 1.f) / pdf);
 	
 #endif //DEBUG
 }
@@ -553,7 +553,7 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 	ShadeableIntersection* dev_firstIntersect = this->dev_firstIntersect.get();
 	PathSegment* dev_firstPaths = this->dev_firstPaths.get();
 	if (iter == 1) {
-		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_firstPaths);
+		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, lenRadius, focusLen, dev_firstPaths);
 		checkCUDAError("generate camera ray");
 		cudaMemset(dev_firstIntersect, 0, pixelcount * sizeof(ShadeableIntersection));
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
@@ -686,42 +686,28 @@ void PathTracer::pathtrace(uchar4* pbo, int frame, int iter)
 		
 
 		cudaDeviceSynchronize();
-		//   * TODO: Shade the rays that intersected something or didn't bottom out.
-//     That is, color the ray by performing a color computation according
-//     to the shader, then generate a new ray to continue the ray path.
-//     We recommend just updating the ray's PathSegment in place.
-//     Note that this step may come before or after stream compaction,
-//     since some shaders you write may also cause a path to terminate.
-		//TODO:
-		//--- Shading Stage ---
-		//Shade path segments based on intersections and generate new rays by
-		// evaluating the BSDF.
-		// Start off with just a big kernel that handles all the different
-		// materials you have in the scenefile.
-		// TODO: compare between directly shading the path segments and shading
-		// path segments that have been reshuffled to be contiguous in memory.
 
-		processPBRMedium << <numblocksPathSegmentTracing, blockSize1d >> > (
-			iter
-			, depth
-			, num_paths
-			, dev_paths
-			, dev_intersections
-			, dev_materials
-			, dev_texObjs
-			, envMap
-			, hasEnvMap
-		);
-		//processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
-		//	iter, depth
+		//processPBRMedium << <numblocksPathSegmentTracing, blockSize1d >> > (
+		//	iter
+		//	, depth
 		//	, num_paths
-		//	, dev_intersections
 		//	, dev_paths
+		//	, dev_intersections
 		//	, dev_materials
 		//	, dev_texObjs
-		//	, envMap 
+		//	, envMap
 		//	, hasEnvMap
-		//	);
+		//);
+		processPBR << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter, depth
+			, num_paths
+			, dev_intersections
+			, dev_paths
+			, dev_materials
+			, dev_texObjs
+			, envMap 
+			, hasEnvMap
+			);
 		depth++;
 
 #if COMPACTION

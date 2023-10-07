@@ -160,6 +160,25 @@ __device__ glm::mat3 tangentToWorld(glm::vec3 worldNorm) {
 	return glm::mat3(tangent, bitangent, worldNorm);
 }
 
+//https://zhuanlan.zhihu.com/p/303168568
+__device__ float schlick(const glm::vec3& I, const glm::vec3& N, float eta) {
+	float f0 = (eta - 1.0) / (eta + 1.0);
+	f0 *= f0;
+	float cos_theta = -dot(I, N);
+	if (eta > 1.0)
+	{
+		float cos2_t = 1.0 - eta * eta * (1.0 - cos_theta * cos_theta);
+		if (cos2_t < 0.0)
+			return 1.0;
+		cos_theta = std::sqrt(cos2_t);
+	}
+
+	float x = 1.0 - cos_theta;
+	float x2 = x * x;
+	float x5 = x2 * x2 * x;
+	return f0 + (1.0 - f0) * x5;
+}
+
 __device__ bool sampleRay(
 	glm::vec3 wo
 	, glm::vec3 norm
@@ -173,16 +192,13 @@ __device__ bool sampleRay(
 	glm::vec3 normal = norm;
 	if (inside) normal = -normal;
 	if (material.hasRefractive) {
-		float indexOfRefract = 1.f/material.indexOfRefraction;
-		float R0 = pow((1 - indexOfRefract) / (1 + indexOfRefract), 2.);
-
-		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
-		
-		if (inside) {
-			indexOfRefract = 1.0 / indexOfRefract;
+		float eta = material.indexOfRefraction;
+		if (!inside) {
+			eta = 1.0 / eta;
 		}
-		float fresnel = R0 + (1 - R0) * pow(1 - glm::dot(normal, wo), 5);//how much is reflected
-		glm::vec3 refract = glm::refract(-wo, normal, indexOfRefract);
+		thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+		float fresnel = schlick(-wo, normal, eta);
+		glm::vec3 refract = glm::refract(-wo, normal, eta);
 		if (
 			!isnan(refract.x) &&
 			fresnel < u01(rng)

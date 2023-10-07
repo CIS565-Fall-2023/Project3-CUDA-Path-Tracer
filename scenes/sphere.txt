@@ -1,6 +1,5 @@
 // Emissive material (light)
 MATERIAL 0
-SCATTER
 RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     .98 .98 .98
@@ -34,7 +33,7 @@ UP          0 1 0
 
 // Sphere
 MESH 0
-wahoo.obj
+sphere.obj
 material 0
 TRANS       0 0 0
 ROTAT       0 0 0

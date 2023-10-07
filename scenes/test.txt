@@ -97,7 +97,7 @@ SCALE       10 10 1
 // Back wall
 MESH 3
 plane.obj
-material 1
+material 4
 TRANS       0 2.5 5
 ROTAT       0 180 0
 SCALE       10 10 1
