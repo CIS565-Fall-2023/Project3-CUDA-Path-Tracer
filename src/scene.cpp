@@ -1,16 +1,14 @@
 #include <iostream>
-#include "scene.h"
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 
 #define TINYGLTF_IMPLEMENTATION
-#include "tiny_gltf.h"
+#include "scene.h"
 
-tinygltf::Model model;
-tinygltf::TinyGLTF loader;
-
-Scene::Scene(string filename) {
+Scene::Scene(string filename)
+    : tris(), meshes(), loadedMeshGroups()
+{
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -65,7 +63,13 @@ int Scene::loadGeom(string objectid) {
                 {
                     // this is a gltf mesh. Load it separately.
                     newGeom.type = GLTF_MESH;
-                    loadGltfMesh(tokens[1].c_str());
+                    SceneMeshGroup meshGroup = loadGltfMesh(tokens[1].c_str());
+                    if (!meshGroup.valid)
+                    {
+                        return -1;
+                    }
+
+                    newGeom.meshGroup = meshGroup;
                 }
             }
         }
@@ -105,8 +109,18 @@ int Scene::loadGeom(string objectid) {
     }
 }
 
-int Scene::loadGltfMesh(string path)
+SceneMeshGroup Scene::loadGltfMesh(string path)
 {
+    if (loadedMeshGroups.find(path) != loadedMeshGroups.end())
+    {
+        // Mesh already exists (might be duplicated)
+        // Use the already loaded one.
+        return loadedMeshGroups[path];
+    }
+
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+
     std::string err;
     std::string warn;
 
@@ -121,32 +135,62 @@ int Scene::loadGltfMesh(string path)
         printf("Error: %s\n", err.c_str());
     }
 
+    SceneMeshGroup meshGroup;
+    meshGroup.valid = false;
+
     if (!ret) {
         cout << "Failed to parse glTF " << path << endl;
-        return -1;
+        return meshGroup;
     }
 
+    meshGroup.startTriIdx = tris.size();
+    meshGroup.startMeshIdx = meshes.size();
+
+    int totalTris = 0;
     // Just iterate over the default scene
     for (int nodeIdx : model.scenes[model.defaultScene].nodes)
     {
         const tinygltf::Node& node = model.nodes[nodeIdx];
-        parseGltfNode(model, node);
+        totalTris += parseGltfNodeRecursive(model, node);
     }
 
-    return 0;
+    if (totalTris > 0)
+    {
+        meshGroup.endTriIdx = tris.size() - 1;
+        meshGroup.endMeshIdx = meshes.size() - 1;
+        meshGroup.valid = true;
+
+        loadedMeshGroups.emplace(path, meshGroup);
+    }
+
+    return meshGroup;
 }
 
-void Scene::parseGltfNode(const tinygltf::Model& model, const tinygltf::Node& node)
+int Scene::parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node)
 {
+    int totalTris = 0;
     for (int childNodeIdx : node.children)
     {
         // if there are children, parse those here
-        parseGltfNode(model, model.nodes[childNodeIdx]);
+        totalTris += parseGltfNodeRecursive(model, model.nodes[childNodeIdx]);
     }
+
+    totalTris += parseGltfNodeHelper(model, node);
+
+    return totalTris;
+}
+
+int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node)
+{
+    int totalTris = 0;
 
     if (node.mesh > -1)
     {
         // has a mesh
+
+        SceneMesh gltfMesh;
+        gltfMesh.startTriIdx = tris.size();
+        
         const tinygltf::Mesh& mesh = model.meshes[node.mesh];
         for (const tinygltf::Primitive& prim : mesh.primitives)
         {
@@ -164,11 +208,63 @@ void Scene::parseGltfNode(const tinygltf::Model& model, const tinygltf::Node& no
                 const unsigned char* posDataChars = &posBuffer.data[posBufView.byteOffset + posAccessor.byteOffset];
                 // oh wait I lied I still have to cast the data to a float array wups
                 // we know positions are vec3s which are floats so we can simply cast it to floats
-                const glm::vec3* posData = reinterpret_cast<const glm::vec3*>(posDataChars);
+                const float* posData = reinterpret_cast<const float*>(posDataChars);
                 // welp. we finally have positions. Now do this for everything else. 
                 // I thought I took this class for GPU programming but here I am managing data parsing in C++
 
-                // get vertex indices data
+                //cout << "========= POSITIONS =========" << endl;
+                int size = posBufView.byteLength / sizeof(float);
+                int stride = posBufView.byteStride == 0 ? 1 : posBufView.byteStride / sizeof(float);
+                int pCount = 0;
+                for (int i = 0; i < size; i += stride)
+                {
+                    // positions are vec3s of 3 floats in GLTF 2.0 spec
+                    gltfMesh.positions.push_back(glm::vec3(posData[i], posData[i + 1], posData[i + 2]));
+                    //cout << "(" << gltfMesh.positions[pCount].x << "," << gltfMesh.positions[pCount].y << "," << gltfMesh.positions[pCount++].z << ")" << endl;
+                }
+            }
+            else
+            {
+                // no positions so we can't really make the mesh
+                return 0;
+            }
+
+            it = prim.attributes.find("NORMAL");
+            if (it != prim.attributes.end())
+            {
+                // get vertex positions data
+                const tinygltf::Accessor& norAccessor = model.accessors[it->second];
+                // use accessor to get buffer view
+                const tinygltf::BufferView& norBufView = model.bufferViews[norAccessor.bufferView];
+                // use buffer view to get buffer
+                const tinygltf::Buffer& norBuffer = model.buffers[norBufView.buffer];
+                // use posBuffer to get the positions data... finally :)
+                // the smiley above is sarcastic and I should have just gone with tinyobjloader why did I chose GLTF
+                const unsigned char* norDataChars = &norBuffer.data[norBufView.byteOffset + norAccessor.byteOffset];
+                // oh wait I lied I still have to cast the data to a float array wups
+                // we know positions are vec3s which are floats so we can simply cast it to floats
+                const float* norData = reinterpret_cast<const float*>(norDataChars);
+                // welp. we finally have positions. Now do this for everything else. 
+                // I thought I took this class for GPU programming but here I am managing data parsing in C++
+
+                gltfMesh.hasNormals = true;
+
+                //cout << "========= NORMALS =========" << endl;
+                int size = norBufView.byteLength / sizeof(float);
+                int stride = norBufView.byteStride == 0 ? 1 : norBufView.byteStride / sizeof(float);
+                int pCount = 0;
+                for (int i = 0; i < size; i += stride)
+                {
+                    // positions are vec3s of 3 floats in GLTF 2.0 spec
+                    gltfMesh.normals.push_back(glm::vec3(norData[i], norData[i + 1], norData[i + 2]));
+                    //cout << "(" << gltfMesh.normals[pCount].x << "," << gltfMesh.normals[pCount].y << "," << gltfMesh.normals[pCount++].z << ")" << endl;
+                }
+            }
+
+            // get vertex indices data if it exists
+            if (prim.indices > -1)
+            {
+                // these will never be interleaved so we can get them separately
                 // get accessor of prim
                 const tinygltf::Accessor& idxAccessor = model.accessors[prim.indices];
                 // use accessor to get buffer view
@@ -176,22 +272,69 @@ void Scene::parseGltfNode(const tinygltf::Model& model, const tinygltf::Node& no
                 // use buffer view to get buffer
                 const tinygltf::Buffer& idxBuffer = model.buffers[idxBufView.buffer];
                 const unsigned char* idxDataChars = &idxBuffer.data[idxBufView.byteOffset + idxAccessor.byteOffset];
-                // positions are unsigned short in GLTF 2.0 spec
-                const unsigned short* idxData = reinterpret_cast<const unsigned short*>(idxDataChars);
+                // indices are unsigned short in GLTF 2.0 spec
+                gltfMesh.indices = reinterpret_cast<const unsigned short*>(idxDataChars);
+                gltfMesh.hasIndices = true;
 
-                cout << "========= POSITIONS =========" << endl;
-                for (int i = 0; i < posBufView.byteLength / sizeof(glm::vec3); i++)
+                //cout << "========= INDICES =========" << endl;
+                //for (int i = 0; i < idxAccessor.count; i++)
+                //{
+                //    cout << gltfMesh.indices[i] << endl;
+                //}
+
+                //cout << "========= TRIANGLE INDICES AND VTX. POS. =========" << endl;
+                // Triangulate with indices
+                Triangle tri;
+                for (int i = 0; i < idxAccessor.count; i += 3)
                 {
-                    cout << "(" << posData[i].x << "," << posData[i].y << "," << posData[i].z << ")" << endl;
-                }
-                cout << "========= INDICES =========" << endl;
-                for (int i = 0; i < idxBufView.byteLength / sizeof(unsigned short); i++)
-                {
-                    cout << idxData[i] << endl;
+                    tri.pos.push_back(gltfMesh.positions[gltfMesh.indices[i]]);
+                    tri.pos.push_back(gltfMesh.positions[gltfMesh.indices[i + 1]]);
+                    tri.pos.push_back(gltfMesh.positions[gltfMesh.indices[i + 2]]);
+                    totalTris++;
+
+                    if (gltfMesh.hasNormals)
+                    {
+                        tri.pos.push_back(gltfMesh.normals[gltfMesh.indices[i]]);
+                        tri.pos.push_back(gltfMesh.normals[gltfMesh.indices[i + 1]]);
+                        tri.pos.push_back(gltfMesh.normals[gltfMesh.indices[i + 2]]);
+                    }
+
+                    tris.push_back(tri);
+
+                    //cout << "(" << gltfMesh.indices[i] << "," << gltfMesh.indices[i+1] << "," << gltfMesh.indices[i+2] << ")" << endl;
+
+                    //cout << "(" << gltfMesh.positions[gltfMesh.indices[i]].x << "," << gltfMesh.positions[gltfMesh.indices[i]].y << "," << gltfMesh.positions[gltfMesh.indices[i]].z << "), ("
+                    //     << "(" << gltfMesh.positions[gltfMesh.indices[i+1]].x << "," << gltfMesh.positions[gltfMesh.indices[i+1]].y << "," << gltfMesh.positions[gltfMesh.indices[i+1]].z << "), ("
+                    //     << "(" << gltfMesh.positions[gltfMesh.indices[i + 2]].x << "," << gltfMesh.positions[gltfMesh.indices[i + 2]].y << "," << gltfMesh.positions[gltfMesh.indices[i + 2]].z << "), (" << endl;
                 }
             }
+            else
+            {
+                // Triangulate without indices
+                Triangle tri;
+                for (int i = 0; i < gltfMesh.positions.size(); i += 3)
+                {
+                    tri.pos.push_back(gltfMesh.positions[i * 3]);
+                    tri.pos.push_back(gltfMesh.positions[i * 3 + 1]);
+                    tri.pos.push_back(gltfMesh.positions[i * 3 + 2]);
+                    totalTris++;
+
+                    if (gltfMesh.hasNormals)
+                    {
+                        tri.pos.push_back(gltfMesh.normals[i * 3]);
+                        tri.pos.push_back(gltfMesh.normals[i * 3 + 1]);
+                        tri.pos.push_back(gltfMesh.normals[i * 3 + 2]);
+                    }
+                }
+            }
+
+            // Ok mesh is loaded. Save its data for later sending to GPU
+            gltfMesh.endTriIdx = gltfMesh.startTriIdx + totalTris - 1;
+            meshes.push_back(gltfMesh);
         }
     }
+
+    return totalTris;
 }
 
 

@@ -129,7 +129,7 @@ SCALE       3 3 3
 
 // Sphere
 OBJECT 7
-gltf		../scenes/gltf/BoxInterleaved/BoxInterleaved.gltf
+gltf		../scenes/gltf/Avocado/Avocado.gltf
 material 5
 TRANS       -2 3 -3.5
 ROTAT       0 0 0

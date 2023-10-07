@@ -18,8 +18,43 @@ struct Ray {
     glm::vec3 direction;
 };
 
+
+struct Triangle
+{
+    std::vector<glm::vec3> pos{ std::vector<glm::vec3>() };
+};
+
+struct SceneMesh
+{
+    const unsigned short* indices;
+    bool hasIndices{ false };
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> normals;
+    bool hasNormals{ false };
+
+    int startTriIdx{ -1 };
+    int endTriIdx{ -1 };
+
+    SceneMesh() :
+        indices(), hasIndices(false), positions(std::vector<glm::vec3>()), normals(std::vector<glm::vec3>())
+    {}
+};
+
+/// <summary>
+/// Used for the case where there's multiple meshes in a GLTF scene
+/// </summary>
+struct SceneMeshGroup
+{
+    bool valid{ false };
+    int startTriIdx{ -1 };
+    int endTriIdx{ -1 };
+    int startMeshIdx{ -1 };
+    int endMeshIdx{ -1 };
+};
+
 struct Geom {
     enum GeomType type;
+    SceneMeshGroup meshGroup;
     int materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
