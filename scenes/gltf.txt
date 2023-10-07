@@ -2,15 +2,19 @@
 GLTF 0
 ../scenes/piplup/scene.gltf
 
+// tree GLTF
+GLTF 1
+../scenes/trees/scene.gltf
+
 // Camera
 CAMERA
 RES         800 800
 FOVY        45
 ITERATIONS  5000
-DEPTH       7
+DEPTH       10
 FILE        piplup
-EYE         0.0 10 23
-LOOKAT      0 10 0
+EYE         -2 8 33
+LOOKAT      -2 8 0
 UP          0 1 0
 
 // Emissive material (light)
@@ -21,17 +25,19 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   5
+EMITTANCE   7
+
+// Emissive material (soft light)
+MATERIAL 7
+RGB         1 1 0.97
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   2.3
 
 
-
-// Ceiling light
-OBJECT 2
-cube
-material 2
-TRANS       0 30 0
-ROTAT       0 0 0
-SCALE       3 .3 3
 
 // Diffuse white
 MATERIAL 3
@@ -73,76 +79,68 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Emissive material (soft light)
-MATERIAL 7
-RGB         1 1 0.85
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   4
+
 
 // Floor
 OBJECT 3
 cube
-material 3
-TRANS       0 -5 0
+material 4
+TRANS       0 -12.5 12.5
 ROTAT       0 0 0
-SCALE       35 0.01 30
+SCALE       150 0.01 50
 
 // Ceiling
 OBJECT 4
 cube
-material 3
-TRANS       0 30 0
+material 4
+TRANS       0 37.5 12.5
 ROTAT       0 0 0
-SCALE       35 0.01 30
+SCALE       150 0.01 50
 
 // Back wall
 OBJECT 5
 cube
-material 5
-TRANS       0 12.5 -15
+material 4
+TRANS       0 12.5 -12.5
 ROTAT       0 0 0
-SCALE       35 35 0.01
+SCALE       150 50 0.01
 
 // Left wall
 OBJECT 6
 cube
 material 4
-TRANS       -17.5 12.5 0
+TRANS       -75 12.5 12.5
 ROTAT       0 0 0
-SCALE       0.01 35 30
+SCALE       0.01 50 50
 
 // Right wall
 OBJECT 7
 cube
 material 4
-TRANS       17.5 12.5 0
+TRANS       75 12.5 12.5
 ROTAT       0 0 0
-SCALE       0.01 35 30
+SCALE       0.01 50 50
 
 // Right light
 OBJECT 8
 cube
-material 2
-TRANS       17.5 10 0
+material 7
+TRANS       75 10 0
 ROTAT       0 0 0
-SCALE       .3 3 3
+SCALE       .3 35 35
 
 // Left light
 OBJECT 9
 cube
-material 2
-TRANS       -17.5 10 0
+material 7
+TRANS       -75 10 0
 ROTAT       0 0 0
-SCALE       .3 3 3
+SCALE       .3 35 35
 
 //// Right light 2
 //OBJECT 8
 //cube
-//material 2
+//material 7
 //TRANS       15 10 7
 //ROTAT       0 0 0
 //SCALE       .3 3 3
@@ -150,7 +148,7 @@ SCALE       .3 3 3
 //// Left light 2
 //OBJECT 8
 //cube
-//material 2
+//material 7
 //TRANS       -15 10 7
 //ROTAT       0 0 0
 //SCALE       .3 3 3
@@ -159,6 +157,31 @@ SCALE       .3 3 3
 OBJECT 9
 cube
 material 7
-TRANS 0.0 12.5 25
+TRANS -20 10 37.5
 ROTAT 0 0 0
-SCALE 18 18 .3
+SCALE 21 21 .3
+
+// Camera light
+OBJECT 11
+cube
+material 7
+TRANS 20 10 37.5
+ROTAT 0 0 0
+SCALE 21 21 .3
+
+//// Camera wall
+OBJECT 10
+cube
+material 4
+TRANS 0 12.5 37.5
+ROTAT 0 0 0
+SCALE 150 50 0.01
+
+
+// Ceiling light
+OBJECT 2
+cube
+material 7
+TRANS       0 37.5 15
+ROTAT       0 0 0
+SCALE       15 .3 15

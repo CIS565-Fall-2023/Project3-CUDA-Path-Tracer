@@ -6,11 +6,13 @@
 #include <cmath>
 
 #define TRANSFORM_DEBUG 0
-#define MATERIAL_DEBUG 0
+#define MATERIAL_DEBUG 1
 #define DEBUG 0
 #define USING_BVH 1
+#define MATERIAL_MAP_NOT_GLTF_INDEX -1
 
 using namespace std;
+static int num_gltf_loaded = 0;
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -46,6 +48,9 @@ Scene::Scene(string filename) {
                 }
             }
         }
+#if USING_BVH
+        bvh_build();
+#endif
     }
 }
 
@@ -86,9 +91,9 @@ bool Scene::load_gltf(string gltf_id)
 
 }
 
-bool Scene::gltf_load_materials(const tinygltf::Model &model)
+bool Scene::gltf_load_materials(const tinygltf::Model &model, int num_gltf_loaded)
 {
-    materials = std::vector<Material>();
+    int count = 0;
     for (const auto& material : model.materials)
     {
         Material new_material;
@@ -110,7 +115,9 @@ bool Scene::gltf_load_materials(const tinygltf::Model &model)
         fprintf(stderr, "Material color: %f, %f, %f\n", new_material.color.x, new_material.color.y, new_material.color.z);
         fprintf(stderr, "Material index: %d\n", materials.size());
 #endif
+        material_map.emplace(std::make_pair(num_gltf_loaded, count), materials.size());
         materials.push_back(new_material);
+        count++;
     }
     return true; // make it void?
 }
@@ -145,7 +152,7 @@ bool Scene::load_gltf_contents(string filename)
     // for now, load one scene
     int display_scene = model.defaultScene > -1 ? model.defaultScene : 0;
     const tinygltf::Scene& scene = model.scenes[display_scene];
-    gltf_load_materials(model);
+    gltf_load_materials(model, num_gltf_loaded);
 
     for (int i = 0; i < scene.nodes.size(); i++)
     {
@@ -172,9 +179,7 @@ bool Scene::load_gltf_contents(string filename)
     }
 #endif
 
-#if USING_BVH
-    bvh_build();
-#endif
+    num_gltf_loaded++;
     return (tris.size() > 0); // look at this
 }
 
@@ -288,7 +293,7 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
         // Assume each mesh is one primitive right now
         if (primitive.material >= 0)
         {
-            new_mesh.materialid = primitive.material;
+            new_mesh.materialid = material_map.at(std::make_pair(num_gltf_loaded, primitive.material));
 #if MATERIAL_DEBUG
             printf("Mesh material id: %d for mesh %li\n", new_mesh.materialid, geoms.size());
 #endif
@@ -455,7 +460,7 @@ int Scene::loadGeom(string objectid) {
     utilityCore::safeGetline(fp_in, line);
     if (!line.empty() && fp_in.good()) {
         vector<string> tokens = utilityCore::tokenizeString(line);
-        newGeom.materialid = material_map.at(atoi(tokens[1].c_str()));
+        newGeom.materialid = material_map.at(std::make_pair(MATERIAL_MAP_NOT_GLTF_INDEX, atoi(tokens[1].c_str())));
         cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid 
              << " mapped from " << tokens[1] << "..." << endl;
     }
@@ -553,7 +558,7 @@ int Scene::loadMaterial(string materialid) {
     cout << "Loading Material " << id << "..." << endl;
     Material newMaterial;
     int material_index = materials.size();
-    material_map.emplace(id, material_index);
+    material_map.emplace(std::make_pair(MATERIAL_MAP_NOT_GLTF_INDEX, id), material_index);
     //load static properties
     for (int i = 0; i < 7; i++) {
         string line;

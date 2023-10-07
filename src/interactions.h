@@ -107,5 +107,5 @@ void scatterRay(
 	}
 #endif
     pathSegment.ray.direction = glm::normalize(sampled_direction);
-    pathSegment.ray.origin = intersect + 0.00001f * pathSegment.ray.direction;
+    pathSegment.ray.origin = intersect + 0.010f * pathSegment.ray.direction;
 }

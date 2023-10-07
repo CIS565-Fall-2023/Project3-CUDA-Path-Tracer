@@ -342,16 +342,6 @@ __global__ void cache_intersections(int n, ShadeableIntersection* to, ShadeableI
     }
     to[index] = from[index];
 }
- 
-struct ray_not_out_of_bounds
-{
-    __host__ __device__
-    bool operator()(const PathSegment& path)
-    {
-        return (!path.no_intersection);
-    }
-
-};
 
 struct ray_no_remaining_bounces
 {
@@ -452,10 +442,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 
         depth++;
-        // compaction stage one
-        new_dev_thrust_path_end = thrust::partition(dev_thrust_paths, dev_thrust_paths + num_paths, ray_not_out_of_bounds());
-        num_paths = new_dev_thrust_path_end - dev_thrust_paths;
-
 #if MATERIAL_SORT
         // make materials contiguous in memory
         thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, material_order());
@@ -469,7 +455,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
             depth
             );
 
-        // compaction stage two
+        // compaction
         new_dev_thrust_path_end = thrust::partition(dev_thrust_paths, dev_thrust_paths + num_paths, ray_no_remaining_bounces());
         num_paths = new_dev_thrust_path_end - dev_thrust_paths;
         if (num_paths == 0)

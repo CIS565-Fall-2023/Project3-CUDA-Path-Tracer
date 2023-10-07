@@ -29,12 +29,12 @@ private:
     void traverse_node(const tinygltf::Model& model, int node_index, const glm::mat4& parent_transform = glm::mat4(1.0f));
     bool load_gltf(string filename);
     bool load_gltf_contents(string filename);
-    bool gltf_load_materials(const tinygltf::Model &model);
+    bool gltf_load_materials(const tinygltf::Model &model, int num_gltf_loaded);
     std::array<std::string, 2> const supported_attributes = {
         "POSITION",
         "NORMAL"
     };
-    std::map<int, int> material_map;
+    std::map<std::pair<int, int>, int> material_map;
 public:
     Scene(string filename);
     ~Scene();
