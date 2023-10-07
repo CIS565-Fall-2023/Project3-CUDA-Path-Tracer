@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include "Mesh/objLoader.h"
+#include <unordered_map>
 
 string getDirectory(const string& path) {
     size_t found = path.find_last_of("/\\");
@@ -78,7 +79,8 @@ int Scene::loadGeom(string objectid) {
     else {*/
     cout << "Loading Geom " << id << "..." << endl;
 
-    GeomType type = CUBE;
+    GeomType type = TRIANGLE;
+    string objFilename = "";
     int materialid = -1;
     glm::vec3 translation, rotation, scale;
     glm::mat4 transform, inverseTransform, invTranspose;
@@ -98,7 +100,10 @@ int Scene::loadGeom(string objectid) {
         }
         else if (strcmp(line.c_str(), "obj") == 0) {
             cout << "Creating new obj..." << endl;
-            type = TRIANGLE;
+        }
+        else {
+            objFilename = line;
+            cout << "Creating new obj..." << objFilename << endl;
         }
     }
 
@@ -146,8 +151,10 @@ int Scene::loadGeom(string objectid) {
     }
     else {
         string dir = getDirectory(filename);
-        string baseName = getBaseFilename(filename);
-        string objFilePath = dir + "/" + baseName + ".obj";
+        if (objFilename == "") {
+            objFilename = getBaseFilename(filename);
+        }
+        string objFilePath = dir + "/" + objFilename + ".obj";
 
         loadObj(objFilePath, materialid, translation, rotation,
             scale, transform, inverseTransform, invTranspose);
@@ -230,74 +237,76 @@ int Scene::loadCamera() {
 }
 
 int Scene::loadMaterial(string materialid) {
-    int id = atoi(materialid.c_str());
-    if (id != materials.size()) {
-        cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
-        return -1;
-    }
-    else {
-        cout << "Loading Material " << id << "..." << endl;
-        Material newMaterial;
+    int id = materials.size();
+    cout << "Loading Material " << id << "..." << endl;
+    Material newMaterial;
 
-        //load static properties
-        for (int i = 0; i < 7; i++) {
-            string line;
-            utilityCore::safeGetline(fp_in, line);
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "RGB") == 0) {
-                glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                newMaterial.color = color;
-            }
-            else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
-                newMaterial.specular.exponent = atof(tokens[1].c_str());
-            }
-            else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
-                glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                newMaterial.specular.color = specColor;
-            }
-            else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
-                newMaterial.hasReflective = atof(tokens[1].c_str());
-            }
-            else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
-                newMaterial.hasRefractive = atof(tokens[1].c_str());
-            }
-            else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
-                newMaterial.indexOfRefraction = atof(tokens[1].c_str());
-            }
-            else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
-                newMaterial.emittance = atof(tokens[1].c_str());
-            }
+    //load static properties
+    for (int i = 0; i < 7; i++) {
+        string line;
+        utilityCore::safeGetline(fp_in, line);
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        if (strcmp(tokens[0].c_str(), "RGB") == 0) {
+            glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            newMaterial.diffuse = color;
         }
-        materials.push_back(newMaterial);
-        return 1;
+        else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
+            newMaterial.specular.exponent = atof(tokens[1].c_str());
+        }
+        else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
+            glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            newMaterial.specular.color = specColor;
+        }
+        else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
+            newMaterial.hasReflective = atof(tokens[1].c_str());
+        }
+        else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
+            newMaterial.hasRefractive = atof(tokens[1].c_str());
+        }
+        else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            newMaterial.indexOfRefraction = atof(tokens[1].c_str());
+        }
+        else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
+            newMaterial.emittance = atof(tokens[1].c_str());
+        }
     }
+    materials.push_back(newMaterial);
+    return 1;
 }
 
 int Scene::addObjMaterial(const tinyobj::material_t& mat) {
     cout << "Loading Obj Material: " << mat.name << "..." << endl;
     Material newMaterial;
-  
-    auto diffuse = mat.diffuse;
-    auto specular = mat.specular;
-    auto emission = mat.emission;
 
-    newMaterial.color = glm::vec3(diffuse[0], diffuse[1], diffuse[2]);
-    newMaterial.specular.color = glm::vec3(specular[0], specular[1], specular[2]);
+    newMaterial.diffuse = glm::vec3(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]);
+    newMaterial.ambient = glm::vec3(mat.ambient[0], mat.ambient[1], mat.ambient[2]);
+    newMaterial.specular.color = glm::vec3(mat.specular[0], mat.specular[1], mat.specular[2]);
     newMaterial.specular.exponent = mat.shininess;
+
+    newMaterial.transmittance = glm::vec3(mat.transmittance[0], mat.transmittance[1], mat.transmittance[2]);
     newMaterial.indexOfRefraction = mat.ior;
+    newMaterial.roughness = mat.roughness; 
 
+    newMaterial.metallic = mat.metallic;  
+    newMaterial.sheen = mat.sheen; 
+    // Decide on reflectivity
     float reflectivity = glm::length(newMaterial.specular.color);
-    newMaterial.hasReflective = (reflectivity > 0.1f) ? 1 : 0;
-    newMaterial.hasRefractive = (mat.dissolve < 1.f) ? 1 : 0;
+    bool isMetallic = newMaterial.metallic > 0.5f;
+    newMaterial.hasReflective = (reflectivity > 0.1f || isMetallic) ? 1.0f : 0.0f;
 
-    newMaterial.emittance = glm::length(glm::vec3(emission[0], emission[1], emission[2]));
+    // Decide on refractivity
+    float opacity = 1.0f - glm::length(newMaterial.transmittance); // Opposite of transmittance
+    newMaterial.hasRefractive = (opacity < 0.9f && newMaterial.indexOfRefraction != 1.0f) ? 1.0f : 0.0f;
+
+    newMaterial.emittance = glm::length(glm::vec3(mat.emission[0], mat.emission[1], mat.emission[2]));
 
     int id = materials.size();
     materials.push_back(newMaterial);
     return id;
 }
 
-int Scene::loadObj(const string& objFilePath, int materialid, 
+
+int Scene::loadObj(const string& objFilePath, int materialid,
     const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale,
     const glm::mat4& transform, const glm::mat4& inverseTransform,
     const glm::mat4& invTranspose) {
@@ -309,65 +318,72 @@ int Scene::loadObj(const string& objFilePath, int materialid,
         return -1;
     }
     else {
-        int shapeSize = objLoader.shapes.size();
-        int materialSize = objLoader.materials.size();
         tinyobj::attrib_t attrib = objLoader.attrib;
 
-        for (int i = 0; i < shapeSize; ++i) {
-            tinyobj::shape_t shape = objLoader.shapes[i];
-            cout << "Loading Obj Shape: " << shape.name << endl;
+        // Build an unordered map for materials based on their names
+        std::unordered_map<std::string, tinyobj::material_t> materialMap;
+        for (const auto& material : objLoader.materials) {
+            materialMap[material.name] = material;
+        }
 
-            if (materialid == -1) {
-                tinyobj::material_t material = objLoader.materials[i];
+        for (const auto& shape : objLoader.shapes) {
+            // Check if shape's name is also a name of a material
+            if (materialMap.find(shape.name) != materialMap.end()) {
+                cout << "Loading Obj Shape: " << shape.name << endl;
+
+                tinyobj::material_t material = materialMap[shape.name];
                 materialid = addObjMaterial(material);
-            }
 
-            cout << "Connection Obj Shape: " << shape.name << "to Material ID: " << materialid << endl;
+                cout << "Connection Obj Shape: " << shape.name << " to Material ID: " << materialid << endl;
+                cout << "" << endl;
 
-            size_t index_offset = 0;
-            for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
-                size_t fv = size_t(shape.mesh.num_face_vertices[f]);
+                size_t index_offset = 0;
+                for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
+                    size_t fv = size_t(shape.mesh.num_face_vertices[f]);
 
-                // We need at least 3 vertices to form a triangle
-                if (fv < 3) {
+                    // We need at least 3 vertices to form a triangle
+                    if (fv < 3) {
+                        index_offset += fv;
+                        continue;
+                    }
+
+                    // Fetch the vertices of the polygon
+                    std::vector<glm::vec3> vertices;
+                    for (size_t v = 0; v < fv; v++) {
+                        tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+                        tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                        tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                        tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+                        vertices.push_back(glm::vec3(vx, vy, vz));
+                    }
+
+                    // Triangulate the polygon using a fan triangulation
+                    for (size_t v = 1; v < fv - 1; v++) {
+                        Geom newGeom;
+                        newGeom.type = TRIANGLE;
+                        newGeom.materialid = materialid;
+                        newGeom.translation = translation;
+                        newGeom.rotation = rotation;
+                        newGeom.scale = scale;
+                        newGeom.transform = transform;
+                        newGeom.inverseTransform = inverseTransform;
+                        newGeom.invTranspose = invTranspose;
+
+                        newGeom.v0 = vertices[0];
+                        newGeom.v1 = vertices[v];
+                        newGeom.v2 = vertices[v + 1];
+
+                        geoms.push_back(newGeom);
+                    }
+
                     index_offset += fv;
-                    continue;
                 }
-
-                // Fetch the vertices of the polygon
-                std::vector<glm::vec3> vertices;
-                for (size_t v = 0; v < fv; v++) {
-                    tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
-                    tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-                    tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-                    tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-                    vertices.push_back(glm::vec3(vx, vy, vz));
-                }
-
-                // Triangulate the polygon using a fan triangulation
-                for (size_t v = 1; v < fv - 1; v++) {
-                    Geom newGeom;
-                    newGeom.type = TRIANGLE;
-                    newGeom.materialid = materialid;
-                    newGeom.translation = translation;
-                    newGeom.rotation = rotation;
-                    newGeom.scale = scale;
-                    newGeom.transform = transform;
-                    newGeom.inverseTransform = inverseTransform;
-                    newGeom.invTranspose = invTranspose;
-                    
-                    newGeom.v0 = vertices[0];
-                    newGeom.v1 = vertices[v];
-                    newGeom.v2 = vertices[v + 1];
-
-                    geoms.push_back(newGeom);
-                }
-
-                index_offset += fv;
             }
         }
     }
 }
+
+
 
 int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int dim, int geomCount,
     Bound& centroidBounds, Bound& bounds) {
