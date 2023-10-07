@@ -143,21 +143,6 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
-__host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 p)
-{
-    const glm::vec3 v0 = b - a, v1 = c - a, v2 = p - a;
-    const float d00 = glm::dot(v0, v0);
-    const float d01 = glm::dot(v0, v1);
-    const float d11 = glm::dot(v1, v1);
-    const float d20 = glm::dot(v2, v0);
-    const float d21 = glm::dot(v2, v1);
-    const float invDenom = 1.f / (d00 * d11 - d01 * d01);
-    const float v = (d11 * d20 - d01 * d21) * invDenom;
-    const float w = (d00 * d21 - d01 * d20) * invDenom;
-    const float u = 1.0f - v - w;
-    return glm::vec3(u, v, w);
-}
-
 __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, Triangle* tris)
 {
