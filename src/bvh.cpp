@@ -5,8 +5,6 @@
 #include "sceneStructs.h"
 #include <fstream>
 
-static int tnodeNum;
-
 TBB::TBB() :min(glm::vec3(FLT_MAX)), max(glm::vec3(-FLT_MAX)) {}
 TBB::TBB(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2) :min(glm::min(v0, glm::min(v1, v2))), max(glm::max(v0, glm::max(v1, v2))) {}
 TBB::TBB(glm::vec3 min, glm::vec3 max) :min(min), max(max) {}
@@ -16,7 +14,7 @@ inline float TBB::area() const {
     return length.x * length.y + length.y * length.z + length.z * length.x;
 }
 
-void sortAxis(std::vector<TriangleDetail>& triangles, std::vector<int>& obj_index, char axis, int li, int ri)
+void sortAxis(std::vector<TriangleDetail>& triangles, std::vector<int>& obj_index, size_t axis, int li, int ri)
 {
     int i = li;
     int j = ri;
@@ -80,7 +78,7 @@ int TBVH::splitBVH(std::vector<TriangleDetail>& triangles, std::vector<int> objI
         return id;
     }
     int axis = 0;
-    int index = 0;
+    size_t index = 0;
     float bestCost = FLT_MAX;
     TBB bestTBBLeft, bestTBBRight;
 
@@ -208,12 +206,11 @@ void TBVH::setRightMiss(int id, int idParent, int face)
 TBVH::TBVH(std::vector<TriangleDetail>& triangles, TBB& tbb)
     :nodes(std::vector<std::vector<TBVHNode>>(7, std::vector<TBVHNode>(triangles.size() * 2)))
 {
-    for (int face = 0; face <= 5; face++)
+    for (size_t face = 0; face <= 5; face++)
     {
-        const int num = triangles.size();
+        const size_t num = triangles.size();
         std::vector<int>objIdx(num);
         std::iota(objIdx.begin(), objIdx.end(), 0);
-        tnodeNum = 0;
         for (int i = 0; i < num * 2; i++) {
             nodes[face][i].miss = -1;
             nodes[face][i].base = i;

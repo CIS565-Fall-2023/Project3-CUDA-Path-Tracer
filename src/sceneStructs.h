@@ -33,7 +33,7 @@ struct TBVHNode {
     int triId = -1;
     int miss, base;
 };
-
+// https://cs.uwaterloo.ca/~thachisu/tdf2015.pdf
 class TBVH
 {
 public:
@@ -42,6 +42,7 @@ public:
     std::vector<std::vector<TBVHNode>> nodes;
     int nodesNum = -1;
 private:
+    int tnodeNum = 0;
     int splitBVH(std::vector<TriangleDetail>& triangles, std::vector<int> objIdx, int num, TBB& tbb, int face);
     void reorderNodes(std::vector<TriangleDetail>& triangles, int face, int index);
     int reorderTree(std::vector<TriangleDetail>& triangles, int face, int index);

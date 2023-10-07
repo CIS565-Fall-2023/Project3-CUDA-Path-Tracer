@@ -353,11 +353,11 @@ __device__ glm::vec3 sample_f_rough_dieletric(glm::vec3 albedo, glm::vec3 nor, g
     }
 }
 
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_specular
 __device__ glm::vec3 sample_f_pbrMetRough(glm::vec3 albedo, const float2& metallicRoughness, const Material& material, glm::vec3 nor, glm::vec3 xi, glm::vec3 wo, BsdfSample& sample)
 {
     float random = xi.z;
     float metallic = metallicRoughness.x, roughness = metallicRoughness.y;
-    const PbrMetallicRoughness& pbrMaterial = material.pbrMetallicRoughness;
     glm::vec3 wh = sample_wh(wo, xi, roughness);
     float ior = material.dielectric.eta;
     glm::vec3 fr = fresnelSchlick(AbsDot(wo, wh), glm::min(pow(((1 - ior) / (1 + ior)), 2.f) * material.specular.specularColorFactor, glm::vec3(1.f)));
@@ -397,6 +397,18 @@ __device__ glm::vec3 sample_f_pbrMetRough(glm::vec3 albedo, const float2& metall
     }
 }
 
+__device__ __inline__ glm::vec3 getEmissiveFactor(const Material& mat, glm::vec2 const& uv) {
+    glm::vec3 color;
+    if (mat.emissiveTexture.index != -1) {
+        color = sampleTexture(mat.emissiveTexture.cudaTexObj, uv);
+    }
+    else {
+        color = mat.emissiveFactor * mat.emissiveStrength;
+    }
+    return color;
+}
+
+
 __device__ float2 getMetallic(const Material& mat, glm::vec2 uv) {
     float2 metallicRoughness;
     auto& tex = mat.pbrMetallicRoughness.metallicRoughnessTexture;
@@ -427,42 +439,6 @@ __device__ glm::vec3 computeAlbedo(const Material& mat, glm::vec3 nor, glm::vec2
     return albedo;
 }
 
-
-__device__ glm::vec3 f(const Material& mat, glm::vec3 nor, glm::vec3 woW, glm::vec3 wiW)
-{
-    glm::vec3 wo = WorldToLocal(nor) * woW;
-    glm::vec3 wi = WorldToLocal(nor) * wiW;
-
-    if (wo.z == 0)
-        return glm::vec3(0.f);
-
-    /*if (mat.type == BsdfSampleType::DIFFUSE_REFL)
-    {
-        return f_diffuse(computeAlbedo(mat, nor));
-    }
-    else if (mat.type == BsdfSampleType::SPEC_REFL ||
-        mat.type == BsdfSampleType::SPEC_TRANS ||
-        mat.type == BsdfSampleType::SPEC_GLASS)
-    {
-        return glm::vec3(0.f);
-    }
-    else if (mat.type == BsdfSampleType::MICROFACET_REFL)
-    {
-        return f_microfacet_refl(computeAlbedo(mat, nor), wo, wi,
-            computeRoughness(mat, nor));
-    }
-    else if (mat.type == BsdfSampleType::MICROFACET_TRANS)
-    {
-        return f_microfacet_trans(computeAlbedo(mat, nor), wo, wi,
-            mat.eta,
-            computeRoughness(mat, nor));
-    }
-    else
-    {
-        return glm::vec3(1, 0, 1);
-    }*/
-    return glm::vec3(1, 0, 1);
-}
 
 __device__ glm::vec3 sample_f(const Material& mat, bool isProcedural, float scale, glm::vec3 nor, glm::vec2 uv, glm::vec3 woW, glm::vec3 xi, BsdfSample& sample)
 {
@@ -497,37 +473,4 @@ __device__ glm::vec3 sample_f(const Material& mat, bool isProcedural, float scal
     }
     sample.pdf = -1.f;
     return glm::vec3(0.f);
-}
-
-__device__ float pdf(const Material& mat, glm::vec3 nor, glm::vec2 uv, glm::vec3 woW, glm::vec3 wiW)
-{
-    glm::vec3 wo = WorldToLocal(nor) * woW;
-    glm::vec3 wi = WorldToLocal(nor) * wiW;
-
-    if (wo.z == 0)
-
-        if (mat.type == BsdfSampleType::DIFFUSE_REFL)
-        {
-            return squareToHemisphereCosinePDF(wi);
-        }
-        else if (mat.type == BsdfSampleType::SPEC_REFL ||
-            mat.type == BsdfSampleType::SPEC_TRANS)
-        {
-            return 0.f;
-        }
-        else if (mat.type == BsdfSampleType::MICROFACET_REFL)
-        {
-            glm::vec3 wh = normalize(wo + wi);
-            return trowbridgeReitzPdf(wo, wh, getMetallic(mat, uv).y) /
-                (4 * dot(wo, wh));
-        }
-        else if (mat.type == BsdfSampleType::MICROFACET_TRANS)
-        {
-            return pdf_microfacet_trans(wo, wi, mat.dielectric.eta, getMetallic(mat, uv).y);
-        }
-        else
-        {
-            return 0.f;
-        }
-    return 0.f;
 }

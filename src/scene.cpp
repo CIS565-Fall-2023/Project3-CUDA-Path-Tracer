@@ -216,7 +216,7 @@ void Scene::loadEnvMap()
         std::cerr << "Error loading environment map: " << settings.envMapFilename << std::endl;
         return;
     }
-    int textureIndex = textures.size();
+    size_t textureIndex = textures.size();
 
     envMapTexture = createTextureObj(textureIndex, width, height, 4, hdrDataPadded, width * height * 4);
 }
@@ -343,6 +343,56 @@ glm::vec4 computeTangent(const glm::vec3& v0, const glm::vec3& v1, const glm::ve
     return tangent;
 }
 
+template<typename T>
+void Scene::loadTriangle(const tinygltf::Primitive& primitive, const Transformation& t, const float* positions, const float* normals, const float* uvs, const float* tangents, const int materialid)
+{
+    auto [indices, indCnt] = getIndexBuffer<T>(model, primitive);
+    for (size_t i = 0; i < indCnt; i += 3) {
+        const size_t v0Id = indices[i];
+        const size_t v1Id = indices[i + 1];
+        const size_t v2Id = indices[i + 2];
+        Triangle triangle{
+            glm::vec3(positions[v0Id * 3], positions[v0Id * 3 + 1], positions[v0Id * 3 + 2]),
+            glm::vec3(positions[v1Id * 3], positions[v1Id * 3 + 1], positions[v1Id * 3 + 2]),
+            glm::vec3(positions[v2Id * 3], positions[v2Id * 3 + 1], positions[v2Id * 3 + 2]) };
+        if (normals) {
+            triangle.normal0 = glm::vec3(normals[v0Id * 3], normals[v0Id * 3 + 1], normals[v0Id * 3 + 2]);
+            triangle.normal1 = glm::vec3(normals[v1Id * 3], normals[v1Id * 3 + 1], normals[v1Id * 3 + 2]);
+            triangle.normal2 = glm::vec3(normals[v2Id * 3], normals[v2Id * 3 + 1], normals[v2Id * 3 + 2]);
+        }
+        else {
+            triangle.normal0 = glm::normalize(glm::cross(triangle.v1 - triangle.v0, triangle.v2 - triangle.v0));
+            triangle.normal1 = triangle.normal0;
+            triangle.normal2 = triangle.normal0;
+        }
+        if (uvs) {
+            triangle.uv0 = glm::vec2(uvs[v0Id * 2], uvs[v0Id * 2 + 1]);
+            triangle.uv1 = glm::vec2(uvs[v1Id * 2], uvs[v1Id * 2 + 1]);
+            triangle.uv2 = glm::vec2(uvs[v2Id * 2], uvs[v2Id * 2 + 1]);
+        }
+        if (tangents) {
+            triangle.tangent0 = glm::make_vec4(&tangents[v0Id * 4]);
+            triangle.tangent1 = glm::make_vec4(&tangents[v1Id * 4]);
+            triangle.tangent2 = glm::make_vec4(&tangents[v2Id * 4]);
+        }
+        else {
+            triangle.tangent0 = computeTangent(triangle.v0, triangle.v1, triangle.v2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.normal0);
+            triangle.tangent1 = computeTangent(triangle.v1, triangle.v2, triangle.v0, triangle.uv1, triangle.uv2, triangle.uv0, triangle.normal1);
+            triangle.tangent2 = computeTangent(triangle.v2, triangle.v0, triangle.v1, triangle.uv2, triangle.uv0, triangle.uv1, triangle.normal2);
+#ifdef DEBUG
+            if (!(glm::dot(glm::vec3(triangle.tangent0), triangle.normal0) < EPSILON && (glm::dot(glm::vec3(triangle.tangent1), triangle.normal1) < EPSILON) && (glm::dot(glm::vec3(triangle.tangent2), triangle.normal2) < EPSILON)))
+                std::cerr << "tangent and normal not vertical" << std::endl;
+#endif
+        }
+        triangle.id = Scene::id++;
+        geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2,
+            triangle.normal0, triangle.normal1, triangle.normal2,
+            triangle.tangent0, triangle.tangent1, triangle.tangent2,
+            triangle.uv0, triangle.uv1, triangle.uv2, materials[materialid].doubleSided, triangle.id);
+        tbb.expand(geoms.back().tbb);
+    }
+}
+
 
 Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transformation& t, Scene* s) :scene(s)
 {
@@ -351,104 +401,16 @@ Scene::Primitive::Primitive(const tinygltf::Primitive& primitive, const Transfor
     auto [normals, norCnt] = getPrimitiveBuffer<float>(model, primitive, "NORMAL");
     auto [tangents, tangCnt] = getPrimitiveBuffer<float>(model, primitive, "TANGENT");
     auto [uvs, uvCnt] = getPrimitiveBuffer<float>(model, primitive, "TEXCOORD_0");
-    materialid = scene->materials.empty() ? scene->defaultMatId : primitive.material;
+    materialid = (scene->materials.empty() || primitive.material == -1) ? scene->defaultMatId : primitive.material;
     if (tinygltf::GetComponentSizeInBytes(model->accessors[primitive.indices].componentType) == sizeof(uint16_t)) {
-        auto [indices, indCnt] = getIndexBuffer<uint16_t>(model, primitive);
-        for (size_t i = 0; i < indCnt; i += 3) {
-            const size_t v0Id = indices[i];
-            const size_t v1Id = indices[i + 1];
-            const size_t v2Id = indices[i + 2];
-            Triangle triangle{
-                glm::vec3(positions[v0Id * 3], positions[v0Id * 3 + 1], positions[v0Id * 3 + 2]),
-                glm::vec3(positions[v1Id * 3], positions[v1Id * 3 + 1], positions[v1Id * 3 + 2]),
-                glm::vec3(positions[v2Id * 3], positions[v2Id * 3 + 1], positions[v2Id * 3 + 2]) };
-            if (normals) {
-                triangle.normal0 = glm::vec3(normals[v0Id * 3], normals[v0Id * 3 + 1], normals[v0Id * 3 + 2]);
-                triangle.normal1 = glm::vec3(normals[v1Id * 3], normals[v1Id * 3 + 1], normals[v1Id * 3 + 2]);
-                triangle.normal2 = glm::vec3(normals[v2Id * 3], normals[v2Id * 3 + 1], normals[v2Id * 3 + 2]);
-            }
-            else {
-                triangle.normal0 = glm::normalize(glm::cross(triangle.v1 - triangle.v0, triangle.v2 - triangle.v0));
-                triangle.normal1 = triangle.normal0;
-                triangle.normal2 = triangle.normal0;
-            }
-            if (uvs) {
-                triangle.uv0 = glm::vec2(uvs[v0Id * 2], uvs[v0Id * 2 + 1]);
-                triangle.uv1 = glm::vec2(uvs[v1Id * 2], uvs[v1Id * 2 + 1]);
-                triangle.uv2 = glm::vec2(uvs[v2Id * 2], uvs[v2Id * 2 + 1]);
-            }
-            if (tangents) {
-                triangle.tangent0 = glm::make_vec4(&tangents[v0Id * 4]);
-                triangle.tangent1 = glm::make_vec4(&tangents[v1Id * 4]);
-                triangle.tangent2 = glm::make_vec4(&tangents[v2Id * 4]);
-            }
-            else {
-                triangle.tangent0 = computeTangent(triangle.v0, triangle.v1, triangle.v2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.normal0);
-                triangle.tangent1 = computeTangent(triangle.v1, triangle.v2, triangle.v0, triangle.uv1, triangle.uv2, triangle.uv0, triangle.normal1);
-                triangle.tangent2 = computeTangent(triangle.v2, triangle.v0, triangle.v1, triangle.uv2, triangle.uv0, triangle.uv1, triangle.normal2);
-#ifdef DEBUG
-                if (!(glm::dot(glm::vec3(triangle.tangent0), triangle.normal0) < EPSILON && (glm::dot(glm::vec3(triangle.tangent1), triangle.normal1) < EPSILON) && (glm::dot(glm::vec3(triangle.tangent2), triangle.normal2) < EPSILON)))
-                    std::cerr << "tangent and normal not vertical" << std::endl;
-#endif
-            }
-            triangle.id = Scene::id++;
-            tris.push_back(triangle);
-            s->geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2,
-                triangle.normal0, triangle.normal1, triangle.normal2,
-                triangle.tangent0, triangle.tangent1, triangle.tangent2,
-                triangle.uv0, triangle.uv1, triangle.uv2, s->materials[materialid].doubleSided, triangle.id);
-            s->tbb.expand(s->geoms.back().tbb);
-        }
+        s->loadTriangle<uint16_t>(primitive, t, positions, normals, uvs, tangents, materialid);
+    }
+    else if(tinygltf::GetComponentSizeInBytes(model->accessors[primitive.indices].componentType) == sizeof(uint32_t)){
+        s->loadTriangle<uint32_t>(primitive, t, positions, normals, uvs, tangents, materialid);
     }
     else {
-        auto [indices, indCnt] = getIndexBuffer<uint32_t>(model, primitive);
-        for (size_t i = 0; i < indCnt; i += 3) {
-            const size_t v0Id = indices[i];
-            const size_t v1Id = indices[i + 1];
-            const size_t v2Id = indices[i + 2];
-            Triangle triangle{
-                glm::vec3(positions[v0Id * 3], positions[v0Id * 3 + 1], positions[v0Id * 3 + 2]),
-                glm::vec3(positions[v1Id * 3], positions[v1Id * 3 + 1], positions[v1Id * 3 + 2]),
-                glm::vec3(positions[v2Id * 3], positions[v2Id * 3 + 1], positions[v2Id * 3 + 2]) };
-            if (normals) {
-                triangle.normal0 = glm::vec3(normals[v0Id * 3], normals[v0Id * 3 + 1], normals[v0Id * 3 + 2]);
-                triangle.normal1 = glm::vec3(normals[v1Id * 3], normals[v1Id * 3 + 1], normals[v1Id * 3 + 2]);
-                triangle.normal2 = glm::vec3(normals[v2Id * 3], normals[v2Id * 3 + 1], normals[v2Id * 3 + 2]);
-            }
-            else {
-                triangle.normal0 = glm::normalize(glm::cross(triangle.v1 - triangle.v0, triangle.v2 - triangle.v0));
-                triangle.normal1 = triangle.normal0;
-                triangle.normal2 = triangle.normal0;
-            }
-            if (uvs) {
-                triangle.uv0 = glm::vec2(uvs[v0Id * 2], uvs[v0Id * 2 + 1]);
-                triangle.uv1 = glm::vec2(uvs[v1Id * 2], uvs[v1Id * 2 + 1]);
-                triangle.uv2 = glm::vec2(uvs[v2Id * 2], uvs[v2Id * 2 + 1]);
-            }
-            if (tangents) {
-                triangle.tangent0 = glm::make_vec4(&tangents[v0Id * 4]);
-                triangle.tangent1 = glm::make_vec4(&tangents[v1Id * 4]);
-                triangle.tangent2 = glm::make_vec4(&tangents[v2Id * 4]);
-            }
-            else {
-                triangle.tangent0 = computeTangent(triangle.v0, triangle.v1, triangle.v2, triangle.uv0, triangle.uv1, triangle.uv2, triangle.normal0);
-                triangle.tangent1 = computeTangent(triangle.v1, triangle.v2, triangle.v0, triangle.uv1, triangle.uv2, triangle.uv0, triangle.normal1);
-                triangle.tangent2 = computeTangent(triangle.v2, triangle.v0, triangle.v1, triangle.uv2, triangle.uv0, triangle.uv1, triangle.normal2);
-#ifdef DEBUG
-                if (!(glm::dot(glm::vec3(triangle.tangent0), triangle.normal0) < EPSILON && (glm::dot(glm::vec3(triangle.tangent1), triangle.normal1) < EPSILON) && (glm::dot(glm::vec3(triangle.tangent2), triangle.normal2) < EPSILON)))
-                    std::cerr << "tangent and normal not vertical" << std::endl;
-#endif
-            }
-            triangle.id = Scene::id++;
-            tris.push_back(triangle);
-            s->geoms.emplace_back(t, materialid, triangle.v0, triangle.v1, triangle.v2,
-                triangle.normal0, triangle.normal1, triangle.normal2,
-                triangle.tangent0, triangle.tangent1, triangle.tangent2,
-                triangle.uv0, triangle.uv1, triangle.uv2, s->materials[materialid].doubleSided, triangle.id);
-            s->tbb.expand(s->geoms.back().tbb);
-        }
+        throw std::runtime_error("Unrecognized index data type.");
     }
-
 }
 
 Camera& Scene::computeCameraParams(Camera& camera)const
@@ -597,7 +559,7 @@ int Scene::loadMaterial() {
 }
 
 bool Scene::loadTexture() {
-    int numTextures = model->textures.size();
+    size_t numTextures = model->textures.size();
     int totalNumTextures = numTextures + (settings.trSettings.envMapEnabled ? 1 : 0);
     dev_tex_arrs_vec.resize(totalNumTextures);
     cuda_tex_vec.resize(totalNumTextures);

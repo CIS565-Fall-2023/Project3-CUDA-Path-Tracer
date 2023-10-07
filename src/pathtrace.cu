@@ -319,10 +319,7 @@ __global__ void shadeMaterial(
             Material material = materials[intersection.materialId];
 
             // If the material indicates that the object was a light, "light" the ray
-            glm::vec3 emissiveColor{ 0.f };
-            if (material.emissiveTexture.index > 0) {
-                emissiveColor = sampleTexture(material.emissiveTexture.cudaTexObj, intersection.uv);
-            }
+            glm::vec3 emissiveColor = getEmissiveFactor(material, intersection.uv);
             if (material.type == Material::Type::LIGHT) {
                 pSeg.color = pSeg.throughput * (glm::vec3(material.pbrMetallicRoughness.baseColorFactor) * material.emissiveFactor * material.emissiveStrength);
                 pSeg.remainingBounces = 0;

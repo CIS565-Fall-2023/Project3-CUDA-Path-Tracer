@@ -31,7 +31,6 @@ private:
         DEFAULT_METHODS(Primitive)
     private:
         int materialid;
-        std::vector<Triangle> tris;
         Scene* scene;
     };
 
@@ -55,6 +54,8 @@ private:
     void loadSettings();
     void traverseNode(const tinygltf::Node& node, std::vector<glm::mat4>& transforms);
     void loadNode(const tinygltf::Node& node);
+    template<typename T>
+    void loadTriangle(const tinygltf::Primitive& primitive, const Transformation& t, const float* positions, const float* normals, const float* uvs, const float* tangents, const int materialid);
     bool loadCamera(const tinygltf::Node&, const glm::mat4& transform);
     template<typename T>
     TextureInfo createTextureObj(int textureIndex, int width, int height, int component, const T* image, size_t size, int isSRGB = 0);
