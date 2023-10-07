@@ -58,14 +58,14 @@ struct LinearBVHNode {
 };
 
 struct Material {
-    glm::vec3 ambient = glm::vec3(0.1f);     // Debug, default to a low gray value
-    glm::vec3 diffuse = glm::vec3(0.8f);     // Default to a neutral gray
-    glm::vec3 transmittance = glm::vec3(0.0f); // Default to opaque, absortion
+    glm::vec3 ambient = glm::vec3(0.1f);      // Debug, default to a low gray value
+    glm::vec3 diffuse = glm::vec3(0.8f);      // Default to a neutral gray
+    glm::vec3 transmittance = glm::vec3(0.5f); // Default to opaque, absortion
     struct {
         float exponent = 10.0f;              // Default shininess value
         glm::vec3 color = glm::vec3(1.0f);   // Default to white
     } specular;
-    float roughness = 0.5f;                  // Midway between smooth and rough
+    float roughness = 0.0f;                  // Midway between smooth and rough
     float metallic = 0.0f;                   // Default to non-metal
     float sheen = 0.0f;                      // Default to no sheen effect
     float hasReflective = 0.0f;              // Default to no reflection

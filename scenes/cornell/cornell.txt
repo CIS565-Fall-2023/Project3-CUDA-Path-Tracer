@@ -24,7 +24,7 @@ FOCALDISTANCE 5
 
 // CornellBox-Glossy
 OBJECT 0
-CornellBox-Original
+CornellBox-Water
 maeterial -1
 TRANS       0 0 0
 ROTAT       0 0 0

@@ -149,37 +149,27 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
 
-    glm::vec3 ro = multiplyMV(triangle.inverseTransform, glm::vec4(r.origin, 1.0f));
-    glm::vec3 rd = glm::normalize(multiplyMV(triangle.inverseTransform, glm::vec4(r.direction, 0.0f)));
-
-    Ray rt;
-    rt.origin = ro;
-    rt.direction = rd;
-
     glm::vec3 v0 = triangle.v0;
     glm::vec3 v1 = triangle.v1;
     glm::vec3 v2 = triangle.v2;
 
     glm::vec3 barycentricCoords;
-    if (glm::intersectRayTriangle(rt.origin, rt.direction, v0, v1, v2, barycentricCoords)) {
-        float t = barycentricCoords.z;  // The distance to the intersection point in terms of the ray's parameter
-        glm::vec3 objspaceIntersection = getPointOnRay(rt, t);
-
-        intersectionPoint = multiplyMV(triangle.transform, glm::vec4(objspaceIntersection, 1.f));
+    if (glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, barycentricCoords)) {
+        float t = barycentricCoords.z; 
+        intersectionPoint = getPointOnRay(r, t);
 
         // Compute the triangle's normal
         glm::vec3 e1 = v1 - v0;
         glm::vec3 e2 = v2 - v0;
-        glm::vec3 objspaceNormal = glm::normalize(glm::cross(e1, e2));
-        normal = glm::normalize(multiplyMV(triangle.invTranspose, glm::vec4(objspaceNormal, 0.f)));
+        normal = glm::normalize(glm::cross(e1, e2));
 
         // For Möller–Trumbore, the ray is always outside the triangle
         outside = true;
 
-        return t;  // Return the distance from the ray origin to the intersection
+        return glm::length(r.origin - intersectionPoint);
     }
 
-    return -1;  // No intersection
+    return -1; 
 }
 
  __host__ __device__ bool intersectBVHNode(const Ray& ray, const LinearBVHNode& node, 

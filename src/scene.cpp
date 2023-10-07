@@ -107,7 +107,9 @@ int Scene::loadGeom(string objectid) {
     if (!line.empty() && fp_in.good()) {
         vector<string> tokens = utilityCore::tokenizeString(line);
         materialid = atoi(tokens[1].c_str());
-        cout << "Connecting Geom " << objectid << " to Material " << materialid << "..." << endl;
+        if (materialid != -1) {
+            cout << "Connecting Geom " << objectid << " to Material " << materialid << "..." << endl;
+        }  
     }
 
     //load transformations
@@ -292,8 +294,7 @@ int Scene::addObjMaterial(const tinyobj::material_t& mat) {
     return id;
 }
 
-
-int Scene::loadObj(const string& objFilePath, int materialid,
+int Scene::loadObj(const string& objFilePath, int inputMaterialId,
     const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale,
     const glm::mat4& transform, const glm::mat4& inverseTransform,
     const glm::mat4& invTranspose) {
@@ -304,91 +305,91 @@ int Scene::loadObj(const string& objFilePath, int materialid,
         cout << "Error Loading " << objFilePath << endl;
         return -1;
     }
-    else {
-        tinyobj::attrib_t attrib = objLoader.attrib;
 
-        // Build an unordered map for materials based on their names
-        std::unordered_map<std::string, tinyobj::material_t> materialMap;
-        for (const auto& material : objLoader.materials) {
-            materialMap[material.name] = material;
+    tinyobj::attrib_t attrib = objLoader.attrib;
+
+    // Build an unordered map for materials based on their names
+    std::unordered_map<std::string, tinyobj::material_t> materialMap;
+    for (const auto& material : objLoader.materials) {
+        materialMap[material.name] = material;
+    }
+
+    for (const auto& shape : objLoader.shapes) {
+        int currentMaterialId = inputMaterialId;
+
+        if (inputMaterialId == -1 && materialMap.find(shape.name) != materialMap.end()) {
+            tinyobj::material_t material = materialMap[shape.name];
+            currentMaterialId = addObjMaterial(material);
         }
+        
+        if (currentMaterialId != -1) {
+            cout << "Loading Obj Shape: " << shape.name << endl;
+            cout << "Connecting Obj Shape: " << shape.name << " to Material ID: " << currentMaterialId << endl;
 
-        for (const auto& shape : objLoader.shapes) {
-            // Check if shape's name is also a name of a material
-            if (materialMap.find(shape.name) != materialMap.end()) {
-                cout << "Loading Obj Shape: " << shape.name << endl;
+            size_t index_offset = 0;
+            for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
+                size_t fv = size_t(shape.mesh.num_face_vertices[f]);
 
-                tinyobj::material_t material = materialMap[shape.name];
-                materialid = addObjMaterial(material);
-
-                cout << "Connection Obj Shape: " << shape.name << " to Material ID: " << materialid << endl;
-                cout << "" << endl;
-
-                size_t index_offset = 0;
-                for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
-                    size_t fv = size_t(shape.mesh.num_face_vertices[f]);
-
-                    // We need at least 3 vertices to form a triangle
-                    if (fv < 3) {
-                        index_offset += fv;
-                        continue;
-                    }
-
-                    // Fetch the vertices of the polygon
-                    std::vector<glm::vec3> vertices;
-                    std::vector<glm::vec3> normals;
-                    std::vector<glm::vec2> uvs;
-                    for (size_t v = 0; v < fv; v++) {
-                        tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
-
-                        // Vertex positions
-                        tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-                        tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-                        tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-                        vertices.push_back(glm::vec3(vx, vy, vz));
-
-                        // Vertex normals
-                        if (idx.normal_index != -1) {  // Check if the normal exists
-                            tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
-                            tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
-                            tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
-                            normals.push_back(glm::vec3(nx, ny, nz));
-                        }
-
-                        // Vertex UVs (texture coordinates)
-                        if (idx.texcoord_index != -1) {  // Check if the UV exists
-                            tinyobj::real_t u = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
-                            tinyobj::real_t v = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
-                            uvs.push_back(glm::vec2(u, v));
-                        }
-                    }
-
-                    // Triangulate the polygon using a fan triangulation
-                    for (size_t v = 1; v < fv - 1; v++) {
-                        Geom newGeom(TRIANGLE, materialid, translation, rotation,
-                            scale, transform, inverseTransform, invTranspose);
-
-                        newGeom.setVertices(vertices[0], vertices[v], vertices[v + 1]);
-                        
-                        if (normals.size() == vertices.size()) {
-                            newGeom.setNormals(normals[0], normals[v], normals[v + 1]);
-                        }
-
-                        if (uvs.size() == vertices.size()) {
-                            newGeom.setUVs(uvs[0], uvs[v], uvs[v + 1]);
-                        }
-
-                        geoms.push_back(newGeom);
-                    }
-
+                // We need at least 3 vertices to form a triangle
+                if (fv < 3) {
                     index_offset += fv;
+                    continue;
                 }
+
+                // Fetch the vertices of the polygon
+                std::vector<glm::vec3> vertices;
+                std::vector<glm::vec3> normals;
+                std::vector<glm::vec2> uvs;
+                for (size_t v = 0; v < fv; v++) {
+                    tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+
+                    // Vertex positions
+                    tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                    tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                    tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+                    vertices.push_back(glm::vec3(vx, vy, vz));
+
+                    // Vertex normals
+                    if (idx.normal_index != -1) {  // Check if the normal exists
+                        tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                        tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                        tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+                        normals.push_back(glm::vec3(nx, ny, nz));
+                    }
+
+                    // Vertex UVs (texture coordinates)
+                    if (idx.texcoord_index != -1) {  // Check if the UV exists
+                        tinyobj::real_t u = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
+                        tinyobj::real_t v = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
+                        uvs.push_back(glm::vec2(u, v));
+                    }
+                }
+
+                // Triangulate the polygon using a fan triangulation
+                for (size_t v = 1; v < fv - 1; v++) {
+                    Geom newGeom(TRIANGLE, currentMaterialId, translation, rotation,
+                        scale, transform, inverseTransform, invTranspose);
+
+                    newGeom.setVertices(vertices[0], vertices[v], vertices[v + 1]);
+
+                    if (normals.size() == vertices.size()) {
+                        newGeom.setNormals(normals[0], normals[v], normals[v + 1]);
+                    }
+
+                    if (uvs.size() == vertices.size()) {
+                        newGeom.setUVs(uvs[0], uvs[v], uvs[v + 1]);
+                    }
+
+                    geoms.push_back(newGeom);
+                }
+
+                index_offset += fv;
             }
         }
     }
-    return 1;
-}
 
+    return 1; // Return a value indicating success
+}
 
 
 int Scene::partitionSplit(std::vector<BVHGeomInfo>& geomInfo, int start, int end, int dim, int geomCount,
@@ -548,46 +549,30 @@ int Scene::flattenBVHTree(BVHNode* node, int* offset) {
 }
 
 void Scene::buildBVH() {
-    std::vector<BVHGeomInfo> geomInfo;
+    if (geoms.size() > 0) {
+        std::vector<BVHGeomInfo> geomInfo;
 
-    for (size_t i = 0; i < geoms.size(); ++i) {
-        Bound bounds = geoms[i].getWorldBounds();
-        geomInfo.push_back(BVHGeomInfo(i, bounds));
-    } 
-    
-    int totalNodes = 0;
-    std::vector<Geom> orderedGeoms;
-    BVHNode* root = constructBVHTree(geomInfo, 0, geoms.size(), &totalNodes, orderedGeoms);
+        for (size_t i = 0; i < geoms.size(); ++i) {
+            Bound bounds = geoms[i].getWorldBounds();
+            geomInfo.push_back(BVHGeomInfo(i, bounds));
+        }
 
-    printf("TotalNodes: %d\n", totalNodes);
+        int totalNodes = 0;
+        std::vector<Geom> orderedGeoms;
+        BVHNode* root = constructBVHTree(geomInfo, 0, geoms.size(), &totalNodes, orderedGeoms);
 
-    cout << "" << endl;
+        printf("TotalNodes: %d\n", totalNodes);
 
-    geoms.swap(orderedGeoms);
+        cout << "" << endl;
 
-    bvh.resize(totalNodes);
-    int offset = 0;
-    flattenBVHTree(root, &offset);
+        geoms.swap(orderedGeoms);
 
-#if DEBUG_BVH
-    // for debugging
-    cout << "" << endl;
-    printf("Dubugging for first root:\n");
-    printf("Root\n");
-    auto minBounds = root->bounds.pMin;
-    auto maxBounds = root->bounds.pMax;
-
-    printf("Min Bounds: (%f, %f, %f)\n", minBounds[0], minBounds[1], minBounds[2]);
-    printf("Max Bounds: (%f, %f, %f)\n", maxBounds[0], maxBounds[1], maxBounds[2]);
-    cout << "" << endl;
-
-    auto node = bvh[0];
-    minBounds = node.bounds.pMin;
-    maxBounds = node.bounds.pMax;
-    printf("Flatten\n");
-    printf("Min Bounds: (%f, %f, %f)\n", minBounds[0], minBounds[1], minBounds[2]);
-    printf("Max Bounds: (%f, %f, %f)\n", maxBounds[0], maxBounds[1], maxBounds[2]);
-    cout << "" << endl;
-#endif
+        bvh.resize(totalNodes);
+        int offset = 0;
+        flattenBVHTree(root, &offset);
+    }
+    else {
+        cout << "Error Building the BVH. The number of geoms is 0" << endl;
+    }
 }
 
