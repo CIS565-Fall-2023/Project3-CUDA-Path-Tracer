@@ -15,6 +15,7 @@
 
 #define ERRORCHECK 1
 #define SAH_BVH 1
+#define DebugNormal 0
 
 #define BIT(x) (1 << (x))
 

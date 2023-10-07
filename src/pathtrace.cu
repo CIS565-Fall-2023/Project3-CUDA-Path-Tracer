@@ -21,9 +21,6 @@
 #include "rng.h"
 #include "cudaTexture.h"
 
-
-#define DebugNormal 0
-
 static constexpr int Compact_Threshold = 2073600;
 
 struct CopyEndPaths 
@@ -288,7 +285,7 @@ __global__ void KernelNaiveGI(const int iteration, const int num_paths, const in
 			material.eta = u_data.eta;
 			material.data.values.albedo = u_data.albedo;
 			material.data.values.metallic = u_data.metallic;
-			material.data.values.rougness = u_data.roughness;
+			material.data.values.roughness = u_data.roughness;
 		}
 
 		if (material.emittance > 0.f) 
@@ -430,7 +427,7 @@ CPU_ONLY void CudaPathTracer::Render(GPUScene& scene,
 {
 	const int pixelcount = resolution.x * resolution.y;
 
-	static const int max_depth = 32;
+	const int& max_depth = camera.path_depth;
 	// TODO: might change to dynamic block size
 	// 2D block for generating ray from camera
 	const dim3 blockSize2d(8, 8);

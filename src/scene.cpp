@@ -197,7 +197,7 @@ void Scene::LoadCameraFromJSON(const Json& camera_json)
 
     SafeGet<float>(camera_json, "fovy", camera.fovy);
     SafeGet<unsigned int>(camera_json, "interation", state.iterations);
-    SafeGet<int>(camera_json, "depth", state.traceDepth);
+    SafeGet<int>(camera_json, "depth", camera.path_depth);
     SafeGetVec<glm::vec3, float, 3>(camera_json, "ref", camera.ref);
     SafeGetVec<glm::vec3, float, 3>(camera_json, "position", camera.position);
     SafeGetVec<glm::ivec2, unsigned int, 2>(camera_json, "resolution", camera.resolution);
@@ -236,6 +236,8 @@ void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesyst
         m_MaterialMap.emplace(name, i + 1);
 
         SafeGet<float>(material_json[i], "emittance", material.emittance);
+        SafeGet<float>(material_json[i], "roughness", material.data.values.roughness);
+        SafeGet<float>(material_json[i], "metallic", material.data.values.metallic);
         SafeGet<float>(material_json[i], "eta", material.eta);
 
         if(material_json[i].contains("albedo map"))
@@ -261,7 +263,24 @@ void Scene::LoadMaterialsFromJSON(const Json& material_json, const std::filesyst
                 material.data.textures.normal_tex.m_TexObj = tex_obj;
             }
         }
-
+        if (material_json[i].contains("metallic map"))
+        {
+            auto tex_obj = LoadTextureFromJSON(material_json[i]["metallic map"], res_path);
+            if (tex_obj > 0)
+            {
+                material.type = static_cast<MaterialType>(material.type | MaterialType::Metallic_Texture);
+                material.data.textures.metallic_tex.m_TexObj = tex_obj;
+            }
+        }
+        if (material_json[i].contains("roughness map"))
+        {
+            auto tex_obj = LoadTextureFromJSON(material_json[i]["roughness map"], res_path);
+            if (tex_obj > 0)
+            {
+                material.type = static_cast<MaterialType>(material.type | MaterialType::Roughness_Texture);
+                material.data.textures.roughness_tex.m_TexObj = tex_obj;
+            }
+        }
         m_Materials.push_back(std::move(material));
     }
     std::cout << "Loading Materials Success!" << std::endl;

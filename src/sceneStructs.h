@@ -92,7 +92,7 @@ struct Material
 
     struct MaterialValues
     {
-        float rougness = 0.f;
+        float roughness = 0.f;
         float metallic = 0.f;
         glm::vec3 albedo = glm::vec3(0.f);
     };
@@ -167,7 +167,7 @@ struct Material
         }
         else
         {
-            return data.values.rougness;
+            return data.values.roughness;
         }
     }
 
@@ -195,6 +195,7 @@ struct Camera {
     float fovy;
     float lenRadius = 0.f;
     float focalDistance = 1.f;
+    int path_depth;
 
     CPU_ONLY void Recompute() 
     {

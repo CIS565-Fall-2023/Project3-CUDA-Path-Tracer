@@ -76,20 +76,15 @@ void AddCornellBox_Triangles(std::vector<glm::vec3>& vertices, std::vector<glm::
 	//ApplyTransform(v_start_id, vertices, glm::vec3(-2, -1, 0.75), glm::vec3(0, -17.5, 0), glm::vec3(1.5, 1.5, 1.5));
 }
 
-SandBox::SandBox(const char* scene_path)
+SandBox::SandBox(const std::string& scene_path)
 	:m_PathTracer(mkU<CudaPathTracer>()),
 	 m_UniformData(mkU<UniformMaterialData>())
 {
 	m_StartTimeString = currentTimeString();
-
-	//if (argc < 2) {
-	//	printf("Usage: %s SCENEFILE.txt\n", argv[0]);
-	//	return 1;
-	//}
 	std::filesystem::path res_path(resources_path);
 
 	// Load scene file
-	m_Scene = mkU<Scene>(res_path, "scenes/materialBall.json");
+	m_Scene = mkU<Scene>(res_path, scene_path);
 	m_CameraController = mkU<CameraController>(m_Scene->state.camera);
 }
 
@@ -199,9 +194,11 @@ void SandBox::DrawImGui()
 	{
 		bool changed = false;
 		ImGui::Begin("Camera Setting");
-		changed |= ImGui::DragFloat("Fov", &m_Scene->state.camera.fovy, 1.f, 19.5f, 90.f);
-		changed |= ImGui::DragFloat("Len Radius", &m_Scene->state.camera.lenRadius, 0.02f, 0.f, 5.f);
-		changed |= ImGui::DragFloat("Focal Distance", &m_Scene->state.camera.focalDistance, 0.1f, 1.f, 100.f);
+		Camera& cam = m_Scene->state.camera;
+		changed |= ImGui::DragFloat("Fov", &cam.fovy, 1.f, 19.5f, 90.f);
+		changed |= ImGui::DragFloat("Len Radius", &cam.lenRadius, 0.02f, 0.f, 5.f);
+		changed |= ImGui::DragFloat("Focal Distance", &cam.focalDistance, 0.1f, 1.f, 100.f);
+		changed |= ImGui::DragInt("Path Depth", &cam.path_depth, 1, 2, 64);
 		if (changed) m_PathTracer->Reset();
 		ImGui::End();
 	}

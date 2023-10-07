@@ -12,7 +12,7 @@ class UniformMaterialData;
 class SandBox
 {
 public:
-	SandBox(const char* scene_path);
+	SandBox(const std::string& scene_path);
 	~SandBox();
 
 	void Init();
