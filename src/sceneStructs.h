@@ -20,6 +20,7 @@ struct Ray {
 
 struct Geom {
     enum GeomType type;
+    int bvhrootidx;
     int meshidx;
     int meshcnt;
     int materialid;
@@ -31,11 +32,28 @@ struct Geom {
     glm::mat4 invTranspose;
 };
 
+// Axis-aligned bounding box
+struct AABB {
+    glm::vec3 min = glm::vec3(FLT_MAX);
+    glm::vec3 max = glm::vec3(-FLT_MAX);
+    glm::vec3 centroid = glm::vec3(0.f);
+};
+
+// Triangle mesh
 struct Mesh {
     int v[3];
     int vn[3];
     int vt[3];
-    int materialid;
+    int materialid = -1;
+    AABB aabb;
+};
+
+// Bounding volume hierarchy node
+struct BVHNode {
+    AABB aabb;
+    int left = -1;
+    int right = -1;
+    int meshidx = -1;
 };
 
 struct Material {

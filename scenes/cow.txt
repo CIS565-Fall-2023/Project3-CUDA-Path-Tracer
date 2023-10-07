@@ -1,13 +1,13 @@
 // Camera
 CAMERA
-RES             800 800
+RES             2000 2000
 FOVY            45
 LENSRADIUS      0
 FOCALDISTANCE   0
-ITERATIONS      300
+ITERATIONS      1000
 DEPTH           8
-FILE            gear
-EYE             0.0 5 5
+FILE            cow
+EYE             0 5 8
 LOOKAT          0 5 0
 UP              0 1 0
 
@@ -131,9 +131,9 @@ ROTAT       0 0 0
 SCALE       .01 10 10
 
 // Cube (OBJ)
-OBJECT gear
-mesh obj/Gear.obj
+OBJECT suzanne
+mesh obj/cow.obj
 material stainless_steel
-TRANS       1 2.5 0
-ROTAT       -20 30 10
-SCALE       .5 .5 .5
+TRANS       -.5 3.6 0
+ROTAT       0 -30 0
+SCALE       1 1 1

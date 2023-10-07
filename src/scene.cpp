@@ -93,11 +93,12 @@ int Scene::loadGeom(string objectid) {
     {
         loadObj(newGeom, mesh_filename);
     }
+#if 0 // disabled
     else if (ext == "gltf")
     {
         loadGltf(newGeom, mesh_filename);
     }
-
+#endif
 
     geoms.push_back(newGeom);
     return 1;
@@ -242,18 +243,7 @@ void Scene::loadObj(Geom& newGeom, string obj_filename)
             newMaterial.roughness = material.roughness;
             newMaterial.ior = material.ior;
             newMaterial.opacity = material.dissolve;
-
             materials.push_back(newMaterial);
-            // cout << "material: " << material.name << endl;
-            // cout << "albedo: " << glm::to_string(newMaterial.albedo) << endl;
-            // cout << "metallic: " << newMaterial.metallic << endl;
-            // cout << "roughness: " << newMaterial.roughness << endl;
-            // cout << "ior: " << newMaterial.ior << endl;
-            // cout << "opacity: " << newMaterial.opacity << endl;
-            // cout << "emittance: " << newMaterial.emittance << endl;
-            // cout << "transmittance: " << glm::to_string(glm::vec3(material.transmittance[0],
-            //                                                         material.transmittance[1],
-            //                                                         material.transmittance[2])) << endl;
         }
     }
 
@@ -313,22 +303,31 @@ void Scene::loadObj(Geom& newGeom, string obj_filename)
                                      ? newGeom.materialid
                                      : shape.mesh.material_ids[f] + mstartIdx;
 
+            // compute aabb
+            newMesh.aabb.min = glm::min(vertices[newMesh.v[0]], glm::min(vertices[newMesh.v[1]], vertices[newMesh.v[2]]));
+            newMesh.aabb.max = glm::max(vertices[newMesh.v[0]], glm::max(vertices[newMesh.v[1]], vertices[newMesh.v[2]]));
+            newMesh.aabb.centroid = (newMesh.aabb.min + newMesh.aabb.max) * 0.5f;
+
             meshes.push_back(newMesh);
         }
     }
     newGeom.meshcnt = meshes.size() - newGeom.meshidx;
 
+    // build bvh
+    newGeom.bvhrootidx = buildBVH(newGeom.meshidx, newGeom.meshidx + newGeom.meshcnt);
+
+    cout << endl;
     cout << "Loaded " << obj_filename << endl;
     cout << "number of vertices: " << attrib.vertices.size() / 3 << endl;
     cout << "number of normals: " << attrib.normals.size() / 3 << endl;
     cout << "number of texcoords: " << attrib.texcoords.size() / 2 << endl;
     cout << "number of meshes: " << newGeom.meshcnt << endl;
     cout << "number of materials: " << tinyobj_materials.size() << endl;
-    cout << endl;
 }
 
 void Scene::loadGltf(Geom& newGeom, string gltf_filename)
 {
+#if 0
     string scene_dirname = scene_filename.substr(0, scene_filename.find_last_of("/\\") + 1);
     gltf_filename = scene_dirname + gltf_filename;
     string obj_dirname = scene_dirname + gltf_filename.substr(0, gltf_filename.find_last_of("/\\") + 1);
@@ -378,28 +377,83 @@ void Scene::loadGltf(Geom& newGeom, string gltf_filename)
     }
 
 
-    // for (const tinygltf::Mesh& mesh : model.meshes)
-//     {
-//         for (const tinygltf::Primitive &primitive : mesh.primitives)
-//         {
-//             const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("POSITION")];
-//             const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
-//             // cast to float type read only. Use accessor and bufview byte offsets to determine where position data
-//             // is located in the buffer.
-//             const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
-//             // bufferView byteoffset + accessor byteoffset tells you where the actual position data is within the buffer. From there
-//             // you should already know how the data needs to be interpreted.
-//             const float *positions = reinterpret_cast<const float *>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
-//             // From here, you choose what you wish to do with this position data. In this case, we  will display it out.
-//             for (size_t i = 0; i < accessor.count; ++i)
-//             {
-//                 // Positions are Vec3 components, so for each vec3 stride, offset for x, y, and z.
-//                 std::cout << "(" << positions[i * 3 + 0] << ", " // x
-//                           << positions[i * 3 + 1] << ", "        // y
-//                           << positions[i * 3 + 2] << ")"         // z
-//                           << "\n";
-//             }
-//         }
-//     }
+    for (const tinygltf::Mesh& mesh : model.meshes)
+    {
+        for (const tinygltf::Primitive &primitive : mesh.primitives)
+        {
+            const tinygltf::Accessor &accessor = model.accessors[primitive.attributes.at("POSITION")];
+            const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+            // cast to float type read only. Use accessor and bufview byte offsets to determine where position data
+            // is located in the buffer.
+            const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+            // bufferView byteoffset + accessor byteoffset tells you where the actual position data is within the buffer. From there
+            // you should already know how the data needs to be interpreted.
+            const float *positions = reinterpret_cast<const float *>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+            // From here, you choose what you wish to do with this position data. In this case, we  will display it out.
+            for (size_t i = 0; i < accessor.count; ++i)
+            {
+                // Positions are Vec3 components, so for each vec3 stride, offset for x, y, and z.
+                std::cout << "(" << positions[i * 3 + 0] << ", " // x
+                          << positions[i * 3 + 1] << ", "        // y
+                          << positions[i * 3 + 2] << ")"         // z
+                          << "\n";
+            }
+        }
+    }
+#endif
+}
 
+// reference https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies
+// split method is EqualCounts, range is [meshStartIdx, meshEndIdx)
+int Scene::buildBVH(int meshStartIdx, int meshEndIdx)
+{
+    // no mesh
+    if (meshEndIdx == meshStartIdx)
+    {
+        return -1;
+    }
+
+    // FIXME: why can't emplace back
+    // int nodeIdx = bvh.size();
+    // bvh.emplace_back();
+    // BVHNode& node = bvh.back();
+    BVHNode node;
+
+    // compute bvh aabb on CPU, expensive but only done once
+    for (int i = meshStartIdx; i < meshEndIdx; i++)
+    {
+        node.aabb.min = glm::min(node.aabb.min, meshes[i].aabb.min);
+        node.aabb.max = glm::max(node.aabb.max, meshes[i].aabb.max);
+    }
+    node.aabb.centroid = (node.aabb.min + node.aabb.max) * 0.5f;
+
+    // one mesh, leaf node
+    if (meshEndIdx - meshStartIdx == 1)
+    {
+        node.left = -1;
+        node.right = -1;
+        node.meshidx = meshStartIdx;
+    }
+    // multiple meshes, internal node
+    else
+    {
+
+        int mid = (meshStartIdx + meshEndIdx) / 2;
+        glm::vec3 diff = node.aabb.max - node.aabb.min;
+        int dim = (diff.x > diff.y && diff.x > diff.z) ? 0 : (diff.y > diff.z) ? 1 : 2;
+        std::nth_element(meshes.begin() + meshStartIdx, meshes.begin() + mid, meshes.begin() + meshEndIdx,
+            [dim](const Mesh& a, const Mesh& b) {
+                return (a.aabb.centroid[dim] < b.aabb.centroid[dim]);
+            }
+        );
+
+        node.left = buildBVH(meshStartIdx, mid);
+        node.right = buildBVH(mid, meshEndIdx);
+        node.meshidx = -1;
+    }
+
+    // FIXME: why can't emplace back
+    // return nodeIdx;
+    bvh.push_back(node);
+    return bvh.size() - 1;
 }

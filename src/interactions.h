@@ -236,3 +236,29 @@ __device__ void scatterRay(
     pathSegment.ray.origin = intersect + .002f * pathSegment.ray.direction;
     pathSegment.remainingBounces--;
 }
+
+
+// some procedural texture
+namespace ProceduralTexture
+{
+__device__ glm::vec3 palettes(glm::vec2 uv)
+{
+    glm::vec3 a(0.5, 0.5, 0.5), b(0.5, 0.5, 0.5), c(1.0, 1.0, 1.0), d(0.00, 0.33, 0.67);
+    return a + b * glm::cos(TWO_PI * (c * glm::length(uv) + d));
+}
+__device__ glm::vec3 checkerboard(glm::vec2 uv)
+{
+    if ((int)(uv.x * 10) % 2 == (int)(uv.y * 10) % 2)
+        return glm::vec3(.2f);
+    else
+        return glm::vec3(.8f);
+}
+__device__ glm::vec3 random(glm::vec2 uv)
+{
+    thrust::default_random_engine rng(int(uv.x * 128) * 128 + int(uv.y * 128));
+    float r = thrust::uniform_real_distribution<float>(0, 1)(rng);
+    float f = 0.5f + 0.5f * glm::sin(uv.x * 10.f * r * TWO_PI);
+    float g = 0.5f + 0.5f * glm::cos(uv.y * 10.f * r * TWO_PI);
+    return glm::vec3(f * g);
+}
+} // namespace ProceduralTexture

@@ -20,6 +20,8 @@
 #define CACHE_FIRST_BOUNCE 1
 #define ANTI_ALIASING 1
 #define DEPTH_OF_FIELD 1
+#define PROCEDURAL_TEXTURE 1
+#define BVH 1
 #define OIDN 1
 
 #if ANTI_ALIASING
@@ -32,7 +34,7 @@
 #endif // DEPTH_OF_FIELD
 #if OIDN
 #define EMA_ALPHA 0.2f
-#define DENOISE_INTERVAL 20
+#define DENOISE_INTERVAL 50
 #endif // OIDN
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -101,6 +103,10 @@ static glm::vec3* dev_vertices = NULL;
 static glm::vec3* dev_normals = NULL;
 static glm::vec2* dev_texcoords = NULL;
 static Mesh* dev_meshes = NULL;
+
+#if BVH
+static BVHNode* dev_bvh = NULL;
+#endif // BVH
 
 #if OIDN
 #include "OpenImageDenoise/oidn.hpp"
@@ -189,7 +195,6 @@ void emaMergeDenoisedAndImage(int pixelcount, glm::vec3 *image, glm::vec3 *denoi
 		image[idx] = image[idx] * (1 - EMA_ALPHA) + denoised[idx] * EMA_ALPHA;
 	}
 }
-
 #endif // OIDN
 
 void InitDataContainer(GuiDataContainer* imGuiData)
@@ -235,6 +240,11 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
 	cudaMemcpy(dev_meshes, scene->meshes.data(), scene->meshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
 
+#if BVH
+	cudaMalloc(&dev_bvh, scene->bvh.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvh, scene->bvh.data(), scene->bvh.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+#endif // BVH
+
 #if OIDN
 	cudaMalloc(&dev_denoised, pixelcount * sizeof(glm::vec3));
 	cudaMemset(dev_denoised, 0, pixelcount * sizeof(glm::vec3));
@@ -265,6 +275,10 @@ void pathtraceFree() {
 	cudaFree(dev_normals);
 	cudaFree(dev_texcoords);
 	cudaFree(dev_meshes);
+
+#if BVH
+	cudaFree(dev_bvh);
+#endif // BVH
 
 #if OIDN
 	cudaFree(dev_denoised);
@@ -365,6 +379,9 @@ void computeIntersections(
 	int num_paths,
 	Geom* geoms,
 	int geoms_size,
+#if BVH
+	BVHNode* bvh,
+#endif // BVH
 	Mesh* meshes,
 	glm::vec3* vertices,
 	glm::vec3* normals,
@@ -380,6 +397,7 @@ void computeIntersections(
 		float t;
 		glm::vec3 intersect_point;
 		glm::vec3 normal;
+		glm::vec2 texcoord;
 		float t_min = FLT_MAX;
 		int hit_material_index = -1;
 		bool outside = true;
@@ -400,18 +418,32 @@ void computeIntersections(
 				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 				tmp_material_index = geom.materialid;
 				tmp_normal = outside ? tmp_normal : -tmp_normal;
+				tmp_texcoord = glm::vec2(-1.f);
 			}
 			else if (geom.type == SPHERE)
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 				tmp_material_index = geom.materialid;
 				tmp_normal = outside ? tmp_normal : -tmp_normal;
+				tmp_texcoord = glm::vec2(-1.f);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 			else if (geom.type == MESH)
 			{
-				t = meshIntersectionTest(geom, meshes, vertices, normals, texcoords, pathSegment.ray,
-										 tmp_intersect, tmp_material_index, tmp_normal, tmp_texcoord);
+#if BVH
+				t = meshIntersectionTestBVH(
+					geom,
+					bvh,
+					meshes, vertices, normals, texcoords,
+					pathSegment.ray,
+					tmp_intersect, tmp_material_index, tmp_normal, tmp_texcoord);
+#else
+				t = meshIntersectionTest(
+					geom,
+					meshes, vertices, normals, texcoords,
+					pathSegment.ray,
+					tmp_intersect, tmp_material_index, tmp_normal, tmp_texcoord);
+#endif // BVH
 			}
 
 			// Compute the minimum t from the intersection tests to determine what
@@ -422,6 +454,7 @@ void computeIntersections(
 				hit_material_index = tmp_material_index;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
+				texcoord = tmp_texcoord;
 			}
 		}
 
@@ -435,6 +468,7 @@ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = hit_material_index;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].texcoord = texcoord;
 		}
 	}
 }
@@ -464,6 +498,30 @@ void shadePhysicallyBasedMaterial(
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
+				if (intersection.texcoord.x >= 0.f && intersection.texcoord.x <= 1.f &&
+					intersection.texcoord.y >= 0.f && intersection.texcoord.y <= 1.f)
+				{
+					switch (PROCEDURAL_TEXTURE)
+					{
+					case 0:
+						break;
+
+					case 1:
+						material.albedo = ProceduralTexture::palettes(intersection.texcoord);
+						break;
+
+					case 2:
+						material.albedo = ProceduralTexture::checkerboard(intersection.texcoord);
+						break;
+
+					case 3:
+						material.albedo = ProceduralTexture::random(intersection.texcoord);
+						break;
+
+					default:
+						break;
+					}
+				}
 				scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t),
 					intersection.surfaceNormal, material, rng);
 				if (pathSegments[idx].remainingBounces == 0) pathSegments[idx].color = glm::vec3(0.0f);
@@ -588,6 +646,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				depth,
 				dev_paths, num_paths,
 				dev_geoms, hst_scene->geoms.size(),
+#if BVH
+				dev_bvh,
+#endif // BVH
 				dev_meshes, dev_vertices, dev_normals, dev_texcoords,
 				dev_intersections);
 			// cache first bounce
@@ -607,6 +668,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			depth,
 			dev_paths, num_paths,
 			dev_geoms, hst_scene->geoms.size(),
+#if BVH
+			dev_bvh,
+#endif // BVH
 			dev_meshes, dev_vertices, dev_normals, dev_texcoords,
 			dev_intersections);
 		checkCUDAError("trace one bounce");
@@ -632,7 +696,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 #if OIDN
 		// copy image to albedo and normal
-		if (depth == 1)
+		if (depth == 1 && (iter % DENOISE_INTERVAL == 0 || iter == hst_scene->state.iterations))
 			copyFirstTraceToAlbedoAndNormal<<<numblocksPathSegmentTracing, blockSize1d>>>(
 				dev_paths, num_paths, dev_intersections, dev_albedo, dev_normal);
 #endif // OIDN
@@ -658,6 +722,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		denoise();
 		emaMergeDenoisedAndImage<<<numBlocksPixels, blockSize1d>>>(pixelcount, dev_image, dev_denoised);
 	}
+	else if (iter == hst_scene->state.iterations)
+    {
+		denoise();
+        std::swap(dev_image, dev_denoised);
+    }
 #endif // OIDN
 
 	///////////////////////////////////////////////////////////////////////////
