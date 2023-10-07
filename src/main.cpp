@@ -92,8 +92,15 @@ void saveImage() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
-			glm::vec3 pix = renderState->image[index];
-			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
+			glm::vec3 pix = renderState->image[index] / samples;
+            if (guiData->ACESFilm)
+                pix = pix * (pix * (pix * 2.51f + 0.03f) + 0.024f) / (pix * (pix * 3.7f + 0.078f) + 0.14f);
+            if (guiData->Reinhard)
+                pix = pix / (1.f + pix);
+            if (!guiData->NoGammaCorrection)
+                pix = glm::pow(pix, glm::vec3(1.f / 2.2f));
+
+			img.setPixel(width - 1 - x, y, glm::vec3(pix));
 		}
 	}
 

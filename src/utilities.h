@@ -35,6 +35,7 @@ public:
     bool SortByMaterial;
     bool UseBVH;
     bool ACESFilm;
+    bool Reinhard;
     bool NoGammaCorrection;
     bool CacheFirstBounce;
     float focalLength;

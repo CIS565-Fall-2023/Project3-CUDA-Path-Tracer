@@ -223,6 +223,7 @@ void RenderImGui()
 	ImGui::Checkbox("Sort By Material", &imguiData->SortByMaterial);
 	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
 	ImGui::Checkbox("Enable ACES Film", &imguiData->ACESFilm);
+	ImGui::Checkbox("Enable Reinhard", &imguiData->Reinhard);
 	ImGui::Checkbox("Disable Gamma Correction", &imguiData->NoGammaCorrection);
 	bool cacheFirstBounce = ImGui::Checkbox("Cache First Bounce", &imguiData->CacheFirstBounce);
 	float availWidth = ImGui::GetContentRegionAvail().x;

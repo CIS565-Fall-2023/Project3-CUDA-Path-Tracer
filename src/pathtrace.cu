@@ -28,16 +28,18 @@ void checkCudaMem(T* d_ptr, int size) {
 
 //Kernel that writes the image to the OpenGL PBO directly.
 __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
-    int iter, glm::vec3* image, bool acesFilm, bool NoGammaCorrection) {
+    int iter, glm::vec3* image, bool acesFilm, bool NoGammaCorrection, bool Reinhard) {
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
     if (x < resolution.x && y < resolution.y) {
         int index = x + (y * resolution.x);
         glm::vec3 pix = image[index] / (float)iter;
+
         if (acesFilm)
             pix = pix * (pix * (pix * 2.51f + 0.03f) + 0.024f) / (pix * (pix * 3.7f + 0.078f) + 0.14f);
-
+        if (Reinhard)
+            pix = pix / (1.f + pix);
         if (!NoGammaCorrection)
             pix = glm::pow(pix, glm::vec3(1.f / 2.2f));
 
@@ -91,11 +93,7 @@ void UpdateDataContainer(GuiDataContainer* imGuiData, Scene* scene, float zoom, 
 {
     imGuiData->TracedDepth = scene->state.traceDepth;
     imGuiData->SortByMaterial = false;
-    imGuiData->UseBVH = true;
-    imGuiData->ACESFilm = false;
     imGuiData->NoGammaCorrection = false;
-    imGuiData->focalLength = scene->state.camera.focalLength;
-    imGuiData->apertureSize = scene->state.camera.apertureSize;
     imGuiData->theta = theta;
     imGuiData->phi = phi;
     imGuiData->cameraLookAt = scene->state.camera.lookAt;
@@ -199,7 +197,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
             - cam.right * cam.pixelLength.x * ((float)x + rx - (float)cam.resolution.x * 0.5f)
             - cam.up * cam.pixelLength.y * ((float)y + ry - (float)cam.resolution.y * 0.5f));
         if (settings.dof) {
-            glm::vec3 forward = glm::cross(cam.up, cam.right);
+            glm::vec3 forward = glm::normalize(glm::cross(cam.up, cam.right));
             float t = cam.focalLength / AbsDot(segment.ray.direction, forward);
             glm::vec3 randPt = cam.apertureSize * squareToDiskConcentric(glm::vec2(u01(rng), u01(rng)));
             glm::vec3 tmpRayOrigin = cam.position + randPt.x * cam.right + randPt.y * cam.up;
@@ -566,7 +564,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
     ///////////////////////////////////////////////////////////////////////////
 
     // Send results to OpenGL buffer for rendering
-    sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image, guiData->ACESFilm, guiData->NoGammaCorrection);
+    sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image, guiData->ACESFilm, guiData->NoGammaCorrection, guiData->Reinhard);
 
     // Retrieve image from GPU
     cudaMemcpy(hst_scene->state.image.data(), dev_image,
