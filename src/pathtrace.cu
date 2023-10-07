@@ -97,6 +97,9 @@ static ShadeableIntersection* dev_intersections = NULL;
 // ...
 static ShadeableIntersection* dev_first_pass = NULL;
 static Triangle* dev_tris = NULL;
+static cudaArray* imgArray = NULL;
+static cudaTextureObject_t textureObject = NULL;
+
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
 	guiData = imGuiData;
@@ -130,6 +133,28 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
+	if (scene->hasEnvMap) {
+		auto channelDesc = cudaCreateChannelDesc<float4>();
+		cudaMallocArray(&imgArray, &channelDesc, scene->mp.width, scene->mp.height);
+		cudaMemcpy2DToArray(imgArray, 0, 0, scene->mp.image_data, scene->mp.width * sizeof(float4), scene->mp.width * sizeof(float4), scene->mp.height, cudaMemcpyHostToDevice);
+
+		cudaResourceDesc resDesc;
+		memset(&resDesc, 0, sizeof(resDesc));
+		resDesc.resType = cudaResourceTypeArray;
+		resDesc.res.array.array = imgArray;
+
+		cudaTextureDesc texDesc;
+		memset(&texDesc, 0, sizeof(texDesc));
+		texDesc.addressMode[0] = cudaAddressModeWrap;  // Set your desired addressing mode
+		texDesc.addressMode[1] = cudaAddressModeWrap;
+		texDesc.filterMode = cudaFilterModeLinear;  // Set your desired filtering mode
+		texDesc.readMode = cudaReadModeElementType;
+		texDesc.normalizedCoords = 1;
+
+		cudaCreateTextureObject(&textureObject, &resDesc, &texDesc, NULL);
+
+	}
+
 	checkCUDAError("pathtraceInit");
 }
 
@@ -139,8 +164,11 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
+			// TODO: clean up any extra device memory you created
 	cudaFree(dev_tris);
-	// TODO: clean up any extra device memory you created
+	cudaDestroyTextureObject(textureObject);
+	cudaFreeArray(imgArray);
+
 
 	checkCUDAError("pathtraceFree");
 }
@@ -231,7 +259,6 @@ __global__ void computeIntersections(
 			else {
 				t = meshIntersectionTest(geom, tris, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -322,6 +349,9 @@ __global__ void shadeFakeMaterial(
 				// This can be useful for post-processing and image compositing.
 			}
 			else {
+				// sample environment map 
+
+
 				path.color = glm::vec3(0.0f);
 				path.dead = true;
 			}

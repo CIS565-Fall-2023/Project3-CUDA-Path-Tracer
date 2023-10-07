@@ -109,9 +109,13 @@ ROTAT       0 0 0
 SCALE       .01 10 10
 
 // Sheep
-FILE 1
-glb_dodecahedron.glb
-material 4
-TRANS       -1 4 -1
+FILE 0
+sheep01.glb
+material 1
+TRANS       0 1 0
 ROTAT       0 0 0
 SCALE       3 3 3
+
+// map
+EMAP 1
+bliss.jpg

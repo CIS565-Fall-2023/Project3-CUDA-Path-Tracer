@@ -17,12 +17,15 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     int loadMesh(string meshid);
+    int loadEnv(string envid);
 public:
     Scene(string filename);
     ~Scene();
 
+    bool hasEnvMap;
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     std::vector<Triangle> tris;
+    EnvironmentMap mp;
     RenderState state;
 };

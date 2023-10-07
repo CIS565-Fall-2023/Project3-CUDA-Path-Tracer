@@ -1,5 +1,5 @@
 #define TINYGLTF_IMPLEMENTATION
-#define INTEGER_ADDRESS 1
+#define INTEGER_ADDRESS 0
 
 #include <iostream>
 #include "scene.h"
@@ -17,6 +17,7 @@ Scene::Scene(string filename) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
     }
+    hasEnvMap = false;
     while (fp_in.good()) {
         string line;
         utilityCore::safeGetline(fp_in, line);
@@ -35,6 +36,10 @@ Scene::Scene(string filename) {
             else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
                 loadMesh(tokens[1]);
                 cout << "mesh loading in progress" << endl;
+            }
+            else if (strcmp(tokens[0].c_str(), "EMAP") == 0) {
+                loadEnv(tokens[1]);
+                cout << "environment map loading in progress" << endl;
             }
         }
     }
@@ -211,13 +216,13 @@ int Scene::loadMesh(string meshid) {
 
         bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, address);
 
-        cout << model.accessors[model.meshes[0].primitives[0].indices].componentType << endl;
-
+        Geom newGeom;
+        newGeom.type = MESH;
+        newGeom.triIdx = tris.size();
+        newGeom.triCount = 0;
+        int offset = 0;
         for (const auto& modelMesh : model.meshes) {
             for (const auto& p : modelMesh.primitives) {
-                Geom newGeom;
-                newGeom.type = MESH;
-                newGeom.triIdx = tris.size();
 
                 // READING INDEX BUFFER FOR TRIANGLE INDICES
 
@@ -238,7 +243,7 @@ int Scene::loadMesh(string meshid) {
 #else
                 cout << "using short" << endl;
                 if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) throw;
-                unsigned short* indicesBuffer = reinterpret_cast<unsigned short*>(rawData[start]);
+                unsigned short* indicesBuffer = reinterpret_cast<unsigned short*>(&rawData[start]);
 #endif
 
                 // READING POSITION, NORMAL, UV BUFFER
@@ -263,8 +268,7 @@ int Scene::loadMesh(string meshid) {
                         uvBuffer = reinterpret_cast<float*>(&rawData[start]);
                     }
                 }
-
-                newGeom.triCount = 0;
+                                
                 // Load pos, nor, and uv data into triangle struct
                 for (size_t i = 0; i < idxCount; i += 3) {
                     Triangle t;
@@ -279,41 +283,56 @@ int Scene::loadMesh(string meshid) {
                     tris.push_back(t);
                     newGeom.triCount++;
                 }
-
-                //link material
-                utilityCore::safeGetline(fp_in, line);
-                if (!line.empty() && fp_in.good()) {
-                    vector<string> tokens = utilityCore::tokenizeString(line);
-                    newGeom.materialid = atoi(tokens[1].c_str());
-                }
-
-                //load transformations
-                utilityCore::safeGetline(fp_in, line);
-                while (!line.empty() && fp_in.good()) {
-                    vector<string> tokens = utilityCore::tokenizeString(line);
-
-                    //load tranformations
-                    if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
-                        newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                    }
-                    else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
-                        newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                    }
-                    else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
-                        newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-                    }
-
-                    utilityCore::safeGetline(fp_in, line);
-                }
-
-                newGeom.transform = utilityCore::buildTransformationMatrix(
-                    newGeom.translation, newGeom.rotation, newGeom.scale);
-                newGeom.inverseTransform = glm::inverse(newGeom.transform);
-                newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
-                geoms.push_back(newGeom);
+                offset += 1;
             }
         }
-        
+        //link material
+        utilityCore::safeGetline(fp_in, line);
+        if (!line.empty() && fp_in.good()) {
+            vector<string> tokens = utilityCore::tokenizeString(line);
+            newGeom.materialid = atoi(tokens[1].c_str());
+        }
+
+        //load transformations
+        utilityCore::safeGetline(fp_in, line);
+        while (!line.empty() && fp_in.good()) {
+            vector<string> tokens = utilityCore::tokenizeString(line);
+
+            //load tranformations
+            if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+                newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            }
+            else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+                newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            }
+            else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+                newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            }
+
+            utilityCore::safeGetline(fp_in, line);
+        }
+
+        newGeom.transform = utilityCore::buildTransformationMatrix(
+            newGeom.translation, newGeom.rotation, newGeom.scale);
+        newGeom.inverseTransform = glm::inverse(newGeom.transform);
+        newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+        geoms.push_back(newGeom);
+    }
+    return 1;
+}
+int Scene::loadEnv(string envid) {
+
+    int id = atoi(envid.c_str());
+    string address;
+    string line;
+    utilityCore::safeGetline(fp_in, address);
+    address = "../scenes/" + address;
+    char* fname = (char*)address.c_str();
+    if (fp_in.good()) {
+        float* img = stbi_loadf(fname, &mp.width, &mp.height, &mp.channels, 0);
+        mp.image_data = new float[mp.width * mp.height * 4];
+        memcpy(mp.image_data, img, mp.width * mp.height * 4);
+        hasEnvMap = true;
     }
     return 1;
 }
