@@ -143,6 +143,21 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
+__host__ __device__ glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 p)
+{
+    const glm::vec3 v0 = b - a, v1 = c - a, v2 = p - a;
+    const float d00 = glm::dot(v0, v0);
+    const float d01 = glm::dot(v0, v1);
+    const float d11 = glm::dot(v1, v1);
+    const float d20 = glm::dot(v2, v0);
+    const float d21 = glm::dot(v2, v1);
+    const float invDenom = 1.f / (d00 * d11 - d01 * d01);
+    const float v = (d11 * d20 - d01 * d21) * invDenom;
+    const float w = (d00 * d21 - d01 * d20) * invDenom;
+    const float u = 1.0f - v - w;
+    return glm::vec3(u, v, w);
+}
+
 __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, Triangle* tris)
 {
@@ -160,35 +175,47 @@ __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
         {
             if (bary.z < minBary.z)
             {
-                minBary.z = bary.z;
+                minBary = bary;
                 triIdx = i;
             }
         }
     }
 
-    if (triIdx >= 0)
+    if (triIdx >= 0 && minBary.z < FLT_MAX)
     {
-        glm::vec3 ptLocal = rayOriginLocal + rayDirLocal * minBary.t;
-        intersectionPoint = multiplyMV(mesh.transform, glm::vec4(ptLocal, 1.0f));
+        glm::vec3 localIntersectionPt = rayOriginLocal + rayDirLocal * minBary.z;
 
         Triangle& tri = tris[triIdx];
-        //glm::vec3 d1 = glm::normalize(tri.v1.pos - tri.v0.pos);
-        //glm::vec3 d2 = glm::normalize(tri.v2.pos - tri.v0.pos);
-        //glm::vec3 norLocal = glm::cross(d2, d1);
 
-        float u = minBary.x;
-        float v = minBary.y;
-        float w = 1.0f - u - v;
+        glm::vec3 localNor(0.0f);
+        // Are vertex normals present?
+        if (tri.hasNormals)
+        {
+            // Use barycentric coordinates to interpolate vertex normals at the intersection point
+            float u = minBary.x;
+            float v = minBary.y;
+            float w = 1.0f - u - v;
 
-        glm::vec3 norLocal = u * tri.v0.nor + v * tri.v1.nor + w * tri.v2.nor;
+            localNor = glm::normalize(u * tri.v0.nor + v * tri.v1.nor + w * tri.v2.nor);
+        }
+        else
+        {
+            // Cross product of triangle edges
+            // This will result in flat shading
+            // This is just a fallback for when the GLTF file doesn't have normal data
+            glm::vec3 d1 = glm::normalize(tri.v1.pos - tri.v0.pos);
+            glm::vec3 d2 = glm::normalize(tri.v2.pos - tri.v0.pos);
+            localNor = glm::normalize(glm::cross(d1, d2));
+        }
 
-        normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(norLocal, 0.0f)));
+        intersectionPoint = multiplyMV(mesh.transform, glm::vec4(localIntersectionPt, 1.0f));
+        normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(localNor, 0.0f)));
     }
     else
     {
-        intersectionPoint = r.origin + r.direction * 10.0f;
-        normal = glm::vec3(0.0f, 0.0f, 1.0f);
-        return 10.0f;
+        //intersectionPoint = r.origin + r.direction * 10.0f;
+        //normal = glm::vec3(0.0f, 0.0f, 1.0f);
+        //return 10.0f;
     }
 
     return triIdx == -1 ? -1 : glm::length(intersectionPoint - r.origin);

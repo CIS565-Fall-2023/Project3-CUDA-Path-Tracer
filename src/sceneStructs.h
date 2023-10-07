@@ -27,6 +27,7 @@ struct Vertex
 struct Triangle
 {
     Vertex v0, v1, v2;
+    bool hasNormals{ false };   // when normals are not defined we approximate them on cuda side
 };
 
 struct SceneMesh
