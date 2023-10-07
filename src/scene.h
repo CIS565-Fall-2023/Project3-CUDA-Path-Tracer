@@ -30,11 +30,9 @@ private:
     bool load_gltf(string filename);
     bool load_gltf_contents(string filename);
     bool gltf_load_materials(const tinygltf::Model &model);
-    std::string basePath;
     std::array<std::string, 2> const supported_attributes = {
         "POSITION",
         "NORMAL"
-        //TEXCOORD?
     };
     std::map<int, int> material_map;
 public:
@@ -48,5 +46,4 @@ public:
     std::vector<Material> materials;
     RenderState state;
     std::vector<BvhNode> bvh_nodes;
-    uint32_t nodes_used = 0;
 };

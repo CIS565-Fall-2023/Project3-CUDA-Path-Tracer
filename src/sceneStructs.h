@@ -10,7 +10,6 @@
 enum GeomType {
     SPHERE,
     CUBE,
-    TRI,
     MESH
 };
 
@@ -30,7 +29,7 @@ struct Triangle
     Vertex v0;
     Vertex v1;
     Vertex v2;
-    glm::vec3 centroid; // Dont forget to calculate this
+    glm::vec3 centroid;
 };
 
 struct Geom {
@@ -42,7 +41,7 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
-    uint32_t root_node_index = 0; // can remove? maybe not
+    uint32_t root_node_index = 0;
     uint32_t nodes_used = 0;
     int first_tri_index;
     int last_tri_index;
@@ -59,7 +58,8 @@ struct Material {
     float hasReflective;
     float hasRefractive;
     float indexOfRefraction;
-    float emittance;
+    float emittance = -1;
+    glm::vec3 emittance_vec3 = glm::vec3(-1.0f);
 };
 
 struct Camera {
@@ -97,14 +97,6 @@ struct ShadeableIntersection {
   glm::vec3 surfaceNormal;
   glm::vec3 intersectionPoint;
   int materialId;
-};
-
-
-struct Mesh : Geom {
-    std::vector<Triangle> tris;
-    std::vector<int> tri_indices;
-    uint32_t root_node_index = 0;
-    uint32_t nodes_used = 0;
 };
 
 struct Aabb {
@@ -161,11 +153,6 @@ struct BvhNode
     BvhNode(uint32_t left_first, uint32_t tri_count)
         : aa_bb(), left_first(left_first), tri_count(tri_count)
         {}
-
-    bool is_leaf()
-    {
-        return tri_count > 0;
-    }
 };
 
 #define NUM_BINS 8

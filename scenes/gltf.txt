@@ -7,10 +7,10 @@ CAMERA
 RES         800 800
 FOVY        45
 ITERATIONS  5000
-DEPTH       3
-FILE        cornell
-EYE         0.0 15 23
-LOOKAT      0 15 0
+DEPTH       7
+FILE        piplup
+EYE         0.0 10 23
+LOOKAT      0 10 0
 UP          0 1 0
 
 // Emissive material (light)
@@ -22,6 +22,8 @@ REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   5
+
+
 
 // Ceiling light
 OBJECT 2
@@ -41,9 +43,9 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Diffuse red
+// Diffuse light blue
 MATERIAL 4
-RGB         .85 .35 .35
+RGB         .67 .86 .89
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -51,9 +53,9 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Diffuse green
+// Diffuse purple
 MATERIAL 5
-RGB         .35 .85 .35
+RGB         .75 .67 .89
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -71,43 +73,53 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
+// Emissive material (soft light)
+MATERIAL 7
+RGB         1 1 0.85
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   4
+
 // Floor
 OBJECT 3
 cube
 material 3
 TRANS       0 -5 0
 ROTAT       0 0 0
-SCALE       30 0.01 30
+SCALE       35 0.01 30
 
 // Ceiling
 OBJECT 4
 cube
 material 3
 TRANS       0 30 0
-ROTAT       0 0 90
-SCALE       0.01 30 30
+ROTAT       0 0 0
+SCALE       35 0.01 30
 
 // Back wall
 OBJECT 5
 cube
-material 3
+material 5
 TRANS       0 12.5 -15
-ROTAT       0 90 0
-SCALE       0.01 35 30
+ROTAT       0 0 0
+SCALE       35 35 0.01
 
 // Left wall
 OBJECT 6
 cube
 material 4
-TRANS       -15 12.5 0
+TRANS       -17.5 12.5 0
 ROTAT       0 0 0
 SCALE       0.01 35 30
 
 // Right wall
 OBJECT 7
 cube
-material 5
-TRANS       15 12.5 0
+material 4
+TRANS       17.5 12.5 0
 ROTAT       0 0 0
 SCALE       0.01 35 30
 
@@ -115,7 +127,7 @@ SCALE       0.01 35 30
 OBJECT 8
 cube
 material 2
-TRANS       15 10 0
+TRANS       17.5 10 0
 ROTAT       0 0 0
 SCALE       .3 3 3
 
@@ -123,7 +135,7 @@ SCALE       .3 3 3
 OBJECT 9
 cube
 material 2
-TRANS       -15 10 0
+TRANS       -17.5 10 0
 ROTAT       0 0 0
 SCALE       .3 3 3
 
@@ -146,7 +158,7 @@ SCALE       .3 3 3
 // Camera light
 OBJECT 9
 cube
-material 2
-TRANS 0.0 15 25
+material 7
+TRANS 0.0 12.5 25
 ROTAT 0 0 0
-SCALE 16 16 .3
+SCALE 18 18 .3

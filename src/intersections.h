@@ -151,12 +151,10 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray ray, Triangle* tri
     Ray r;
     r.origin = multiplyMV(mesh.inverseTransform, glm::vec4(ray.origin, 1.0f));
     r.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(ray.direction, 0.0f)));
-    float curr_t = FLT_MAX; //Double check what this does
+    float curr_t = FLT_MAX; 
     bool intersected = false;
     glm::vec3 obj_intersect;
     glm::vec3 obj_normal;
-    //printf("test mesh intersection 1 ");
-    //printf("tris_size = % d\n", tris_size);
     for (int i = mesh.first_tri_index; i <= mesh.last_tri_index; i++)
     {
         Triangle tri = tris[i];
@@ -164,17 +162,13 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray ray, Triangle* tri
 		glm::vec3 tri_v1 = tri.v1.pos;
 		glm::vec3 tri_v2 = tri.v2.pos;
 		glm::vec3 bary;
-        //printf("test tri %d\n", i);
         if (glm::intersectRayTriangle(r.origin, r.direction, tri_v0, tri_v1, tri_v2, bary) && (bary.z < curr_t))
         {
 			intersected = true;
 			float bary_w = 1.0f - bary.x - bary.y;
             obj_intersect = getPointOnRay(r, bary.z);
-			//intersect = bary.x * tri_v0 + bary.y * tri_v1 + bary_w * tri_v2; //try w = 1 - (u + v) here
 			obj_normal = glm::normalize(bary_w * tri.v0.nor + bary.x * tri.v1.nor + bary.y * tri.v2.nor);
-            //printf("obj_normal is %f, %f, %f\n", obj_normal.x, obj_normal.y, obj_normal.z);
             curr_t = bary.z;
-            //printf("curr_t is %f, bary is %f %f %f\n", curr_t, bary.x, bary.y, bary.z);
 		}
 	}
     if (!intersected)
@@ -183,7 +177,6 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray ray, Triangle* tri
     }
     intersect = multiplyMV(mesh.transform, glm::vec4(obj_intersect, 1.0f));
     normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(obj_normal, 0.0f)));
-    //printf("normal is %f, %f, %f\n", normal.x, normal.y, normal.z);
 
 #if DEBUG
     printf("in obj space:\n");
@@ -232,7 +225,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
     glm::vec3 ray_origin = r.origin;
     glm::vec3 ray_rec_direction = 1.0f / r.direction;
     glm::vec3 ray_direction = r.direction;
-    float curr_t = FLT_MAX; //Double check what this does
+    float curr_t = FLT_MAX; 
     do
     {
         if (node->tri_count > 0) // if BvhNode is leaf
@@ -246,8 +239,6 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
                 glm::vec3 tri_v2 = tri->v2.pos;
                 glm::vec3 bary;
 
-                
-                // bary.z might be t
                 if (glm::intersectRayTriangle(ray_origin, ray_direction, tri_v0, tri_v1, tri_v2, bary) 
                     && (bary.z < curr_t))
                 {
@@ -256,16 +247,11 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
                     float bary_w = 1.0f - bary.x - bary.y;
                     intersect = getPointOnRay(r, curr_t);
 #if DEBUG
-                    // I'm not sure if this is in world coords
                     glm::vec3 intersect_test = tri_v0 * bary_w + tri_v1 * bary.x + tri_v2 * bary.y; 
                     glm::vec3 diff = intersect - intersect_test;
                     printf("diff is %f, %f, %f", diff.x, diff.y, diff.z);
 #endif DEBUG
-                    // I'm not sure if this is in world coords
                     normal = glm::normalize(tri->v0.nor * bary_w + tri->v1.nor * bary.x + tri->v2.nor * bary.y);
-
-                    //intersect = bary.x * tri_v0 + bary.y * tri_v1 + bary_w * tri_v2; //try w = 1 - (u + v) here
-                    //normal = glm::normalize(bary.x * tri->v0.nor + bary.y * tri->v1.nor + bary_w * tri->v2.nor);
                 }
 
             }
@@ -273,7 +259,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
             {
 				break;
 			}
-            node = &bvh_nodes[stack[--stack_ptr]]; // Double check this logic for first iter
+            node = &bvh_nodes[stack[--stack_ptr]]; 
         }
         else
         {
@@ -312,7 +298,7 @@ __host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const 
                 }
             }
         }
-    } while (stack_ptr >= 0); //double check iterations
+    } while (stack_ptr >= 0); 
     intersect = multiplyMV(geom.transform, glm::vec4(intersect, 1.0f));
     normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(normal, 0.0f)));
 #if DEBUG

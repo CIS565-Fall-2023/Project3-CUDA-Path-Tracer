@@ -5,7 +5,6 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <cmath>
 
-#define EMISSIVE_FACTOR 1.5f
 #define TRANSFORM_DEBUG 0
 #define MATERIAL_DEBUG 0
 #define DEBUG 0
@@ -14,9 +13,6 @@
 using namespace std;
 
 Scene::Scene(string filename) {
-    //std::string file = filename.substr(filename.rfind('/') + 1);
-    //fprintf(stderr, "filename is %s\n", filename.c_str());
-    //fprintf(stderr, "file is %s\n", file.c_str());
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -25,12 +21,6 @@ Scene::Scene(string filename) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
     }
-    //if (fp_in.good() && !strcmp(strrchr(fname, '.'), ".gltf"))
-    //{
-    //    // instead of this, add gltf file as meshes, maybe enable adding multiple meshes
-    //    // per gltf in existing scene.txt
-    //    load_gltf(filename);
-    //}
     else
     {
         while (fp_in.good()) {
@@ -102,18 +92,20 @@ bool Scene::gltf_load_materials(const tinygltf::Model &model)
     for (const auto& material : model.materials)
     {
         Material new_material;
-        new_material.color = glm::vec3(static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[0]),
-                                       static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[1]), 
-                                       static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]));
+        new_material.color = glm::vec3((material.pbrMetallicRoughness.baseColorFactor[0]),
+                                       (material.pbrMetallicRoughness.baseColorFactor[1]), 
+                                       (material.pbrMetallicRoughness.baseColorFactor[2]));
         new_material.specular.exponent = 1.0f / material.pbrMetallicRoughness.roughnessFactor;
         new_material.specular.factor = material.pbrMetallicRoughness.metallicFactor;
         new_material.specular.color = new_material.color;
         new_material.hasReflective = (material.pbrMetallicRoughness.metallicFactor > 0.0f) ? 1.0f : 0.0f;
         new_material.hasRefractive = 0.0f;
         new_material.indexOfRefraction = 0.0f;
-        //if (!material.emissiveFactor.empty())
-        //    cout << "Material emissive factor: " << material.emissiveFactor[0] << endl;
-        new_material.emittance = material.emissiveFactor[0]; // hard coded emissive for now
+        new_material.emittance = material.emissiveFactor[0] == 0 ? -1 : material.emissiveFactor[0];
+        if (material.emissiveFactor.size() == 3)
+        {
+            new_material.emittance_vec3 = glm::vec3(new_material.emittance);
+        }
 #if MATERIAL_DEBUG 
         fprintf(stderr, "Material color: %f, %f, %f\n", new_material.color.x, new_material.color.y, new_material.color.z);
         fprintf(stderr, "Material index: %d\n", materials.size());
@@ -192,6 +184,7 @@ void Scene::traverse_node(const tinygltf::Model& model, int node_index,
                            const glm::mat4& parent_transform)
 {
     const tinygltf::Node& node = model.nodes[node_index];
+    // Get and combine node transform with parent's
     glm::vec3 rotation(0.0f);
     glm::quat rotation_quat;
     glm::vec3 translation(0.0f);
@@ -256,8 +249,6 @@ void Scene::traverse_node(const tinygltf::Model& model, int node_index,
     }
 }
 
-
-
 void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh, 
                       const glm::vec3& translation, const glm::vec3& rotation, const glm::vec3& scale,
                       const glm::quat& rotation_quat, const glm::mat4 &transformation)
@@ -270,7 +261,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
     new_mesh.scale = scale;
     new_mesh.first_tri_index = tris.size();
 
-    // TODO: link material
     // I'm kind of assuming each mesh is only one primitive here
     for (const auto& primitive : mesh.primitives)
     {
@@ -287,7 +277,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
             if (primitive.attributes.find(supported_attributes[i]) != primitive.attributes.end())
             {
                 const int index = primitive.attributes.at(supported_attributes[i]);
-                //cout << " index: " << index << "for supported attributes i " << supported_attributes[i] << endl;
                 accessors[i] = &model.accessors[index];
                 bufferViews[i] = &model.bufferViews[accessors[i]->bufferView];
                 buffers[i] = &model.buffers[bufferViews[i]->buffer];
@@ -304,14 +293,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
             printf("Mesh material id: %d for mesh %li\n", new_mesh.materialid, geoms.size());
 #endif
         }
-        //if (primitive.attributes.find("POSITION") != primitive.attributes.end())
-        //{
-        //    const int pos_index = primitive.attributes.at("POSITION");
-        //    const tinygltf::Accessor& pos_accessor = model.accessors[pos_index];
-        //    const tinygltf::BufferView& pos_bufferView = model.bufferViews[accessor.bufferView];
-        //    const tinygltf::Buffer& pos_buffer = model.buffers[bufferView.buffer];
-        //    const float* pos_data = reinterpret_cast<const float*>(&(buffer.data[accessor.byteOffset + bufferView.byteOffset]));
-        //
         // not using indices
         if (primitive.indices < 0)
         {
@@ -325,17 +306,13 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
                     {
                         continue;
                     }
-                    //const float* attribute_data = data[j];
                     const glm::vec3 * attribute_data = vec3_data[j];
                     if (supported_attributes[j] == "TEXCOORD_0")
                     {
-                        // UV coords
+                        // UV coords - texture mapping not implemented
                     }
                     else
                     {
-                        //glm::vec3 vec_0 = glm::vec3(attribute_data[i * 3], attribute_data[i * 3 + 1], attribute_data[i * 3 + 2]);
-                        //glm::vec3 vec_1 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
-                        //glm::vec3 vec_2 = glm::vec3(attribute_data[(i + 1) * 3], attribute_data[(i + 1) * 3 + 1], attribute_data[(i + 1) * 3 + 2]);
                         glm::vec3 vec_0 = attribute_data[i * strides[j] / sizeof(glm::vec3)]; // Adjust index based on stride
                         glm::vec3 vec_1 = attribute_data[(i + 1) * strides[j] / sizeof(glm::vec3)]; // Adjust index based on stride
                         glm::vec3 vec_2 = attribute_data[(i + 2) * strides[j] / sizeof(glm::vec3)]; // Adjust index based on stride
@@ -356,8 +333,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
                         }
                     }
                 }
-                // For now assume that each mesh is one material
-                //tri.materialid = static_cast<int>(primitive.material);
 #if DEBUG
                 print_tri(tri);
 #endif
@@ -370,15 +345,26 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
             const tinygltf::Accessor& index_accessor = model.accessors[primitive.indices];
             const tinygltf::BufferView& index_bufferView = model.bufferViews[index_accessor.bufferView];
             const tinygltf::Buffer& index_buffer = model.buffers[index_bufferView.buffer];
-            // assuming 16 bit indices - may need to change
-            const uint32_t* index_data = reinterpret_cast<const uint32_t*>(&(index_buffer.data[index_accessor.byteOffset + index_bufferView.byteOffset]));
-            for (int i = 0; i < index_accessor.count; i += 3) //stride may be here?
+            const uint16_t* index_data_16 = reinterpret_cast<const uint16_t*>(&(index_buffer.data[index_accessor.byteOffset + index_bufferView.byteOffset]));
+            const uint32_t* index_data_32 = reinterpret_cast<const uint32_t*>(&(index_buffer.data[index_accessor.byteOffset + index_bufferView.byteOffset]));
+            for (int i = 0; i < index_accessor.count; i += 3) 
             {
 
                 Triangle tri;
-                int index_0 = index_data[i];
-                int index_1 = index_data[i + 1];
-                int index_2 = index_data[i + 2];
+                int index_0, index_1, index_2;
+                if (index_accessor.componentType == 5123)
+                {
+                    index_0 = index_data_16[i];
+                    index_1 = index_data_16[i + 1];
+                    index_2 = index_data_16[i + 2];
+                }
+                else
+                {
+                    // If neither 16 or 32 bit uint used for indices, just default to 32-bit for now
+                    index_0 = index_data_32[i];
+                    index_1 = index_data_32[i + 1];
+                    index_2 = index_data_32[i + 2];
+                }
 
                 for (int j = 0; j < supported_attributes.size(); j++)
                 {
@@ -386,7 +372,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
                     {
                         continue;
                     }
-                    //const float* attribute_data = data[j];
                     const glm::vec3 * attribute_data = vec3_data[j];
                     if (supported_attributes[j] == "TEXCOORD_0")
                     {
@@ -394,9 +379,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
                     }
                     else
                     {
-                        //glm::vec3 vec_0 = glm::vec3(attribute_data[index_0 * 3], attribute_data[index_0 * 3 + 1], attribute_data[index_0 * 3 + 2]);
-                        //glm::vec3 vec_1 = glm::vec3(attribute_data[index_1 * 3], attribute_data[index_1 * 3 + 1], attribute_data[index_1 * 3 + 2]);
-                        //glm::vec3 vec_2 = glm::vec3(attribute_data[index_2 * 3], attribute_data[index_2 * 3 + 1], attribute_data[index_2 * 3 + 2]);
                         int byte_stride = strides[j]; // Get byte stride for this attribute
 
                         // Access vec3 values while accounting for byte stride
@@ -429,7 +411,8 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
     }
     new_mesh.last_tri_index = tris.size() - 1;
 
-    //new_mesh.transform = utilityCore::buildTransformationMatrix(new_mesh.translation, new_mesh.rotation, new_mesh.scale);
+    // Going to use own transformation building due to difficulties with default function
+    // new_mesh.transform = utilityCore::buildTransformationMatrix(new_mesh.translation, new_mesh.rotation, new_mesh.scale);
     glm::quat quat = rotation_quat;
     new_mesh.transform = (transformation == glm::mat4(0.0f)) ? glm::scale((glm::translate(glm::mat4(1.0f), translation) * glm::mat4(quat)), scale)
                                                              : transformation;
@@ -452,10 +435,6 @@ void Scene::load_mesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
 
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
-    //if (id != geoms.size()) {
-    //    cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
-    //    return -1;
-    //} else {
     cout << "Loading Geom " << id << "..." << endl;
     Geom newGeom;
     string line;
@@ -571,10 +550,6 @@ int Scene::loadCamera() {
 
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
-    //if (id != materials.size()) {
-    //    cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
-    //    return -1;
-    //} else {
     cout << "Loading Material " << id << "..." << endl;
     Material newMaterial;
     int material_index = materials.size();
@@ -604,20 +579,17 @@ int Scene::loadMaterial(string materialid) {
     }
     materials.push_back(newMaterial);
     return 1;
-    //}
 }
 
-//need to build a bvh per mesh? or tbh can just search for which mesh the triangle belongs to after intersecting
-// have to rework the first index, last index thing for the mesh though
 void Scene::bvh_build()
 {
     bvh_nodes.reserve(tris.size() - 1);
-    // assign triangle centroids at some other point, when loading in triangles perhaps
     tri_indices = std::vector<int>(tris.size());
     for (int i = 0; i < tri_indices.size(); i++)
     {
         tri_indices[i] = i;
     }
+    // Build a separate BVH for each mesh 
     for (int i = 0; i < geoms.size(); i++)
     {
         Geom& geom = geoms[i];
@@ -627,7 +599,6 @@ void Scene::bvh_build()
         }
         bvh_nodes.emplace_back();
         geom.root_node_index = bvh_nodes.size() - 1;
-        nodes_used++; //not sure what this is used for at the moment
         geom.nodes_used++;
         BvhNode& root = bvh_nodes[geom.root_node_index];
         root.left_first = geom.first_tri_index;
@@ -637,16 +608,14 @@ void Scene::bvh_build()
     }
     bvh_reorder_tris();
     bvh_in_use = true;
+    cout << "Enabled BVH with " << bvh_nodes.size() << " nodes" << endl;
 }
 
+// Reorder triangles to be in order of triangle indices from BVH construction before copying to GPU
+// Avoids copying both triangles and triangle indices to GPU, avoiding excessive indirection
 void Scene::bvh_reorder_tris()
 {
     std::vector<Triangle> temp_tris(tris);
- //   for (int i = 0; i < tri_indices.size(); i++)
- //   {
-	//	tris[i] = temp_tris[tri_indices[i]];
-	//}
-
     auto reorder = [&temp_tris](int index)
         {
             return temp_tris[index];
@@ -751,7 +720,7 @@ float Scene::bvh_find_best_split(uint32_t node_index, int& axis, float& split_po
 			bins[bin_index].tri_count++;
             bins[bin_index].bounds.grow(tri);
         }
-        // Sweep over planes and gather data to calculate SAH
+        // Sweep over splitting options and gather data to calculate SAH
         float left_area[NUM_BINS - 1], right_area[NUM_BINS - 1];
         int left_count[NUM_BINS - 1], right_count[NUM_BINS - 1];
         Aabb left_box, right_box;

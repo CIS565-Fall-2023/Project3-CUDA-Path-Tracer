@@ -7,7 +7,6 @@
 #include <glm/gtx/intersect.hpp>
 #include <cstring>
 
-
 #define DEBUG 0
 
 static std::string startTimeString;
