@@ -39,7 +39,7 @@ public:
 #if BVH_TOGGLE
     bool useBvh{ true };
 #endif
-    bool partitionRays{ true };
+    bool partitionRays{ false };
 
     bool denoising{ true };
     int denoiseInterval{ 3 };

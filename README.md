@@ -52,7 +52,7 @@ Using [tinygltf](https://github.com/syoyo/tinygltf). The above images show, from
 
 TODO: replace these FPS numbers
 
-The [above scene](#environment-map-lights) renders at \_\_\_\_ FPS using a BVH and \_\_\_\_ FPS without a BVH. The mesh has 17,386 triangles and it takes about 11.5 ms to construct the BVH.
+The [above scene](#environment-map-lights) renders at 40.9 FPS using a BVH and 2.2 FPS without a BVH. The mesh has 17,386 triangles and it takes about 11.5 ms to construct the BVH.
 
 More detailed performance analysis is given [below](#bvh).
 
@@ -82,12 +82,22 @@ TODO
 
 TODO
 
+Seems like it's faster with this off. Maybe the cost of partitioning 2 million rays is a lot higher than the potential savings.
+
+Might want to look at an iteration of this in nsight, but I'm also really lazy so probably not.
+
 - Stream compaction helps most after a few bounces. Print and plot the effects of stream compaction within a single iteration (i.e. the number of unterminated rays after each bounce) and evaluate the benefits you get from stream compaction.
 - Compare scenes which are open (like the given cornell box) and closed (i.e. no light can escape the scene). Again, compare the performance effects of stream compaction! Remember, stream compaction only affects rays which terminate, so what might you expect?
 
 ### Sort rays by material type
 
 TODO
+
+### Russian roulette path termination
+
+TODO
+
+- Compare number of rays per depth with and without russian roulette
 
 ### First bounce cache
 
@@ -96,12 +106,6 @@ TODO
 This option exists for performance comparisons but does not make sense to use for actual renders because it doesn't play nice with anti-aliasing or depth of field.
 
 - Provide performance benefit analysis across different max ray depths.
-
-### Russian roulette path termination
-
-TODO
-
-- Compare number of rays per depth with and without russian roulette
 
 ### BVH
 

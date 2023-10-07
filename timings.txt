@@ -1,13 +1,6 @@
 open = end of evangelion scene (1080 x 1350)
 closed = backrooms scene (1920 x 1080)
 
-unless otherwise specified:
-- Block size = 64 for 1D, 8x8 for 2D
-- BVH, partition rays, and russian roulette are on
-- sort rays by material type and first bounce cache are off
-- max ray depth = 8
-- denoising every 3 frames
-
 ==================================================
 Baseline
 ==================================================
@@ -19,9 +12,14 @@ Closed: 355.9 ms/frame
 Block size
 ==================================================
 
+- BVH, partition rays, and russian roulette are on
+- sort rays by material type and first bounce cache are off
+- max ray depth = 8
+- denoising every 3 frames
+
 Open
 ----------
-1D size
+1D block size
 16: 111.4 ms/frame
 32: 104.8 ms/frame
 64: 103.1 ms/frame
@@ -31,7 +29,7 @@ Open
 768: 114.2 ms/frame
 1024: doesn't work (too many resources requested)
 
-2D size
+2D block size
 4x4: 103.1 ms/frame
 8x4: 102.8 ms/frame
 8x8: 103.1 ms/frame
@@ -61,6 +59,8 @@ Closed
 32x16: 356.8 ms/frame
 32x32: 356.2 ms/frame
 
+- Block size = 64 for 1D, 8x8 for 2D
+
 ==================================================
 Partition rays
 ==================================================
@@ -79,7 +79,7 @@ Open
 7: 820
 
 with: 103.1 ms/frame
-without: 
+without: 63.1 ms/frame
 
 Closed
 ----------
@@ -93,7 +93,11 @@ Closed
 7: 1413231
 
 with: 355.9 ms/frame
-without: 
+without: 243.6 ms/frame
+
+Performance also doubled in the monkey scene when I turned partition rays off.
+
+- partition rays switches to off
 
 ==================================================
 Sort rays by material type
@@ -101,63 +105,19 @@ Sort rays by material type
 
 Open
 ----------
-without: 103.1 ms/frame
-with: 
+without: 63.1 ms/frame
+with: 478.8 ms/frame
+with and with partition: 187.0 ms/frame
 
 Closed
 ----------
-without: 355.9 ms/frame
-with: 
+without: 243.6 ms/frame
+with: 807.7 ms/frame
+with and with partition: 634.6 ms/frame
 
-==================================================
-First bounce cache
-==================================================
+Interestingly, with material type sorting enabled, partitioning rays actually led to better performance. However, that was still worse than having neither enabled.
 
-the numbers on the left represent max ray depth
-
-Open
-----------
-without
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 103.1 ms/frame
-
-with
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 
-
-Closed
-----------
-without
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 355.9 ms/frame
-
-with
-1: 
-2: 
-3: 
-4: 
-5: 
-6: 
-7: 
-8: 
+- sort by material and partition rays both stay off
 
 ==================================================
 Russian roulette path termination
@@ -165,8 +125,8 @@ Russian roulette path termination
 
 Open
 ----------
-with: 103.1 ms/frame
-without: 
+with: 63.1 ms/frame
+without: 64.7 ms/frame
 
 0: 1458000
 1: 834771
@@ -179,8 +139,8 @@ without:
 
 Closed
 ----------
-with: 355.9 ms/frame
-without: 
+with: 243.6 ms/frame
+without: 417.0 ms/frame
 
 0: 2073600
 1: 2035969
@@ -191,16 +151,70 @@ without:
 6: 22119
 7: 10439
 
+- russian roulette stays on
+
+==================================================
+First bounce cache
+==================================================
+
+the numbers on the left represent max ray depth
+
+Open
+----------
+without
+1: 33.5 ms/frame
+2: 48.6 ms/frame
+3: 55.4 ms/frame
+4: 59.2 ms/frame
+5: 60.0 ms/frame
+6: 60.7 ms/frame
+7: 61.6 ms/frame
+8: 63.1 ms/frame
+
+with
+1: 29.1 ms/frame
+2: 41.6 ms/frame
+3: 50.2 ms/frame
+4: 53.6 ms/frame
+5: 54.8 ms/frame
+6: 56.2 ms/frame
+7: 56.8 ms/frame
+8: 57.2 ms/frame
+
+Closed
+----------
+without
+1: 51.3 ms/frame
+2: 110.0 ms/frame
+3: 166.1 ms/frame
+4: 222.7 ms/frame
+5: 231.5 ms/frame
+6: 237.2 ms/frame
+7: 240.2 ms/frame
+8: 243.6 ms/frame
+
+with
+1: 39.3 ms/frame
+2: 96.1 ms/frame
+3: 154.7 ms/frame
+4: 209.3 ms/frame
+5: 217.8 ms/frame
+6: 223.0 ms/frame
+7: 226.6 ms/frame
+8: 228.5 ms/frame
+
+- first bounce cache stays off because it leads to incorrect results (and doesn't give that much performance anyway)
+
 ==================================================
 BVH
 ==================================================
 
 freddy fazbear environment map scene (800 x 800) [17,386 tris] {~11.5 ms to construct BVH}
 ----------
-with: 
-without: 
+with: 24.5 ms/frame
+without: 459.1 ms/frame
 
 orange and blue monkey scene (800 x 800) [968 tris] {~0.5 ms to construct BVH}
 ----------
-with: 
-without: 
+with: 17.2 ms/frame
+without: 31.7 ms/frame
