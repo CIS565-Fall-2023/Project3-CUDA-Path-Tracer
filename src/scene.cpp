@@ -211,6 +211,8 @@ int Scene::loadCamera() {
         }
     }
 
+    // set default lens radius
+    camera.lensRadius = 0;
     string line;
     utilityCore::safeGetline(fp_in, line);
     while (!line.empty() && fp_in.good()) {

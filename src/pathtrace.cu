@@ -22,6 +22,9 @@
 
 #define CACHE_FIRST_BOUNCE 1
 
+// enable 4x Stochastic Sample Anti-Aliasing
+#define ANTIALIASING 1
+
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {
@@ -76,6 +79,7 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
+static glm::vec3* dev_final_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
@@ -99,10 +103,24 @@ void pathtraceInit(Scene* scene) {
 	hst_scene = scene;
 
 	const Camera& cam = hst_scene->state.camera;
-	const int pixelcount = cam.resolution.x * cam.resolution.y;
+#if ANTIALIASING
 
+	const int pixelcount = 4 * cam.resolution.x * cam.resolution.y;
+	cudaMalloc(&dev_image, pixelcount  * sizeof(glm::vec3));
+	cudaMemset(dev_image, 0, pixelcount  * sizeof(glm::vec3));
+
+	cudaMalloc(&dev_final_image, pixelcount / 4 * sizeof(glm::vec3));
+	cudaMemset(dev_final_image, 0, pixelcount / 4 * sizeof(glm::vec3));
+#else
+
+	const int pixelcount = cam.resolution.x * cam.resolution.y;
 	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
+#endif
+
+	
+	//cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
+	//cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
 
@@ -130,6 +148,7 @@ void pathtraceInit(Scene* scene) {
 
 void pathtraceFree() {
 	cudaFree(dev_image);  // no-op if dev_image is null
+	cudaFree(dev_final_image);
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
@@ -180,6 +199,55 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
+#if ANTIALIASING
+	if (x < 2 * cam.resolution.x && y < 2 * cam.resolution.y) {
+		int index = x + (y * cam.resolution.x * 2);
+		PathSegment& segment = pathSegments[index];
+
+		segment.ray.origin = cam.position;
+		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+
+		// TODO: implement antialiasing by jittering the ray
+		// Initialize random number generator
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		
+		// Initialize uniform distribution in two dimensions
+		thrust::uniform_real_distribution<float> u01(-1, 1);
+		thrust::uniform_real_distribution<float> u02(-1, 1);
+
+		segment.ray.direction = glm::normalize(cam.view
+			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) * 4.f - (float)cam.resolution.x * 2 * 0.5f) / 2.f
+			- cam.up * cam.pixelLength.y * ((float)y + u02(rng) * 4.f - (float)cam.resolution.y * 2 * 0.5f) / 2.f
+		);
+
+		if (cam.lensRadius > 0) {
+			// Initialize random number generator
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+			//thrust::uniform_real_distribution<float> uniformDistribution(-1, 1);
+
+			// Sample a point on the lens using the concentricSampleDisk function
+			float lensSampleX, lensSampleY;
+			concentricSampleDisk(&lensSampleX, &lensSampleY, rng);
+
+			// Scale the sample by the lens radius
+			glm::vec3 lensPosition = cam.lensRadius * glm::vec3(lensSampleX, lensSampleY, 0.f);
+
+			// Calculate the distance from the lens to the focal plane
+			float focalPlaneIntersectionDistance = cam.focalLength / -segment.ray.direction.z;
+
+			// Determine the point of intersection on the focal plane
+			glm::vec3 focalPlaneIntersection = focalPlaneIntersectionDistance * segment.ray.direction;
+
+			// Update ray origin and direction for the effect of the lens
+			segment.ray.origin += lensPosition;
+			segment.ray.direction = glm::normalize(focalPlaneIntersection - lensPosition);
+		}
+
+
+		segment.pixelIndex = index;
+		segment.remainingBounces = traceDepth;
+	}
+#else
 	if (x < cam.resolution.x && y < cam.resolution.y) {
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
@@ -220,6 +288,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
+#endif
 }
 
 // TODO:
@@ -386,6 +455,19 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	}
 }
 
+// averageWeight the 4X images into one image
+__global__ void averageWeightImages(glm::ivec2 resolution, glm::vec3* inputImage, glm::vec3* outputImage)
+{
+	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+
+	if (x < resolution.x && y < resolution.y) {
+		int out_index = x + (y * resolution.x);
+		int in_index = 2 * x + (2 * y * resolution.x * 2);
+		outputImage[out_index] = (inputImage[in_index] + inputImage[in_index + 1] + inputImage[in_index + resolution.x * 2] + inputImage[in_index + resolution.x * 2 + 1]) / 4.f;
+	}
+}
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -393,6 +475,21 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 void pathtrace(uchar4* pbo, int frame, int iter) {
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
+
+#if ANTIALIASING
+	const int pixelcount = 4 * cam.resolution.x * cam.resolution.y;
+
+	// 2D block for generating ray from camera
+	const dim3 blockSize2d(8, 8);
+	const dim3 blocksPerGrid2d(
+		(cam.resolution.x * 2 + blockSize2d.x - 1) / blockSize2d.x,
+		(cam.resolution.y * 2 + blockSize2d.y - 1) / blockSize2d.y);
+
+	const dim3 finalblocksPerGrid2d(
+		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
+		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
+#else
+
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
 	// 2D block for generating ray from camera
@@ -401,6 +498,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
 		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
+#endif
 	// 1D block for path tracing
 	const int blockSize1d = 128;
 
@@ -434,6 +532,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//     since some shaders you write may also cause a path to terminate.
 	// * Finally, add this iteration's results to the image. This has been done
 	//   for you.
+
 
 	// TODO: perform one iteration of path tracing
 #if CACHE_FIRST_BOUNCE
@@ -576,12 +675,30 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//cout << "ending finalGather" << endl;
 	///////////////////////////////////////////////////////////////////////////
 
+
+#if ANTIALIASING
+
+	averageWeightImages << <finalblocksPerGrid2d, blockSize2d >> > (cam.resolution, dev_image, dev_final_image);
+
+	// Send results to OpenGL buffer for rendering
+	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_final_image);
+	//cout << "sendImageToPBO finished" << endl;
+	// Retrieve image from GPU
+
+#else
+
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
 	//cout << "sendImageToPBO finished" << endl;
 	// Retrieve image from GPU
+#endif
+
+#if ANTIALIASING
+	cudaMemcpy(hst_scene->state.image.data(), dev_image,
+		pixelcount / 4 * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
+#else
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
-
+#endif
 	checkCUDAError("pathtrace");
 }
