@@ -35,6 +35,9 @@ if(WIN32)
     set(CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE FILEPATH "Host side compiler used by NVCC" FORCE)
 endif(WIN32)
 ########################################
+#set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+#set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+#add_subdirectory(src/tinygltf)
 
 find_package(OpenGL REQUIRED)
 
@@ -74,6 +77,8 @@ set(headers
     src/preview.h
     src/utilities.h
     src/ImGui/imconfig.h
+    src/tinygltf/tiny_gltf.h
+    src/tinygltf/json.hpp
 	
 	src/ImGui/imgui.h
     src/ImGui/imconfig.h

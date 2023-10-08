@@ -6,6 +6,8 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+#define DEBUG 0
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -141,4 +143,167 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     }
 
     return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__ float meshIntersectionTest(Geom mesh, Ray ray, Triangle* tris,
+    glm::vec3& intersect, glm::vec3& normal, bool& outside, int tris_size)
+{
+    Ray r;
+    r.origin = multiplyMV(mesh.inverseTransform, glm::vec4(ray.origin, 1.0f));
+    r.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(ray.direction, 0.0f)));
+    float curr_t = FLT_MAX; 
+    bool intersected = false;
+    glm::vec3 obj_intersect;
+    glm::vec3 obj_normal;
+    for (int i = mesh.first_tri_index; i <= mesh.last_tri_index; i++)
+    {
+        Triangle tri = tris[i];
+		glm::vec3 tri_v0 = tri.v0.pos;
+		glm::vec3 tri_v1 = tri.v1.pos;
+		glm::vec3 tri_v2 = tri.v2.pos;
+		glm::vec3 bary;
+        if (glm::intersectRayTriangle(r.origin, r.direction, tri_v0, tri_v1, tri_v2, bary) && (bary.z < curr_t))
+        {
+			intersected = true;
+			float bary_w = 1.0f - bary.x - bary.y;
+            obj_intersect = getPointOnRay(r, bary.z);
+			obj_normal = glm::normalize(bary_w * tri.v0.nor + bary.x * tri.v1.nor + bary.y * tri.v2.nor);
+            curr_t = bary.z;
+		}
+	}
+    if (!intersected)
+    {
+        return -1;
+    }
+    intersect = multiplyMV(mesh.transform, glm::vec4(obj_intersect, 1.0f));
+    normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(obj_normal, 0.0f)));
+
+#if DEBUG
+    printf("in obj space:\n");
+    float obj_length = glm::length(r.origin - obj_intersect);
+    printf("curr_t is %f, length is %f\n", curr_t, obj_length);
+    printf("obj intersection is %f, %f, %f\n", obj_intersect.x, obj_intersect.y, obj_intersect.z);
+
+    printf("\n\n in world space:\n");
+    float length = glm::length(ray.origin - intersect);
+    printf("curr_t is %f, length is %f\n", curr_t, length);
+    printf("intersection is %f, %f, %f\n", intersect.x, intersect.y, intersect.z);
+#endif DEBUG
+    return glm::length(ray.origin - intersect);
+}
+
+
+__host__ __device__ inline float intersect_aabb(const glm::vec3& ray_origin, const glm::vec3& ray_rec_direction, const Aabb& aa_bb, float curr_t)
+{
+    glm::vec3 bmin = aa_bb.bmin;
+    glm::vec3 bmax = aa_bb.bmax;
+    float tx_1 = (bmin.x - ray_origin.x) * ray_rec_direction.x;
+    float tx_2 = (bmax.x - ray_origin.x) * ray_rec_direction.x;
+    float t_min = min(tx_1, tx_2), tmax = max(tx_1, tx_2);
+    float ty_1 = (bmin.y - ray_origin.y) * ray_rec_direction.y;
+    float ty_2 = (bmax.y - ray_origin.y) * ray_rec_direction.y;
+    t_min = max(t_min, min(ty_1, ty_2)), tmax = min(tmax, max(ty_1, ty_2));
+    float tz_1 = (bmin.z - ray_origin.z) * ray_rec_direction.z;
+    float tz_2 = (bmax.z - ray_origin.z) * ray_rec_direction.z;
+    t_min = max(t_min, min(tz_1, tz_2)), tmax = min(tmax, max(tz_1, tz_2));
+
+    return (tmax >= t_min && t_min < curr_t && tmax > 0) ? t_min : FLT_MAX;
+}
+
+
+// returns t
+__host__ __device__ float intersect_bvh(const Geom &geom, Triangle *tris, const Ray &ray, glm::vec3& intersect, 
+                                        glm::vec3& normal, BvhNode *bvh_nodes, int root_node_index)
+{
+    BvhNode* node = &bvh_nodes[root_node_index];
+    int stack[64];
+    int stack_ptr = 0;
+    Ray r = ray;
+    bool intersected = false;
+    r.origin = multiplyMV(geom.inverseTransform, glm::vec4(ray.origin, 1.0f));
+    r.direction = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(ray.direction, 0.0f)));
+    glm::vec3 ray_origin = r.origin;
+    glm::vec3 ray_rec_direction = 1.0f / r.direction;
+    glm::vec3 ray_direction = r.direction;
+    float curr_t = FLT_MAX; 
+    do
+    {
+        if (node->tri_count > 0) // if BvhNode is leaf
+        {
+            for (unsigned int i = 0; i < node->tri_count; i++)
+            {
+                // get intersection with each triangle
+                Triangle* tri = &tris[node->left_first + i];
+                glm::vec3 tri_v0 = tri->v0.pos;
+                glm::vec3 tri_v1 = tri->v1.pos;
+                glm::vec3 tri_v2 = tri->v2.pos;
+                glm::vec3 bary;
+
+                if (glm::intersectRayTriangle(ray_origin, ray_direction, tri_v0, tri_v1, tri_v2, bary) 
+                    && (bary.z < curr_t))
+                {
+                    intersected = true;
+                    curr_t = bary.z;
+                    float bary_w = 1.0f - bary.x - bary.y;
+                    intersect = getPointOnRay(r, curr_t);
+#if DEBUG
+                    glm::vec3 intersect_test = tri_v0 * bary_w + tri_v1 * bary.x + tri_v2 * bary.y; 
+                    glm::vec3 diff = intersect - intersect_test;
+                    printf("diff is %f, %f, %f", diff.x, diff.y, diff.z);
+#endif DEBUG
+                    normal = glm::normalize(tri->v0.nor * bary_w + tri->v1.nor * bary.x + tri->v2.nor * bary.y);
+                }
+
+            }
+            if (stack_ptr == 0)
+            {
+				break;
+			}
+            node = &bvh_nodes[stack[--stack_ptr]]; 
+        }
+        else
+        {
+            int child_1_index = node->left_first;
+            int child_2_index = node->left_first + 1;
+            // Get distances to intersections
+            float dist_1 = intersect_aabb(ray_origin, ray_rec_direction, bvh_nodes[child_1_index].aa_bb, curr_t);
+            float dist_2 = intersect_aabb(ray_origin, ray_rec_direction, bvh_nodes[child_2_index].aa_bb, curr_t);
+            // Check closer node first
+            if (dist_1 > dist_2)
+            {
+                // swap
+                float temp = dist_1;
+                dist_1 = dist_2;
+                dist_2 = temp;
+                temp = child_1_index;
+                child_1_index = child_2_index;
+                child_2_index = temp;
+            }
+            if (dist_1 == FLT_MAX)
+            {
+                // If no intersection, continue popping off stack
+                if (stack_ptr == 0)
+                {
+                    break;
+                }
+                node = &bvh_nodes[stack[--stack_ptr]];
+            }
+            else
+            {
+                // If valid intersection, add children to stack
+                node = &bvh_nodes[child_1_index];
+                if (dist_2 < FLT_MAX)
+                {
+                    stack[stack_ptr++] = child_2_index;
+                }
+            }
+        }
+    } while (stack_ptr >= 0); 
+    intersect = multiplyMV(geom.transform, glm::vec4(intersect, 1.0f));
+    normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(normal, 0.0f)));
+#if DEBUG
+    float length = glm::length(ray.origin - intersect);
+    printf("curr_t is %f, length is %f", curr_t, length);
+#endif DEBUG
+    return intersected ? glm::length(ray.origin - intersect) : -1.0f; // return distance
 }
