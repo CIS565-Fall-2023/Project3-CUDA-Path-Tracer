@@ -153,7 +153,7 @@ __host__ __device__ void swap(float& a, float& b) {
 }
 
 // reference: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
-__host__ __device__ bool aabbIntersectionTest(AABB box, Ray& r, float& t) {
+__host__ __device__ bool aabbIntersectionTest(AABB& box, Ray& r, float& t) {
     float tmin = (box.min.x - r.origin.x) / r.direction.x;
     float tmax = (box.max.x - r.origin.x) / r.direction.x;
 
@@ -203,13 +203,6 @@ __host__ __device__ bool aabbIntersectionTest(AABB box, Ray& r, float& t) {
  */
 __host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
     const Triangle* tris, glm::vec3& intersectionPoint, glm::vec3& normal) {
-
-#if BB_CULLING
-    float t = -1.0;
-    if (!aabbIntersectionTest(mesh.aabb, r, t)) {
-        return -1;
-    }
-#endif
 
     float tMin = FLT_MAX;
     Triangle closest;

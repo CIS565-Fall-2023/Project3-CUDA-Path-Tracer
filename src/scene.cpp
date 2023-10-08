@@ -75,8 +75,7 @@ int Scene::loadGeom(string objectid) {
             }
             else if (strcmp(tokens[0].c_str(), "obj") == 0) {
                 cout << "Creating new obj mesh..." << endl;
-                newGeom.type = OBJ;
-                
+                newGeom.type = OBJ;                
                 if (!loadMeshObj(basePath + tokens[1], newGeom)) {
                     return -1;
                 }
@@ -400,7 +399,8 @@ void parseModel(tinygltf::Model& model, int& triCount, std::vector<Triangle>& tr
 int Scene::loadMeshGltf(string filename, Geom& geom, int objectId) {
     cout << "Loading glTF Mesh: " << filename << endl;
     tinygltf::Model model;
-
+    meshCount = 0;
+    
     auto startTime = utilityCore::timeSinceEpochMillisec();
     // read model file
     if (!loadModel(model, filename.c_str())) return -1;
@@ -418,6 +418,7 @@ int Scene::loadMeshGltf(string filename, Geom& geom, int objectId) {
     duration = (endTime - startTime);
     cout << "Parsing mesh took: " << duration << "ms" << endl;
 
+    meshCount++;
     return 1;
 }
 
@@ -446,8 +447,12 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
     const std::vector<tinyobj::material_t>& materials= reader.GetMaterials();
 
     meshCount = 0;
+    geom.startTriIdx = triangles.size();
+
     // traverse mesh structure
     for (size_t s = 0; s < shapes.size(); s++) {
+        std::vector<Triangle> trisInMesh;
+
         // track AABB for each triangle
         glm::vec3 bbMin = glm::vec3(FLT_MAX);
         glm::vec3 bbMax = glm::vec3(-FLT_MAX);
@@ -494,10 +499,18 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
             tri.computeAABB();
             tri.computeCentroid();
             tri.objectId = f;
-            triangles.push_back(tri);
+            trisInMesh.push_back(tri);
         }
-    }
-    meshCount++;
 
+        // initialize new geom
+        geom.aabb.min = bbMin;
+        geom.aabb.max = bbMax;
+        geom.startTriIdx = triangles.size();
+        geom.triangleCount = trisInMesh.size();
+        
+        // update scene attributes
+        triangles.insert(triangles.end(), trisInMesh.begin(), trisInMesh.end());
+        meshCount++;
+    }
     return 1;
 }
