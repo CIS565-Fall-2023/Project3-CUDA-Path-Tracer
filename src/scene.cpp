@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/intersect.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #define TINYGLTF_IMPLEMENTATION
 
@@ -69,9 +70,9 @@ void Scene::buildBvhTree() {
         BVHTriIndex bti = bvh_tri_indices[i];
         Triangle& tri = mesh_triangles[bti.triIndex];
         Geom& g = geoms[tri.mesh_index];
-        glm::vec3 p1 = glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
-        glm::vec3 p2 = glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
-        glm::vec3 p3 = glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
+        glm::vec3 p1 = tri.points[0].pos;//glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
+        glm::vec3 p2 = tri.points[1].pos;//glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
+        glm::vec3 p3 = tri.points[2].pos;//glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
 
         g_bb_min = glm::min(g_bb_min, p1);
         g_bb_max = glm::max(g_bb_max, p1);
@@ -142,9 +143,9 @@ float Scene::eval_sah(BVHNode& node, int axis, float pos, glm::vec3 &l_bb_min, g
         Triangle& tri = mesh_triangles[bti.triIndex];
         Geom& g = geoms[tri.mesh_index];
         // need to be in global frame for bbs
-        glm::vec3 p1 = glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
-        glm::vec3 p2 = glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
-        glm::vec3 p3 = glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
+        glm::vec3 p1 = tri.points[0].pos;//glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
+        glm::vec3 p2 = tri.points[1].pos;//glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
+        glm::vec3 p3 = tri.points[2].pos;//glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
         if (bti.gFrameCentroid[axis] < pos) {
             left_count++;
             l_bb_min = glm::min(l_bb_min, p1);
@@ -290,7 +291,7 @@ void Scene::subdivide_bvh(BVHNode& node) {
 #endif
 // from tinygltf example basic
 // recursively iter through scene nodes to parse meshes and associated maps
-void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<Geom>& newGeoms) {
+void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<Geom>& newGeoms, glm::mat4 tmat) {
     //1 Geom per prim(submesh)
     for (const tinygltf::Primitive& prim : mesh.primitives) {
         //standardized data structs
@@ -310,15 +311,14 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
             tinygltf::Buffer& buf = model.buffers[buf_view.buffer];
 
             // offset to where data begins for this attribute
-            unsigned char* attrib_data = buf.data.data() + buf_view.byteOffset;
-
+            unsigned char* attrib_data = buf.data.data() + accessor.byteOffset + buf_view.byteOffset;
             if (attribute.first == "POSITION") {
                 //assuming float vec3s bc im lazy FIXME
                 glm::vec3* casted_ad = (glm::vec3*)attrib_data;
                 for (int i = 0; i < accessor.count; i++) {
-                    vertices.push_back(casted_ad[i]);
+                    //transform vertices by tmat
+                    vertices.push_back(glm::vec3(tmat * glm::vec4(casted_ad[i], 1.f)));
                 }
-
                 //aggregate bb min and max for mesh across prims
                 bb_min = glm::min(bb_min, glm::vec3(accessor.minValues[0], accessor.minValues[1], accessor.minValues[2]));
                 bb_max = glm::max(bb_max, glm::vec3(accessor.maxValues[0], accessor.maxValues[1], accessor.maxValues[2]));
@@ -327,7 +327,8 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
                 //assuming float vec3
                 glm::vec3* casted_ad = (glm::vec3*)attrib_data;
                 for (int i = 0; i < accessor.count; i++) {
-                    normals.push_back(casted_ad[i]);
+                    //transform norms by tmat
+                    normals.push_back(glm::vec3(tmat * glm::vec4(casted_ad[i], 0.f)));
                 }
             }
             //1 set of texture coords per mesh FIXME
@@ -338,7 +339,6 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
                 for (int i = 0; i < accessor.count; i++) {
                     uvs.push_back(glm::vec2(glm::mod(tex[i].x, 1.f), glm::mod(tex[i].y, 1.f)));
                 }
-
             }
         }
         
@@ -346,8 +346,7 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
         const tinygltf::Accessor& indices_acc = model.accessors[prim.indices];
         const tinygltf::BufferView& buf_view = model.bufferViews[indices_acc.bufferView];
         tinygltf::Buffer& buf = model.buffers[buf_view.buffer];
-        unsigned char* indices_data = buf.data.data() + buf_view.byteOffset;
-
+        unsigned char* indices_data = buf.data.data() + indices_acc.byteOffset + buf_view.byteOffset;
         //assuming unsigned short or unsigned int indices bc lazy(basically up to 4294967296 vertices) FIXME
         if (indices_acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
             unsigned short* casted_indices = (unsigned short*)indices_data;
@@ -389,6 +388,10 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
 
         // load mesh texture data + texture if not already loaded
         tinygltf::Material &prim_mat = model.materials[prim.material];
+        const auto c = prim_mat.pbrMetallicRoughness.baseColorFactor;
+        if (c.size() > 0) {
+            mesh_geom.base_color = glm::vec3(c[0], c[1], c[2]);
+        }
         tinygltf::TextureInfo& color_tex = prim_mat.pbrMetallicRoughness.baseColorTexture;
         tinygltf::NormalTextureInfo& normal_tex = prim_mat.normalTexture;
 
@@ -482,14 +485,14 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
     }
 }
 
-void Scene::parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, std::vector<Geom>& newGeoms) {
-
+void Scene::parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, std::vector<Geom>& newGeoms, glm::mat4 tmat) {
+    glm::mat4 cur_tmat = node.matrix.size() == 0 ? glm::mat4(1.f) : glm::make_mat4(node.matrix.data());
     if (node.mesh >= 0 && node.mesh < model.meshes.size()) {
-        parseMesh(model, model.meshes[node.mesh], newGeoms);
+        parseMesh(model, model.meshes[node.mesh], newGeoms, tmat * cur_tmat);
     } 
 
     for (size_t i = 0; i < node.children.size(); i++) {
-        parseModelNodes(model, model.nodes[node.children[i]], newGeoms);
+        parseModelNodes(model, model.nodes[node.children[i]], newGeoms, tmat * cur_tmat);
     }
 }
 
@@ -509,7 +512,7 @@ int Scene::loadGltf(string file, std::vector<Geom> &newGeoms) {
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     //iter through all scene nodes for meshes
     for (size_t i = 0; i < scene.nodes.size(); i++) {
-        parseModelNodes(model, model.nodes[scene.nodes[i]], newGeoms);
+        parseModelNodes(model, model.nodes[scene.nodes[i]], newGeoms, glm::mat4(1.f));
     }
 }
 
@@ -582,6 +585,22 @@ int Scene::loadGeom(string objectid) {
         geom.invTranspose = glm::inverseTranspose(geom.transform);
     }
 
+    //transform all tris to global frame
+    for (int i = 0; i < newGeoms.size(); i++) {
+        const auto& g = newGeoms[i];
+        if (g.type == MESH_PRIM) {
+            for (int i = g.tri_start_index; i < g.tri_end_index; i++) {
+                Triangle& t = mesh_triangles[i];
+                t.points[0].pos = glm::vec3(g.transform * glm::vec4(t.points[0].pos, 1.f));
+                t.points[1].pos = glm::vec3(g.transform * glm::vec4(t.points[1].pos, 1.f));
+                t.points[2].pos = glm::vec3(g.transform * glm::vec4(t.points[2].pos, 1.f));
+
+                t.points[0].normal = glm::normalize(glm::vec3(g.transform * glm::vec4(t.points[0].normal, 0.f)));
+                t.points[1].normal = glm::normalize(glm::vec3(g.transform * glm::vec4(t.points[1].normal, 0.f)));
+                t.points[2].normal = glm::normalize(glm::vec3(g.transform * glm::vec4(t.points[2].normal, 0.f)));
+            }
+        }
+    }
     geoms.insert(geoms.end(), newGeoms.begin(), newGeoms.end());
     return 1;
 }

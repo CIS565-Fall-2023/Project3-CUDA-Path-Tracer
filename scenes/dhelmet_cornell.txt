@@ -64,7 +64,7 @@ UP          0 1 0
 OBJECT 0
 cube
 material 0
-TRANS       0 10 0
+TRANS       0 10 2
 ROTAT       0 0 0
 SCALE       3 .3 3
 
@@ -112,6 +112,6 @@ SCALE       .01 10 10
 OBJECT 6
 C:\Users\genel\Documents\cis5650\glTF-Sample-Models\2.0\DamagedHelmet\glTF\DamagedHelmet.gltf
 material 3
-TRANS       -1 1 2
-ROTAT        0 0 0
-SCALE       10 10 10
+TRANS       0 4 -1
+ROTAT       -90 0 0
+SCALE       3 3 3

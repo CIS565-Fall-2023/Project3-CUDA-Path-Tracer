@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
@@ -22,8 +23,8 @@ private:
     int loadCamera();
     //load gltf fn
     int loadGltf(string filename, std::vector<Geom>& newGeoms);
-    void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, std::vector<Geom>& newGeoms);
-    void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<Geom>& newGeoms);
+    void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, std::vector<Geom>& newGeoms, glm::mat4 tmat);
+    void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<Geom>& newGeoms, glm::mat4 tmat);
 
 #if BVH
     //sah based bvh + stack iteration mainly adapted from https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/

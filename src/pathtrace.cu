@@ -381,6 +381,9 @@ __global__ void shadeMaterial(
 				glm::ivec2 sample_uv = mesh_uv * glm::vec2(tex_map.img_w, tex_map.img_h);
 				materialColor = img_data[tex_map.data_start_index + (sample_uv[1] * tex_map.img_w + sample_uv[0])];
 			}
+			else if (intersection.geom->base_color != glm::vec3(-1.f)) {
+				materialColor = intersection.geom->base_color;
+			}
 
 
 			// If the material indicates that the object was a light, "light" the ray
