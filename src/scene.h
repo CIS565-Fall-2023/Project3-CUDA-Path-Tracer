@@ -22,16 +22,18 @@ private:
     SceneMeshGroup loadGltfMesh(string path);
     /// <summary>
     /// Recursively parses the entire node. Some nodes have children which is why the recursion is necessary.
+    /// Calculates the AABB of the SceneMeshGroup generated here.
     /// </summary>
     /// <param name="model"></param>
     /// <param name="node"></param>
-    int parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node);
+    int parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax);
     /// <summary>
-    /// Does the actual parsing from the recursive function
+    /// Does the actual parsing from the recursive function.
+    /// Calculates the AABB for the SceneMesh generated here.
     /// </summary>
     /// <param name="model"></param>
     /// <param name="node"></param>
-    int parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node);
+    int parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax);
     int loadCamera();
 public:
     Scene(string filename);

@@ -41,6 +41,9 @@ struct SceneMesh
     int startTriIdx{ -1 };
     int endTriIdx{ -1 };
 
+    glm::vec3 aabbMin{ glm::vec3(FLT_MAX) }; // Axis-aligned bounding box for this group. Simple optimization
+    glm::vec3 aabbMax{ glm::vec3(FLT_MIN) };
+
     SceneMesh() :
         indices(), hasIndices(false), positions(std::vector<glm::vec3>()), normals(std::vector<glm::vec3>())
     {}
@@ -56,6 +59,9 @@ struct SceneMeshGroup
     int endTriIdx{ -1 };
     int startMeshIdx{ -1 };
     int endMeshIdx{ -1 };
+
+    glm::vec3 aabbMin{ glm::vec3(FLT_MAX) }; // Axis-aligned bounding box for this group. Simple optimization
+    glm::vec3 aabbMax{ glm::vec3(FLT_MIN) };
 };
 
 struct Geom {
@@ -70,6 +76,9 @@ struct Geom {
 
     int startTriIdx;
     int endTriIdx;
+
+    glm::vec3 aabbMin{ glm::vec3(FLT_MAX) }; // Axis-aligned bounding box for this mesh. Simple optimization
+    glm::vec3 aabbMax{ glm::vec3(FLT_MIN) };
 };
 
 struct Material {

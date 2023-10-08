@@ -6,6 +6,8 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+#define RAY_MESH_AABB_INTERSECT_OPTIMISATION 1
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -143,6 +145,49 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     return glm::length(r.origin - intersectionPoint);
 }
 
+/// <summary>
+/// Returns true if the ray intersects with AABB. Both ray and AABB are expected to be in local-space.
+/// </summary>
+/// <param name="r"></param>
+/// <param name="aabbMin"></param>
+/// <param name="aabbMax"></param>
+/// <returns></returns>
+__host__ __device__ bool raycastAABB(const Ray& r, const glm::vec3& aabbMin, const glm::vec3& aabbMax)
+{
+    float tmin = -1e38f;
+    float tmax = 1e38f;
+    glm::vec3 tmin_n;
+    glm::vec3 tmax_n;
+    for (int xyz = 0; xyz < 3; ++xyz) {
+        float dirComponent = r.direction[xyz];
+        /*if (glm::abs(qdxyz) > 0.00001f)*/ {
+            float t1 = (aabbMin[xyz] - r.origin[xyz]) / dirComponent;
+            float t2 = (aabbMax[xyz] - r.origin[xyz]) / dirComponent;
+            float ta = glm::min(t1, t2);
+            float tb = glm::max(t1, t2);
+            glm::vec3 n;
+            n[xyz] = t2 < t1 ? +1 : -1;
+            if (ta > 0 && ta > tmin) {
+                tmin = ta;
+                tmin_n = n;
+            }
+            if (tb < tmax) {
+                tmax = tb;
+                tmax_n = n;
+            }
+        }
+    }
+
+    if (tmax >= tmin && tmax > 0) {
+        if (tmin <= 0) {
+            tmin = tmax;
+            tmin_n = tmax_n;
+        }
+        return true;
+    }
+    return false;
+}
+
 __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, Triangle* tris)
 {
@@ -152,6 +197,21 @@ __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
 
     const glm::vec3 rayOriginLocal = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
     const glm::vec3 rayDirLocal = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+#if RAY_MESH_AABB_INTERSECT_OPTIMISATION
+    Ray localSpaceRay;
+    localSpaceRay.origin = rayOriginLocal;
+    localSpaceRay.direction = rayDirLocal;
+
+    // First, check if the ray intersects with the AABB of the mesh.
+    // If not, there is no need to further check through each ray
+    if (!raycastAABB(localSpaceRay, mesh.aabbMin, mesh.aabbMax))
+    {
+        // No intersection with AABB
+        // Won't intersect with mesh
+        return -1;
+    }
+#endif
 
     // Go through every single triangle
     for (int i = mesh.startTriIdx; i <= mesh.endTriIdx; i++)

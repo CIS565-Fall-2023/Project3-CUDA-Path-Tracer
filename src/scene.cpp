@@ -71,6 +71,8 @@ int Scene::loadGeom(string objectid) {
 
                     newGeom.startTriIdx = meshGroup.startTriIdx;
                     newGeom.endTriIdx = meshGroup.endTriIdx;
+                    newGeom.aabbMin = meshGroup.aabbMin;
+                    newGeom.aabbMax = meshGroup.aabbMax;
                 }
             }
         }
@@ -152,7 +154,7 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
     for (int nodeIdx : model.scenes[model.defaultScene].nodes)
     {
         const tinygltf::Node& node = model.nodes[nodeIdx];
-        totalTris += parseGltfNodeRecursive(model, node);
+        totalTris += parseGltfNodeRecursive(model, node, meshGroup.aabbMin, meshGroup.aabbMax);
     }
 
     if (totalTris > 0)
@@ -167,21 +169,27 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
     return meshGroup;
 }
 
-int Scene::parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node)
+int Scene::parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax)
 {
     int totalTris = 0;
     for (int childNodeIdx : node.children)
     {
         // if there are children, parse those here
-        totalTris += parseGltfNodeRecursive(model, model.nodes[childNodeIdx]);
+        totalTris += parseGltfNodeRecursive(model, model.nodes[childNodeIdx], aabbMin, aabbMax);
     }
 
-    totalTris += parseGltfNodeHelper(model, node);
+    totalTris += parseGltfNodeHelper(model, node, aabbMin, aabbMax);
 
     return totalTris;
 }
 
-int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node)
+/// <summary>
+/// This function parses one node and all primitives inside it to build a single SceneMesh for this renderer.
+/// </summary>
+/// <param name="model"></param>
+/// <param name="node"></param>
+/// <returns></returns>
+int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax)
 {
     int totalTris = 0;
 
@@ -191,7 +199,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
 
         SceneMesh gltfMesh;
         gltfMesh.startTriIdx = tris.size();
-        
+
         const tinygltf::Mesh& mesh = model.meshes[node.mesh];
         for (const tinygltf::Primitive& prim : mesh.primitives)
         {
@@ -220,9 +228,13 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 for (int i = 0; i < size; i += stride)
                 {
                     // positions are vec3s of 3 floats in GLTF 2.0 spec
-                    gltfMesh.positions.push_back(glm::vec3(posData[i], posData[i + 1], posData[i + 2]));
+                    glm::vec3 pos = glm::vec3(posData[i], posData[i + 1], posData[i + 2]);
+                    gltfMesh.positions.push_back(pos);
                     //cout << "(" << gltfMesh.positions[pCount].x << "," << gltfMesh.positions[pCount].y << "," << gltfMesh.positions[pCount].z << ")" << endl;
                     pCount++;
+
+                    gltfMesh.aabbMin = glm::min(gltfMesh.aabbMin, pos);
+                    gltfMesh.aabbMax = glm::max(gltfMesh.aabbMax, pos);
                 }
             }
             else
@@ -230,6 +242,9 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 // no positions so we can't really make the mesh
                 return 0;
             }
+
+            aabbMin = glm::min(aabbMin, gltfMesh.aabbMin);
+            aabbMax = glm::max(aabbMax, gltfMesh.aabbMax);
 
             it = prim.attributes.find("NORMAL");
             if (it != prim.attributes.end())
