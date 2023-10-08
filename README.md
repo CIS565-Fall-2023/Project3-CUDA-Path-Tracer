@@ -17,17 +17,17 @@ Astartes of Warhammer 40,000
 ## Features
 - [Camera Controll & GUI](#camera-control--gui)
 - [Customized JSON scene file](#json-scene-file)
-- [Stochastic Sampled Anti-aliasing]()
-- [Bounding Volume Hierarchy]()
-- [Tone mapping]()
-- [Mesh Loader(obj) and texture mapping]()
-- [BSDFs]()
+- [Stochastic Sampled Anti-aliasing](#stochastic-sampled-anti-aliasing)
+- [Bounding Volume Hierarchy](#bounding-volume-hierarchy)
+- [Tone mapping](#tone-mapping)
+- [Mesh Loader(obj) and texture mapping](#mesh-loaderobj-and-texture-mapping)
+- [BSDFs](#bsdfs)
   - Diffuse Reflection
   - Specular Reflection
   - Specular Refraction
   - Microfacet Reflection
   - Subsurface Scattering
-- [Physically-based depth-of-field]()
+- [Physically-based depth-of-field](#physically-based-depth-of-field)
 ### Camera Control & GUI
 -----------------------------
 #### Camera
@@ -90,7 +90,7 @@ Here is a simple example of a scene with a camera, a Cube and a Light.
   ]
 }
 ```
-This is an example of [CornellBox scene](/resources/scenes/CornellBox). You can find more samples in [Resources](/resources/scenes/)
+This is an example of [CornellBox scene](/resources/scenes/cornellBox.json). You can find more samples in [Resources](/resources/scenes/)
 <p align = "center">
  <img src = "/img/cornellBox.png"/>
 </p>
