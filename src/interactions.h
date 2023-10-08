@@ -80,14 +80,14 @@ void scatterRay(
     if (m.hasRefractive) {
         thrust::uniform_real_distribution<float> u01(0, 1);
         float prob = u01(rng);
-        if (prob < 0.5f) {
+        if (prob < 0.99f) {
             pathSegment.ray.origin = intersectIn;
             pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, m.indexOfRefraction);
-            pathSegment.color *= 2.f;
-            pathSegment.remainingBounces--;
+            //pathSegment.color *= 2.f;
+            //pathSegment.remainingBounces--;
             return;
         }
-        counteract *= 2.f;
+        counteract *= 100.f;
     }
     pathSegment.ray.origin = intersectOut;
     if (m.hasReflective) {
