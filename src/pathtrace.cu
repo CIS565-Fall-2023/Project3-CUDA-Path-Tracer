@@ -403,16 +403,7 @@ __device__  float bvhSearch(
 					float t = triangleIntersectionTest(tris[ti], ray, tmp_intersect, tmp_normal, outside);
 					if (t > 0.0f && t_min > t)
 					{
-						//if (t_min < bt) {
-						//	/////
-						//}
-						//if (t < bt) {
-						//	/////
-						//	float ori[3] = { ray.origin.x, ray.origin.y, ray.origin.z };
-						//	float dir[3] = { ray.direction.x, ray.direction.y, ray.direction.z };
-						//	int bboxId = arr[threadId][sign + 1];
-						//	int a = 1;
-						//}
+
 						t_min = t;
 						hit_index = ti;
 						intersectionPoint = tmp_intersect;
