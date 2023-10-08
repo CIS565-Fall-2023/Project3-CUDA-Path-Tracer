@@ -62,7 +62,7 @@ UP          0 1 0
 
 // Ceiling light
 OBJECT 0
-sphere
+cube
 material 0
 TRANS       0 10 0
 ROTAT       0 0 0
@@ -112,7 +112,7 @@ SCALE       .01 10 10
 OBJECT 6
 mesh
 ./../mesh/cube_text2.obj
-material 4
+material -1
 TRANS       0 3 0
 ROTAT       0 0 0
 SCALE       1 1 1

@@ -264,8 +264,8 @@ int Scene::loadGeom(string objectid) {
                         Material mat;
                         glm::vec3 emissive=glm::vec3(material.emission[0],material.emission[1],material.emission[2]);
                         
-                        cout<<"material loading "<<material.diffuse_texname<<endl;
-                         cout<<"material loading "<<material.normal_texname<<endl;
+                        cout<<"material loading "<<filePath+material.diffuse_texname<<endl;
+                        cout<<"material loading "<<filePath+material.normal_texname<<endl;
                         if(material.diffuse_texname.empty()){
                             //cout<<"should arrive"<<endl;
                             mat.dimg=-1;
@@ -287,8 +287,8 @@ int Scene::loadGeom(string objectid) {
                             imgIdx++;
                             glm::vec3* pixels = img.getPixel();
                             imgtext.insert(imgtext.end(), pixels, pixels + img.getHeight()*img.getWidth());
-                            //cout<<imgtext.size()<<endl;
-                            //printvec3(imgtext[img.getHeight()*img.getWidth()-1]);
+                            cout<<imgtext.size()<<endl;
+                            printvec3(imgtext[img.getHeight()*img.getWidth()-1]);
                             //cout<<"should not arrive"<<endl;
                         }
                         if(material.normal_texname.empty()){
@@ -316,9 +316,9 @@ int Scene::loadGeom(string objectid) {
                         }
                         //cout<<"material loading diffuse color"<<endl;
                         glm::vec3 scolor=glm::vec3(material.specular[0],material.specular[1],material.specular[2]);
-                        if(material.illum==1){
+                        if(material.illum==1||material.illum==2){
                             mat.hasReflective=0.0f;
-                        }else if(material.illum==3||material.illum==4||material.illum==2){
+                        }else if(material.illum==3||material.illum==4){
                             mat.hasReflective=1.0f;
                             mat.specular.exponent=material.shininess;
                             mat.specular.color=glm::vec3(material.specular[0],material.specular[1],material.specular[2]);
@@ -362,7 +362,7 @@ int Scene::loadGeom(string objectid) {
                             triGeom.type=TRIANGLE;
                             
                             triGeom.materialid=shape.mesh.material_ids[i]+materialStartIdx;
-                            //cout<< "material id " <<shape.mesh.material_ids[i]+materialStartIdx<<"  ";
+                            cout<< "material id " <<shape.mesh.material_ids[i]+materialStartIdx<<"  ";
                             //cout << "mesh indices" <<i << endl;
                             for (int k = 0; k < 3; k++) {
                                 //cout << "triangle indices" <<k<< endl;

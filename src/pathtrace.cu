@@ -435,6 +435,8 @@ __global__ void shadeFakeMaterial(
 			int start=Lights[index*2];
 			int end=Lights[index*2+1];
 			int gidx=u01(rng)*(end-start)+start;
+			if (intersection.materialId == 5)
+				int test = 1;
 			scatterRay(pathSegments[idx],intersection,materials[intersection.materialId],rng,textPixel,back,geoms[gidx],LightArea[index],shading);
 			// If the material indicates that the object was a light, "light" the ray
 			// If there was no intersection, color the ray black.
