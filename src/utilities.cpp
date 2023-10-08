@@ -110,3 +110,13 @@ std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
         }
     }
 }
+
+uint64_t utilityCore::timeSinceEpochMillisec() {
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
+bool utilityCore::fileHasExtension(const std::string& filePath, const std::string& ext) {
+    if (filePath.size() <= ext.size()) return false;
+    return std::equal(ext.rbegin(), ext.rend(), filePath.rbegin());
+}

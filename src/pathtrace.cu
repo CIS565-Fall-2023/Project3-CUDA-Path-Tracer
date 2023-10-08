@@ -19,16 +19,6 @@
 
 #define ERRORCHECK 1
 
-#define SORT_MAT 0				// Sort by material (Keep same material contiguous in memory)
-#define COMPACT 1				// Stream compaction
-#define AA		1				// Anti-aliasing
-#ifndef AA
-	#define CACHE_FIRST_BOUNCE 1	// Cache first bounce of rays, ONLY if AA is disabled
-#endif
-#define MOTION 0
-#define MOTION_BLUR	MOTION ? 0 : 0
-#define TIMER 0
-
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 void checkCUDAErrorFn(const char* msg, const char* file, int line) {

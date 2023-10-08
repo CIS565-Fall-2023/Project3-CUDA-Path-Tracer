@@ -244,8 +244,9 @@ void scatterRay(
     glm::vec3 wo = pathSegment.ray.direction;
     glm::vec3 wi(0.0f);
     glm::vec3 bsdf(0.0f);
-    float offset = OFFSET;
     float absDot = 1.f, pdf = 1.f;
+    bool isDiffuse = false;
+    bool manualCalc = false;
 
     // Based on material type
     if (m.hasReflective && m.hasRefractive) {
@@ -254,6 +255,7 @@ void scatterRay(
     // Had to manually calculate absDot and pdf to get correct results, otherwise not working properly
     else if (m.hasReflective && glm::length(m.color) > EPSILON) {
         bsdf = samplePlastic(m, normal, rng, wo, wi, absDot, pdf);
+        manualCalc = true;
     }
     else if (m.hasReflective) {
         bsdf = sampleSpecularRefl(m, normal, wo, wi);
@@ -264,14 +266,17 @@ void scatterRay(
     // not working properly?
     else if (m.hasTransmission) {
         bsdf = sampleDiffuseTrans(m, normal, rng, wi, absDot, pdf);
+        isDiffuse = true;
+        manualCalc = true;
     }
     else { // default to lambert diffuse
         bsdf = sampleDiffuse(m, normal, rng, wi);
-        offset = 0.f;
+        isDiffuse = true;
     }
 
-    pathSegment.throughput *= bsdf * absDot / pdf;
+    pathSegment.throughput *= manualCalc ? (bsdf * absDot / pdf) : bsdf;
     pathSegment.ray.direction = glm::normalize(wi);
-    pathSegment.ray.origin = intersect + offset * pathSegment.ray.direction;
+    pathSegment.ray.origin = isDiffuse ? intersect :
+        intersect + OFFSET * pathSegment.ray.direction;
     pathSegment.remainingBounces--;
 }

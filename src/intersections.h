@@ -145,3 +145,102 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ void swap(float& a, float& b) {
+    float tmp = a;
+    a = b;
+    b = tmp;
+}
+
+// reference: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+__host__ __device__ bool aabbIntersectionTest(AABB box, Ray& r, float& t) {
+    float tmin = (box.min.x - r.origin.x) / r.direction.x;
+    float tmax = (box.max.x - r.origin.x) / r.direction.x;
+
+    if (tmin > tmax) swap(tmin, tmax);
+
+    float tymin = (box.min.y - r.origin.y) / r.direction.y;
+    float tymax = (box.max.y - r.origin.y) / r.direction.y;
+
+    if (tymin > tymax) swap(tymin, tymax);
+
+    if ((tmin > tymax) || (tymin > tmax))
+        return false;
+
+    if (tymin > tmin)
+        tmin = tymin;
+
+    if (tymax < tmax)
+        tmax = tymax;
+
+    float tzmin = (box.min.z - r.origin.z) / r.direction.z;
+    float tzmax = (box.max.z - r.origin.z) / r.direction.z;
+
+    if (tzmin > tzmax) swap(tzmin, tzmax);
+
+    if ((tmin > tzmax) || (tzmin > tmax))
+        return false;
+
+    if (tzmin > tmin)
+        tmin = tzmin;
+
+    if (tzmax < tmax)
+        tmax = tzmax;
+
+    bool intersect = tzmin <= tzmax && tzmax >= 0;
+    t = intersect ? tzmin : -1.f;
+    if (t < 0.f) t = tzmax;
+
+    return true;
+}
+
+/**
+ * Test intersection between a ray and a triangulated mesh.
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
+__host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
+    const Triangle* tris, glm::vec3& intersectionPoint, glm::vec3& normal) {
+
+#if BB_CULLING
+    float t = -1.0;
+    if (!aabbIntersectionTest(mesh.aabb, r, t)) {
+        return -1;
+    }
+#endif
+
+    float tMin = FLT_MAX;
+    Triangle closest;
+    glm::vec3 barycenter, baryMin;
+    
+    // If aabb is intersected, check for intersection with every triangle
+    for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; i++) {
+       
+        bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
+            tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, barycenter);
+        if (!intersect) continue;
+
+        float t = barycenter.z;
+        if (t < tMin && t > 0.f) {
+            tMin = t;
+            baryMin = barycenter;
+            closest = tris[i];
+        }
+    }
+
+    // find intersection point and normal
+    float u = baryMin.x;
+    float v = baryMin.y;
+    float w = 1.f - u - v;
+
+    intersectionPoint = u * closest.v0.pos
+        + v * closest.v1.pos
+        + w * closest.v2.pos;
+    normal = u * closest.v0.nor
+        + v * closest.v1.nor
+        + w * closest.v2.nor;
+
+    return tMin;
+}

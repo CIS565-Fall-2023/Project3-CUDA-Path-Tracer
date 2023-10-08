@@ -83,8 +83,12 @@ set(headers
      src/ImGui/imgui_internal.h 
      src/ImGui/imstb_rectpack.h 
      src/ImGui/imstb_textedit.h 
-     src/ImGui/imstb_truetype.h 
-    )
+     src/ImGui/imstb_truetype.h
+     src/tiny_obj_loader.h
+
+    src/gltf/json.hpp
+    src/gltf/tiny_gltf.h
+)
 
 set(sources
     src/main.cpp
@@ -103,7 +107,7 @@ set(sources
      src/ImGui/imgui_impl_opengl3.cpp 
      src/ImGui/imgui_tables.cpp 
      src/ImGui/imgui_widgets.cpp 
-    )
+)
 
 list(SORT headers)
 list(SORT sources)

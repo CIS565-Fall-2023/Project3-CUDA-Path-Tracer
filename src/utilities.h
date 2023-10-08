@@ -20,6 +20,17 @@
 #define EPSILON           0.0001f
 #define OFFSET            0.01f
 
+#define SORT_MAT            0				// Sort by material (Keep same material contiguous in memory)
+#define COMPACT             1				// Stream compaction
+#define AA		            1				// Anti-aliasing
+#ifndef AA
+#define CACHE_FIRST_BOUNCE  1	            // Cache first bounce of rays, ONLY if AA is disabled
+#endif
+#define MOTION              0               // Real-time moving objects
+#define MOTION_BLUR	MOTION ? 0 : 0          // Hard-coded motion blur
+#define TIMER               0               // Gpu timer for performance analysis
+#define BB_CULLING          1               // Test ray against mesh AABB
+
 class GuiDataContainer
 {
 public:
@@ -36,6 +47,8 @@ namespace utilityCore {
     extern glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
     extern std::string convertIntToString(int number);
     extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413
+    extern uint64_t timeSinceEpochMillisec();
+    extern bool fileHasExtension(const std::string& filePath, const std::string& ext);
 }
 
 /**
