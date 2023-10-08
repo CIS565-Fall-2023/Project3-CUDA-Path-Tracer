@@ -199,12 +199,12 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Triangle* meshes, Ray 
   glm::vec3 baryPosition;
   glm::vec3 baryNormal;
   
-#ifdef BOUND_BOX
+#if BOUND_BOX
   float tBox = boundBoxIntersectionTest(mesh, r, intersectionPoint, outside);
   if (tBox < 0) {
 		return -1;
 	}
-#endif // 
+#endif 
 
 
   for (int i = 0; i < mesh.meshNum; i++) {
