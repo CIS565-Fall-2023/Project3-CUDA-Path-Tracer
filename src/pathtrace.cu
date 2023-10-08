@@ -522,7 +522,7 @@ __global__ void shadeMaterial(
 			// Set up the RNG
 			// LOOK: this is how you use thrust's RNG! Please look at
 			// makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(depth, idx, iter);
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 			// thrust::uniform_real_distribution<float> u01(0, 1); // u01(rng) to get random (0, 1)
 
 			Material material = materials[intersection.materialId];
