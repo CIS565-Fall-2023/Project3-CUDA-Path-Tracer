@@ -2,8 +2,6 @@
 
 #include "intersections.h"
 
-#define OFFSET 0.001f
-
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
@@ -57,10 +55,14 @@ glm::vec3 sampleDiffuse(const Material& m, glm::vec3 nor,
 
 __host__ __device__
 glm::vec3 sampleDiffuseTrans(const Material& m, glm::vec3 nor,
-    thrust::default_random_engine& rng, glm::vec3& wi) {
+    thrust::default_random_engine& rng, glm::vec3& wi,
+    float& absDot, float& pdf) {
     // sample wi in the opposite hemisphere of wo, everything else same as diffuse_refl
-    wi = calculateRandomDirectionInHemisphere(-nor, rng);
-    return m.color;
+    wi = calculateRandomDirectionInHemisphere(nor, rng);
+    wi.x = -wi.z;
+    absDot = glm::abs(glm::dot(nor, wi));
+    pdf = absDot * INV_PI;
+    return m.color * INV_PI;
 }
 
 __host__ __device__
@@ -75,22 +77,24 @@ __host__ __device__
 glm::vec3 sampleSpecularTrans(const Material& m, glm::vec3 nor,
     glm::vec3 wo, glm::vec3& wi) {
 
-    // Hard-coded eta of air always assumed to be 1
-    //float etaA = 1.0f;
-    //float etaB = m.indexOfRefraction;
+    // Default to hard-coded glass IOR if not provided
+    float ior = m.indexOfRefraction;
+    ior = ior ? 1.55f : ior;
 
     // figure out which surface to enter/exit
-    bool entering = glm::dot(nor, wo) > 0.0f;
-    float etaI = entering ? 1.0f : m.indexOfRefraction; // incident index
-    float etaT = entering ? m.indexOfRefraction : 1.0f; // transmitted index
+    // eta of air always assumed to be 1
+    bool entering = glm::clamp(glm::dot(wo, nor), -1.f, 1.f) < 0.0f;
+    float etaI = entering ? 1.0f : ior; // incident index
+    float etaT = entering ? ior : 1.0f; // transmitted index
     float eta = etaI / etaT;
 
-    // face forward
+    // flip normal
     nor = entering ? nor : -nor;
-
     wi = glm::refract(wo, nor, eta);
+
     // handle total internal refl
-    if (glm::length(wi) <= 0.0f) {
+    if (glm::length(wi) < EPSILON) {
+        wi = glm::reflect(wo, nor);
         return glm::vec3(0.0f);
     }
     return m.specular.color;
@@ -100,16 +104,17 @@ __host__ __device__
 float fresnelDielectricEval(const Material& m, float cosThetaI) {
     float etaI = 1.f;
     float etaT = m.indexOfRefraction;
+    etaT = etaT < EPSILON ? 1.55f : etaT;
     cosThetaI = glm::clamp(cosThetaI, -1.f, 1.f);
 
     // see pbrt FrDielectric()
     // Potentially swap indices of refraction
-    if (cosThetaI <= 0.f) {
+    if (cosThetaI > 0.f) {
         float temp = etaI;
         etaI = etaT;
         etaT = temp;
-        cosThetaI = glm::abs(cosThetaI);
     }
+    cosThetaI = glm::abs(cosThetaI);
 
     // Computer cosThetaT using Snell's law
     float sinThetaI = glm::sqrt(glm::max(0.f,
@@ -117,11 +122,11 @@ float fresnelDielectricEval(const Material& m, float cosThetaI) {
     float sinThetaT = etaI / etaT * sinThetaI;
     
     // Handle total internal reflection
-    if (sinThetaT >= 1.f) {
+    if (sinThetaT >= 0.999f) {
         return 1.f;
     }
 
-    // Compute Fresnel reflectance, see PBRT 8.2.1
+    // Compute Fresnel reflectance using light polarization eqns, see PBRT 8.2.1
     float cosThetaT = glm::sqrt(glm::max(0.f,
                                          1.f - sinThetaT * sinThetaT));
     float Rparl = ((etaT * cosThetaI) - (etaI * cosThetaT)) /
@@ -129,7 +134,7 @@ float fresnelDielectricEval(const Material& m, float cosThetaI) {
     float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) /
         ((etaI * cosThetaI) + (etaT * cosThetaT));
 
-    return (Rparl * Rparl + Rperp * Rperp) * 0.5f; // coefficient
+    return (Rparl * Rparl + Rperp * Rperp) / 2.f; // coefficient
 }
 
 __host__ __device__
@@ -139,18 +144,60 @@ glm::vec3 sampleGlass(const Material& m, glm::vec3 nor,
     thrust::uniform_real_distribution<float> u01(0, 1);
     bool random = u01(rng);
 
-    float fresnel = fresnelDielectricEval(m, glm::dot(nor, -wo));;
+    float fresnel = fresnelDielectricEval(m, glm::dot(wo, nor));
     glm::vec3 bsdf(0.f);
-    if (random < 0.5f) {
+    if (random < fresnel) {
         // Have to double contribution b/c we only sample
         // reflection BxDF half the time
         bsdf = sampleSpecularRefl(m, nor, wo, wi);
-        return 2.f * fresnel * bsdf;
+        return bsdf;
     }
     else {
         bsdf = sampleSpecularTrans(m, nor, wo, wi);
-        return 2.f * (1.f - fresnel) * bsdf; // 1-fr b/c all conditions sum up to 1
+        return bsdf; // 1-fr b/c all conditions sum up to 1
     }
+}
+
+__host__ __device__
+glm::vec3 samplePlastic(const Material& m, glm::vec3 nor,
+    thrust::default_random_engine& rng, glm::vec3 wo, glm::vec3& wi,
+    float& absDot, float& pdf) {
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    bool random = u01(rng);
+    glm::vec3 bsdf(0.f);
+
+    float fresnel = fresnelDielectricEval(m, glm::dot(wo, nor));;
+    //if (random < fresnel) {
+    //    // Have to double contribution b/c we only sample
+    //    // reflection BxDF half the time
+    //    bsdf = sampleSpecularRefl(m, nor, wo, wi);
+    //    return bsdf;
+    //}
+    //else {
+    //    bsdf = sampleDiffuse(m, nor, rng, wi);
+    //    return bsdf; // 1-fr b/c all conditions sum up to 1
+    //}
+
+    if (random < 0.5f) {
+        // diffuse
+        bsdf = sampleDiffuse(m, nor, rng, wi);// glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
+        absDot = glm::abs(glm::dot(nor, wi));
+        pdf = absDot * INV_PI;
+        bsdf = m.color * INV_PI;
+        bsdf *= 1.f - fresnel;
+    }
+    else {
+        // spec refl
+        bsdf = sampleSpecularRefl(m, nor, wo, wi);// glm::reflect(wo, normal);
+        absDot = glm::abs(glm::dot(nor, wi));
+        pdf = 1.0f;
+        if (absDot > 0.0f) {
+            bsdf = m.specular.color / absDot;
+        }
+        bsdf *= fresnel;
+    }
+    return bsdf * 2.0f;
 }
 
 /**
@@ -195,12 +242,18 @@ void scatterRay(
     if (pathSegment.remainingBounces == 0) return;
 
     glm::vec3 wo = pathSegment.ray.direction;
-    glm::vec3 wi = glm::vec3(0.0f);
-    glm::vec3 bsdf = glm::vec3(0.0f);
+    glm::vec3 wi(0.0f);
+    glm::vec3 bsdf(0.0f);
+    float offset = OFFSET;
+    float absDot = 1.f, pdf = 1.f;
 
     // Based on material type
     if (m.hasReflective && m.hasRefractive) {
         bsdf = sampleGlass(m, normal, rng, wo, wi);
+    }
+    // Had to manually calculate absDot and pdf to get correct results, otherwise not working properly
+    else if (m.hasReflective && glm::length(m.color) > EPSILON) {
+        bsdf = samplePlastic(m, normal, rng, wo, wi, absDot, pdf);
     }
     else if (m.hasReflective) {
         bsdf = sampleSpecularRefl(m, normal, wo, wi);
@@ -208,15 +261,17 @@ void scatterRay(
     else if (m.hasRefractive) {
         bsdf = sampleSpecularTrans(m, normal, wo, wi);
     }
-    //else if (m.hasTransmission) { // not working properly
-    //    bsdf = sampleDiffuseTrans(m, normal, rng, wi);
-    //}
-    else { // default to diffuse refl
+    // not working properly?
+    else if (m.hasTransmission) {
+        bsdf = sampleDiffuseTrans(m, normal, rng, wi, absDot, pdf);
+    }
+    else { // default to lambert diffuse
         bsdf = sampleDiffuse(m, normal, rng, wi);
+        offset = 0.f;
     }
 
-    pathSegment.throughput *= bsdf;
-    pathSegment.ray.direction = wi;
-    pathSegment.ray.origin = intersect + OFFSET * pathSegment.ray.direction;
+    pathSegment.throughput *= bsdf * absDot / pdf;
+    pathSegment.ray.direction = glm::normalize(wi);
+    pathSegment.ray.origin = intersect + offset * pathSegment.ray.direction;
     pathSegment.remainingBounces--;
 }
