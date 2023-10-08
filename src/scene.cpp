@@ -312,8 +312,8 @@ void Scene::buildTree()
 
     std::vector<Triangle> new_tris = std::vector<Triangle>();
     for (BoundingBox& bbox : bvh) {
-        bbox.beginTriId = new_tris.size();
         if (bbox.triArrId > -1) {
+            bbox.beginTriId = new_tris.size();
             bbox.triNum = triArr[bbox.triArrId].triIds[0];
             for (int ti = 1; ti <= bbox.triNum; ti++) {
                 int real_ti = triArr[bbox.triArrId].triIds[ti];
