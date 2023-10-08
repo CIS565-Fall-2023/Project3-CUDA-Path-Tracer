@@ -7,6 +7,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
 #include <cuda_runtime.h>
+#include <thrust/count.h>
 
 #include "scene.h"
 #include "glm/glm.hpp"
@@ -235,7 +236,9 @@ __global__ void computeIntersections(
     if (path_index < num_paths)
     {
         PathSegment pathSegment = pathSegments[path_index];
-
+#if DISABLE_COMPACTION
+        if (pathSegment.pixelIndex < 0 || pathSegment.remainingBounces <= 0)return;
+#endif
         float3 tmp_t;
         float3 t;
         float t_min = FLT_MAX;
@@ -307,6 +310,9 @@ __global__ void shadeMaterial(
     if (idx < num_paths)
     {
         PathSegment& pSeg = pathSegments[idx];
+#if DISABLE_COMPACTION
+        if (pSeg.pixelIndex < 0 || pSeg.remainingBounces <= 0)return;
+#endif
         ShadeableIntersection intersection = shadeableIntersections[idx];
         if (intersection.t > 0.0f) { // if the intersection exists...
             // Set up the RNG
@@ -541,6 +547,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
             hst_scene->settings.trSettings);
         depth++;
         // gather valid terminated paths
+#if DISABLE_COMPACTION
+
+        int num_paths_valid = thrust::count_if(thrust::device, dev_paths_thrust, dev_paths_thrust + num_paths,
+            [] __host__  __device__(const PathSegment & p) { return p.pixelIndex >= 0 && p.remainingBounces > 0; });
+        iterationComplete = (num_paths_valid == 0); // TODO: should be based off stream compaction results.
+#else
         dev_paths_terminated_end = thrust::remove_copy_if(dev_paths_thrust, dev_paths_thrust + num_paths, dev_paths_terminated_end,
             [] __host__  __device__(const PathSegment & p) { return !(p.pixelIndex >= 0 && p.remainingBounces == 0); });
         int num_paths_valid = dev_paths_terminated_end - dev_paths_terminated_thrust;
@@ -549,12 +561,16 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
         num_paths = end - dev_paths_thrust;
 
         iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
-
+#endif
         if (guiData != nullptr)
         {
             guiData->TracedDepth = depth;
         }
     }
+#if DISABLE_COMPACTION
+    dev_paths_terminated_end = thrust::remove_copy_if(dev_paths_thrust, dev_paths_thrust + num_paths, dev_paths_terminated_end,
+        [] __host__  __device__(const PathSegment & p) { return !(p.pixelIndex >= 0 && p.remainingBounces == 0); });
+#endif
 
     // Assemble this iteration and apply it to the image
     int num_paths_valid = dev_paths_terminated_end - dev_paths_terminated_thrust;
