@@ -113,15 +113,14 @@ BVH Time Complexity Graph             |
 One current limitation of the BVH feature in this particular path tracer is that BVH construction is handled on the CPU, after all objects are read from the scene file. Information about the BVH and associated geometries is then copied onto the GPU, which iterates through the data structure to find intersections between paths and the geometry. However, the performance of the BVH structure can be further increased by moving the BVH construction to the GPU, parallelizing all aspects of the data structure. The performance difference would be negligible for static scenes such as the ones loaded in this path tracer, as construction only occurs during initialization, but for scenes which include animation and morphing, construction and modification of the BVH data structures may occur multiple times, so it would be beneficial to move these functions to the GPU and avoid excessive memory operations when modifying the BVH. For the scope of this project, CPU-side construction is enough, as GPU-side construction would be much more complex. 
 
 ## **Attributions**
-TODO
+### The following coding resources were used as reference or used as a library in this project:
+- [TinyglTF](https://github.com/syoyo/tinygltf)
+- [BVH Tutorial](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
+### The following free-to-download models were used to test and demonstrate the functionality of this project:
 
-Piplup	https://skfb.ly/6Vt7x
-
-Trees	https://skfb.ly/6BOWV
-
-Water Bottle	https://skfb.ly/o7CKp
-
-McCree	https://skfb.ly/6sBDo
-
-Bulbasaur	https://skfb.ly/6SZ9B
+- [Piplup](https://skfb.ly/6Vt7x)
+- [Trees](https://skfb.ly/6BOWV)
+- [Water Bottle](https://skfb.ly/o7CKp)
+- [McCree](https://skfb.ly/6sBDo)
+- [Bulbasaur](https://skfb.ly/6SZ9B)
