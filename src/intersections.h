@@ -108,33 +108,46 @@ __host__ __device__ float closestPointOnCube(Geom c, glm::vec2 xi, glm::vec3 ise
     // add intersection test
 }
 
-__host__ __device__ float meshIntersectionTest(Geom m, Triangle* tris, Ray r,
+__host__ __device__ void barycentric(Triangle t, glm::vec3 p, glm::vec3& results) {
+    glm::vec3 P1 = t.vertices[0].pos, P2 = t.vertices[1].pos, P3 = t.vertices[2].pos;
+    glm::vec3 v1 = P2 - P1, v2 = P3 - P1, v3 = p - P1;
+    float d11 = dot(v1, v1);
+    float d12 = dot(v1, v2);
+    float d22 = dot(v2, v2);
+    float d31 = dot(v3, v1);
+    float d32 = dot(v3, v2);
+    float d = 1.0f / (d11 * d22 - d12 * d12);
+    results[1] = (d22 * d31 - d12 * d32) * d;
+    results[0] = (d11 * d32 - d12 * d31) * d;
+    results[2] = 1.0f - results[0] - results[1];
+}
+
+__host__ __device__ float meshIntersectionTest(Geom m, Triangle* tris, glm::vec2& uv, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
     Ray q;
     q.origin = multiplyMV(m.inverseTransform, glm::vec4(r.origin, 1.0f));
     q.direction = glm::normalize(multiplyMV(m.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
-    float tmax = -1e38f;
-    float tmin = 1e38f;
-    glm::vec3 tmin_n;
-    glm::vec3 tmax_n;
+    float tmax = -1e38f, tmin = 1e38f;
+    glm::vec3 tmin_n, tmax_n;
+    size_t tri_hit = -1, tri_hit_hold = -1;
 
     for (size_t i = m.triIdx; i < m.triIdx + m.triCount; i++) {
         Triangle t = tris[i];
 
-        glm::vec3 P1 = t.vertices[0].pos;
-        glm::vec3 P2 = t.vertices[1].pos;
-        glm::vec3 P3 = t.vertices[2].pos;
+        glm::vec3 P1 = t.vertices[0].pos, P2 = t.vertices[1].pos, P3 = t.vertices[2].pos;
         
         glm::vec3 pos;
         if (glm::intersectRayTriangle(q.origin, q.direction, P1, P2, P3, pos)) {
             if (pos.z < tmin) {
                 tmin = pos.z;
                 tmin_n = t.vertices[0].nor;
+                tri_hit = i;
             }
             if (pos.z > tmax) {
                 tmax = pos.z;
                 tmax_n = t.vertices[0].nor;
+                tri_hit_hold = i;
             }
         }
     }
@@ -145,8 +158,22 @@ __host__ __device__ float meshIntersectionTest(Geom m, Triangle* tris, Ray r,
             tmin = tmax;
             tmin_n = tmax_n;
             outside = false;
+            tri_hit = tri_hit_hold;
         }
+
+        // interpolate to find uv
+        Triangle t = tris[tri_hit];
+        glm::vec3 interp;
+        barycentric(t, getPointOnRay(q, tmin), interp);
+
+        glm::vec2 uv1 = t.vertices[0].uv, uv2 = t.vertices[1].uv, uv3 = t.vertices[2].uv;
+        float x = interp[0] * uv1[0] + interp[1] * uv2[0] + interp[2] * uv3[0];
+        float y = interp[0] * uv1[1] + interp[1] * uv2[1] + interp[2] * uv3[1];
+
+        uv = interp[0] * uv1 + interp[1] * uv2 + interp[2] * uv3;
+
         intersectionPoint = multiplyMV(m.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
+
         normal = glm::normalize(multiplyMV(m.invTranspose, glm::vec4(tmin_n, 0.0f)));
         return glm::length(r.origin - intersectionPoint);
     }

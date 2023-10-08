@@ -7,7 +7,7 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
-struct EnvironmentMap {
+struct Image {
     std::vector<float> imgdata;
     int width;
     int height;
@@ -27,6 +27,7 @@ struct Ray {
 
 struct Geom {
     int index;
+    int textureIdx;
     enum GeomType type;
     int materialid;
     int triCount;
@@ -97,4 +98,6 @@ struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;
+  int hitGeomIdx;
+  glm::vec2 uv;
 };

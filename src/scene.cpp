@@ -9,6 +9,8 @@
 #include "tiny_gltf.h"
 
 Scene::Scene(string filename) {
+    numLights = 0;
+    envMap = -1;
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -17,7 +19,6 @@ Scene::Scene(string filename) {
         cout << "Error reading from file - aborting!" << endl;
         throw;
     }
-    hasEnvMap = false;
     while (fp_in.good()) {
         string line;
         utilityCore::safeGetline(fp_in, line);
@@ -56,6 +57,7 @@ int Scene::loadGeom(string objectid) {
         Geom newGeom;
         string line;
         newGeom.index = id;
+        newGeom.textureIdx = -1;
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -221,6 +223,7 @@ int Scene::loadMesh(string meshid) {
         bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, address);
 
         Geom newGeom;
+        newGeom.index = geoms.size();
         newGeom.type = MESH;
         newGeom.triIdx = tris.size();
         newGeom.triCount = 0;
@@ -268,7 +271,7 @@ int Scene::loadMesh(string meshid) {
                     else if (att.first == "NORMAL") {
                         norBuffer = reinterpret_cast<float*>(&rawData[start]);
                     }
-                    else {
+                    else if (att.first == "TEXCOORD_0"){
                         uvBuffer = reinterpret_cast<float*>(&rawData[start]);
                     }
                 }
@@ -290,6 +293,27 @@ int Scene::loadMesh(string meshid) {
                 offset += 1;
             }
         }
+
+        //link texture
+        utilityCore::safeGetline(fp_in, address);
+        address = "../scenes/" + address;
+        char* fname = (char*)address.c_str();
+        if (fp_in.good()) {
+            Image tex;
+            float* img = stbi_loadf(fname, &tex.width, &tex.height, &tex.channels, 0);
+            for (size_t i = 0; i < tex.width * tex.height; i++) {
+                for (size_t c = 0; c < tex.channels; c++) {
+                    tex.imgdata.push_back(img[tex.channels * i + c]);
+                }
+                for (size_t c = tex.channels; c < 4; c++) {
+                    tex.imgdata.push_back(1.0f);
+                }
+            }
+            newGeom.textureIdx = textures.size();
+            textures.push_back(tex);
+        }
+
+
         //link material
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -333,16 +357,18 @@ int Scene::loadEnv(string envid) {
     address = "../scenes/" + address;
     char* fname = (char*)address.c_str();
     if (fp_in.good()) {
-        float* img = stbi_loadf(fname, &mp.width, &mp.height, &mp.channels, 0);
-        for (size_t i = 0; i < mp.width * mp.height; i++) {
-            for (size_t c = 0; c < mp.channels; c++) {
-                mp.imgdata.push_back(img[mp.channels * i + c]);
+        Image tex;
+        float* img = stbi_loadf(fname, &tex.width, &tex.height, &tex.channels, 0);
+        for (size_t i = 0; i < tex.width * tex.height; i++) {
+            for (size_t c = 0; c < tex.channels; c++) {
+                tex.imgdata.push_back(img[tex.channels * i + c]);
             }
-            for (size_t c = mp.channels; c < 4; c++) {
-                mp.imgdata.push_back(1.0f);
+            for (size_t c = tex.channels; c < 4; c++) {
+                tex.imgdata.push_back(1.0f);
             }
         }
-        hasEnvMap = true;
+        envMap = textures.size();
+        textures.push_back(tex);
     }
     return 1;
 }

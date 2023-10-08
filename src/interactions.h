@@ -94,7 +94,7 @@ void scatterRay(
             pathSegment.reflecting = false;
             wo = calculateRandomDirectionInHemisphere(normal, rng);
         }
-        pathSegment.color *= m.color;
+        
         pathSegment.ray.direction = glm::normalize(wo);
         pathSegment.ray.origin = intersect;
     }

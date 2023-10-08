@@ -97,9 +97,11 @@ static ShadeableIntersection* dev_intersections = NULL;
 // ...
 static ShadeableIntersection* dev_first_pass = NULL;
 static Triangle* dev_tris = NULL;
-static cudaArray* imgArray = NULL;
-static cudaTextureObject_t textureObject = NULL;
+static cudaArray_t* imgArrays = NULL;
+static cudaTextureObject_t* textureObjects = NULL;
 static Geom* dev_lights = NULL;
+size_t num_textures = 0;
+static cudaTextureObject_t* dev_tex = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -137,15 +139,21 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Geom));
 	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
-	if (scene->hasEnvMap) {
+	num_textures = hst_scene->textures.size();
+	imgArrays = new cudaArray_t[num_textures];
+	textureObjects = new cudaTextureObject_t[num_textures];
+
+	for (size_t i = 0; i < hst_scene->textures.size(); i++) {
+		Image mp = hst_scene->textures[i];
+
 		auto channelDesc = cudaCreateChannelDesc<float4>();
-		cudaMallocArray(&imgArray, &channelDesc, scene->mp.width, scene->mp.height);
-		cudaMemcpy2DToArray(imgArray, 0, 0, scene->mp.imgdata.data(), scene->mp.width * sizeof(float4), scene->mp.width * sizeof(float4), scene->mp.height, cudaMemcpyHostToDevice);
+		cudaMallocArray(&imgArrays[i], &channelDesc, mp.width, mp.height);
+		cudaMemcpy2DToArray(imgArrays[i], 0, 0, mp.imgdata.data(), mp.width * sizeof(float4), mp.width * sizeof(float4), mp.height, cudaMemcpyHostToDevice);
 
 		cudaResourceDesc resDesc;
 		memset(&resDesc, 0, sizeof(resDesc));
 		resDesc.resType = cudaResourceTypeArray;
-		resDesc.res.array.array = imgArray;
+		resDesc.res.array.array = imgArrays[i];
 
 		cudaTextureDesc texDesc;
 		memset(&texDesc, 0, sizeof(texDesc));
@@ -155,10 +163,11 @@ void pathtraceInit(Scene* scene) {
 		texDesc.readMode = cudaReadModeElementType;
 		texDesc.normalizedCoords = 1;
 
-		cudaCreateTextureObject(&textureObject, &resDesc, &texDesc, NULL);
-
+		cudaCreateTextureObject(&textureObjects[i], &resDesc, &texDesc, NULL);
 	}
 
+	cudaMalloc(&dev_tex, num_textures * sizeof(cudaTextureObject_t));
+	cudaMemcpy(dev_tex, textureObjects, num_textures * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
 	checkCUDAError("pathtraceInit");
 }
 
@@ -170,10 +179,12 @@ void pathtraceFree() {
 	cudaFree(dev_intersections);
 			// TODO: clean up any extra device memory you created
 	cudaFree(dev_tris);
-	cudaDestroyTextureObject(textureObject);
-	cudaFreeArray(imgArray);
-
-
+	for (size_t i = 0; i < num_textures; i++) {
+		cudaDestroyTextureObject(textureObjects[i]);
+		cudaFreeArray(imgArrays[i]);
+	}
+	
+	cudaFree(dev_lights);
 	checkCUDAError("pathtraceFree");
 }
 
@@ -242,9 +253,11 @@ __global__ void computeIntersections(
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
 		bool outside = true;
+		glm::vec2 uv;
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		glm::vec2 tmp_uv;
 
 		// naive parse through global geoms
 
@@ -260,7 +273,7 @@ __global__ void computeIntersections(
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
 			else {
-				t = meshIntersectionTest(geom, tris, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = meshIntersectionTest(geom, tris, tmp_uv, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -270,6 +283,7 @@ __global__ void computeIntersections(
 				hit_geom_index = i;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
+				uv = tmp_uv;
 			}
 		}
 
@@ -284,6 +298,8 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].hitGeomIdx = hit_geom_index;
+			intersections[path_index].uv = uv;
 		}
 	}
 }
@@ -298,18 +314,19 @@ __global__ void computeIntersections(
 // Your shaders should handle that - this can allow techniques such as
 // bump mapping.
 __global__ void shadeFakeMaterial(
-	int iter
-	, int num_paths
-	, ShadeableIntersection* shadeableIntersections
-	, PathSegment* pathSegments
-	, Material* materials,
-	const int depth
-	, cudaTextureObject_t textureObject
-	, Geom* lights
-	, int numLights
-	, Geom* geoms
-	, int geoms_size
-	, Triangle* tris
+	const int iter, 
+	const int num_paths, 
+	const ShadeableIntersection* shadeableIntersections, 
+	PathSegment* pathSegments, 
+	const Material* materials,
+	const int depth,
+	const cudaTextureObject_t* tex, 
+	const int envMap, 
+	const Geom* lights, 
+	const int numLights, 
+	Geom* geoms, 
+	const int geoms_size, 
+	Triangle* tris
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -333,24 +350,31 @@ __global__ void shadeFakeMaterial(
 
 				// apply direct lighting
 				if (material.emittance == 0 && !material.hasReflective) {
-					int rand = int(u01(rng) * (numLights + 1)) % (numLights + 1);
+					int rand;
+					if (envMap == -1) {
+						int(u01(rng) * (numLights)) % (numLights);
+					}
+					else {
+						int(u01(rng) * numLights) % numLights;
+					}
 
 					glm::vec3 L;
 					float pdf;
 					Ray light;
 					int target = -1;
+					rand = 0;
 
 					glm::vec2 xi = glm::vec2(-0.5f) + glm::vec2(u01(rng), u01(rng));
 					if (rand == numLights) {
 						light.origin = intersection_point;
-						light.direction = calculateRandomDirectionInHemisphere(path.ray.direction, rng);
+						light.direction = calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng);
 						glm::vec3 d = light.direction;
 						glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
 						uv *= glm::vec2(0.1591, -0.3183);
 						uv += 0.5;
-						pdf = 1.0f;
+						pdf = abs(dot(normalize(light.direction), -intersection.surfaceNormal));
 
-						float4 env_color = tex2D<float4>(textureObject, uv.x, uv.y);
+						float4 env_color = tex2D<float4>(tex[envMap], uv.x, uv.y);
 						L.x = env_color.x;
 						L.y = env_color.y;
 						L.z = env_color.z;
@@ -362,28 +386,27 @@ __global__ void shadeFakeMaterial(
 						
 						pdf = closestPointOnCube(l, xi, intersection_point, point_on_light, light, u01(rng));
 						light.direction = point_on_light - intersection_point;
-						L = materials[l.materialid].color * materialColor * pow(abs(dot(intersection.surfaceNormal, light.direction)), 2.0f) / pdf;
+						L = materials[l.materialid].color * materialColor * pow(abs(dot(intersection.surfaceNormal, -light.direction)), 2.0f) / pdf;
 					}
 					float t;
 					float t_min = FLT_MAX;
 					int hit_geom_index = -1;
 					bool outside = true;
-					glm::vec3 tmp_intersect;
-					glm::vec3 tmp_normal;
+
 
 					for (int i = 0; i < geoms_size; i++)
 					{
 						Geom& geom = geoms[i];
 						if (geom.type == CUBE)
 						{
-							t = boxIntersectionTest(geom, light, tmp_intersect, tmp_normal, outside);
+							t = boxIntersectionTest(geom, light, glm::vec3(), glm::vec3(), outside);
 						}
 						else if (geom.type == SPHERE)
 						{
-							t = sphereIntersectionTest(geom, light, tmp_intersect, tmp_normal, outside);
+							t = sphereIntersectionTest(geom, light, glm::vec3(), glm::vec3(), outside);
 						}
 						else {
-							t = meshIntersectionTest(geom, tris, light, tmp_intersect, tmp_normal, outside);
+							t = meshIntersectionTest(geom, tris, glm::vec2(), light, glm::vec3(), glm::vec3(), outside);
 						}
 						if (t > 0.0f && t_min > t)
 						{
@@ -395,10 +418,18 @@ __global__ void shadeFakeMaterial(
 					if (pdf < 0.001f || (hit_geom_index != target)) {
 						L = glm::vec3(0.0f);
 					}
-					path.accumRay += L * path.color * float(numLights + 1);
+					path.accumRay += L * path.color;
 				}
 
 				scatterRay(path, intersection_point, intersection.surfaceNormal, material, rng, depth);
+				if (geoms[intersection.hitGeomIdx].textureIdx != -1) {
+					float4 c = tex2D<float4>(tex[geoms[intersection.hitGeomIdx].textureIdx], intersection.uv.x, intersection.uv.y);
+					path.color *= material.color;
+					path.color *= glm::vec3(c.x, c.y, c.z);
+				}
+				else {
+					path.color *= material.color;
+				}
 
 				// Russian Roulette
 				if (depth > 3) {
@@ -423,7 +454,7 @@ __global__ void shadeFakeMaterial(
 					uv *= glm::vec2(0.1591, -0.3183);
 					uv += 0.5;
 
-					float4 env_color = tex2D<float4>(textureObject, uv.x, uv.y);
+					float4 env_color = tex2D<float4>(tex[envMap], uv.x, uv.y);
 					path.accumRay.x = env_color.x;
 					path.accumRay.y = env_color.y;
 					path.accumRay.z = env_color.z;
@@ -581,7 +612,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials,
 			depth,
-			textureObject,
+			dev_tex,
+			hst_scene->envMap,
 			dev_lights,
 			hst_scene->numLights
 			, dev_geoms

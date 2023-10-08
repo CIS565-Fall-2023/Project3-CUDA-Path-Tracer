@@ -22,12 +22,12 @@ public:
     Scene(string filename);
     ~Scene();
 
-    bool hasEnvMap;
+    int envMap;
     int numLights;
     std::vector<Geom> lights;
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     std::vector<Triangle> tris;
-    EnvironmentMap mp;
+    std::vector<Image> textures;
     RenderState state;
 };
