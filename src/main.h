@@ -27,7 +27,7 @@ using namespace std;
 //----------PATH TRACER----------
 //-------------------------------
 
-extern SceneConfig* scene;
+extern SceneConfig* sceneConfig;
 extern int iteration;
 
 extern int width;

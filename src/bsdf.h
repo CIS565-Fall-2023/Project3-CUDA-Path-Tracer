@@ -3,74 +3,15 @@
 #include "bsdfStruct.h"
 #include "texture.h"
 
-#define Clamp(x, min, max) (x < min ? min : (x > max ? max : x))
-
-// BSDF Inline Functions
-__device__ inline float CosTheta(const glm::vec3& w) { return w.z; }
-__device__ inline float Cos2Theta(const glm::vec3& w) { return w.z * w.z; }
-__device__ inline float AbsCosTheta(const glm::vec3& w) { return std::abs(w.z); }
-__device__ inline float Sin2Theta(const glm::vec3& w) {
-    return __max((float)0, (float)1 - Cos2Theta(w));
-}
-
-__device__ inline float SinTheta(const glm::vec3& w) { return std::sqrt(Sin2Theta(w)); }
-
-__device__ inline float TanTheta(const glm::vec3& w) { return SinTheta(w) / CosTheta(w); }
-
-__device__ inline float Tan2Theta(const glm::vec3& w) {
-    return Sin2Theta(w) / Cos2Theta(w);
-}
-
-__device__ inline float CosPhi(const glm::vec3& w) {
-    float sinTheta = SinTheta(w);
-    return (sinTheta == 0) ? 1 : Clamp(w.x / sinTheta, -1, 1);
-}
-
-__device__ inline float SinPhi(const glm::vec3& w) {
-    float sinTheta = SinTheta(w);
-    return (sinTheta == 0) ? 0 : Clamp(w.y / sinTheta, -1, 1);
-}
-
-__device__ inline float Cos2Phi(const glm::vec3& w) { return CosPhi(w) * CosPhi(w); }
-
-__device__ inline float Sin2Phi(const glm::vec3& w) { return SinPhi(w) * SinPhi(w); }
-
-__device__ inline float CosDPhi(const glm::vec3& wa, const glm::vec3& wb) {
-    float waxy = wa.x * wa.x + wa.y * wa.y;
-    float wbxy = wb.x * wb.x + wb.y * wb.y;
-    if (waxy == 0 || wbxy == 0)
-        return 1;
-    return Clamp((wa.x * wb.x + wa.y * wb.y) / std::sqrt(waxy * wbxy), -1, 1);
-}
-
-
-__device__ float Lambda(const glm::vec3& w, const float alpha) {
-    float absTanTheta = std::abs(TanTheta(w));
-    if (glm::isinf(absTanTheta)) return 0.;
-        float alpha_lambda = glm::sqrt(Cos2Phi(w) +
-            Sin2Phi(w)) * alpha;
-
-    float a = 1 / (alpha_lambda * absTanTheta);
-    if (a >= 1.6f)
-        return 0;
-    return (1 - 1.259f * a + 0.396f * a * a) /
-        (3.535f * a + 2.181f * a * a);
-    
-    // Beckmann Spizzichino 
-    //float theta = acos(w.z);
-    //float a = 1.0 / (alpha * tan(theta));
-    //return 0.5f * (erf(a) - 1.0f + exp(-a * a) / (a * sqrt(PI)));
-}
-
 __device__ float microfacetBSDF_G(const glm::vec3 & wo, const glm::vec3 & wi, const float alpha) {
-    return 1.0 / (1.0 + Lambda(wo, alpha) + Lambda(wi, alpha));
+    return 1.0 / (1.0 + Math::Lambda(wo, alpha) + Math::Lambda(wi, alpha));
 }
 
 __device__ float microfacetBSDF_D(const glm::vec3 & h, const float alpha) {
     float alpha_square = glm::max(alpha * alpha, EPSILON);
-    auto tan2Theta = Tan2Theta(h);
+    auto tan2Theta = Math::Tan2Theta(h);
     if (glm::isinf(tan2Theta)) return 0.;
-    auto cos4Theta = glm::max(Cos2Theta(h) * Cos2Theta(h), EPSILON);
+    auto cos4Theta = glm::max(Math::Cos2Theta(h) * Math::Cos2Theta(h), EPSILON);
 	return exp(-tan2Theta / alpha_square) 
         / (PI * alpha_square * cos4Theta);
 }
@@ -91,21 +32,6 @@ __device__ float roughnessToAlpha(float roughness) {
 __device__ glm::vec3 microfacetBSDF_F(const glm::vec3& h, const glm::vec3 & wo, const glm::vec3 & baseColor, const float metallic) {
     auto F0 = glm::mix(glm::vec3(0.08f), baseColor, metallic);
     return Schlick(F0, glm::dot(wo, h));
-    //if (metallic > 0.1f) {
-    //    auto F0 = glm::mix(glm::vec3(0.4f), baseColor, metallic);
-    //    return Schlick(F0, h.z);
-    //}
-    //else {
-    //    float R0 = powf((1.0f - ior) / (1.0f + ior), 2);
-    //    return glm::vec3(Schlick(R0, h.z));
-
-    //}
-    //auto eta2_add_k2 = eta * eta + k * k;
-    //auto cosine_square = wi.z * wi.z;
-    //auto eta_times_cosine = eta * wi.z;
-    //auto Rs = (eta2_add_k2 - 2.0f * eta_times_cosine + cosine_square) / ((eta2_add_k2 + 2.0f * eta_times_cosine + cosine_square) + EPSILON);
-    //auto Rp = ((eta2_add_k2)*cosine_square - 2.0f * eta_times_cosine + 1.0f) / (((eta2_add_k2)*cosine_square + 2.0f * eta_times_cosine + 1.0f) + EPS_D);
-    //return (Rs + Rp) / 2.;
 }
 
 __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec3& wi, const glm::vec2 & uv) {
@@ -124,26 +50,10 @@ __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::v
         auto D = microfacetBSDF_D(h, alpha);
         auto G = microfacetBSDF_G(wo, wi, alpha);
         auto F = microfacetBSDF_F(h, wo, baseColor, metallicRoughness.x);
-        //if (metallicRoughness.x < 0.99f) printf("h: %f %f %f kS: %f %f %f kD:%f %f %f metallic:%f\n", normalize(wi + wo).x, normalize(wi + wo).y, normalize(wi + wo).z, kS.x, kS.y, kS.z, kD.x, kD.y, kD.z, metallicRoughness.x);
         auto denominator = 4.0f * wo.z * wi.z + EPSILON;
-        //auto specular = F * D * G / denominator;
-        //auto kS = metallicRoughness.x;
-        //auto kD = 1.0f - kS;
-        //auto specular = kS * F * D * G / denominator;
-        //auto diffuse  = kD * INV_PI;
-        //auto result = baseColor * (diffuse + specular);
-        //auto result = baseColor * specular;
-        //auto result = baseColor * diffuse;
-        //return (baseColor * F* D* G/denominator);
-        //return baseColor * INV_PI;
         auto diffuse = baseColor * INV_PI * (1.f - metallicRoughness.x);
         auto specular = glm::vec3(G * D / denominator);
         return glm::mix(diffuse, specular, F);
-        //printf("baseColor: %f %f %f\n", baseColor.x, baseColor.y, baseColor.z);
-
-        //return baseColor;
-        //return result;
-        //return baseColor * INV_PI;
     case EMISSIVE:
         return bsdfStruct.emissiveFactor * bsdfStruct.strength;
     default:
@@ -179,12 +89,6 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         return f(bsdfStruct, wo, wi, uv);
     }
     case MICROFACET:
-        // Uniform sampling for now
-        // TODO: Add importance sampling
-
-        //wi = hemiSphereRandomSample(rng, pdf);
-        //return f(bsdfStruct, wo, wi, uv);
-
         thrust::uniform_real_distribution<float> u01(0, 1);
         glm::vec3 rands(u01(rng), u01(rng), u01(rng));
         float alpha = glm::max(bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor, EPSILON);
@@ -215,10 +119,6 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
             //printf("Specular wi.z: %f wo: %f %f %f wh : %f %f %f\n", wi.z, wo.x, wo.y, wo.z, wh.x, wh.y, wh.z);
         }
         *pdf = PDF(bsdfStruct, wo, wi);
-        if (glm::isnan(pdf)) {
-			printf("pdf is nan\n");
-        }
-
         return f(bsdfStruct, wo, wi, uv);
         
     case EMISSIVE:
