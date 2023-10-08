@@ -11,6 +11,8 @@ static bool middleMousePressed = false;
 static double lastX;
 static double lastY;
 
+const float CameraSpeed = 1.0f;
+
 static bool camchanged = true;
 static float dtheta = 0, dphi = 0;
 static glm::vec3 cammove;
@@ -73,6 +75,8 @@ int main(int argc, char** argv) {
 	// Initialize CUDA and GL components
 	init();
 
+	scene->loadTextures();
+
 	// Initialize ImGui Data
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
@@ -107,7 +111,7 @@ void saveImage() {
 }
 
 void runCuda() {
-	if (camchanged) {
+	if (camchanged || samplePerPixelChanged || depthChanged) {
 		iteration = 0;
 		Camera& cam = renderState->camera;
 		cameraPosition.x = zoom * sin(phi) * sin(theta);
@@ -125,6 +129,8 @@ void runCuda() {
 		cameraPosition += cam.lookAt;
 		cam.position = cameraPosition;
 		camchanged = false;
+		samplePerPixelChanged = false;
+		depthChanged = false;
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -148,10 +154,10 @@ void runCuda() {
 		cudaGLUnmapBufferObject(pbo);
 	}
 	else {
-		saveImage();
-		pathtraceFree();
-		cudaDeviceReset();
-		exit(EXIT_SUCCESS);
+		//saveImage();
+		//pathtraceFree();
+		//cudaDeviceReset();
+		//exit(EXIT_SUCCESS);
 	}
 }
 
@@ -163,15 +169,29 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
 		case GLFW_KEY_S:
-			saveImage();
+			//saveImage();
 			break;
 		case GLFW_KEY_SPACE:
+		{
 			camchanged = true;
 			renderState = &scene->state;
 			Camera& cam = renderState->camera;
 			cam.lookAt = ogLookAt;
 			break;
 		}
+		case GLFW_KEY_1:
+			sortMaterial = !sortMaterial;
+			break;
+
+		case GLFW_KEY_2:
+			Compaction = !Compaction;
+			break;
+
+		case GLFW_KEY_3:
+			CacheFirstBound = !CacheFirstBound;
+			break;
+		}
+
 	}
 }
 
@@ -215,4 +235,53 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	}
 	lastX = xpos;
 	lastY = ypos;
+}
+
+void processInput(GLFWwindow* window)
+{
+	auto renderState = &scene->state;
+	Camera& cam = renderState->camera;
+	glm::vec3 forward = cam.view;
+	forward.y = 0.0f;
+	forward = glm::normalize(forward);
+	glm::vec3 right = cam.right;
+	right.y = 0.0f;
+	right = glm::normalize(right);
+	glm::vec3 up = cam.up;
+
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	{
+		cam.lookAt += forward * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	{
+		cam.lookAt -= forward * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	{
+		cam.lookAt -= right * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	{
+		cam.lookAt += right * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+	{
+		cam.lookAt -= up * CameraSpeed;
+		camchanged = true;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+	{
+		cam.lookAt += up * CameraSpeed;
+		camchanged = true;
+	}
 }

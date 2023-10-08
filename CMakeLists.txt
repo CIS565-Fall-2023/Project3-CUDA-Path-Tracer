@@ -74,6 +74,7 @@ set(headers
     src/preview.h
     src/utilities.h
     src/ImGui/imconfig.h
+    src/gltfLoader.h
 	
 	src/ImGui/imgui.h
     src/ImGui/imconfig.h
@@ -95,6 +96,7 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/gltfLoader.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 

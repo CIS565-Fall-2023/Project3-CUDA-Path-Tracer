@@ -3,6 +3,10 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <stb_image.h>
+
+#include "gltfLoader.h"
+#include "utilities.h"
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -27,7 +31,10 @@ Scene::Scene(string filename) {
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
                 cout << " " << endl;
-            }
+			} else if (strcmp(tokens[0].c_str(), "RANDOM") == 0) {
+				randomScene();
+				cout << " " << endl;
+			}
         }
     }
 }
@@ -42,6 +49,10 @@ int Scene::loadGeom(string objectid) {
         Geom newGeom;
         string line;
 
+        bool isMesh = false;
+
+        std::vector<Triangle> triangleList;
+
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -51,7 +62,20 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
-            }
+			} else if (strcmp(line.c_str(), "mesh") == 0) {
+				cout << "Creating new mesh..." << endl;
+				newGeom.type = MESH;
+				utilityCore::safeGetline(fp_in, line);
+
+                loadGLTF(line, triangleList);
+
+                isMesh = true;
+			} else if (line.find("procedural") != std::string::npos) {
+				newGeom.type = PROCEDURAL;
+             
+				vector<string> tokens = utilityCore::tokenizeString(line);
+				newGeom.proceduralType = static_cast<ProceduralType>(atoi(tokens[1].c_str()));
+			}
         }
 
         //link material
@@ -85,6 +109,20 @@ int Scene::loadGeom(string objectid) {
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
         geoms.push_back(newGeom);
+
+        for (const auto& triangle : triangleList)
+        {
+            Geom geom;
+            geom.materialid = newGeom.materialid;
+            geom.type = MESH;
+            geom.transform = newGeom.transform;
+            geom.inverseTransform = newGeom.inverseTransform; 
+            geom.invTranspose = newGeom.invTranspose;
+            geom.triangle = triangle;
+
+            geoms.push_back(geom);
+        }
+
         return 1;
     }
 }
@@ -150,6 +188,180 @@ int Scene::loadCamera() {
     return 1;
 }
 
+void Scene::loadTexture(const std::string& path, cudaTextureObject_t* cudaTextureObject, int type)
+{
+    stbi_set_flip_vertically_on_load(true);
+
+	int width, height, channels;
+	if (!type)
+	{
+		unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+		if (data) {
+			cudaError_t err;
+			size_t dataSize = width * height * 4 * sizeof(unsigned char);
+			cudaArray_t cuArray;
+			cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(8, 8, 8, 8, cudaChannelFormatKindUnsigned);
+			cudaMallocArray(&cuArray, &channelDesc, width, height);
+
+            textureData.emplace_back(cuArray);
+			cudaMemcpyToArray(cuArray, 0, 0, data, width * height * 4 * sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+            cudaDeviceSynchronize();
+
+			stbi_image_free(data);
+			cudaResourceDesc resDesc;
+			memset(&resDesc, 0, sizeof(resDesc));
+			resDesc.resType = cudaResourceTypeArray;
+			resDesc.res.array.array = cuArray;
+			resDesc.res.linear.desc = cudaCreateChannelDesc(8, 8, 8, 8, cudaChannelFormatKindUnsigned);
+			resDesc.res.linear.sizeInBytes = dataSize;
+
+			cudaTextureDesc texDesc;
+			memset(&texDesc, 0, sizeof(texDesc));
+			texDesc.addressMode[0] = cudaAddressModeWrap;
+			texDesc.addressMode[1] = cudaAddressModeWrap;
+			texDesc.filterMode = cudaFilterModeLinear;
+			texDesc.readMode = cudaReadModeNormalizedFloat;
+			texDesc.normalizedCoords = 1;
+			texDesc.sRGB = 1;
+			cudaCreateTextureObject(cudaTextureObject, &resDesc, &texDesc, NULL);
+
+            cudaDeviceSynchronize();
+
+			err = cudaGetLastError();
+			if (err != cudaSuccess) {
+				printf("CUDA error: %s\n", cudaGetErrorString(err));
+				exit(-1);
+			}
+
+		}
+		else {
+			printf("Failed to load image: %s\n", stbi_failure_reason());
+		}
+	}
+	else
+	{
+		float* data = stbi_loadf(path.c_str(), &width, &height, &channels, 4);
+		if (data) {
+			cudaError_t err;
+			size_t dataSize = width * height * 4 * sizeof(float);
+			cudaArray_t cuArray;
+			cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+			cudaMallocArray(&cuArray, &channelDesc, width, height);
+
+            textureData.emplace_back(cuArray);
+			cudaMemcpyToArray(cuArray, 0, 0, data, width * height * 4 * sizeof(float), cudaMemcpyHostToDevice);
+
+			stbi_image_free(data);
+			cudaResourceDesc resDesc;
+			memset(&resDesc, 0, sizeof(resDesc));
+			resDesc.resType = cudaResourceTypeArray;
+			resDesc.res.array.array = cuArray;
+			resDesc.res.linear.desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+			resDesc.res.linear.sizeInBytes = dataSize;
+
+			cudaTextureDesc texDesc;
+			memset(&texDesc, 0, sizeof(texDesc));
+			texDesc.addressMode[0] = cudaAddressModeWrap;
+			texDesc.addressMode[1] = cudaAddressModeWrap;
+			texDesc.filterMode = cudaFilterModeLinear;
+			texDesc.readMode = cudaReadModeElementType;
+			texDesc.normalizedCoords = 1;
+			cudaCreateTextureObject(cudaTextureObject, &resDesc, &texDesc, NULL);
+			err = cudaGetLastError();
+			if (err != cudaSuccess) {
+				printf("CUDA error: %s\n", cudaGetErrorString(err));
+				exit(-1);
+			}
+
+		}
+		else {
+			printf("Failed to load image: %s\n", stbi_failure_reason());
+		}
+	}
+}
+
+void Scene::loadTextures()
+{
+    for (auto& material : materials)
+    {
+        if (material.type == MaterialType::Image)
+        {
+			loadTexture("scenes/textures/2k_earth_daymap.jpg", &material.albedo, 1);
+            loadTexture("scenes/textures/PaintedSky_Day.hdr", &skyboxTextureObject, 0);
+        }
+    }
+}
+
+void Scene::randomScene()
+{
+    srand(time(nullptr));
+
+    Material diffuseMaterial;
+    diffuseMaterial.type = MaterialType::Diffuse;
+    diffuseMaterial.color = utilityCore::random(0.1f, 1.0f);
+    diffuseMaterial.emittance = 0.0f;
+    diffuseMaterial.hasRefractive = 0.0f;
+    diffuseMaterial.hasRefractive = 0.0f;
+    diffuseMaterial.indexOfRefraction = 1.0f;
+    diffuseMaterial.pattern = Pattern::None;
+    diffuseMaterial.specular.color = glm::vec3(0.0f);
+    diffuseMaterial.specular.exponent = 0.0f;
+
+    materials.emplace_back(diffuseMaterial);
+
+    for (int i = 0; i < 20; i++)
+    {
+		Material metalMaterial;
+		metalMaterial.type = MaterialType::Glass;
+		metalMaterial.color = utilityCore::random(0.1f, 1.0f);
+		metalMaterial.emittance = 0.0f;
+		metalMaterial.hasReflective = 1.0f;
+		metalMaterial.hasRefractive = 0.0f;
+		metalMaterial.indexOfRefraction = 1.0f;
+		metalMaterial.pattern = Pattern::None;
+		metalMaterial.specular.color = glm::vec3(0.0f);
+		metalMaterial.specular.exponent = 0.0f;
+        metalMaterial.fuzz = 0.0f;// utilityCore::random_float(0.6f, 1.0f);
+
+		materials.emplace_back(metalMaterial);
+    }
+
+	Material glassMaterial;
+	glassMaterial.type = MaterialType::Glass;
+	glassMaterial.color = glm::vec3(1.0f);
+	glassMaterial.emittance = 0.0f;
+	glassMaterial.hasReflective = 0.0f;
+	glassMaterial.hasRefractive = 1.0f;
+	glassMaterial.indexOfRefraction = 1.5f;
+	glassMaterial.pattern = Pattern::None;
+	glassMaterial.specular.color = glm::vec3(0.0f);
+	glassMaterial.specular.exponent = 0.0f;
+
+	materials.emplace_back(glassMaterial);
+
+	Material skyboxMaterial;
+	skyboxMaterial.type = MaterialType::Image;
+
+	materials.emplace_back(skyboxMaterial);
+
+    for (int i = 0; i < 20; i++)
+    {
+		Geom geom;
+		geom.type = SPHERE;
+        geom.materialid = utilityCore::random_int(1, 20);
+		geom.translation = utilityCore::random(-6.0f, 6.0f);
+		geom.rotation = glm::vec3(0.0f);
+		geom.scale = utilityCore::uniformRandom(1.0f, 5.0f);
+
+        geom.transform = utilityCore::buildTransformationMatrix(geom.translation, geom.rotation, geom.scale);
+        geom.inverseTransform = glm::inverse(geom.transform);
+        geom.invTranspose = glm::inverseTranspose(geom.transform);
+
+		geoms.emplace_back(geom);
+    }
+}
+
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
     if (id != materials.size()) {
@@ -160,7 +372,7 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 9; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
@@ -175,13 +387,28 @@ int Scene::loadMaterial(string materialid) {
             } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.hasReflective = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
+                printf("REF");
                 newMaterial.hasRefractive = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            }else if (strcmp(tokens[0].c_str(), "FUZZ") == 0) {
+                newMaterial.fuzz = atoi(tokens[1].c_str());
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
-            }
+            } else if (strcmp(tokens[0].c_str(), "TYPE") == 0) {
+                newMaterial.type = static_cast<MaterialType>(atoi(tokens[1].c_str()));
+			} else if (strcmp(tokens[0].c_str(), "PATTERN") == 0) {
+				newMaterial.pattern = static_cast<Pattern>(atoi(tokens[1].c_str()));
+			} 
+
         }
+
+        if (newMaterial.type == MaterialType::Image)
+        {
+            texturesMap.emplace_back("scenes/textures/2k_moon.jpg", materials.size());
+        }
+
         materials.push_back(newMaterial);
         return 1;
     }

@@ -110,3 +110,27 @@ std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
         }
     }
 }
+
+float utilityCore::random_float() {
+	// Returns a random real in [0,1).
+	return rand() / (RAND_MAX + 1.0);
+}
+
+float utilityCore::random_float(float min, float max) {
+	// Returns a random real in [min,max).
+	return min + (max - min) * random_float();
+}
+
+glm::vec3 utilityCore::random(float min, float max) {
+	return glm::vec3(random_float(min, max), random_float(min, max), random_float(min, max));
+}
+
+glm::vec3 utilityCore::uniformRandom(float min, float max) {
+    float value = random_float(min, max);
+	return glm::vec3(value, value, value);
+}
+
+int utilityCore::random_int(int min, int max) {
+	// Returns a random integer in [min,max].
+	return static_cast<int>(random_float(min, max + 1));
+}

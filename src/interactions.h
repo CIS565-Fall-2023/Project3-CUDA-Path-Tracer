@@ -1,6 +1,9 @@
 #pragma once
 
 #include "intersections.h"
+#include "perlin.h"
+
+#include <thrust/random.h>
 
 // CHECKITOUT
 /**
@@ -41,6 +44,55 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__ glm::vec3 random_in_unit_sphere(thrust::default_random_engine& rng) {
+	glm::vec3 p;
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	do {
+		p = 2.0f * glm::vec3(u01(rng), u01(rng), u01(rng)) - glm::vec3(1, 1, 1);
+	} while (glm::length2(p) >= 1.0f);
+	return p;
+}
+
+// This is the reflection function from the pseudocode
+__host__ __device__ glm::vec3 reflect(const glm::vec3& v, const glm::vec3& n) {
+	return v - 2.0f * glm::dot(v, n) * n;
+}
+
+__host__ __device__ float schlick(float cosine, float ref_idx) {
+	float r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
+	r0 = r0 * r0;
+	return r0 + (1.0f - r0) * std::powf((1.0f - cosine), 5.0f);
+}
+
+__host__ __device__ bool refract(const glm::vec3& v, const glm::vec3& n, float niOverNt, glm::vec3& refracted) {
+	glm::vec3 uv = glm::normalize(v);
+	float dt = dot(uv, n);
+	float discriminant = 1.0f - niOverNt * niOverNt * (1 - dt * dt);
+
+	if (discriminant > 0.0f) 
+    {
+		refracted = niOverNt * (uv - n * dt) - n * sqrt(discriminant);
+		return true;
+	}
+	return false;
+}
+
+__host__ __device__ glm::vec3 refract(const glm::vec3& uv, const glm::vec3& n, float etai_over_etat) 
+{
+	auto cos_theta = std::fminf(glm::dot(-uv, n), 1.0f);
+
+    glm::vec3 r_out_perp = etai_over_etat * (uv + cos_theta * n);
+    glm::vec3 r_out_parallel = -std::sqrtf(fabs(1.0 - glm::dot(r_out_perp, r_out_perp))) * n;
+	return r_out_perp + r_out_parallel;
+}
+
+__host__ __device__ float schlickApproximation(float cosine, float ref_idx) {
+	float R0 = (1.0f - ref_idx) / (1.0f + ref_idx);
+	R0 = R0 * R0;
+	return R0 + (1.0f - R0) * powf((1.0f - cosine), 5.0f);
+}
+
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -66,14 +118,114 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
+__device__
 void scatterRay(
-        PathSegment & pathSegment,
+        PathSegment& pathSegment,
+		ShadeableIntersection intersection,
         glm::vec3 intersect,
         glm::vec3 normal,
-        const Material &m,
+        bool frontFace,
+        const Material &material,
         thrust::default_random_engine &rng) {
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+
+	thrust::uniform_real_distribution<float> u01(0.0f, 1.0f);
+
+	pathSegment.needSkyboxColor = false;
+
+    switch (material.type)
+    {
+    case MaterialType::Emissive:
+		pathSegment.ray.origin = intersect + normal * 0.001f;
+		pathSegment.color *= (material.color * material.emittance);
+		pathSegment.remainingBounces = 0;
+        break;
+	case MaterialType::Diffuse:
+	{
+		pathSegment.ray.origin = intersect + normal * 0.001f;
+
+		glm::vec3 target = intersect + normal + random_in_unit_sphere(rng);
+		pathSegment.ray.direction = target - intersect;
+
+		float cosine = glm::dot(glm::normalize(pathSegment.ray.direction), normal);
+		float reflectance = schlick(cosine, material.indexOfRefraction);
+		pathSegment.color *= reflectance * material.color;
+
+		pathSegment.remainingBounces--;
+	}
+    break;
+	case MaterialType::Metal: {
+		pathSegment.ray.origin = intersect + normal * 0.001f;
+		glm::vec3 reflected = glm::reflect(glm::normalize(pathSegment.ray.direction), normal);
+		float cosine = glm::dot(glm::normalize(pathSegment.ray.direction), normal);
+		float reflectance = schlickApproximation(cosine, material.indexOfRefraction);
+		pathSegment.ray.direction = reflected + reflectance * material.fuzz * random_in_unit_sphere(rng);
+		pathSegment.color *= material.color * material.hasReflective;
+		pathSegment.needSkyboxColor = true;
+		pathSegment.remainingBounces--;
+	}
+	break;
+
+	case MaterialType::Glass: {
+		pathSegment.ray.origin = intersect;
+		float refractionIndex = frontFace ? (1.0f / material.indexOfRefraction) : material.indexOfRefraction;
+		glm::vec3 unitDirection = glm::normalize(pathSegment.ray.direction);
+		float cosine = glm::dot(-unitDirection, normal);
+		float reflectance = schlickApproximation(cosine, refractionIndex);
+		glm::vec3 direction;
+
+		if (reflectance > u01(rng)) {
+			direction = glm::reflect(unitDirection, normal);
+		}
+		else {
+			direction = glm::refract(unitDirection, normal, refractionIndex);
+		}
+
+		pathSegment.ray.direction = direction;
+		pathSegment.needSkyboxColor = true;
+		pathSegment.remainingBounces--;
+	}
+	break;
+	case MaterialType::Image:
+	{
+		float4 color = tex2D<float4>(material.albedo, intersection.u, intersection.v);
+		pathSegment.color = { color.x, color.y, color.z };
+		pathSegment.remainingBounces = 0;
+	}
+	break;
+    default:
+        break;
+    }
+
+	if (material.pattern == Pattern::Ring)
+	{
+		float sqrt = glm::sqrt(intersect.x * intersect.x + intersect.y * intersect.y) * 4.0f;
+		float floorValue = glm::floor(sqrt);
+		if (glm::mod(floorValue, 2.0f))
+		{
+			glm::vec3 slimeColor = glm::vec3(0.0f, 1.0f, 0.0f);
+			float factor = sqrt - floorValue;
+			pathSegment.color *= glm::mix(pathSegment.color, slimeColor, factor);
+		}
+		else
+		{
+			glm::vec3 iceCreamColor = glm::vec3(1.0f, 0.6f, 0.7f);
+			float factor = sqrt - floorValue;
+			pathSegment.color *= glm::mix(pathSegment.color, iceCreamColor, factor);
+		}
+	}
+
+	else if (material.pattern == Pattern::CheckerBoard)
+	{
+		if (glm::mod(glm::floor(intersect.x) + glm::floor(intersect.y) + glm::floor(intersect.z), 2.0f) == 0)
+		{
+			pathSegment.color *= glm::vec3(0.0f);
+		}
+		else
+		{
+			pathSegment.color *= glm::vec3(1.0f);
+		}
+	}
 }

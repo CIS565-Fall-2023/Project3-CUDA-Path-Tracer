@@ -15,6 +15,9 @@ GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
 
+bool samplePerPixelChanged = false;
+bool depthChanged = false;
+
 std::string currentTimeString() {
 	time_t now;
 	time(&now);
@@ -219,8 +222,18 @@ void RenderImGui()
 	//ImGui::Text("counter = %d", counter);
 	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-	ImGui::End();
 
+	if (ImGui::SliderInt("Sample per Pixel:", &imguiData->SamplePerPixel, 1, 50))
+	{
+		samplePerPixelChanged = true;
+	}
+
+	if (ImGui::SliderInt("Depth:", &imguiData->Depth, 1, 50))
+	{
+		depthChanged = true;
+	}
+
+	ImGui::End();
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -236,6 +249,8 @@ void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		
 		glfwPollEvents();
+
+		processInput(window);
 
 		runCuda();
 
