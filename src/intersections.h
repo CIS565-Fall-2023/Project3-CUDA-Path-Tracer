@@ -188,6 +188,35 @@ __host__ __device__ bool raycastAABB(const Ray& r, const glm::vec3& aabbMin, con
     return false;
 }
 
+__host__ __device__ float getTriArea(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3)
+{
+    //p1.z = 0;
+    //p2.z = 0;
+    //p3.z = 0;
+
+    glm::vec3 v1 = p1 - p3;
+    glm::vec3 v2 = p2 - p3;
+
+    glm::vec3 crossedV = glm::cross(v1, v2); // cross product
+    float area = glm::length(crossedV); // *0.5f; triangle area IS 1/2 of cross product but in our only use case this is cancelled out
+    return area;
+}
+
+__host__ __device__ glm::vec3 getBarycentricInfluence(glm::vec3 p, glm::vec3 t1, glm::vec3 t2, glm::vec3 t3)
+{
+    glm::vec3 influence;
+    float S = getTriArea(t1, t2, t3);
+    float S1 = getTriArea(p, t1, t2);       // (0,1)
+    float S2 = getTriArea(p, t1, t3);       // (0,2)
+    float S3 = getTriArea(p, t2, t3);       // (1,2)
+
+    influence.x = S3 / S;
+    influence.y = S2 / S;
+    influence.z = S1 / S;
+
+    return influence;
+}
+
 __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, Triangle* tris)
 {
@@ -237,11 +266,17 @@ __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
         if (tri.hasNormals)
         {
             // Use barycentric coordinates to interpolate vertex normals at the intersection point
-            float u = minBary.x;
-            float v = minBary.y;
-            float w = 1.0f - u - v;
+            //float u = minBary.x;
+            //float v = minBary.y;
+            //float w = 1.0f - u - v;
 
-            localNor = glm::normalize(u * tri.v0.nor + v * tri.v1.nor + w * tri.v2.nor);
+            //localNor = glm::normalize(u * tri.v0.nor + v * tri.v1.nor + w * tri.v2.nor);
+            // whatever barycentric influence is returned by glm::intersectRayTriangle() is either wrong
+            // or uvw are not what I think they are
+            // normal calculation with those values is broken
+            // so I'll recalculate barycentric influence here.
+            const glm::vec3 barycentricWeights = getBarycentricInfluence(localIntersectionPt, tri.v0.pos, tri.v1.pos, tri.v2.pos);
+            localNor = glm::normalize(barycentricWeights.x * tri.v0.nor + barycentricWeights.y * tri.v1.nor + barycentricWeights.z * tri.v2.nor);
         }
         else
         {
