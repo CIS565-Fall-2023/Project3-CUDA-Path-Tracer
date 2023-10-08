@@ -312,7 +312,7 @@ void Scene::buildTree()
     // printTree();
 
     cout << "bbox num = " << bvh.size() << endl;
-    checkTree();
+    // checkTree();
 
 }
 
@@ -348,6 +348,9 @@ void Scene::splitTree(int leftEnd, int rightEnd, int bboxId, int axis)
         lmax = glm::max(lmax, tris[ti].max);
         ti++;
     }
+    rmin = tris[mid].min;
+    rmax = tris[mid].max;
+    ti = mid + 1;
     while (ti < rightEnd) {
         rmin = glm::min(rmin, tris[ti].min);
         rmax = glm::max(rmax, tris[ti].max);
