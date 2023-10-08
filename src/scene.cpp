@@ -287,8 +287,8 @@ int Scene::loadGeom(string objectid) {
                             imgIdx++;
                             glm::vec3* pixels = img.getPixel();
                             imgtext.insert(imgtext.end(), pixels, pixels + img.getHeight()*img.getWidth());
-                            cout<<imgtext.size()<<endl;
-                            printvec3(imgtext[img.getHeight()*img.getWidth()-1]);
+                            //cout<<imgtext.size()<<endl;
+                            //printvec3(imgtext[img.getHeight()*img.getWidth()-1]);
                             //cout<<"should not arrive"<<endl;
                         }
                         if(material.normal_texname.empty()){
@@ -362,7 +362,7 @@ int Scene::loadGeom(string objectid) {
                             triGeom.type=TRIANGLE;
                             
                             triGeom.materialid=shape.mesh.material_ids[i]+materialStartIdx;
-                            cout<< "material id " <<shape.mesh.material_ids[i]+materialStartIdx<<"  ";
+                            //cout<< "material id " <<shape.mesh.material_ids[i]+materialStartIdx<<"  ";
                             //cout << "mesh indices" <<i << endl;
                             for (int k = 0; k < 3; k++) {
                                 //cout << "triangle indices" <<k<< endl;
