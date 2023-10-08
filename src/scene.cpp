@@ -321,6 +321,7 @@ void Scene::buildTree()
                 triArr[taid].triIds[ti] = new_tris.size();
                 new_tris.push_back(tris[real_ti]);
             }
+            bbox.beginTriId = triArr[taid].triIds[1];
         }
     }
     tris = new_tris;
@@ -330,6 +331,8 @@ void Scene::buildTree()
 #endif
     cout << "bbox num = " << bvh.size() << ", triArr num = " << triArr.size() << endl;
     checkTree();
+
+    triArr.clear();
 }
 
 

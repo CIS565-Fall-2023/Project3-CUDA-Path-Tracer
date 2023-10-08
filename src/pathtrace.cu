@@ -86,7 +86,6 @@ static int* dev_scanBools = NULL;
 static int* dev_scanNBools = NULL;
 static Triangle* dev_tris = NULL;
 static BoundingBox* dev_bvh = NULL;
-static TriangleArray* dev_triArr = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -158,8 +157,6 @@ void pathtraceInit(Scene* scene) {
 #ifdef USING_BVH
 	cudaMalloc(&dev_bvh, scene->bvh.size() * sizeof(BoundingBox));
 	cudaMemcpy(dev_bvh, scene->bvh.data(), scene->bvh.size() * sizeof(BoundingBox), cudaMemcpyHostToDevice);
-	cudaMalloc(&dev_triArr, scene->triArr.size() * sizeof(TriangleArray));
-	cudaMemcpy(dev_triArr, scene->triArr.data(), scene->triArr.size() * sizeof(TriangleArray), cudaMemcpyHostToDevice);
 #endif
 
 	checkCUDAError("pathtraceInit");	
@@ -185,7 +182,6 @@ void pathtraceFree() {
 #endif
 #ifdef USING_BVH
 	cudaFree(dev_bvh);
-	cudaFree(dev_triArr);
 #endif
 	checkCUDAError("pathtraceFree");
 }
@@ -335,8 +331,6 @@ __global__ void computeIntersectionsBVH(
 	, int tris_size
 	, BoundingBox* bvh
 	, int bvh_size
-	, TriangleArray* tri_arr
-	, int tri_arr_size
 	, ShadeableIntersection* intersections
 ) {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -406,7 +400,7 @@ __global__ void computeIntersectionsBVH(
 
 		while (sign >= 0) {
 			BoundingBox& bbox = bvh[arr[sign]];
-			int taid = bbox.beginTriId;
+			int beginId = bbox.beginTriId;
 			glm::vec3& bmin = bbox.min;
 			glm::vec3& bmax = bbox.max;
 			sign--;
@@ -438,17 +432,17 @@ __global__ void computeIntersectionsBVH(
 #endif
 			){
 				// reach leaf node of bvh
-				if (taid >= 0) {
+				if (beginId >= 0) {
 
-					TriangleArray& triIndices = tri_arr[taid];
+					// TriangleArray& triIndices = tri_arr[taid];
 					// #pragma unroll
-					for (int j = 1; j < triIndices.triIds[0] + 1; j++) {
+					for (int j = beginId; j < bbox.triNum + beginId; j++) {
 
-						t = triangleIntersectionTest(tris[triIndices.triIds[j]], pathSegment.ray, tmp_intersect, tmp_normal, outside);
+						t = triangleIntersectionTest(tris[j], pathSegment.ray, tmp_intersect, tmp_normal, outside);
 						if (t > 0.0f && t_min > t)
 						{
 							t_min = t;
-							hit_index = triIndices.triIds[j];
+							hit_index = j;
 							hit_geom = false;
 							intersect_point = tmp_intersect;
 							normal = tmp_normal;
@@ -770,7 +764,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 					dev_geoms, hst_scene->geoms.size(),
 					dev_tris, hst_scene->tris.size(),
 					dev_bvh, hst_scene->bvh.size(),
-					dev_triArr, hst_scene->triArr.size(),
 					dev_intersections);
 				checkCUDAError("tcomputeIntersectionsBVH");
 			} else {

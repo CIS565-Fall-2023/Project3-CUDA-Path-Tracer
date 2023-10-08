@@ -57,13 +57,13 @@ struct BoundingBox {
     int beginTriId;
     int triNum;
 
-    BoundingBox() : min(), max(), leftId(-1), rightId(-1), beginTriId(-1), triNum(-1) {}
+    BoundingBox() : min(), max(), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
 
     BoundingBox(glm::vec3 minPos, glm::vec3 maxPos) :
-        min(minPos), max(maxPos), leftId(-1), rightId(-1), beginTriId(-1), triNum(-1) {}
+        min(minPos), max(maxPos), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
 
     BoundingBox(const Triangle& tri, int tai = -1) :
-        min(tri.min), max(tri.max), leftId(-1), rightId(-1), beginTriId(-1), triNum(-1) {}
+        min(tri.min), max(tri.max), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
 };
 
 struct TriangleArray {

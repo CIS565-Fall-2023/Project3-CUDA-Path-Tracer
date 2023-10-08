@@ -36,7 +36,10 @@ public:
     std::vector<Material> materials;
     std::vector<Triangle> tris;
     std::vector<BoundingBox> bvh;
-    std::vector<TriangleArray> triArr;
+
     RenderState state;
     int objCount = 0;
+
+private:
+    std::vector<TriangleArray> triArr;
 };
