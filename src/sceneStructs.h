@@ -5,80 +5,15 @@
 #include <cuda_runtime.h>
 #include "glm/glm.hpp"
 #include "bound.h"
+#include "geom.h"
 
 #define BACKGROUND_COLOR (glm::vec3(0.5f))
-
-enum GeomType {
-    SPHERE,
-    CUBE,
-    TRIANGLE
-};
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+    float tMax = 1e38f;
 };
-
-struct Geom {
-    GeomType type;
-    int materialid;
-    glm::vec3 translation;
-    glm::vec3 rotation;
-    glm::vec3 scale;
-    glm::mat4 transform;
-    glm::mat4 inverseTransform;
-    glm::mat4 invTranspose;
-
-    // For triangle:
-    glm::vec3 v0, v1, v2;
-
-    Bound getBounds() const {
-        glm::vec3 objectSpaceMin;
-        glm::vec3 objectSpaceMax;
-
-        // Get the object-space bounding box
-        switch (type) {
-        case TRIANGLE:
-            objectSpaceMin = glm::min(v0, glm::min(v1, v2));
-            objectSpaceMax = glm::max(v0, glm::max(v1, v2));
-            break;
-        case SPHERE:
-            objectSpaceMin = glm::vec3(-scale.x);
-            objectSpaceMax = glm::vec3(scale.x);
-            break;
-        case CUBE:
-            objectSpaceMin = -0.5f * scale;
-            objectSpaceMax = 0.5f * scale;
-            break;
-        default:
-            objectSpaceMin = glm::vec3(0);
-            objectSpaceMax = glm::vec3(0);
-            break;
-        }
-
-        // Transform object-space bounding box corners to world space
-        glm::vec3 corners[8] = {
-            objectSpaceMin,
-            glm::vec3(objectSpaceMax.x, objectSpaceMin.y, objectSpaceMin.z),
-            glm::vec3(objectSpaceMin.x, objectSpaceMax.y, objectSpaceMin.z),
-            glm::vec3(objectSpaceMin.x, objectSpaceMin.y, objectSpaceMax.z),
-            glm::vec3(objectSpaceMax.x, objectSpaceMax.y, objectSpaceMin.z),
-            glm::vec3(objectSpaceMax.x, objectSpaceMin.y, objectSpaceMax.z),
-            glm::vec3(objectSpaceMin.x, objectSpaceMax.y, objectSpaceMax.z),
-            objectSpaceMax
-        };
-
-        Bound bound;
-
-        for (int i = 0; i < 8; i++) {
-            glm::vec3 worldCorner = glm::vec3(transform * glm::vec4(corners[i], 1.0f));
-            bound = bound.unionBound(worldCorner);
-        }
-
-        return bound;
-    }
-};
-
 
 struct BVHGeomInfo {
     size_t geomIndex;
@@ -123,14 +58,14 @@ struct LinearBVHNode {
 };
 
 struct Material {
-    glm::vec3 ambient = glm::vec3(0.1f);     // Debug, default to a low gray value
-    glm::vec3 diffuse = glm::vec3(0.8f);     // Default to a neutral gray
-    glm::vec3 transmittance = glm::vec3(0.0f); // Default to opaque, absortion
+    glm::vec3 ambient = glm::vec3(0.1f);      // Debug, default to a low gray value
+    glm::vec3 diffuse = glm::vec3(0.8f);      // Default to a neutral gray
+    glm::vec3 transmittance = glm::vec3(0.5f); // Default to opaque, absortion
     struct {
         float exponent = 10.0f;              // Default shininess value
         glm::vec3 color = glm::vec3(1.0f);   // Default to white
     } specular;
-    float roughness = 0.5f;                  // Midway between smooth and rough
+    float roughness = 0.0f;                  // Midway between smooth and rough
     float metallic = 0.0f;                   // Default to non-metal
     float sheen = 0.0f;                      // Default to no sheen effect
     float hasReflective = 0.0f;              // Default to no reflection

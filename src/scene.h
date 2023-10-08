@@ -8,6 +8,7 @@
 #include "utilities.h"
 #include "sceneStructs.h"
 #include "bound.h"
+#include "geom.h"
 #include "Mesh/tiny_obj_loader.h"
 
 #define USE_BVH 1

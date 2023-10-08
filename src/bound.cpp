@@ -50,3 +50,15 @@ Bound Bound::unionBound(const glm::vec3& p) {
 Bound Bound::unionBound(const Bound& otherBound) {
     return Bound(glm::min(pMin, otherBound.pMin), glm::max(pMax, otherBound.pMax));
 }
+
+const glm::vec3& Bound::operator[](int i) const
+{
+    if (i == 0) return pMin;
+    else return pMax;
+}
+
+glm::vec3& Bound::operator[](int i)
+{
+    if (i == 0) return pMin;
+    else return pMax;
+}

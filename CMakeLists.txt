@@ -87,6 +87,7 @@ set(headers
     src/scene.h
     src/sceneStructs.h
     src/bound.h
+    src/geom.h
     src/preview.h
     src/utilities.h
     src/ImGui/imconfig.h
@@ -114,6 +115,7 @@ set(sources
     src/preview.cpp
     src/utilities.cpp
     src/bound.cpp
+    src/geom.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 

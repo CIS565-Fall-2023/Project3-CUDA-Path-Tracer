@@ -21,7 +21,6 @@
 
 
 #define ERRORCHECK 1
-#define DEBUG_OBJ_LOADER 0
 #define PRINT_DEPTH 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -325,12 +324,10 @@ __global__ void computeIntersectionsBVH(
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
-
+		
 		// BVH traversal
-		int dirIsNeg[3] = { 1 / pathSegment.ray.direction.x < 0, 
-							1 / pathSegment.ray.direction.y < 0,
-						    1 / pathSegment.ray.direction.z < 0};
-
+		glm::vec3 invDir = 1.0f / pathSegment.ray.direction;
+		int dirIsNeg[3] = { invDir.x < 0.f, invDir.y < 0.f, invDir.z < 0.f };
 		int currentNodeIdx = 0, toVisitOffset = 0;
 		int nodesToVisit[64];
 
@@ -339,7 +336,7 @@ __global__ void computeIntersectionsBVH(
 			if (currentNodeIdx < bvh_size) {
 				auto& bvhNode = bvh[currentNodeIdx];
 
-				if (intersectBVHNode(pathSegment.ray, bvhNode)) {
+				if (intersectBVHNode(pathSegment.ray, bvhNode, dirIsNeg, invDir)) {
 					if (bvhNode.geomCount > 0) {   // hit the leaf node
 						int start = bvhNode.geomIndex, end = start + bvhNode.geomCount;
 
@@ -403,46 +400,6 @@ __global__ void computeIntersectionsBVH(
 	}
 }
 
-// LOOK: "fake" shader demonstrating what you might do with the info in
-// a ShadeableIntersection, as well as how to use thrust's random number
-// generator. Observe that since the thrust random number generator basically
-// adds "noise" to the iteration, the image should start off noisy and get
-// cleaner as more iterations are computed.
-//
-// Note that this shader does NOT do a BSDF evaluation!
-// Your shaders should handle that - this can allow techniques such as
-// bump mapping.
-__global__ void shadeFakeMaterial(
-	int iter, int num_paths, ShadeableIntersection* shadeableIntersections, 
-	PathSegment* pathSegments, Material* materials) {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	if (idx < num_paths)
-	{
-		ShadeableIntersection intersection = shadeableIntersections[idx];
-		if (intersection.t > 0.0f) { // if the intersection exists...
-		    // Set up the RNG
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
-			thrust::uniform_real_distribution<float> u01(0, 1);
-
-			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
-
-			// If the material indicates that the object was a light, "light" the ray
-			if (material.emittance > 0.0f) {
-				pathSegments[idx].color *= (materialColor * material.emittance);
-			}
-			else {
-				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-				pathSegments[idx].color *= u01(rng); // apply some noise because why not
-			}
-		}
-		else {
-			pathSegments[idx].color = glm::vec3(0);
-		}
-	}
-}
-
 __global__ void shadeBSDFMaterial(
 	int iter, int num_paths, ShadeableIntersection* shadeableIntersections,
 	PathSegment* pathSegments, Material* materials){
@@ -455,7 +412,7 @@ __global__ void shadeBSDFMaterial(
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 
 			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
+			glm::vec3 materialColor = material.diffuse;
 
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
@@ -617,12 +574,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		printf("Num of Paths: %d\n", num_paths);
 #endif
 
-#if DEBUG_OBJ_LOADER
-		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
-			iter, num_paths, dev_intersections, dev_paths, dev_materials);
-		iterationComplete = true;
-#else
-
 #if SORT_RAY_BY_MATERIAL
 		// sort rays by material type 
 		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, materialSort());
@@ -641,10 +592,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 
 		if (num_paths <= 0 || depth >= traceDepth) {
-			// printf("End num path: %d\n", num_paths);
 			iterationComplete = true;
 		}
-#endif
+
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;

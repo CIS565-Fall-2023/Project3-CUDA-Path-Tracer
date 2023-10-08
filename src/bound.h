@@ -13,4 +13,8 @@ public:
     float computeBoxSurfaceArea() const;
     Bound unionBound(const glm::vec3& p);
     Bound unionBound(const Bound& otherBound);
+
+    // operator
+    const glm::vec3& operator[](int i) const;
+    glm::vec3& operator[](int i);
 };
