@@ -296,11 +296,11 @@ __global__ void shadeFakeMaterial(
             // do a vec3 emittance
             if (material.emittance_vec3 != glm::vec3(-1.0f))
             {
-                curr_segment.color *= (materialColor * material.emittance_vec3 * material.color);
+                curr_segment.color *= (materialColor * material.emittance_vec3);
                 curr_segment.remainingBounces = 0;
             }
             else if (material.emittance > 0.0f) {
-                curr_segment.color *= (materialColor * material.emittance * material.color);
+                curr_segment.color *= (materialColor * material.emittance);
                 curr_segment.remainingBounces = 0;
             }
             // Material has no emittance

@@ -78,6 +78,10 @@ One advanced feature that was added was the loading and rendering of arbitrary m
 :-------------------------:|
 ![Trees Scene](img/trees_scene.png)  |
 
+[McCree Scene](https://skfb.ly/6sBDo)  |  
+:-------------------------:|
+![McCree Scene](img/mccree_scene.png)  |
+
 [Bulbasaur Scene](https://skfb.ly/6SZ9B)  |  
 :-------------------------:|
 ![Bulbasaur Scene](img/bulbasaur_scene.png)  |
@@ -116,6 +120,7 @@ One current limitation of the BVH feature in this particular path tracer is that
 ### The following coding resources were used as reference or used as a library in this project:
 - [TinyglTF](https://github.com/syoyo/tinygltf)
 - [BVH Tutorial](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
+- [NVIDIA's Thrust Library](https://github.com/nvidia/cccl)
 
 ### The following free-to-download models were used to test and demonstrate the functionality of this project:
 
