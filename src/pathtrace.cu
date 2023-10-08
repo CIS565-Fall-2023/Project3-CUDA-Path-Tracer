@@ -23,9 +23,17 @@
 #define CONTIGUOUS_MATERIAL 0
 
 // toggle first bounce intersections
-// antialiasing auto ON when CACHE is OFF
+// not available when CACHE is ON or FISHEYE is ON
 #define CACHE_FIRST_BOUNCE 0
 
+// Depth of field
+#define CAM_APERTURE_DIAM 1.0f // set to 0.0f for no depth of field
+#define CAM_FOCAL_DIST 11.58f
+
+// toggle fisheye camera
+// not available when CACHE is ON
+#define CAM_FISHEYE 0
+#define CAM_FISHEYE_MAX_ANGLE PI/2.0f
 
 #define ERRORCHECK 1
 
@@ -201,6 +209,25 @@ void pathtraceFree() {
 	checkCUDAError("pathtraceFree");
 }
 
+#if CAM_FISHEYE == 1
+// calculate fish eye coordinate, given pixel coordinates in range [-1, 1]
+__host__ __device__ glm::vec3 calcFishEye(float u, float v) {
+	float radiant_dist = sqrtf(u * u + v * v);
+	if (radiant_dist > 1.0f) {
+		return glm::vec3(0.f);
+	}
+	// compute angles
+	float theta = radiant_dist * CAM_FISHEYE_MAX_ANGLE;
+	float phi = atan2f(-v, -u);
+	return glm::vec3(
+		sinf(theta) * cosf(phi),
+		sinf(theta) * sinf(phi),
+		cosf(theta)
+	);
+}
+#endif // CAM_FISHEYE
+
+
 /**
 * Generate PathSegments with rays from the camera through the screen into the
 * scene, which is the first bounce of rays.
@@ -228,15 +255,42 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
 #else
-		// jittering rays , within a pixel range
+		// jittering rays, subpixel for antialiasing
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
-		thrust::uniform_real_distribution<float> uniform(-0.5f, 0.5f);
-		float jit_x_num_pixel = uniform(rng);
-		float jit_y_num_pixel = uniform(rng);
-		segment.ray.direction = glm::normalize(cam.view
+		thrust::uniform_real_distribution<float> uniform_pixel(-0.5f, 0.5f); // can shift at most 0.5 pixel
+		float jit_x_num_pixel = uniform_pixel(rng);
+		float jit_y_num_pixel = uniform_pixel(rng);
+
+		// jittering within aperture for depth-of-field
+		thrust::uniform_real_distribution<float> uniform_radius(0, 0.5f * CAM_APERTURE_DIAM);
+		thrust::uniform_real_distribution<float> uniform_angle(0, 2.0f * PI);
+		float radius = uniform_radius(rng);
+		float angle = uniform_angle(rng);
+		float jit_aperture_x = radius * cosf(angle);
+		float jit_aperture_y = radius * sinf(angle);
+
+#if CAM_FISHEYE == 1
+		// FishEye camera
+		float u = ((float)x - (float)cam.resolution.x * 0.5f) / ((float)cam.resolution.x * 0.5f);
+		float v = ((float)y - (float)cam.resolution.y * 0.5f) / ((float)cam.resolution.y * 0.5f);
+		glm::vec3 fisheye_dir = calcFishEye(u, v);
+		if (glm::length(fisheye_dir) < 0.001f) {
+			segment.color = glm::vec3(0.f);
+			segment.remainingBounces = 0;
+			return;
+		}
+		segment.ray.direction = glm::normalize(cam.view * fisheye_dir.z +
+																					 cam.right * fisheye_dir.x +
+																					 cam.up * fisheye_dir.y);
+#else
+		// setting origin (randomized on aperture)
+		segment.ray.origin = cam.position + cam.right * jit_aperture_x + cam.up * jit_aperture_y;
+
+		glm::vec3 focal_point = cam.position + glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x + jit_x_num_pixel - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y + jit_y_num_pixel - (float)cam.resolution.y * 0.5f)
-		);
+			- cam.up * cam.pixelLength.y * ((float)y + jit_y_num_pixel - (float)cam.resolution.y * 0.5f)) * CAM_FOCAL_DIST;
+		segment.ray.direction = glm::normalize(focal_point - segment.ray.origin);
+#endif
 #endif
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;

@@ -82,6 +82,7 @@ __host__ __device__ glm::vec3 calcPerturbedSpecularDirection(
 }
 #endif // IMPERFECT_SPECULAR == 1
 
+// calculate reflection coefficient
 __host__ __device__ float calcFrensel(const PathSegment& pathSegment, glm::vec3 normal, const Material& m) {
   // cosine angle between incident ray and normal
   float cosTheta = glm::dot(pathSegment.ray.direction, -normal);
