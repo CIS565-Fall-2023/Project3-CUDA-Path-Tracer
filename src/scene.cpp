@@ -298,20 +298,17 @@ void Scene::buildTree()
     for (int ti = 0; ti < tris.size(); ti++) { triIds.push_back(ti); }
 
     glm::vec3 min = tris[0].min;
-    glm::vec3 maxmin = tris[0].min;
     glm::vec3 max = tris[0].max;
     for (int ti = 1; ti < tris.size(); ti++) {
         min = glm::min(min, tris[ti].min);
-        maxmin = glm::max(maxmin, tris[ti].min);
         max = glm::max(max, tris[ti].max);
     }
     bvh.emplace_back(min, max);
 
     cout << "global, min = "; printVec(min);
-    cout << ", max = "; printVec(max);
-    cout << ", maxmin = "; printVec(maxmin); cout << endl;
+    cout << ", max = "; printVec(max); cout << endl;
 
-    splitTree(triIds, 0, tris.size(), 0, maxmin, 0);
+    splitTree(triIds, 0, tris.size(), 0, 0);
 #ifdef PRINT_TREE
     printTree();
 #endif
@@ -320,7 +317,7 @@ void Scene::buildTree()
 }
 
 
-void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int bboxId, glm::vec3 maxmin, int axis)
+void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int bboxId, int axis)
 {    
     //cout << endl;
     // cout << "splitTree: " << leftEnd << ", " << rightEnd << ", " << bboxId << endl;
@@ -343,85 +340,56 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
     }
     // cout << "here0" << endl;
 
-    glm::vec3 lmin, lmax, rmin, rmax, lmaxmin, rmaxmin;
+    glm::vec3 lmin, lmax, rmin, rmax;
 
     // int axis = 0;
-    int off = 0;
-    while ((off < 3) && (abs(bvh[bboxId].min[(axis + off) % 3] - maxmin[(axis + off) % 3]) < 0.001f)) {
-        off++;
-    }
-    axis = (axis + off) % 3;
     // cout << "here1" << endl;
 
     int midPoint = rightEnd;
-    if (off < 3) {
-        // float midmin = (maxmin[axis] + bvh[bboxId].min[axis]) / 2.0f;
-        float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
-        int ti = leftEnd;
 
-        // cout << "midmin = " << midmin << endl;
+    // float midmin = (maxmin[axis] + bvh[bboxId].min[axis]) / 2.0f;
+    float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
+    int ti = leftEnd;
 
-        while (ti < midPoint) {    
-            // if (tris[triIds[ti]].min[axis] <= midmin) {
-            if (tris[triIds[ti]].min[axis] + tris[triIds[ti]].max[axis] <= midsum) {
-                // cout << "left, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
-                if (ti == leftEnd) {
-                    lmin = tris[triIds[ti]].min;
-                    lmax = tris[triIds[ti]].max;
-                    lmaxmin = tris[triIds[ti]].min;
-                }
-                else {
-                    lmin = glm::min(lmin, tris[triIds[ti]].min);
-                    lmax = glm::max(lmax, tris[triIds[ti]].max);
-                    lmaxmin = glm::max(lmaxmin, tris[triIds[ti]].min);
-                }
-                ti++;
+    // cout << "midmin = " << midmin << endl;
 
-                // cout << "lmin: " << lmin[axis] << ", lmaxmin: " << lmaxmin[axis] << endl;
+    while (ti < midPoint) {    
+        // if (tris[triIds[ti]].min[axis] <= midmin) {
+        if (tris[triIds[ti]].min[axis] + tris[triIds[ti]].max[axis] <= midsum) {
+            // cout << "left, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
+            if (ti == leftEnd) {
+                lmin = tris[triIds[ti]].min;
+                lmax = tris[triIds[ti]].max;
             }
             else {
-                // cout << "right, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
-                if (midPoint == rightEnd) {
-                    rmin = tris[triIds[ti]].min;
-                    rmax = tris[triIds[ti]].max;
-                    rmaxmin = tris[triIds[ti]].min;
-                }
-                else {
-                    rmin = glm::min(rmin, tris[triIds[ti]].min);
-                    rmax = glm::max(rmax, tris[triIds[ti]].max);
-                    rmaxmin = glm::max(rmaxmin, tris[triIds[ti]].min);
-                }
-                midPoint--;
-                if (midPoint != ti) {
-                    int temp = triIds[midPoint];
-                    triIds[midPoint] = triIds[ti];
-                    triIds[ti] = temp;
-                }
-                // cout << "rmin: " << rmin[axis] << ", rmaxmin: " << rmaxmin[axis] << endl;
+                lmin = glm::min(lmin, tris[triIds[ti]].min);
+                lmax = glm::max(lmax, tris[triIds[ti]].max);
             }
-        }
-    }
-    else { // can't find good axis to split, just split naively
-        std::cout << "Axis Not Found!!!" << std::endl;
-        lmin = tris[leftEnd].min;
-        lmax = tris[leftEnd].max;
-        lmaxmin = tris[leftEnd].min;
-        midPoint = (rightEnd + leftEnd) / 2;
-        for (int ti = leftEnd + 1; ti < midPoint; ti++) {
-            lmin = tris[triIds[ti]].min;
-            lmax = tris[triIds[ti]].max;
-            lmaxmin = tris[triIds[ti]].min;
-        }
-        rmin = tris[midPoint].min;
-        rmax = tris[midPoint].max;
-        rmaxmin = tris[midPoint].min;
-        for (int ti = midPoint; ti < rightEnd; ti++) {
-            rmin = glm::min(rmin, tris[triIds[ti]].min);
-            rmax = glm::max(rmax, tris[triIds[ti]].max);
-            rmaxmin = glm::max(rmaxmin, tris[triIds[ti]].min);
-        }
-    }
+            ti++;
 
+            // cout << "lmin: " << lmin[axis] << ", lmaxmin: " << lmaxmin[axis] << endl;
+        }
+        else {
+            // cout << "right, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
+            if (midPoint == rightEnd) {
+                rmin = tris[triIds[ti]].min;
+                rmax = tris[triIds[ti]].max;
+            }
+            else {
+                rmin = glm::min(rmin, tris[triIds[ti]].min);
+                rmax = glm::max(rmax, tris[triIds[ti]].max);
+            }
+            midPoint--;
+            if (midPoint != ti) {
+                int temp = triIds[midPoint];
+                triIds[midPoint] = triIds[ti];
+                triIds[ti] = temp;
+            }
+            // cout << "rmin: " << rmin[axis] << ", rmaxmin: " << rmaxmin[axis] << endl;
+        }
+    }
+    
+   
     // cout << "midPoint = " << midPoint << endl;
 
     
@@ -429,8 +397,8 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
     bvh.emplace_back(rmin, rmax);
     bvh[bboxId].leftId = bvh.size() - 2;
     bvh[bboxId].rightId = bvh.size() - 1;
-    splitTree(triIds, leftEnd, midPoint, bvh[bboxId].leftId, lmaxmin, (axis + 1) % 3);
-    splitTree(triIds, midPoint, rightEnd, bvh[bboxId].rightId, rmaxmin, (axis + 1) % 3);
+    splitTree(triIds, leftEnd, midPoint, bvh[bboxId].leftId, (axis + 1) % 3);
+    splitTree(triIds, midPoint, rightEnd, bvh[bboxId].rightId, (axis + 1) % 3);
 }
 
 void Scene::printTree() {
