@@ -29,11 +29,12 @@ struct Triangle {
 
     glm::vec3 min;
     glm::vec3 max;
+    // glm::vec3 center;
     // glm::vec3 nor[3];
     // Triangle() {}
     // Triangle(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2) :pos{ p0, p1, p2 } {}
 
-    void setCorner(){
+    void set(){
         min = glm::vec3(
             glm::min(glm::min(pos[0].x, pos[1].x), pos[2].x),
             glm::min(glm::min(pos[0].y, pos[1].y), pos[2].y),
@@ -44,6 +45,7 @@ struct Triangle {
             glm::max(glm::max(pos[0].y, pos[1].y), pos[2].y),
             glm::max(glm::max(pos[0].z, pos[1].z), pos[2].z)
         );
+        // center = (pos[0] + pos[1] + pos[2])
     }
 };
 

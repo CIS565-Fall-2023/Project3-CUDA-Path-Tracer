@@ -118,7 +118,7 @@ int Scene::loadGeom(string objectid) {
             }
             singleTri.materialid = newGeom.materialid;
 #ifdef USING_BVH
-            singleTri.setCorner();
+            singleTri.set();
 #endif
             tris.push_back(singleTri);
         }
@@ -164,7 +164,7 @@ int Scene::loadGeom(string objectid) {
                         }
                         t.materialid = newGeom.materialid;
 #ifdef USING_BVH
-                        t.setCorner();
+                        t.set();
 #endif
                         tris.push_back(t);
                     }
