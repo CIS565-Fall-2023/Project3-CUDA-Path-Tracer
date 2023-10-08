@@ -24,6 +24,7 @@
  ![](./img/MainScene1.png)
 
  ## PBR depth-of-field (by jittering rays within an aperture)
+ ![](./img/blur.png)
  ![](./img/pbrDOF.png)
 
  ## PBR Schlick's approximation of Diffuse, Glass, Metal with random sphere scene
@@ -64,6 +65,7 @@
   * Glass material keep showing error(Solution: rewrite sphere intersection)
   * GLTF obj not loading(Solution: reExport from modeling application and make sure the format is match the triangle intersection in accesor, bufferview, mesh etc.)
   * Metal and Glass not reflecting skybox
+  * Failed to implement BVH, incorrect normal value
   * etc.
 
 # References
