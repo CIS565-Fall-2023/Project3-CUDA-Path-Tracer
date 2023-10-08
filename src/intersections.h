@@ -296,6 +296,7 @@ __device__ inline bool util_bvh_leaf_intersect(
             intersection->surfaceTangent = tmp_tangent;
             intersection->fsign = tmp_fsign;
             intersection->uv = tmp_uv;
+            intersection->primitiveId = i;
             intersected = true;
         }
 
@@ -303,16 +304,15 @@ __device__ inline bool util_bvh_leaf_intersect(
     return intersected;
 }
 
-__device__ inline bool util_bvh_leaf_test_intersect(
+__device__ inline float util_bvh_leaf_test_intersect(
     int primsStart,
     int primsEnd,
     const SceneInfoDev& dev_sceneInfo,
-    const Ray& ray,
-    float tmax
+    const Ray& ray
 )
 {
     glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord;
-    float t;
+    float t, tmin = 1e37f;
     for (int i = primsStart; i != primsEnd; i++)
     {
         const Primitive& prim = dev_sceneInfo.dev_primitives[i];
@@ -334,38 +334,69 @@ __device__ inline bool util_bvh_leaf_test_intersect(
         {
             t = util_geometry_ray_sphere_intersection(obj, ray, tmp_intersect, tmp_normal);
         }
-        if (t > 0.0 && t < tmax - EPSILON)
+        if (t > 0.0 && t < tmin)
         {
-            return true;
+            tmin = t;
         }
     }
-    return false;
+    return tmin;
 }
 
 
-__host__ __device__ bool util_test_visibility(glm::vec3 p0, glm::vec3 p1)
+__host__ __device__ bool util_test_visibility(glm::vec3 p0, glm::vec3 p1, const SceneInfoDev& dev_sceneInfo)
 {
-    if (glm::length(p1 - p0) < EPSILON) return true;
-    glm::vec3 rayDir = glm::normalize(p1 - p0);
-    glm::vec3 rayOri = p0;
-    //TODO
-    return false;
+    glm::vec3 dir = p1 - p0;
+    if (glm::length(dir) < 0.001f) return true;
+    Ray ray;
+    ray.direction = glm::normalize(dir);
+    ray.origin = p0;
+    glm::vec3 t3 = (dir / ray.direction);
+    float t, tmax = max(t3.x, max(t3.y, t3.z)) - 0.001f;
+    glm::vec3 tmp_intersect, tmp_normal, tmp_baryCoord;
+    for (int i = 0; i < dev_sceneInfo.objectsSize; i++)
+    {
+        Object& obj = dev_sceneInfo.dev_objs[i];
+        if (obj.type == GeomType::CUBE)
+        {
+            t = boxIntersectionTest(obj, ray, tmp_intersect, tmp_normal);
+            if (t > 0.0 && t < tmax) return false;
+        }
+        else if(obj.type == GeomType::SPHERE)
+        {
+            t = util_geometry_ray_sphere_intersection(obj, ray, tmp_intersect, tmp_normal);
+            if (t > 0.0 && t < tmax) return false;
+        }
+        else
+        {
+            for (int j = obj.triangleStart; j != obj.triangleEnd; j++)
+            {
+                const glm::ivec3& tri = dev_sceneInfo.modelInfo.dev_triangles[j];
+                const glm::vec3& v0 = dev_sceneInfo.modelInfo.dev_vertices[tri[0]];
+                const glm::vec3& v1 = dev_sceneInfo.modelInfo.dev_vertices[tri[1]];
+                const glm::vec3& v2 = dev_sceneInfo.modelInfo.dev_vertices[tri[2]];
+                t = triangleIntersectionTest(obj.Transform, v0, v1, v2, ray, tmp_intersect, tmp_normal, tmp_baryCoord);
+                if (t > 0.0 && t < tmax) return false;
+            }
+        }
+
+    }
+    return true;
 }
 
 
 __device__ bool util_bvh_test_visibility(glm::vec3 p0, glm::vec3 p1, const SceneInfoDev& dev_sceneInfo)
 {
-    if (glm::length(p1 - p0) < EPSILON) return true;
-    glm::vec3 rayDir = glm::normalize(p1 - p0);
-    glm::vec3 rayOri = p0;
+    glm::vec3 dir = p1 - p0;
+    if (glm::length(dir) < 0.001f) return true;
     Ray ray;
-    ray.direction = rayDir;
-    ray.origin = rayOri;
-    float tmax = ((p1 - p0) / rayDir).x;
+    ray.direction = glm::normalize(dir);
+    ray.origin = p0;
+    glm::vec3 t3 = (dir / ray.direction);
+    float tmax = max(t3.x, max(t3.y, t3.z)) - 0.001f;
 #if MTBVH
-    float x = fabs(rayDir.x), y = fabs(rayDir.y), z = fabs(rayDir.z);
+    float x = fabs(ray.direction.x), y = fabs(ray.direction.y), z = fabs(ray.direction.z);
     int axis = x > y && x > z ? 0 : (y > z ? 1 : 2);
-    int sgn = rayDir[axis] > 0 ? 0 : 1;
+    int sgn = ray.direction[axis] > 0 ? 0 : 1;
     int d = (axis << 1) + sgn;
     const MTBVHGPUNode* currArray = dev_sceneInfo.dev_mtbvhArray + d * dev_sceneInfo.bvhDataSize;
     int curr = 0;
@@ -380,7 +411,7 @@ __device__ bool util_bvh_test_visibility(glm::vec3 p0, glm::vec3 p1, const Scene
             if (currArray[curr].startPrim != -1)//leaf node
             {
                 int start = currArray[curr].startPrim, end = currArray[curr].endPrim;
-                if (util_bvh_leaf_test_intersect(start, end, dev_sceneInfo, ray, tmax))
+                if (util_bvh_leaf_test_intersect(start, end, dev_sceneInfo, ray) < tmax - EPSILON)
                     return false;
             }
             curr = currArray[curr].hitLink;

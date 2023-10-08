@@ -969,6 +969,18 @@ void Scene::buildBVH()
     assert(checkBVHTreeFull(bvhroot));
 }
 
+void Scene::CreateLights()
+{
+    for (int i = 0; i < primitives.size(); i++)
+    {
+        const Object& obj = objects[primitives[i].objID];
+        if (materials[obj.materialid].type == emitting)
+        {
+            lights.emplace_back(primitives[i]);
+        }
+    }
+}
+
 void Scene::buildStacklessBVH()
 {
 #if MTBVH

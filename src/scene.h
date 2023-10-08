@@ -26,6 +26,7 @@ public:
     void buildBVH();
     void buildStacklessBVH();
     void LoadAllTextures();
+    void CreateLights();
     Scene(string filename);
     ~Scene();
 
@@ -38,6 +39,7 @@ public:
     std::vector<glm::vec3> tangents;
     std::vector<float> fSigns;
     std::vector<Primitive> primitives;
+    std::vector<Primitive> lights;
     std::vector<BVHGPUNode> bvhArray;
     std::vector<MTBVHGPUNode> MTBVHArray;
     RenderState state;
@@ -61,3 +63,5 @@ struct AliasBin {
     float q, p;
     int alias = -1;
 };
+
+

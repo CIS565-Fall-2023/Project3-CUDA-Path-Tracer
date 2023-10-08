@@ -105,6 +105,7 @@ static glm::vec2* dev_uvs = NULL;
 static glm::vec3* dev_normals = NULL;
 static glm::vec3* dev_tangents = NULL;
 static float* dev_fsigns = NULL;
+static Primitive* dev_lights = NULL;
 static PathSegment* dev_paths1 = NULL;
 static PathSegment* dev_paths2 = NULL;
 static ShadeableIntersection* dev_intersections1 = NULL;
@@ -158,6 +159,7 @@ void pathtraceInit(Scene* scene) {
 			cudaMemcpy(dev_fsigns, scene->fSigns.data(), scene->fSigns.size() * sizeof(float), cudaMemcpyHostToDevice);
 		}
 	}
+	
 #if MTBVH
 	cudaMalloc(&dev_mtbvhArray, scene->MTBVHArray.size() * sizeof(MTBVHGPUNode));
 	cudaMemcpy(dev_mtbvhArray, scene->MTBVHArray.data(), scene->MTBVHArray.size() * sizeof(MTBVHGPUNode), cudaMemcpyHostToDevice);
@@ -168,6 +170,12 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_primitives, scene->primitives.size() * sizeof(Primitive));
 	cudaMemcpy(dev_primitives, scene->primitives.data(), scene->primitives.size() * sizeof(Primitive), cudaMemcpyHostToDevice);
+
+	if (scene->lights.size())
+	{
+		cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Primitive));
+		cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Primitive), cudaMemcpyHostToDevice);
+	}
 
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
@@ -205,6 +213,11 @@ void pathtraceFree(Scene* scene) {
 		}
 	}
 	cudaFree(dev_primitives);
+	if (scene->lights.size())
+	{
+		cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Primitive));
+		cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Primitive), cudaMemcpyHostToDevice);
+	}
 #if MTBVH
 	cudaFree(dev_mtbvhArray);
 #else
@@ -281,6 +294,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 #endif
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
+		segment.misW = -1;
 	}
 }
 
@@ -587,11 +601,12 @@ __global__ void scatter_on_intersection(
 	, int num_paths
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
-	, Material* materials
+	, SceneInfoDev sceneInfo
 	, int* rayValid
 	, glm::vec3* image
 )
 {
+	Material* materials = sceneInfo.dev_materials;
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= num_paths) return;
 	ShadeableIntersection intersection = shadeableIntersections[idx];
@@ -625,11 +640,10 @@ __global__ void scatter_on_intersection(
 			nMap.x = nMapCol.x;
 			nMap.y = nMapCol.y;
 			nMap.z = nMapCol.z;
-			nMap=glm::pow(nMap, glm::vec3(1 / 2.2f));
+			nMap = glm::pow(nMap, glm::vec3(1 / 2.2f));
 			nMap = nMap * 2.0f - 1.0f;
 			nMap = glm::normalize(nMap);
 		}
-		
 		glm::vec3 N = glm::normalize(intersection.surfaceNormal);
 		glm::vec3 B, T;
 		if (material.normalMap != 0)
@@ -666,7 +680,7 @@ __global__ void scatter_on_intersection(
 				roughness = color.y;
 				metallic = color.z;
 			}
-			
+
 			bxdf = bxdf_metallic_workflow_sample_f(wo, &wi, random, &pdf, materialColor, metallic, roughness);
 		}
 		else if (material.type == MaterialType::frenselSpecular)
@@ -698,7 +712,7 @@ __global__ void scatter_on_intersection(
 			{
 				bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor);
 			}
-			
+
 		}
 		if (pdf > 0)
 		{
@@ -708,6 +722,183 @@ __global__ void scatter_on_intersection(
 			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;
 			pathSegments[idx].ray.origin = intersection.worldPos + offset * offsetMult;
 			pathSegments[idx].ray.direction = newDir;
+			rayValid[idx] = 1;
+		}
+		else
+		{
+			rayValid[idx] = 0;
+		}
+
+	}
+}
+
+__global__ void scatter_on_intersection_mis(
+	int iter
+	, int num_paths
+	, ShadeableIntersection* shadeableIntersections
+	, PathSegment* pathSegments
+	, SceneInfoDev sceneInfo
+	, int* rayValid
+	, glm::vec3* image
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx >= num_paths) return;
+	ShadeableIntersection intersection = shadeableIntersections[idx];
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+	thrust::uniform_real_distribution<float> u01(0, 1);
+
+	Material* materials = sceneInfo.dev_materials;
+	Material material = materials[intersection.materialId];
+	glm::vec3 materialColor = material.color;
+#if VIS_NORMAL
+	image[pathSegments[idx].pixelIndex] += (glm::normalize(intersection.surfaceNormal));
+	rayValid[idx] = 0;
+	return;
+#endif
+
+	// If the material indicates that the object was a light, "light" the ray
+	if (material.type == MaterialType::emitting) {
+		float misW = pathSegments[idx].misW;
+		if (misW > 0.0)
+		{
+			pathSegments[idx].color *= (materialColor * material.emittance * misW);
+		}
+		else
+		{
+			pathSegments[idx].color *= (materialColor * material.emittance);
+		}
+		rayValid[idx] = 0;
+		if (!util_math_is_nan(pathSegments[idx].color))
+			image[pathSegments[idx].pixelIndex] += pathSegments[idx].color;
+	}
+	else {
+		//Prepare normal and wo for sample
+		glm::vec3& woInWorld = pathSegments[idx].ray.direction;
+		glm::vec3 nMap = glm::vec3(0, 0, 1);
+		if (material.normalMap != 0)
+		{
+			float4 nMapCol = tex2D<float4>(material.normalMap, intersection.uv.x, 1.0 - intersection.uv.y);
+			nMap.x = nMapCol.x;
+			nMap.y = nMapCol.y;
+			nMap.z = nMapCol.z;
+			nMap = glm::pow(nMap, glm::vec3(1 / 2.2f));
+			nMap = nMap * 2.0f - 1.0f;
+			nMap = glm::normalize(nMap);
+		}
+		glm::vec3 N = glm::normalize(intersection.surfaceNormal);
+		glm::vec3 B, T;
+		if (material.normalMap != 0)
+		{
+			T = intersection.surfaceTangent;
+			T = glm::normalize(T - N * glm::dot(N, T));
+			B = glm::cross(N, T);
+			N = glm::normalize(T * nMap.x + B * nMap.y + N * nMap.z);
+		}
+		else
+		{
+			util_math_get_TBN_pixar(N, &T, &B);
+		}
+		glm::mat3 TBN(T, B, N);
+		glm::vec3 wo = glm::transpose(TBN) * (-woInWorld);
+		wo = glm::normalize(wo);
+		float pdf = 0;
+		glm::vec3 wi, bxdf;
+		glm::vec3 random = glm::vec3(u01(rng), u01(rng), u01(rng));
+		float materialMISw = -1.0f;
+		if (material.type == MaterialType::frenselSpecular)
+		{
+			glm::vec2 iors = glm::dot(woInWorld, N) < 0 ? glm::vec2(1.0, material.indexOfRefraction) : glm::vec2(material.indexOfRefraction, 1.0);
+			bxdf = bxdf_frensel_specular_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, materialColor, iors);
+		}
+		else
+		{
+			float roughness = material.roughness, metallic = material.metallic;
+			float4 color = { 0,0,0,1 };
+			//Texture mapping
+			if (material.baseColorMap != 0)
+			{
+				color = tex2D<float4>(material.baseColorMap, intersection.uv.x, 1.0 - intersection.uv.y);
+				materialColor.x = color.x;
+				materialColor.y = color.y;
+				materialColor.z = color.z;
+			}
+			if (material.metallicRoughnessMap != 0)
+			{
+				color = tex2D<float4>(material.metallicRoughnessMap, intersection.uv.x, 1.0 - intersection.uv.y);
+				roughness = color.y;
+				metallic = color.z;
+			}
+			//Sampling lights
+			glm::vec3 lightPos, lightNormal, emissive = glm::vec3(0);
+			float lightPdf = -1.0;
+			lights_sample(sceneInfo, glm::vec3(u01(rng), u01(rng), u01(rng)), intersection.worldPos, N, &lightPos, &lightNormal, &emissive, &lightPdf);
+			
+			if (lightPdf > 0.0 && (emissive.x > 0.0 || emissive.y > 0.0 || emissive.z > 0.0))
+			{
+				glm::vec3 light_wi = lightPos - intersection.worldPos;
+				light_wi = glm::normalize(glm::transpose(TBN) * (light_wi));
+				float G = util_math_solid_angle_to_area(lightPos, glm::normalize(lightNormal), intersection.worldPos);
+				float matPdf = -1.0f;
+				if (material.type == MaterialType::metallicWorkflow)
+				{
+					matPdf = bxdf_metallic_workflow_pdf(wo, light_wi, materialColor, metallic, roughness);
+					bxdf = bxdf_metallic_workflow_eval(wo, light_wi, materialColor, metallic, roughness);
+				}
+				else if (material.type == MaterialType::microfacet)
+				{
+					matPdf = bxdf_microfacet_pdf(wo, light_wi, roughness);
+					bxdf = bxdf_microfacet_eval(wo, light_wi, materialColor, roughness);
+				}
+				else
+				{
+					matPdf = bxdf_diffuse_pdf(wo, light_wi);
+					bxdf = bxdf_diffuse_eval(wo, light_wi, materialColor);
+				}
+				if (matPdf > 0.0)
+				{
+					float misW = util_mis_weight_balanced(lightPdf, matPdf * G);
+					materialMISw = 1.0 - misW;
+					/*image[pathSegments[idx].pixelIndex] += glm::vec3(lightPdf);
+					rayValid[idx] = 0;
+					return;*/
+
+					image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW / (lightPdf/ G);
+				}
+			}
+			//Sampling material bsdf
+			if (material.type == MaterialType::metallicWorkflow)
+			{	
+				bxdf = bxdf_metallic_workflow_sample_f(wo, &wi, random, &pdf, materialColor, metallic, roughness);
+			}
+			else if (material.type == MaterialType::microfacet)
+			{
+				bxdf = bxdf_microfacet_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, roughness);
+			}
+			else//diffuse
+			{
+				if (color.w <= ALPHA_CUTOFF)
+				{
+					bxdf = pathSegments[idx].remainingBounces == 0 ? glm::vec3(0, 0, 0) : glm::vec3(1, 1, 1);
+					wi = -wo;
+					pdf = util_math_tangent_space_abscos(wi);
+				}
+				else
+				{
+					bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor);
+				}
+
+			}
+		}
+		if (pdf > 0)
+		{
+			pathSegments[idx].color *= bxdf * util_math_tangent_space_abscos(wi) / pdf;
+			glm::vec3 newDir = glm::normalize(TBN * wi);
+			glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
+			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;
+			pathSegments[idx].ray.origin = intersection.worldPos + offset * offsetMult;
+			pathSegments[idx].ray.direction = newDir;
+			pathSegments[idx].misW = materialMISw;
 			rayValid[idx] = 1;
 		}
 		else
@@ -828,6 +1019,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 #endif // 
 	dev_sceneInfo.skyboxObj = hst_scene->skyboxTextureObj;
+	dev_sceneInfo.dev_lights = dev_lights;
+	dev_sceneInfo.lightsSize = hst_scene->lights.size();
+
 
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, MAX_ITER, dev_paths1);
 	checkCUDAError("generate camera ray");
@@ -894,7 +1088,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 		cudaDeviceSynchronize();
 		checkCUDAError("trace one bounce");
-		cudaDeviceSynchronize();
+
 		depth++;
 
 #if SORT_BY_MATERIAL_TYPE
@@ -913,15 +1107,29 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		// path segments that have been reshuffled to be contiguous in memory.
 		if (!numRays) break;
 		dim3 numblocksLightScatter = (numRays + blockSize1d - 1) / blockSize1d;
+#if USE_MIS
+		scatter_on_intersection_mis << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter,
+			numRays,
+			dev_intersections1,
+			dev_paths1,
+			dev_sceneInfo,
+			rayValid,
+			dev_image
+			);
+#else
 		scatter_on_intersection << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			numRays,
 			dev_intersections1,
 			dev_paths1,
-			dev_materials,
+			dev_sceneInfo,
 			rayValid,
 			dev_image
 			);
+#endif
+		cudaDeviceSynchronize();
+		checkCUDAError("scatter_on_intersection_mis");
 
 		numRays = compact_rays(rayValid, rayIndex, numRays);
 
@@ -931,7 +1139,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		}
 	}
 
-	if (numRays)
+	if (0)
 	{
 		// Assemble this iteration and apply it to the image
 		dim3 numBlocksPixels = (numRays + blockSize1d - 1) / blockSize1d;

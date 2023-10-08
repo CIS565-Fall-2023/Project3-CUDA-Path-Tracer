@@ -6,16 +6,17 @@
 #include <glm/glm.hpp>
 
 #define USE_BVH 1
+#define USE_MIS 1
 #define MTBVH 1
 #define VIS_NORMAL 0
 #define TONEMAPPING 1
 #define DOF_ENABLED 1
 #define BACKGROUND_COLOR_MULT 1.0f
-#define SCATTER_ORIGIN_OFFSETMULT 0.001f
+#define SCATTER_ORIGIN_OFFSETMULT 0.0001f
 #define BOUNDING_BOX_EXPAND 0.001f
 #define ALPHA_CUTOFF 0.01f
 #define STOCHASTIC_SAMPLING 1
-#define MAX_ITER 10 
+#define MAX_ITER 8
 #define SORT_BY_MATERIAL_TYPE 0
 #define MAX_NUM_PRIMS_IN_LEAF 2
 #define SAH_BUCKET_SIZE 20
@@ -150,6 +151,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    float misW;
 };
 
 // Use with a corresponding PathSegment to do:
@@ -162,6 +164,7 @@ struct ShadeableIntersection {
     float fsign = 1.0;
     glm::vec3 worldPos = glm::vec3(0.0);
     int materialId = -1;
+    int primitiveId = -1;
     glm::vec2 uv = glm::vec2(0.0);
     MaterialType type = diffuse;
 };
@@ -186,6 +189,8 @@ struct SceneInfoDev {
         MTBVHGPUNode* dev_mtbvhArray;
     };
     int bvhDataSize;
+    Primitive* dev_lights;
+    int lightsSize;
     cudaTextureObject_t skyboxObj;
 };
 

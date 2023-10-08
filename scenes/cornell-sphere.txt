@@ -43,7 +43,7 @@ EMITTANCE   0
 // Metal
 MATERIAL 6
 RGB         0.99 0.99 0.99
-ROUGHNESS   0.05
+ROUGHNESS   0.1
 REFRIOR     0
 EMITTANCE   0
 
@@ -62,11 +62,11 @@ UP          0 1 0
 
 // Ceiling light
 OBJECT 0
-geometry cube
+geometry sphere
 material 0
-TRANS       0 10 0
+TRANS       0 8 0
 ROTAT       0 0 0
-SCALE       3 .3 3
+SCALE       1.0 1.0 1.0
 
 // Floor
 OBJECT 1

@@ -16,11 +16,19 @@ __device__ inline void util_math_get_TBN_pixar(const glm::vec3& N, glm::vec3* T,
 	(*B) = glm::vec3(b, y * ya - sz, y);
 }
 
-__device__ inline void util_math_get_TBN_naive(const glm::vec3& N, const glm::vec3& pos, glm::vec3* T, glm::vec3* B)
+__device__ inline void util_math_get_TBN_naive(const glm::vec3& N, glm::vec3* T, glm::vec3* B)
 {
-	//glm::vec3 tmp = abs(N.x) > 1.0 - EPSILON ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
-	*T = glm::cross(N, pos);
+	glm::vec3 tmp = abs(N.x) > 1.0 - EPSILON ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+	*T = glm::cross(N, tmp);
 	*B = glm::cross(N, *T);
+}
+
+__device__ inline glm::vec3 util_sample_hemisphere_uniform(const glm::vec2& random)
+{
+	float z = random.x;
+	float sq_1_z_2 = sqrt(max(1 - z * z, 0.0f));
+	float phi = TWO_PI * random.y;
+	return glm::vec3(cos(phi) * sq_1_z_2, sin(phi) * sq_1_z_2, z);
 }
 
 __device__ inline glm::vec2 util_sample_disk_uniform(const glm::vec2& random)
@@ -89,7 +97,7 @@ __device__ inline float util_math_luminance(glm::vec3 col)
 	return 0.299f * col.r + 0.587f * col.g + 0.114f * col.b;
 }
 
-//https://hal.science/hal-01509746/document
+//https://jcgt.org/published/0007/04/01/paper.pdf
 __device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float roughness, const glm::vec2& rand)
 {
 	glm::vec3 v = glm::normalize(glm::vec3(wo.x * roughness, wo.y * roughness, wo.z));
@@ -124,7 +132,7 @@ __device__ inline float util_math_ggx_normal_distribution(const glm::vec3& wh, f
 	float NoH = util_math_tangent_space_abscos(wh);
 	float denom = NoH * NoH * (a2 - 1) + 1;
 	denom = denom * denom * PI;
-	return (a2 + 1e-10) / (denom + 1e-10);
+	return (a2 + 1e-10f) / (denom + 1e-10f);
 }
 
 __device__ inline glm::vec3 bxdf_diffuse_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor)
@@ -170,6 +178,13 @@ __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::ve
 	}
 }
 
+__device__ glm::vec3 bxdf_perfect_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, float* pdf, glm::vec3 reflectionAlbedo)
+{
+	*wi = glm::vec3(-wo.x, -wo.y, wo.z);
+	*pdf = 1;
+	return reflectionAlbedo / util_math_tangent_space_abscos(wo);
+}
+
 __device__ inline glm::vec3 bxdf_microfacet_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float roughness)
 {
 	glm::vec3 wh = glm::normalize(wo + wi);
@@ -177,17 +192,18 @@ __device__ inline glm::vec3 bxdf_microfacet_eval(const glm::vec3& wo, const glm:
 	glm::vec3 F = util_math_fschlick(baseColor, glm::abs(glm::dot(wo, wh)));
 	float D = util_math_ggx_normal_distribution(wh, a2);
 	float G2 = util_math_smith_ggx_shadowing_masking(wi, wo, a2);
-	return (F * G2 * D) / (4 * util_math_tangent_space_abscos(wo) * util_math_tangent_space_abscos(wi));
+	return (F * G2 * D) / (max(4 * util_math_tangent_space_abscos(wo) * util_math_tangent_space_abscos(wi), 1e-9f));
 }
 
 __device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3& wi, float roughness)
 {
 	float a2 = roughness * roughness;
 	glm::vec3 wh = glm::normalize(wo + wi);
+	if (wo.z < 0 || wi.z < 0) return 0.0;
 	float G1 = util_math_smith_ggx_masking(wo, a2);
 	float D = util_math_ggx_normal_distribution(wh, a2);
 
-	return (G1 * D) / (4 * util_math_tangent_space_abscos(wo));
+	return (G1 * D) / (max(4 * util_math_tangent_space_abscos(wo), 1e-9f));
 }
 
 __device__ inline glm::vec3 bxdf_microfacet_sample(const glm::vec2& random, const glm::vec3& wo, float roughness)
@@ -202,15 +218,12 @@ __device__ inline glm::vec3 bxdf_microfacet_sample_f(const glm::vec3& wo, glm::v
 {
 	*wi = bxdf_microfacet_sample(random, wo, roughness);
 	*pdf = bxdf_microfacet_pdf(wo, *wi, roughness);
-	if ((*wi).z > 0)
-		return bxdf_microfacet_eval(wo, *wi, reflectionAlbedo, roughness);
-	else
-		return glm::vec3(0);
+	return bxdf_microfacet_eval(wo, *wi, reflectionAlbedo, roughness);
 }
 
 __device__ inline float util_math_calc_lS(float metallic)
 {
-	return 1.0 / (2.0 - metallic * metallic);
+	return 1.0 / (6.0 - 5.0 * sqrt(metallic));
 }
 
 __device__ inline glm::vec3 bxdf_metallic_workflow_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float metallic, float roughness)
@@ -251,8 +264,164 @@ __device__ inline glm::vec3 bxdf_metallic_workflow_sample(const glm::vec3& rando
 __device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec3& random, float* pdf, glm::vec3& baseColor, float metallic, float roughness)
 {
 	*wi = bxdf_metallic_workflow_sample(random, wo, baseColor, metallic, roughness);
-	*pdf = bxdf_metallic_workflow_pdf(wo, *wi, baseColor, metallic, roughness);
-	return bxdf_metallic_workflow_eval(wo, *wi, baseColor, metallic, roughness);
+	if (wi->z < 0.0)
+	{
+		*pdf = 0;
+		return glm::vec3(0.0);
+	}
+	else
+	{
+		*pdf = bxdf_metallic_workflow_pdf(wo, *wi, baseColor, metallic, roughness);
+		return bxdf_metallic_workflow_eval(wo, *wi, baseColor, metallic, roughness);
+	}
+} 
+
+__device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
+{
+	float t = sqrt(rand.x);
+	return glm::vec2(1 - t, t * rand.y);
+}
+
+__device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 surfaceNormal, glm::vec3 receivePos)
+{
+	glm::vec3 L = surfacePos - receivePos;
+	return glm::clamp(glm::dot(glm::normalize(-L), surfaceNormal),0.0f,1.0f)/ glm::distance2(surfacePos, receivePos);
+}
+
+__device__ inline float util_mis_weight_balanced(float pdf1, float pdf2)
+{
+	return pdf1 / (pdf1 + pdf2);
+}
+
+__device__ float lights_sample_pdf(const SceneInfoDev& sceneInfo, int lightPrimID)
+{
+	if(!sceneInfo.lightsSize) return -1;
+	float prob = 1.0 / sceneInfo.lightsSize;
+	Primitive& lightPrim = sceneInfo.dev_primitives[lightPrimID];
+	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
+	if (lightObj.type == GeomType::SPHERE)
+	{
+		glm::vec3 rWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.5, 0.0, 0.0), 0.0f));
+		float R = glm::length(rWorld);
+		return prob / (TWO_PI * R * R);
+	}
+	else if(lightObj.type == GeomType::CUBE)
+	{
+		glm::vec3 vx = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(1, 0, 0), 0.0f));
+		glm::vec3 vy = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0, 1, 0), 0.0f));
+		glm::vec3 vz = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0, 0, 1), 0.0f));
+		float Axy = abs(glm::length(glm::cross(vx, vy)));
+		float Axz = abs(glm::length(glm::cross(vx, vz)));
+		float Ayz = abs(glm::length(glm::cross(vy, vz)));
+		float area = 2 * (Axy + Axz + Ayz);
+		return prob / area;
+	}
+	else
+	{
+		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
+		const glm::vec3& v0 = sceneInfo.modelInfo.dev_vertices[tri[0]];
+		const glm::vec3& v1 = sceneInfo.modelInfo.dev_vertices[tri[1]];
+		const glm::vec3& v2 = sceneInfo.modelInfo.dev_vertices[tri[2]];
+		glm::vec3 v0w = multiplyMV(lightObj.Transform.transform, glm::vec4(v0, 1.0f));
+		glm::vec3 v1w = multiplyMV(lightObj.Transform.transform, glm::vec4(v1, 1.0f));
+		glm::vec3 v2w = multiplyMV(lightObj.Transform.transform, glm::vec4(v2, 1.0f));
+		glm::vec3 nNormal = glm::cross(v1w - v0w, v2w - v0w);
+		float area = abs(glm::length(nNormal)) / 2;
+		return prob / area;
+	}
+}
+
+__device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& random, const glm::vec3& position, const glm::vec3& normal, glm::vec3* lightPos, glm::vec3* lightNormal, glm::vec3* emissive, float* pdf)
+{
+	if (!sceneInfo.lightsSize) return;
+	float fchosen = random.x * sceneInfo.lightsSize;
+	int chosenLight = fchosen;
+	float u = glm::clamp(fchosen - (int)fchosen, 0.0f, 1.0f);
+	Primitive& lightPrim = sceneInfo.dev_lights[chosenLight];
+	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
+	Material& lightMat = sceneInfo.dev_materials[lightObj.materialid];
+	float prob = 1.0f / sceneInfo.lightsSize;
+	if (lightObj.type == GeomType::SPHERE)//Assume uniform scale of xyz
+	{
+		glm::vec3 originWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.0), 1.0f));
+		glm::vec3 rWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.5, 0.0, 0.0), 0.0f));
+		float R = glm::length(rWorld);
+		glm::vec3 localSample = util_sample_hemisphere_uniform(glm::vec2(random.y, random.z));
+		glm::vec3 N = glm::normalize(position - originWorld);
+		glm::vec3 T, B;
+		util_math_get_TBN_pixar(N, &T, &B);
+		*lightNormal = glm::normalize(glm::mat3(T, B, N) * localSample);
+		*lightPos = originWorld + *lightNormal * R;
+		prob /= (TWO_PI * R * R);
+	}
+	else if(lightObj.type == GeomType::CUBE)//TODO: use quad light to replace all cubes
+	{
+		glm::vec3 v0 = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(-0.5f, -0.5f, -0.5f), 1.0f));
+		glm::vec3 vx = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(1,0,0), 0.0f));
+		glm::vec3 vy = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0,1,0), 0.0f));
+		glm::vec3 vz = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0,0,1), 0.0f));
+
+		float Axy = abs(glm::length(glm::cross(vx, vy)));
+		float Axz = abs(glm::length(glm::cross(vx, vz)));
+		float Ayz = abs(glm::length(glm::cross(vy, vz)));
+		float area = 2 * (Axy + Axz + Ayz);
+		prob /= area;
+		float s = random.x * area;
+		double limit = Axy;
+		float i = random.y, j = random.z;
+		if (s < limit) {
+			*lightPos = v0 + vx * i + vy * j;
+			*lightNormal = glm::normalize(-vz);
+		}
+		else if (s < (limit += Axy)) {
+			*lightPos = v0 + vz + vx * i + vy * j;
+			*lightNormal = glm::normalize(vz);
+		}
+		else if (s < (limit += Axz)) {
+			*lightPos = v0 + vx * i + vz * j;
+			*lightNormal = glm::normalize(-vy);
+		}
+		else if (s < (limit += Axz)) {
+			*lightPos = v0 + vy + vx * i + vz * j;
+			*lightNormal = glm::normalize(vy);
+		}
+		else if (s < (limit += Ayz)) {
+			*lightPos = v0 + vy * i + vz * j;
+			*lightNormal = glm::normalize(-vx);
+		}
+		else {
+			*lightPos = v0 + vx + vy * i + vz * j;
+			*lightNormal = glm::normalize(vx);
+		}
+	}
+	else
+	{
+		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
+		glm::vec2 bary = util_math_uniform_sample_triangle(glm::vec2(random.y, random.z));
+		const glm::vec3& v0 = sceneInfo.modelInfo.dev_vertices[tri[0]];
+		const glm::vec3& v1 = sceneInfo.modelInfo.dev_vertices[tri[1]];
+		const glm::vec3& v2 = sceneInfo.modelInfo.dev_vertices[tri[2]];
+		glm::vec3 v0w = multiplyMV(lightObj.Transform.transform, glm::vec4(v0, 1.0f));
+		glm::vec3 v1w = multiplyMV(lightObj.Transform.transform, glm::vec4(v1, 1.0f));
+		glm::vec3 v2w = multiplyMV(lightObj.Transform.transform, glm::vec4(v2, 1.0f));
+		*lightPos = v0w * bary[0] + v1w * bary[1] + v2w * (1 - bary[0] - bary[1]);
+		glm::vec3 nNormal = glm::cross(v1w - v0w, v2w - v0w);
+		float area = abs(glm::length(nNormal)) / 2;
+		*lightNormal = nNormal / (area > 0.0 ? area : 1e-8f);
+		prob /= area;
+	}
+	bool vis = glm::dot(position - *lightPos, *lightNormal) > 0;
+	vis = vis && glm::dot(*lightPos - position, normal) > 0;
+	glm::vec3 shadowRayOri = position;
+	shadowRayOri += glm::dot(*lightPos - position, normal) > 0.0 ? normal * 0.00001f : -normal * 0.00001f;
+#if USE_BVH
+	vis = vis && util_bvh_test_visibility(shadowRayOri, *lightPos, sceneInfo);
+#else
+	vis = vis && util_test_visibility(shadowRayOri, *lightPos, sceneInfo);
+#endif
+	
+	*pdf = prob;
+	*emissive = vis ? lightMat.emittance * lightMat.color : glm::vec3(0);
 }
 
 

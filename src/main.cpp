@@ -51,6 +51,8 @@ int main(int argc, char** argv) {
 	scene->buildBVH();
 	scene->buildStacklessBVH();
 
+	scene->CreateLights();
+
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
 	sysTime = time(nullptr);
