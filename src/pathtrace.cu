@@ -390,10 +390,10 @@ __device__  float bvhSearch(
 		if (inside || (bt > -1e-3 && bt < t_min))
 		{
 			// reach leaf node of bvh
-			if (bbox.triArrId >= 0) {
+			if (bbox.beginTriId >= 0) {
 				// searchTriArrIntersect(ray, t_min, hit_index, tri_arr[bbox.triArrId], tris, intersectionPoint, normal, outside);
 				
-				TriangleArray& triIndices = tri_arr[bbox.triArrId];
+				TriangleArray& triIndices = tri_arr[bbox.beginTriId];
 				// #pragma unroll
 				for (int j = 0; j < BBOX_TRI_NUM; j++) {
 					int ti = triIndices.triIds[j];
@@ -509,7 +509,7 @@ __global__ void computeIntersectionsBVH(
 
 		while (sign >= 0) {
 			BoundingBox& bbox = bvh[arr[sign]];
-			int taid = bbox.triArrId;
+			int taid = bbox.beginTriId;
 			glm::vec3& bmin = bbox.min;
 			glm::vec3& bmax = bbox.max;
 			sign--;

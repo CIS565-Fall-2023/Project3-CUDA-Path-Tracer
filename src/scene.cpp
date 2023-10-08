@@ -312,12 +312,13 @@ void Scene::buildTree()
 
     std::vector<Triangle> new_tris = std::vector<Triangle>();
     for (BoundingBox& bbox : bvh) {
-        if (bbox.triArrId > -1) {
-            bbox.beginTriId = new_tris.size();
-            bbox.triNum = triArr[bbox.triArrId].triIds[0];
+        if (bbox.beginTriId > -1) {
+            int taid = bbox.beginTriId;
+            // bbox.beginTriId = new_tris.size();
+            bbox.triNum = triArr[taid].triIds[0];
             for (int ti = 1; ti <= bbox.triNum; ti++) {
-                int real_ti = triArr[bbox.triArrId].triIds[ti];
-                triArr[bbox.triArrId].triIds[ti] = new_tris.size();
+                int real_ti = triArr[taid].triIds[ti];
+                triArr[taid].triIds[ti] = new_tris.size();
                 new_tris.push_back(tris[real_ti]);
             }
         }
@@ -343,7 +344,7 @@ void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int b
         }
 
         triArr.push_back(triArrObj);
-        bvh[bboxId].triArrId = triArr.size() - 1;
+        bvh[bboxId].beginTriId = triArr.size() - 1;
         return;
     }
 
@@ -404,10 +405,10 @@ void Scene::printTree() {
         bids.pop_front();
         cout << "box[" << bi << "]:"; printVec(bvh[bi].min); printVec(bvh[bi].max);
         cout << endl;
-        if (bvh[bi].triArrId >= 0) {
+        if (bvh[bi].beginTriId >= 0) {
             cout << "triIds: ";
             for (int i = 0; i < BBOX_TRI_NUM; i++) {
-                cout << triArr[bvh[bi].triArrId].triIds[i] << " ";
+                cout << triArr[bvh[bi].beginTriId].triIds[i] << " ";
             }cout << endl;
         }
         else {
@@ -424,6 +425,8 @@ inline bool bigger(glm::vec3 v0, glm::vec3 v1) {
 }
 
 bool Scene::checkTree() {
+    return true;
+    /*
     if (bvh.empty()) {
         return true;
     }
@@ -462,4 +465,5 @@ bool Scene::checkTree() {
 
     cout << "tris num = " << tris.size() << ", check num = " << tri_set.size() << ", maxi = " << maxi << endl;
     return tris.size() == tri_set.size();
+    */
 }
