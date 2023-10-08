@@ -32,15 +32,56 @@ struct Geom {
 struct Mesh {
     int materialid;
     float* vertices;
-    unsigned short* indices;
+    unsigned int* indices;
     int numVertices;
     int numIndices;
+    Geom boundingVolume;
     glm::vec3 translation;
     glm::quat rotation;
     glm::vec3 scale;
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+};
+
+struct Triangle {
+    glm::vec3 vertices[3];
+    glm::vec3 centroid;
+    bool isInVolume(Geom volume) {
+        for (int i = 0; i < 3; i++) {
+            glm::vec4 vertex = volume.inverseTransform * glm::vec4(vertices[i], 1.0f);
+            if (vertex.x < -0.5f || vertex.x > 0.5f ||
+                vertex.y < -0.5f || vertex.y > 0.5f ||
+                vertex.z < -0.5f || vertex.z > 0.5f) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+static const int OCTREE_MAX_DEPTH = 2;
+static const int OCTREE_MAX_PRIMITIVES = 10;
+static const float OCTREE_MIN_BOX_SIZE = 0.5f;
+struct OctreeNode {
+    int children[8] = { -1 };
+};
+
+struct Octree {
+    int root;
+    std::vector<OctreeNode> nodes;
+    std::vector<Triangle> triangles;
+    std::vector<Geom> boundingBoxes;
+    std::vector<int> dataStarts;
+};
+
+struct OctreeDev {
+    int root;
+    OctreeNode* nodes;
+    Triangle* triangles;
+    Geom* boundingBoxes;
+    int* dataStarts;
+    int numNodes;
 };
 
 struct Material {
