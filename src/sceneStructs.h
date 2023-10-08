@@ -31,9 +31,6 @@ struct Geom {
     //mesh only properties
     //mesh tri indices
     int tri_start_index{ -1 }, tri_end_index{ -1 };
-
-    //bounding box min, max
-    glm::vec3 bb_min, bb_max;
     
     glm::vec3 base_color{ glm::vec3(-1.f) }; //base color
     int texture_index{ -1 }, normal_map_index{ -1 };

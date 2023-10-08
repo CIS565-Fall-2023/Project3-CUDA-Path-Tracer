@@ -1,6 +1,6 @@
 // Emissive material (light)
 MATERIAL 0
-RGB         1 1 1
+RGB         0.98 0.96 0.54
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -18,32 +18,12 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Diffuse red
+// Diffuse gray
 MATERIAL 2
-RGB         .85 .35 .35
+RGB         .5 .5 .5
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse green
-MATERIAL 3
-RGB         .35 .85 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Specular white
-MATERIAL 4
-RGB         .98 .98 .98
-SPECEX      0
-SPECRGB     .98 .98 .98
-REFL        1
 REFR        0
 REFRIOR     0
 EMITTANCE   0
@@ -54,11 +34,31 @@ RES         800 800
 FOVY        45
 ITERATIONS  5000
 DEPTH       8
-FILE        avocado
-EYE         0.0 5 10.5
-LOOKAT      0 5 0
+FILE        final
+EYE         0.0 5 2
+LOOKAT      -0.5 3 -3
 UP          0 1 0
 
+OBJECT 0
+C:\Users\genel\Downloads\viper_steam_carbine\scene.gltf
+material 1
+TRANS        -1 3.3 -3
+ROTAT        60 -30 60
+SCALE        60 60 60
+
+OBJECT 1
+C:\Users\genel\Downloads\old_soviet_backpack\scene.gltf
+material 1
+TRANS        -0.5 3 -3
+ROTAT        0 20 0
+SCALE        1 1 1
+
+OBJECT 2
+C:\Users\genel\Downloads\low_poly_skull\scene.gltf
+material 1
+TRANS        0.5 1.5 -2.5
+ROTAT        0 40 -20
+SCALE        0.07 0.07 0.07
 
 // Ceiling light
 OBJECT 0
@@ -71,24 +71,24 @@ SCALE       3 .3 3
 // Floor
 OBJECT 1
 cube
-material 1
-TRANS       0 0 0
+material 2
+TRANS       0 1.2 0
 ROTAT       0 0 0
 SCALE       10 .01 10
 
 // Ceiling
 OBJECT 2
 cube
-material 1
-TRANS       0 10 0
+material 2
+TRANS       0 11.2 0
 ROTAT       0 0 90
 SCALE       .01 10 10
 
 // Back wall
 OBJECT 3
 cube
-material 1
-TRANS       0 5 -5
+material 2
+TRANS       0 6.2 -5
 ROTAT       0 90 0
 SCALE       .01 10 10
 
@@ -96,21 +96,6 @@ SCALE       .01 10 10
 OBJECT 4
 cube
 material 2
-TRANS       -5 5 0
+TRANS       -5 6.2 0
 ROTAT       0 0 0
 SCALE       .01 10 10
-
-// Right wall
-OBJECT 5
-cube
-material 3
-TRANS       5 5 0
-ROTAT       0 0 0
-SCALE       .01 10 10
-
-OBJECT 6
-C:\Users\genel\Downloads\viper_steam_carbine\scene.gltf
-material 1
-TRANS        0 3 -1
-ROTAT        0 -90 0
-SCALE        80 80 80

@@ -70,9 +70,9 @@ void Scene::buildBvhTree() {
         BVHTriIndex bti = bvh_tri_indices[i];
         Triangle& tri = mesh_triangles[bti.triIndex];
         Geom& g = geoms[tri.mesh_index];
-        glm::vec3 p1 = tri.points[0].pos;//glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
-        glm::vec3 p2 = tri.points[1].pos;//glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
-        glm::vec3 p3 = tri.points[2].pos;//glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
+        glm::vec3 p1 = tri.points[0].pos;
+        glm::vec3 p2 = tri.points[1].pos;
+        glm::vec3 p3 = tri.points[2].pos;
 
         g_bb_min = glm::min(g_bb_min, p1);
         g_bb_max = glm::max(g_bb_max, p1);
@@ -143,9 +143,9 @@ float Scene::eval_sah(BVHNode& node, int axis, float pos, glm::vec3 &l_bb_min, g
         Triangle& tri = mesh_triangles[bti.triIndex];
         Geom& g = geoms[tri.mesh_index];
         // need to be in global frame for bbs
-        glm::vec3 p1 = tri.points[0].pos;//glm::vec3(g.transform * glm::vec4(tri.points[0].pos, 1.f));
-        glm::vec3 p2 = tri.points[1].pos;//glm::vec3(g.transform * glm::vec4(tri.points[1].pos, 1.f));
-        glm::vec3 p3 = tri.points[2].pos;//glm::vec3(g.transform * glm::vec4(tri.points[2].pos, 1.f));
+        glm::vec3 p1 = tri.points[0].pos;
+        glm::vec3 p2 = tri.points[1].pos;
+        glm::vec3 p3 = tri.points[2].pos;
         if (bti.gFrameCentroid[axis] < pos) {
             left_count++;
             l_bb_min = glm::min(l_bb_min, p1);
@@ -295,7 +295,6 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
     //1 Geom per prim(submesh)
     for (const tinygltf::Primitive& prim : mesh.primitives) {
         //standardized data structs
-        glm::vec3 bb_min(FLT_MAX), bb_max(FLT_MIN);
         Geom mesh_geom;
         mesh_geom.type = MESH_PRIM;
         std::vector<Triangle> curr_tris;
@@ -319,9 +318,6 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
                     //transform vertices by tmat
                     vertices.push_back(glm::vec3(tmat * glm::vec4(casted_ad[i], 1.f)));
                 }
-                //aggregate bb min and max for mesh across prims
-                bb_min = glm::min(bb_min, glm::vec3(accessor.minValues[0], accessor.minValues[1], accessor.minValues[2]));
-                bb_max = glm::max(bb_max, glm::vec3(accessor.maxValues[0], accessor.maxValues[1], accessor.maxValues[2]));
             }
             else if (attribute.first == "NORMAL") {
                 //assuming float vec3
@@ -382,9 +378,6 @@ void Scene::parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<
         mesh_geom.tri_start_index = mesh_triangles.size();
         mesh_triangles.insert(mesh_triangles.end(), curr_tris.begin(), curr_tris.end());
         mesh_geom.tri_end_index = mesh_triangles.size();
-
-        mesh_geom.bb_min = bb_min;
-        mesh_geom.bb_max = bb_max;
 
         // load mesh texture data + texture if not already loaded
         tinygltf::Material &prim_mat = model.materials[prim.material];

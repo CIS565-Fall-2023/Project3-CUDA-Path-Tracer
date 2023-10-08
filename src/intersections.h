@@ -6,8 +6,6 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
-#define AABB_MESH_CULLING 1
-
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -157,20 +155,12 @@ __host__ __device__ float aabbRayIntTest(glm::vec3 bmin, glm::vec3 bmax, Ray r, 
     if (tmax >= tmin && tmin < max_dist && tmax > 0) return tmin; else return 1e30;
 }
 
+__host__ __device__ bool inAABB(glm::vec3 pt, glm::vec3 bb_min, glm::vec3 bb_max) {
+    return (pt.x >= bb_min.x && pt.x <= bb_max.x && pt.y >= bb_min.y && pt.y <= bb_max.y && pt.z >= bb_min.z && pt.z <= bb_max.z);
+}
+
 __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, glm::vec3& intPt, glm::vec3& normal, bool& outside, 
     Triangle* triangles, ImageInfo* img_info, glm::vec3* img_data, glm::vec3& bary, int &tri_index) {
-    // bring ray into frame of mesh
-    Ray q;
-    q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
-    q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
-
-    //bb int culling
-    // check against mesh bb, if no int return
-#if AABB_MESH_CULLING
-    // as mesh bb in mesh frame use ray in mesh frame
-    if (aabbRayIntTest(mesh.bb_min, mesh.bb_max, q, 1e30) == 1e30) return -1;
-#endif
-
     //check against each tri of mesh with glm::intersectRayTriangle
     //find smallest t to return(int pt)
     //list tri normal by bary interp verts
@@ -181,8 +171,9 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, glm::vec3& intP
     for (int i = mesh.tri_start_index; i < mesh.tri_end_index; i++) {
         Triangle& curr_tri = triangles[i];
         //res is (v2r, v3r, dist to int)?
+        //these in global frame
         glm::vec3 curr_bary;
-        if (glm::intersectRayTriangle(q.origin, q.direction, curr_tri.points[0].pos, curr_tri.points[1].pos, curr_tri.points[2].pos, curr_bary)) {
+        if (glm::intersectRayTriangle(r.origin, r.direction, curr_tri.points[0].pos, curr_tri.points[1].pos, curr_tri.points[2].pos, curr_bary)) {
             float cur_t = curr_bary.z;
             if (cur_t < t_min) {
                 min_tri_ptr = &triangles[i];
@@ -209,7 +200,7 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, glm::vec3& intP
         //sample data for correct normal
         ImageInfo normal_map = img_info[mesh.normal_map_index];
         glm::ivec2 sample_uv = mesh_uv * glm::vec2(normal_map.img_w, normal_map.img_h);
-        tri_normal = img_data[normal_map.data_start_index + (sample_uv[1] * normal_map.img_w + sample_uv[0])];
+        tri_normal = glm::normalize(glm::vec3(mesh.transform * glm::vec4(img_data[normal_map.data_start_index + (sample_uv[1] * normal_map.img_w + sample_uv[0])], 0.f)));
     } 
     else if (min_tri.points[0].normal != glm::vec3(0)) {
         tri_normal = (1.f - int_bary.x - int_bary.y) * min_tri.points[0].normal + int_bary.x * min_tri.points[1].normal + int_bary.y * min_tri.points[2].normal;
@@ -218,8 +209,8 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r, glm::vec3& intP
         tri_normal = outside ? glm::cross(min_tri.points[2].pos - min_tri.points[0].pos, min_tri.points[1].pos - min_tri.points[0].pos) : glm::cross(min_tri.points[1].pos - min_tri.points[0].pos, min_tri.points[2].pos - min_tri.points[0].pos);
     }
     //convert back to global frame
-    intPt = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(q, t_min), 1.f));
-    normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(tri_normal, 0.f)));
+    intPt = getPointOnRay(r, t_min);
+    normal = tri_normal;
     bary = int_bary;
     tri_index = min_tri_index;
     return glm::length(r.origin - intPt);
@@ -248,13 +239,8 @@ __host__ __device__ float bvh_intersection_test(Ray r, glm::vec3& int_pt, glm::v
                 Triangle& tri = triangles[triangle_index];
                 Geom& mesh = geoms[tri.mesh_index];
                 glm::vec3 cur_bary;
-                // move tri points to global frame
-                //Ray q;
-                //q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
-                //q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
                 if (glm::intersectRayTriangle(r.origin, r.direction, tri.points[0].pos, tri.points[1].pos, tri.points[2].pos, cur_bary)) {
-                    //int_pt = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(q, cur_bary[2]), 1.f));
                     int_pt = getPointOnRay(r, cur_bary[2]);
                     float cur_t = glm::length(r.origin - int_pt);
                     if (cur_t < min_t) {
@@ -337,7 +323,6 @@ __host__ __device__ float bvh_intersection_test(Ray r, glm::vec3& int_pt, glm::v
             else {
                 normal = outside ? glm::cross(tri.points[2].pos - tri.points[0].pos, tri.points[1].pos - tri.points[0].pos) : glm::cross(tri.points[1].pos - tri.points[0].pos, tri.points[2].pos - tri.points[0].pos);
             }
-            //normal = glm::normalize(multiplyMV(mesh.transform, glm::vec4(normal, 0.f)));
         }
         return min_t;
     }
