@@ -20,10 +20,12 @@
 #include "device_launch_parameters.h"
 
 // toggle material sorting
-#define CONTIGUOUS_MATERIAL
+#define CONTIGUOUS_MATERIAL 0
 
 // toggle first bounce intersections
-#define CACHE_FIRST_BOUNCE
+// antialiasing auto ON when CACHE is OFF
+#define CACHE_FIRST_BOUNCE 0
+
 
 #define ERRORCHECK 1
 
@@ -86,12 +88,12 @@ static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
-#ifdef CONTIGUOUS_MATERIAL
+#if CONTIGUOUS_MATERIAL == 1
 static int* dev_indices = NULL; // for materialId grouping
 static PathSegment* dev_paths_tmp = NULL; // Ping-Pong buffer for reordering
 static ShadeableIntersection* dev_intersections_tmp = NULL;
 #endif // CONTIGUOUS_MATERIAL
-#ifdef CACHE_FIRST_BOUNCE
+#if CACHE_FIRST_BOUNCE == 1
 static PathSegment* dev_first_paths = NULL;
 static ShadeableIntersection* dev_first_intersections = NULL;
 #endif // CACHE_FIRST_BOUNCE
@@ -104,7 +106,7 @@ struct is_path_terminated {
 	}
 };
 
-#ifdef CONTIGUOUS_MATERIAL
+#if CONTIGUOUS_MATERIAL == 1
 // comparator to sort pathSegments and shadeableIntersections based on materialId and t
 struct IntersectionComparator {
 	ShadeableIntersection* intersections;
@@ -144,13 +146,13 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
-#ifdef CONTIGUOUS_MATERIAL
+#if CONTIGUOUS_MATERIAL == 1
 	cudaMalloc(&dev_indices, pixelcount * sizeof(int));
 	cudaMalloc(&dev_paths_tmp, pixelcount * sizeof(PathSegment));
 	cudaMalloc(&dev_intersections_tmp, pixelcount * sizeof(ShadeableIntersection));
 #endif // CONTIGUOUS_MATERIAL
 
-#ifdef CACHE_FIRST_BOUNCE
+#if CACHE_FIRST_BOUNCE == 1
 	cudaMalloc(&dev_first_paths, pixelcount * sizeof(PathSegment));
 	cudaMalloc(&dev_first_intersections, pixelcount * sizeof(ShadeableIntersection));
 	const int traceDepth = hst_scene->state.traceDepth;
@@ -187,12 +189,12 @@ void pathtraceFree() {
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
-#ifdef CONTIGUOUS_MATERIAL
+#if CONTIGUOUS_MATERIAL == 1
 	cudaFree(dev_indices);
 	cudaFree(dev_paths_tmp);
 	cudaFree(dev_intersections_tmp);
 #endif // CONTIGUOUS_MATERIAL
-#ifdef CACHE_FIRST_BOUNCE
+#if CACHE_FIRST_BOUNCE == 1
 	cudaFree(dev_first_paths);
 	cudaFree(dev_first_intersections);
 #endif // CACHE_FIRST_BOUNCE
@@ -219,12 +221,23 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
+#if CACHE_FIRST_BOUNCE == 1
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
-
+#else
+		// jittering rays , within a pixel range
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+		thrust::uniform_real_distribution<float> uniform(-0.5f, 0.5f);
+		float jit_x_num_pixel = uniform(rng);
+		float jit_y_num_pixel = uniform(rng);
+		segment.ray.direction = glm::normalize(cam.view
+			- cam.right * cam.pixelLength.x * ((float)x + jit_x_num_pixel - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y + jit_y_num_pixel - (float)cam.resolution.y * 0.5f)
+		);
+#endif
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
@@ -258,6 +271,7 @@ __global__ void computeIntersections(
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		bool tmp_outside = true;
 
 		// naive parse through global geoms
 
@@ -267,11 +281,11 @@ __global__ void computeIntersections(
 
 			if (geom.type == CUBE)
 			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tmp_outside);
 			}
 			else if (geom.type == SPHERE)
 			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tmp_outside);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -283,6 +297,7 @@ __global__ void computeIntersections(
 				hit_geom_index = i;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
+				outside = tmp_outside;
 			}
 		}
 
@@ -296,6 +311,7 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].outside = outside;
 		}
 	}
 }
@@ -385,7 +401,7 @@ __global__ void shadeMaterial(
 	Material material = materials[intersection.materialId];
 	Ray ray_in = pathSegments[idx].ray;
 	glm::vec3 intersection_point = ray_in.origin + ray_in.direction * intersection.t;
-	scatterRay(pathSegments[idx], intersection_point, intersection.surfaceNormal, material, rng);
+	scatterRay(pathSegments[idx], intersection_point, intersection.surfaceNormal, intersection.outside, material, rng);
 }
 
 // Add output of terminated pathSegments to the overall image
@@ -461,7 +477,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//   for you.
 
 	// TODO: perform one iteration of path tracing
-#ifdef CACHE_FIRST_BOUNCE
+#if CACHE_FIRST_BOUNCE == 1
 	cudaMemcpy(dev_paths, dev_first_paths, pixelcount * sizeof(PathSegment), cudaMemcpyDeviceToDevice);
 #else
 	generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
@@ -483,7 +499,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-#ifdef CACHE_FIRST_BOUNCE
+#if CACHE_FIRST_BOUNCE == 1
 		if (depth == 0) {
 			// first bounce, copy intersections instead of compute them
 			cudaMemcpy(dev_intersections, dev_first_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
@@ -523,7 +539,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
 
-#ifdef CONTIGUOUS_MATERIAL
+#if CONTIGUOUS_MATERIAL == 1
 		// sort PathSegments and ShadeableIntersections
 		// locate range in dev_indices to initialize the sequence
 		thrust::device_ptr<int> dev_thrust_indices(dev_indices);
