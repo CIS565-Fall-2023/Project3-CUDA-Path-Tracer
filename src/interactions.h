@@ -79,12 +79,13 @@ void scatterRay(
 
     if (m.hasReflective > 0.0f) {
         pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
-        pathSegment.color *= m.specular.color;
+        pathSegment.throughput *= m.specular.color;
     }
     else {
         glm::vec3 dir = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
         pathSegment.ray.direction = glm::normalize(dir);
-        pathSegment.color *= m.color;   
+        pathSegment.throughput *= m.color;   
     }
     pathSegment.ray.origin = intersect;
 }
+

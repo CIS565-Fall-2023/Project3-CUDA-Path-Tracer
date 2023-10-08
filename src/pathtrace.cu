@@ -18,7 +18,9 @@
 #define ERRORCHECK 1
 #define ENABLE_SORT_BY_MATERIAL 0
 #define ENABLE_CACHE_1ST_INTERSECTIONS 1
-#define ENABLE_BVH 1
+#define ENABLE_BVH 0
+#define ENABLE_DIRECT_LIGHT 1
+
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -99,6 +101,7 @@ static PathSegment* dev_1st_paths_cache = NULL;
 static Triangle* dev_triangles = NULL;
 static BVHNode* dev_BVHNodes = NULL;
 static int* dev_BVHTriIdx = NULL;
+static glm::vec3* dev_directLights = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -131,6 +134,9 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_1st_paths_cache, pixelcount * sizeof(PathSegment));
 	cudaMemset(dev_1st_paths_cache, 0, pixelcount * sizeof(PathSegment));
 
+	cudaMalloc(&dev_directLights, pixelcount * sizeof(glm::vec3));
+	cudaMemset(dev_directLights, 0, pixelcount * sizeof(glm::vec3));
+
 	if(scene -> hasMesh) {
 	    int triCnt = scene->tri.size();
 	    cudaMalloc(&dev_triangles, triCnt * sizeof(Triangle));
@@ -157,6 +163,7 @@ void pathtraceFree() {
 	cudaFree(dev_1st_intersections_cache);
 	cudaFree(dev_1st_paths_cache);
 	cudaFree(dev_triangles);
+	cudaFree(dev_directLights);
 #ifdef ENABLE_BVH
 	cudaFree(dev_BVHNodes);
 	cudaFree(dev_BVHTriIdx);
@@ -182,7 +189,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		PathSegment& segment = pathSegments[index];
 
 		segment.ray.origin = cam.position;
-		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+		segment.throughput = glm::vec3(1.0f, 1.0f, 1.0f);
+		segment.L = glm::vec3(0.0f, 0.0f, 0.0f);
 
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
@@ -261,10 +269,6 @@ __global__ void computeIntersections(
 		}
 
 #if ENABLE_BVH
-//BVHIntersect(Ray r,
-//    Triangle* tri, BVHNode* bvhNode, int* triIdx,
-//   glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside, int& geomIdx)
-
         int geomIdx = -1;
         t = BVHIntersect(pathSegment.ray, triangles, bvhNodes, bvhTriIdx,
 		                 tmp_intersect, tmp_normal, outside, geomIdx);
@@ -275,7 +279,6 @@ __global__ void computeIntersections(
 			intersect_point = tmp_intersect;
 			normal = tmp_normal;
 		}
-
 #endif
 
 		if (hit_geom_index == -1)
@@ -288,6 +291,97 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+		}
+	}
+}
+
+__global__ void computeDirectLight(
+	int iter
+	, int num_paths
+	, PathSegment* pathSegments
+	, glm::vec3* directLights
+	, Geom* geoms
+	, int geoms_size
+	, ShadeableIntersection* intersections
+	, Material* materials
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index < num_paths)
+	{
+		PathSegment pathSegment = pathSegments[path_index];
+		ShadeableIntersection intersection = intersections[path_index];
+		glm::vec3 intersect = getPointOnRay(pathSegment.ray, intersection.t);
+
+		int lightIdx = 0;
+		Geom light = geoms[lightIdx];
+
+		// Generate ray to a light source
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_index, 0);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+
+        glm::vec2 xi = glm::vec2(u01(rng), u01(rng)) - glm::vec2(0.5);
+        glm::vec3 pos = multiplyMV(light.transform, glm::vec4(xi.x, 0., xi.y, 1.));
+        glm::vec3 nor = glm::normalize(multiplyMV(light.invTranspose, glm::vec4(0., 1., 0., 0.)));
+        float area = light.scale.x * light.scale.z;
+
+        glm::vec3 wi = pos - intersect;
+        glm::vec3 wiW = glm::normalize(wi);
+
+		float dot = glm::dot(wiW, nor);
+        float absDot = glm::abs(dot);
+        float pdf = (length(wi) * length(wi)) / (absDot * area);
+
+		if (pdf == 0){
+		    directLights[path_index] = glm::vec3(0.0f);
+			return;
+		}
+
+		// Compute if blocked by other objects
+		Ray r;
+		r.origin = intersect;
+		r.direction = wiW;
+
+		float t;
+		float t_min = FLT_MAX;
+		int hit_geom_index = -1;
+		bool outside = true;
+		glm::vec3 tmp_intersect;
+		glm::vec3 tmp_normal;
+        
+		// naive parse through global geoms
+
+		for (int i = 0; i < geoms_size; i++)
+		{
+			Geom& geom = geoms[i];
+
+			if (geom.type == CUBE)
+			{
+				t = boxIntersectionTest(geom, r, tmp_intersect, tmp_normal, outside);
+			}
+			else if (geom.type == SPHERE)
+			{
+				t = sphereIntersectionTest(geom, r, tmp_intersect, tmp_normal, outside);
+			}
+			// We assume loaded abjects are not light sources
+
+			if (t > 0.0f && t_min > t)
+			{
+				t_min = t;
+				hit_geom_index = i;
+			}
+		}
+
+		if (hit_geom_index == lightIdx) {		    
+			Material m = materials[light.materialid];
+            float absDot = glm::abs(glm::dot(intersection.surfaceNormal, wiW));
+			float INV_PI = 0.31830988618379067;
+			glm::vec3 f = materials[intersection.materialId].color * INV_PI;
+			directLights[path_index] = f * (m.color * m.emittance) * absDot / pdf;             
+		}
+		else {
+		    directLights[path_index] = glm::vec3(0.0f);
 		}
 	}
 }
@@ -321,7 +415,7 @@ __global__ void shadeFakeMaterial(
 			Material material = materials[intersection.materialId];
 
 			if (material.emittance > 0.0f) {
-				pathSegments[idx].color *= (material.color * material.emittance);
+				pathSegments[idx].L += pathSegments[idx].throughput * (material.color * material.emittance);
 				pathSegments[idx].remainingBounces = 0;
 			}
 			else {
@@ -334,7 +428,100 @@ __global__ void shadeFakeMaterial(
 		}
 		else {
 		    pathSegments[idx].remainingBounces = 0;
-			pathSegments[idx].color = glm::vec3(0.0f);
+		}
+	}
+}
+
+__global__ void shadeMaterialDirectLighting(
+	int iter
+	, int bounces
+	, int num_paths
+	, ShadeableIntersection* shadeableIntersections
+	, PathSegment* pathSegments
+	, Material* materials
+	, Geom* geoms
+	, glm::vec3* directLights
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths)
+	{	    
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+		if (intersection.t > 0.0f) { 
+
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+
+			Material material = materials[intersection.materialId];
+
+			if(bounces == 0 || pathSegments[idx].specularBounce){
+			    if (material.emittance > 0.0f) {
+				    pathSegments[idx].L += pathSegments[idx].throughput * (material.color * material.emittance);
+			    }
+			}
+			else{
+			    if (material.emittance > 0.0f) {
+				    pathSegments[idx].remainingBounces = 0;
+					return;
+			    }
+			}
+
+			glm::vec3 intersect = getPointOnRay(pathSegments[idx].ray, intersection.t);
+			glm::vec3 normal = intersection.surfaceNormal;
+
+			if(material.hasReflective){
+			    pathSegments[idx].specularBounce = true;
+			}
+			else{
+			    pathSegments[idx].specularBounce = false;
+				pathSegments[idx].L += pathSegments[idx].throughput * directLights[idx];
+			}
+		
+			scatterRay(pathSegments[idx], intersect, normal, material, rng);
+			pathSegments[idx].remainingBounces --;
+			
+		}
+		else {
+		    pathSegments[idx].remainingBounces = 0;
+		}
+	}
+}
+
+__global__ void shadeMaterialDirectLightingTest(
+	int iter
+	, int bounces
+	, int num_paths
+	, ShadeableIntersection* shadeableIntersections
+	, PathSegment* pathSegments
+	, Material* materials
+	, Geom* geoms
+	, glm::vec3* directLights
+)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx < num_paths)
+	{	    
+		ShadeableIntersection intersection = shadeableIntersections[idx];
+		if (intersection.t > 0.0f) { 
+
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+
+			Material material = materials[intersection.materialId];
+
+			
+			if (material.emittance > 0.0f) {
+				pathSegments[idx].L += pathSegments[idx].throughput * (material.color * material.emittance);
+				pathSegments[idx].remainingBounces = 0;
+				return;
+			}
+			
+			pathSegments[idx].L += directLights[idx];
+			pathSegments[idx].remainingBounces = 0;
+			
+		}
+		else {
+		    pathSegments[idx].remainingBounces = 0;
 		}
 	}
 }
@@ -347,7 +534,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.color;
+		image[iterationPath.pixelIndex] += iterationPath.L;
 	}
 }
 
@@ -472,11 +659,34 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		cudaDeviceSynchronize();
 #endif
 		
-		depth++;
 
 #if SORT_MATERIALS
         thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, compareMatID());
 #endif
+
+#if ENABLE_DIRECT_LIGHT
+        computeDirectLight << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter
+			, num_paths
+			, dev_paths
+			, dev_directLights
+			, dev_geoms
+			, hst_scene->geoms.size()
+			, dev_intersections
+			, dev_materials
+			);
+
+        shadeMaterialDirectLighting << <numblocksPathSegmentTracing, blockSize1d >> > (
+			iter, depth,
+			num_paths,
+			dev_intersections,
+			dev_paths,
+			dev_materials,
+			dev_geoms,
+			dev_directLights
+			);
+
+#else
 		shadeFakeMaterial << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
@@ -484,7 +694,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials
 			);
-	
+#endif	
+        depth++;
 		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, pathAlive());
         num_paths = dev_path_end - dev_paths;
 

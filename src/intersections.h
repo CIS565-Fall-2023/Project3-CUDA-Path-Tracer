@@ -173,8 +173,6 @@ __host__ __device__ float objIntersectionTest(Geom mesh, Ray r, Triangle* triang
     glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
 {
     Ray q = r;
-    //q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
-   // q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
  
     if (!boundingBoxIntersectionTest(mesh.aabb, q)) {
         return -1;

@@ -85,9 +85,11 @@ struct RenderState {
 
 struct PathSegment {
     Ray ray;
-    glm::vec3 color;
+    glm::vec3 L;
+    glm::vec3 throughput;
     int pixelIndex;
     int remainingBounces;
+    bool specularBounce;
 };
 
 // Use with a corresponding PathSegment to do:
