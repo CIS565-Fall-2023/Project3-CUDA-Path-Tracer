@@ -84,7 +84,7 @@ One advanced feature that was added was the loading and rendering of arbitrary m
 
 [Bulbasaur Scene](https://skfb.ly/6SZ9B)  |  
 :-------------------------:|
-![Bulbasaur Scene](img/bulbasaur_scene.png)  |
+![Bulbasaur Scene](img/bulbasaur_new_scene.png)  |
 
 ## **Hierarchical Spatial Data Structure - BVH**
 One advanced feature that was added was the storing of spatial data such as the position and normal of triangles in a hierarchical spatial data structure - in this case, a BVH (Bounding Volume Hierarchy) data structure was used. [This tutorial](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/) was used as a guideline for a basic BVH implementation, however various changes were made to adapt the tutorial's code for use on the GPU, (as the given code is meant for the CPU) and also to integrate the data structure with the glTF loading and rendering feature. In this implementation, because each mesh from a glTF file is stored as separate objects, each mesh was assigned its own root BVH node. The nodes are stored in a vector passed to the GPU, and they contain the necessary indices to both traverse the BVH tree and find the associated geometries, on the GPU.
