@@ -15,7 +15,7 @@ private:
     ifstream fp_in;
     int loadMaterial(string materialid);
     int loadTexture(string textureid);
-    int loadGeom(string objectid);
+    int loadGeom(string objectid, int& meshID);
     int loadCamera();
     bool loadGLTF(const std::string& filePath, GLTFMesh& gltfMesh, glm::vec3 trans, glm::vec3 scale);
     bool loadOBJ(const std::string& filePath, GLTFMesh& gltfMesh);

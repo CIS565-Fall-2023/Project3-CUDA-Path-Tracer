@@ -144,7 +144,19 @@ void runCuda() {
 	if (iteration == 0) {
 		pathtraceFree();
 		pathtraceInit(scene);
-		buildBVHTree((scene->gltfMeshes)[0], (scene->gltfMeshes)[0].triangles.size());
+		int polygonCount = scene->gltfMeshes.size();
+		int startIndexBVH = 0;
+		int startIndexTri = 0;
+		for(int i = 0; i < polygonCount; i++)
+		{
+			buildBVHTree(startIndexBVH, startIndexTri, (scene->gltfMeshes)[i], (scene->gltfMeshes)[i].triangles.size());
+			startIndexBVH += 2 * ((scene->gltfMeshes)[i].triangles.size()) - 1;
+			startIndexTri += (scene->gltfMeshes)[i].triangles.size();
+		}
+		for (Geom geo : scene->geoms)
+		{
+			cout << geo.meshid << endl;
+		}
 	}
 	
 	if (iteration < renderState->iterations) {

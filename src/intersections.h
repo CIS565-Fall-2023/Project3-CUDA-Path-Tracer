@@ -305,7 +305,7 @@ __device__ void computeTriangleInfo(Geom geo, Triangle tri, glm::vec3& normal, g
 
 __device__ float traverseTree(BVHNode* nodes, Geom geo, Triangle* triangles,
     int start, int end, AABB bbox, Ray worldRay, glm::vec3& intersectionPoint,
-    glm::vec3& normal, glm::vec2& uv, bool& outside)
+    glm::vec3& normal, glm::vec2& uv, bool& outside, int meshInd)
 {
     // record the closest intersection
     float closest = FLT_MAX;
@@ -320,21 +320,21 @@ __device__ float traverseTree(BVHNode* nodes, Geom geo, Triangle* triangles,
     {
         return -1;
     }
-
+    int bvhStart = 2 * start - geo.meshid;
     int stack[64];
     int stackPtr = 0;
-    int bvhPtr = 0;
-    stack[stackPtr++] = 0;
+    int bvhPtr = bvhStart;
+    stack[stackPtr++] = bvhStart;
     while(stackPtr)
     {
         bvhPtr = stack[--stackPtr];
         BVHNode currentNode = nodes[bvhPtr];
-        BVHNode leftChild = nodes[currentNode.leftIndex];
-        BVHNode rightChild = nodes[currentNode.rightIndex];
+        // all the left and right indexes are 0
+        BVHNode leftChild = nodes[currentNode.leftIndex + bvhStart];
+        BVHNode rightChild = nodes[currentNode.rightIndex + bvhStart];
 
         bool hitLeft = bboxIntersectionTest(objectRay, leftChild.bbox);
         bool hitRight = bboxIntersectionTest(objectRay, rightChild.bbox);
-        int j = 0;
         if (hitLeft)
         {
             // check triangle intersection
@@ -342,18 +342,18 @@ __device__ float traverseTree(BVHNode* nodes, Geom geo, Triangle* triangles,
             {
                 glm::vec3 tmpWorldIntersect = glm::vec3(0.f);
                 glm::vec3 tmpObjectIntersect = glm::vec3(0.f);
-                float distance = triangleIntersectionTest(geo, triangles[leftChild.triangleIndex], worldRay, objectRay, tmpWorldIntersect, tmpObjectIntersect);
+                float distance = triangleIntersectionTest(geo, triangles[leftChild.triangleIndex + start], worldRay, objectRay, tmpWorldIntersect, tmpObjectIntersect);
                 // if is closer, then calculate normal and uv
                 if (distance < closest)
                 {
-                    computeTriangleInfo(geo, triangles[leftChild.triangleIndex], normal, tmpWorldIntersect, tmpObjectIntersect,
+                    computeTriangleInfo(geo, triangles[leftChild.triangleIndex + start], normal, tmpWorldIntersect, tmpObjectIntersect,
                         worldRay, objectRay, uv, outside);
                     closest = distance;
                 }
             }
             else
             {
-                stack[stackPtr++] = currentNode.leftIndex;
+                stack[stackPtr++] = currentNode.leftIndex + bvhStart;
             }
             
         }
@@ -365,18 +365,18 @@ __device__ float traverseTree(BVHNode* nodes, Geom geo, Triangle* triangles,
                 
                 glm::vec3 tmpWorldIntersect = glm::vec3(0.f);
                 glm::vec3 tmpObjectIntersect = glm::vec3(0.f);
-                float distance = triangleIntersectionTest(geo, triangles[rightChild.triangleIndex], worldRay, objectRay, tmpWorldIntersect, tmpObjectIntersect);
+                float distance = triangleIntersectionTest(geo, triangles[rightChild.triangleIndex + start], worldRay, objectRay, tmpWorldIntersect, tmpObjectIntersect);
                 // if is closer, then calculate normal and uv
                 if (distance < closest)
                 {
-                    computeTriangleInfo(geo, triangles[rightChild.triangleIndex], normal, tmpWorldIntersect, tmpObjectIntersect,
+                    computeTriangleInfo(geo, triangles[rightChild.triangleIndex + start], normal, tmpWorldIntersect, tmpObjectIntersect,
                         worldRay, objectRay, uv, outside);
                     closest = distance;
                 }
             }
             else
             {
-                stack[stackPtr++] = currentNode.rightIndex;
+                stack[stackPtr++] = currentNode.rightIndex + bvhStart;
             }
             
         }

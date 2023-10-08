@@ -100,7 +100,7 @@ __device__ void buildBBox(BVHNode& curr, BVHNode left, BVHNode right)
 }
 
 // build the bounding box and morton code for each triangle
-__global__ void buildLeafMorton(int numTri, float minX, float minY, float minZ, 
+__global__ void buildLeafMorton(int startIndex, int numTri, float minX, float minY, float minZ, 
 	float maxX, float maxY, float maxZ, Triangle* triangles, BVHNode* leafNodes,
 	unsigned int* mortonCodes)
 {
@@ -108,7 +108,7 @@ __global__ void buildLeafMorton(int numTri, float minX, float minY, float minZ,
 	if (ind < numTri)
 	{
 		int leafPos = ind + numTri - 1;
-		Triangle tri = triangles[ind];
+		Triangle tri = triangles[ind + startIndex];
 		leafNodes[leafPos].bbox = computeBBox(tri);
 		leafNodes[leafPos].isLeaf = 1;
 		leafNodes[leafPos].leftIndex = -1;
@@ -193,7 +193,7 @@ __global__ void buildSplitList(int codeCount, unsigned int* uniqueMorton, BVHNod
 }
 
 
-//since maximum depth is 30, thus just repeat 30 times
+// very naive implementation
 __global__ void buildBBoxes(int leafCount, BVHNode* nodes, unsigned char* ready)
 {
 	int ind = blockIdx.x * blockDim.x + threadIdx.x;

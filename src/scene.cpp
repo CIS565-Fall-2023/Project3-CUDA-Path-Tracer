@@ -25,6 +25,7 @@ Scene::Scene(string filename) {
         std::cout << "Error reading from file - aborting!" << std::endl;
         throw;
     }
+    int meshID = 0;
     while (fp_in.good()) {
         string line;
         utilityCore::safeGetline(fp_in, line);
@@ -37,7 +38,7 @@ Scene::Scene(string filename) {
                 loadTexture(tokens[1]);
                 std::cout << " " << std::endl;
             } else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
-                loadGeom(tokens[1]);
+                loadGeom(tokens[1], meshID);
                 std::cout << " " << std::endl;
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
@@ -347,7 +348,7 @@ bool Scene::loadGLTF(const std::string& filePath, GLTFMesh& gltfMesh, glm::vec3 
 }
 
 
-int Scene::loadGeom(string objectid) {
+int Scene::loadGeom(string objectid, int& meshID) {
     int id = atoi(objectid.c_str());
     if (id != geoms.size()) {
         std::cout << "ERROR: OBJECT ID does not match expected number of geoms" << std::endl;
@@ -356,7 +357,6 @@ int Scene::loadGeom(string objectid) {
         std::cout << "Loading Geom " << id << "..." << std::endl;
         Geom newGeom;
         string line;
-
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -370,6 +370,8 @@ int Scene::loadGeom(string objectid) {
             else if (strcmp(line.c_str(), "mesh") == 0) {
                 std::cout << "Creating new mesh..." << std::endl;
                 newGeom.type = MESH;
+                newGeom.meshid = meshID;
+                ++meshID;
             }
         }
 
@@ -390,7 +392,6 @@ int Scene::loadGeom(string objectid) {
             std::cout << "Connecting Geom " << objectid << " to Texture " << newGeom.textureid << "..." << std::endl;
         }
 
-        int meshID = 0;
         //load transformations
         utilityCore::safeGetline(fp_in, line);
         while (!line.empty() && fp_in.good()) {
@@ -405,7 +406,7 @@ int Scene::loadGeom(string objectid) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
             else if (strcmp(tokens[0].c_str(), "LINK") == 0) {
-                newGeom.meshid = meshID;
+                //newGeom.meshid = meshID;
                 //TODO: read mesh
                 std::string path = tokens[1].c_str();
                 std::vector<int> offs;
@@ -431,7 +432,6 @@ int Scene::loadGeom(string objectid) {
                     loadOBJ(path, mesh1);
                 }
                 gltfMeshes.push_back(mesh1);
-                ++meshID;
             }
             
             utilityCore::safeGetline(fp_in, line);

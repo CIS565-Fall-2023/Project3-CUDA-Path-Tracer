@@ -8,4 +8,4 @@ void pathtraceInit(Scene *scene);
 void pathtraceFree();
 void updateBBox(Scene* scene);
 void pathtrace(uchar4 *pbo, int frame, int iteration);
-void buildBVHTree(GLTFMesh mesh1, int triCount);
+void buildBVHTree(int startIndexBVH, int startIndexTri, GLTFMesh mesh1, int triCount);

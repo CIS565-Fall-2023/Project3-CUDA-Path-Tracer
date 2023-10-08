@@ -128,12 +128,23 @@ SCALE       .01 10 10
 // Mesh cube
 OBJECT 6
 mesh
-material 4
+material 1
 texture 0
-TRANS       0 0 0
-ROTAT       0 0 0
-SCALE       0.1 0.1 0.1
-LINK        C:/Users/2000/Downloads/stanford_dragon_pbr/scene.gltf
+TRANS       0 3 0
+ROTAT       0 45 0
+SCALE       5 5 5
+LINK        C:/Users/2000/Downloads/deino/scene.gltf
+
+// Mesh cube
+OBJECT 7
+mesh
+material 1
+texture 1
+TRANS       4 4 4
+ROTAT       0 45 0
+SCALE       3 3 3
+LINK        C:/Users/2000/Downloads/pokemon_137_-_porygon/scene.gltf
+//C:/Users/2000/Downloads/stanford_dragon_pbr/scene.gltf
 //C:/Users/2000/Downloads/stanford_bunny_pbr/scene.gltf
 //C:/Users/2000/Downloads/stanford_dragon_vrip_res_3/scene.gltf
 //C:/Users/2000/Downloads/stanford_bunny_pbr/scene.gltf
@@ -160,7 +171,11 @@ LINK        C:/Users/2000/Downloads/stanford_dragon_pbr/scene.gltf
 
 
 TEXTURE 0
-LINK    C:/Users/2000/Downloads/stanford_dragon_vrip_res_3/jade.png
+LINK    C:/Users/2000/Downloads/deino/textures/body_mat_baseColor.png
+
+TEXTURE 1
+LINK    C:/Users/2000/Downloads/mimikyu/textures/body_baseColor.png
+//C:/Users/2000/Downloads/stanford_dragon_vrip_res_3/jade.png
 //C:/Users/2000/Downloads/stanford_bunny_pbr/textures/DefaultMaterial_baseColor.png
 //C:/Users/2000/Downloads/deino/textures/body_mat_baseColor.png
 //C:/Users/2000/Downloads/low-poly-fox/textures/TextureDiff3.png

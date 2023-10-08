@@ -171,7 +171,8 @@ void initMeshInfo(Scene* scene)
 	std::vector<AABB> bboxes;
 	std::vector<Triangle> triangles;
 	offsets.push_back(0);
-	for (int i = 0; i < scene->gltfMeshes.size(); i++)
+	int meshCount = scene->gltfMeshes.size();
+	for (int i = 0; i < meshCount; i++)
 	{
 		const GLTFMesh& mesh1 = (hst_scene->gltfMeshes)[i];
 		copy(mesh1.triangles.begin(), mesh1.triangles.end(), back_inserter(triangles));
@@ -190,8 +191,8 @@ void initMeshInfo(Scene* scene)
 	cudaMemcpy(dev_bboxes, bboxes.data(), bboxes.size() * sizeof(AABB), cudaMemcpyHostToDevice);
 	cudaMalloc(&dev_offsets, offsets.size() * sizeof(int));
 	cudaMemcpy(dev_offsets, offsets.data(), offsets.size() * sizeof(int), cudaMemcpyHostToDevice);
-	cudaMalloc(&dev_BVHNodes, (triangles.size() * 2 - 1) * sizeof(BVHNode));
-	cudaMemset(dev_BVHNodes, 0, (triangles.size() * 2 - 1) * sizeof(BVHNode));
+	cudaMalloc(&dev_BVHNodes, (triangles.size() * 2 - meshCount) * sizeof(BVHNode));
+	cudaMemset(dev_BVHNodes, 0, (triangles.size() * 2 - meshCount) * sizeof(BVHNode));
 }
 
 void pathtraceInit(Scene* scene) {
@@ -380,11 +381,11 @@ __global__ void computeIntersections(
 #if !BVHON
 				t = meshIntersectionTest(geom, meshTriangles, meshOffsets[meshInd],
 					meshOffsets[meshInd + 1], bboxes[meshInd],
-					pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, outside);*/
+					pathSegment.ray, tmp_intersect, tmp_normal, tmp_uv, outside);
 #else
 				t = traverseTree(nodes, geom, meshTriangles, meshOffsets[meshInd],
 					meshOffsets[meshInd + 1], bboxes[meshInd], pathSegment.ray,
-					tmp_intersect, tmp_normal, tmp_uv, outside);
+					tmp_intersect, tmp_normal, tmp_uv, outside, meshInd);
 #endif
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
@@ -917,7 +918,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	checkCUDAError("pathtrace");
 }
 
-void buildBVHTree(GLTFMesh mesh1, int triCount)
+void buildBVHTree(int startIndexBVH, int startIndexTri, GLTFMesh mesh1, int triCount)
 {
 	const int blockSize1d = 128;
 	unsigned int* dev_mortonCodes = NULL;
@@ -928,14 +929,18 @@ void buildBVHTree(GLTFMesh mesh1, int triCount)
 	cudaMemset(dev_ready, 0, triCount * sizeof(unsigned char));
 	cudaMemset(&dev_ready[triCount - 1], 1, triCount * sizeof(unsigned char));
 
+	static BVHNode* dev_tmpBVHNodes = NULL;
+	cudaMalloc(&dev_tmpBVHNodes, (triCount * 2 - 1) * sizeof(BVHNode));
+	cudaMemset(dev_tmpBVHNodes, 0, (triCount * 2 - 1) * sizeof(BVHNode));
+
 	dim3 numblocks = (triCount + blockSize1d - 1) / blockSize1d;
-	buildLeafMorton << <numblocks, blockSize1d >> > (triCount, mesh1.bbmin.x, mesh1.bbmin.y, mesh1.bbmin.z, mesh1.bbmax.x, mesh1.bbmax.y, mesh1.bbmax.z,
-		dev_triangles, dev_BVHNodes, dev_mortonCodes);
+	buildLeafMorton << <numblocks, blockSize1d >> > (startIndexTri, triCount, mesh1.bbmin.x, mesh1.bbmin.y, mesh1.bbmin.z, mesh1.bbmax.x, mesh1.bbmax.y, mesh1.bbmax.z,
+		dev_triangles, dev_tmpBVHNodes, dev_mortonCodes);
 	
-	thrust::stable_sort_by_key(thrust::device, dev_mortonCodes, dev_mortonCodes + triCount, dev_BVHNodes + triCount - 1);
+	thrust::stable_sort_by_key(thrust::device, dev_mortonCodes, dev_mortonCodes + triCount, dev_tmpBVHNodes + triCount - 1);
 
 
-	//fortest
+	/**
 	unsigned int* hstMorton = (unsigned int*)malloc(sizeof(unsigned int) * triCount);
 	cudaMemcpy(hstMorton, dev_mortonCodes, triCount * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
@@ -945,30 +950,35 @@ void buildBVHTree(GLTFMesh mesh1, int triCount)
 	}
 	cout << endl;
 	free(hstMorton);
-	//fortest
+	*/
 	
 
-	buildSplitList << <numblocks, blockSize1d >> > (triCount, dev_mortonCodes, dev_BVHNodes);
+	buildSplitList << <numblocks, blockSize1d >> > (triCount, dev_mortonCodes, dev_tmpBVHNodes);
 	//the maximum of level is 30 + 32
 	//can use atomic operation for further optimization
 	for (int i = 0; i < triCount; i++)
 	{
-		buildBBoxes << <numblocks, blockSize1d >> > (triCount, dev_BVHNodes, dev_ready);
+		buildBBoxes << <numblocks, blockSize1d >> > (triCount, dev_tmpBVHNodes, dev_ready);
 	}
 
-	//fortest
-	BVHNode* hstBVHNodes = (BVHNode*)malloc(sizeof(BVHNode) * (triCount * 2 - 1));
-	cudaMemcpy(hstBVHNodes, dev_BVHNodes, sizeof(BVHNode) * (triCount * 2 - 1), cudaMemcpyDeviceToHost);
-	for (int i = 0; i < 200; i++)
+	cudaMemcpy(dev_BVHNodes + startIndexBVH, dev_tmpBVHNodes, (triCount * 2 - 1) * sizeof(BVHNode), cudaMemcpyDeviceToDevice);
+	
+	/**
+	BVHNode* hstBVHNodes = (BVHNode*)malloc(sizeof(BVHNode) * (startIndex + 2 * triCount - 1));
+	cudaMemcpy(hstBVHNodes, dev_BVHNodes, sizeof(BVHNode) * (startIndex + 2 * triCount - 1), cudaMemcpyDeviceToHost);
+	for (int i = 0; i < startIndex + 2 * triCount - 1; i++)
 	{
 		cout << i << ": " << hstBVHNodes[i].leftIndex << "," << hstBVHNodes[i].rightIndex << "  parent:" << hstBVHNodes[i].parent << endl;
-		cout << i << ": " << hstBVHNodes[i].bbox.max.x << "," << hstBVHNodes[i].bbox.max.y << "," << hstBVHNodes[i].bbox.max.z << endl;
-		cout << i << ": " << hstBVHNodes[i].bbox.min.x << "," << hstBVHNodes[i].bbox.min.y << "," << hstBVHNodes[i].bbox.min.z << endl;
+		//cout << i << ": " << hstBVHNodes[i].bbox.max.x << "," << hstBVHNodes[i].bbox.max.y << "," << hstBVHNodes[i].bbox.max.z << endl;
+		//cout << i << ": " << hstBVHNodes[i].bbox.min.x << "," << hstBVHNodes[i].bbox.min.y << "," << hstBVHNodes[i].bbox.min.z << endl;
 	}
 	cout << endl;
-	free(hstBVHNodes);
-	//fortest
+	cout << endl;
+	cout << endl;
+	free(hstBVHNodes);*/
+	
 
 	cudaFree(dev_ready);
 	cudaFree(dev_mortonCodes);
+	cudaFree(dev_tmpBVHNodes);
 }
