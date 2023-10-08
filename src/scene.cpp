@@ -310,18 +310,19 @@ void Scene::buildTree()
 
     splitTree(triIds, 0, tris.size(), 0, 0);
 
-    //std::vector<Triangle> new_tris = std::vector<Triangle>();
-    //for (BoundingBox& bbox : bvh) {
-    //    bbox.beginTriId = new_tris.size();
-    //    bbox.triNum = triArr[bbox.triArrId].triIds[0];
-    //    for (int ti = 1; ti <= bbox.triNum; ti++) {
-    //        int real_ti = triArr[bbox.triArrId].triIds[ti];
-    //        triArr[bbox.triArrId].triIds[ti] = new_tris.size();
-    //        new_tris.push_back(tris[real_ti]);
-    //    }
-    //}
-
-    //tris = new_tris;
+    std::vector<Triangle> new_tris = std::vector<Triangle>();
+    for (BoundingBox& bbox : bvh) {
+        bbox.beginTriId = new_tris.size();
+        if (bbox.triArrId > -1) {
+            bbox.triNum = triArr[bbox.triArrId].triIds[0];
+            for (int ti = 1; ti <= bbox.triNum; ti++) {
+                int real_ti = triArr[bbox.triArrId].triIds[ti];
+                triArr[bbox.triArrId].triIds[ti] = new_tris.size();
+                new_tris.push_back(tris[real_ti]);
+            }
+        }
+    }
+    tris = new_tris;
 
 #ifdef PRINT_TREE
     printTree();
