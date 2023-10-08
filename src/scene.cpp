@@ -75,6 +75,9 @@ int Scene::loadGeom(string objectid) {
         if (!line.empty() && fp_in.good()) {
             vector<string> tokens = utilityCore::tokenizeString(line);
             newGeom.materialid = atoi(tokens[1].c_str());
+            if (materials[newGeom.materialid].emittance > 0.f) {
+                lightIdx.push_back(id);
+            }
             cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
         }
 

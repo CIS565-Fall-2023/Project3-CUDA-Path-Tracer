@@ -34,5 +34,6 @@ public:
     std::vector<Material> materials;
     std::vector<Triangle> tri;
     std::vector<int> triIdx;
+    std::vector<int> lightIdx;
     RenderState state;
 };
