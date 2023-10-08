@@ -38,9 +38,9 @@ glm::vec3 calculateRandomDirectionInHemisphere(
     glm::vec3 perpendicularDirection2 =
         glm::normalize(glm::cross(normal, perpendicularDirection1));
 
-    return up * normal
+    return glm::normalize(up * normal
         + cos(around) * over * perpendicularDirection1
-        + sin(around) * over * perpendicularDirection2;
+        + sin(around) * over * perpendicularDirection2);
 }
 
 #if IMPERFECT_SPECULAR == 1
@@ -82,6 +82,18 @@ __host__ __device__ glm::vec3 calcPerturbedSpecularDirection(
 }
 #endif // IMPERFECT_SPECULAR == 1
 
+__host__ __device__ float calcFrensel(const PathSegment& pathSegment, glm::vec3 normal, const Material& m) {
+  // cosine angle between incident ray and normal
+  float cosTheta = glm::dot(pathSegment.ray.direction, -normal);
+
+  // swap index if inside
+  float ior_i = 1.0f;
+  float ior_o = m.indexOfRefraction;
+
+  // calculate reflection coefficient using Schlick's approx.
+  float r0 = powf((ior_i - ior_o) / (ior_i + ior_o), 2.0f);
+  return r0 + (1.0f - r0) * powf((1.0f - cosTheta), 5.0f);
+}
 
 /**
  * Scatter a ray with some probabilities according to the material properties.
@@ -113,6 +125,7 @@ void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
+        bool outside,
         const Material &m,
         thrust::default_random_engine &rng) {
   // TODO: implement this.
@@ -130,6 +143,42 @@ void scatterRay(
     return;
   }
 
+  // REFRACTION
+  if (m.hasRefractive) {
+    // calculate out-going ray directions
+    float eta = outside ? 1.0f / m.indexOfRefraction : m.indexOfRefraction / 1.0f;
+    glm::vec3 ray_out_reflect = glm::reflect(pathSegment.ray.direction, normal);
+    glm::vec3 ray_out_refract = glm::refract(pathSegment.ray.direction, normal, eta);
+
+    // calculate reflection coefficient
+    float r = calcFrensel(pathSegment, normal, m);
+
+    //// choose to sample Specular or Refraction
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float choice = u01(rng);
+    if (choice < r) {
+      // reflect
+      pathSegment.ray.origin = intersect + ray_out_reflect * 0.001f;
+      pathSegment.ray.direction = ray_out_reflect;
+      pathSegment.color *= m.specular.color;
+    }
+    else {
+      // refract
+      if (glm::length(ray_out_refract) < 0.0001f) {
+        // handle total internal reflection (TIR), use reflection
+        pathSegment.ray.direction = ray_out_reflect;
+        pathSegment.ray.origin = intersect + ray_out_reflect * 0.001f;
+        pathSegment.color *= m.specular.color;
+      } else {
+        // not TIR
+        pathSegment.ray.origin = intersect + pathSegment.ray.direction * 0.001f;
+        pathSegment.ray.direction = ray_out_refract;
+        pathSegment.color *= m.color;
+      }
+    }
+    return;
+  }
+
   // IMPERFECT SPECULAR (Phong Shading)
   if (m.hasReflective) {
 #if IMPERFECT_SPECULAR == 1
@@ -143,7 +192,7 @@ void scatterRay(
     float pdf_diffuse = glm::dot(normal, ray_out_diffusive) / PI;
 
     glm::vec3 specular_dir = glm::reflect(pathSegment.ray.direction, normal);
-    float cosTheta = glm::abs(glm::dot(specular_dir, ray_out_specular));
+    float cosTheta = glm::clamp(glm::abs(glm::dot(specular_dir, ray_out_specular)), 0.0f, 1.0f);
     float bsdf_specular = (alpha + 2) / (2 * PI) * powf(cosTheta, alpha);
     float pdf_specular = (alpha + 1) / (2 * PI) * powf(cosTheta, alpha);
 
@@ -179,7 +228,7 @@ void scatterRay(
     glm::vec3 ray_out = glm::reflect(pathSegment.ray.direction, normal);
     pathSegment.ray.direction = ray_out;
     pathSegment.ray.origin = intersect + ray_out * 0.0001f;
-    pathSegment.color *= m.color;
+    pathSegment.color *= m.specular.color;
 #endif
     return;
   }
