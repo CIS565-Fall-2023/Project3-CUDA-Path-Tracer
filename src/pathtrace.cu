@@ -191,6 +191,7 @@ __global__ void computeIntersections(
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		bool temp_outside = true;
 
 		// naive parse through global geoms
 
@@ -200,11 +201,11 @@ __global__ void computeIntersections(
 
 			if (geom.type == CUBE)
 			{
-				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, temp_outside);
 			}
 			else if (geom.type == SPHERE)
 			{
-				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, temp_outside);
 			}
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -216,6 +217,7 @@ __global__ void computeIntersections(
 				hit_geom_index = i;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
+				outside = temp_outside;
 			}
 		}
 
@@ -229,6 +231,7 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].outside = outside;
 		}
 	}
 }
@@ -340,7 +343,7 @@ __global__ void shadeFakeMaterial(
 
 			glm::vec3 intersect = intersection.t * pathSegments[idx].ray.direction + pathSegments[idx].ray.origin;
 
-			scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
+			scatterRay(pathSegments[idx], intersection.outside, intersect, intersection.surfaceNormal, material, rng);
 		}
 		else {
 			pathSegments[idx].color = glm::vec3(0.0f);

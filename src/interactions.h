@@ -41,6 +41,20 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+
+__host__ __device__ float calcFrensel(const PathSegment& pathSegment, glm::vec3 normal, const Material& m) {
+    // cosine angle between incident ray and normal
+    float cosTheta = glm::dot(pathSegment.ray.direction, -normal);
+
+    // swap index if inside
+    float ior_i = 1.0f;
+    float ior_o = m.indexOfRefraction;
+
+    // calculate reflection coefficient using Schlick's approx.
+    float r0 = powf((ior_i - ior_o) / (ior_i + ior_o), 2.0f);
+    return r0 + (1.0f - r0) * powf((1.0f - cosTheta), 5.0f);
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -69,6 +83,7 @@ glm::vec3 calculateRandomDirectionInHemisphere(
 __host__ __device__
 void scatterRay(
         PathSegment & pathSegment,
+        bool outside,
         glm::vec3 intersect,
         glm::vec3 normal,
         const Material &m,
@@ -88,6 +103,30 @@ void scatterRay(
     }
 
     pathSegment.remainingBounces--;
+    if (m.hasRefractive) {
+        thrust::uniform_real_distribution<float> u01(0, 1);
+        float r = u01(rng); // generate a random number.
+        float cosTheta = - glm::dot(normal, pathSegment.ray.direction);
+        float ior = m.indexOfRefraction;
+        float r_0 = ((1 - ior) / (1 + ior)) * ((1 - ior) / (1 + ior));
+        float fTheta = r_0 + (1 - r_0) * powf((1 - cosTheta), 5);
+        if (r < fTheta) {
+            // reflect
+            pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
+            pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
+            pathSegment.color *= m.specular.color;
+        }
+        else {
+            // refract
+            float eta = outside ? 1 / ior : ior;
+            // ?? why 0.001 instead of 0.0001
+            pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
+            pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, eta);
+            pathSegment.color *= m.color;
+        }
+        return;
+    }
+    
     if (m.hasReflective) {
         // pure specular reflection
         pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);

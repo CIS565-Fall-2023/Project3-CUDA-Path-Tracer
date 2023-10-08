@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   5
+EMITTANCE   10
 
 // Diffuse white
 MATERIAL 1
@@ -46,6 +46,16 @@ SPECRGB     .98 .98 .98
 REFL        1
 REFR        0
 REFRIOR     0
+EMITTANCE   0
+
+// glass
+MATERIAL 5
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        1
+REFRIOR     1.5
 EMITTANCE   0
 
 // Camera
@@ -119,7 +129,7 @@ SCALE       3 3 3
 // Sphere
 OBJECT 7
 sphere
-material 4
+material 5
 TRANS       3 5 3
 ROTAT       0 0 0
 SCALE       2 2 2
@@ -127,7 +137,7 @@ SCALE       2 2 2
 // Sphere
 OBJECT 8
 sphere
-material 4
+material 5
 TRANS       1 2 1
 ROTAT       0 0 0
-SCALE       1 2 1
+SCALE       3 3 3
