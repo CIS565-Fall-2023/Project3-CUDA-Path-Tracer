@@ -108,7 +108,7 @@ __device__ glm::vec3 microfacetBSDF_F(const glm::vec3& h, const glm::vec3 & wo, 
     //return (Rs + Rp) / 2.;
 }
 
-__device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, const glm::vec2 & uv) {
+__device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec3& wi, const glm::vec2 & uv) {
     switch (bsdfStruct.bsdfType)
     {
     case DIFFUSE:
@@ -153,7 +153,7 @@ __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& w
     }
 }
 
-__device__ float PDF(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec3& wi, const glm::vec3 & rands) {
+__device__ float PDF(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec3& wi) {
     switch (bsdfStruct.bsdfType) {
         case DIFFUSE:
 		    return abs(wi.z) * INV_PI;
@@ -167,12 +167,14 @@ __device__ float PDF(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec
     }
 }
 
-__device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, float* pdf, thrust::default_random_engine & rng, const glm::vec2 & uv, const glm::vec3 & rands) {
+__device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& wi, float* pdf, thrust::default_random_engine & rng, const glm::vec2 & uv, const glm::vec3 & _rands) {
     switch (bsdfStruct.bsdfType)
     {
     case DIFFUSE:
     {
-        wi = hemiSphereRandomSample(glm::vec2(rands), pdf);
+        thrust::random::uniform_real_distribution<float> u01(0, 1);
+        wi = hemiSphereRandomSample(glm::vec2(u01(rng), u01(rng)), pdf);
+        //wi = hemiSphereRandomSample(glm::vec2(rands), pdf);
         // Encapsulate a sampler class
         return f(bsdfStruct, wo, wi, uv);
     }
@@ -184,6 +186,7 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         //return f(bsdfStruct, wo, wi, uv);
 
         thrust::uniform_real_distribution<float> u01(0, 1);
+        glm::vec3 rands(u01(rng), u01(rng), u01(rng));
         float alpha = glm::max(bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor, EPSILON);
         glm::vec3 wi_diffuse;
         float pdf_diffuse;
@@ -211,7 +214,7 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
             //wi = glm::reflect(-wo, wh);
             //printf("Specular wi.z: %f wo: %f %f %f wh : %f %f %f\n", wi.z, wo.x, wo.y, wo.z, wh.x, wh.y, wh.z);
         }
-        *pdf = PDF(bsdfStruct, wo, wi, rands);
+        *pdf = PDF(bsdfStruct, wo, wi);
         if (glm::isnan(pdf)) {
 			printf("pdf is nan\n");
         }

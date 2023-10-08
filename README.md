@@ -163,3 +163,22 @@ Try to refactor camera
         - CPU only for now
         - [ ] Figure out how to build `oidn` for cuda
     - [ ] Integrate it into project
+
+
+10.4-10.6
+
+- Microfacet
+
+10.7 
+
+- Environment map
+
+10.8
+
+- Fix random number issue(Maybe try to generate a better random number array in future?)
+    - Before
+![](img/before_fixing_random_number_issue.png)
+    - After
+![](img/after_fixing_random_number_issue.png)
+
+    **Please notice the fracture on rabbit head before fixing**

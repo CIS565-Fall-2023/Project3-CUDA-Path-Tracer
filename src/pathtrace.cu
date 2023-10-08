@@ -22,12 +22,13 @@
 #include "bsdf.h"
 #include "bvh.h"
 #include "texture.h"
+#include "mathUtil.h"
 
 //#include "utilities.cuh"
 
 #define USE_FIRST_BOUNCE_CACHE 0
 #define USE_SORT_BY_MATERIAL 0
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 0
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
 #define USE_BVH 1
 
 #define ERRORCHECK 1
@@ -97,7 +98,8 @@ static Triangle* dev_triangles= nullptr;
 /* TODO: Solve the weird shiny line in the empty room! */
 //static Scene* pa = new Scene("..\\scenes\\pathtracer_empty_room.glb");
 
-static Scene * pa = new Scene("..\\scenes\\pathtracer_bunny_matte.glb");
+//static Scene* pa = new Scene("..\\scenes\\pathtracer_direct_lighting.glb");
+static Scene * pa = new Scene("..\\scenes\\pathtracer_bunny.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -360,6 +362,11 @@ __global__ void intersect(
 	}
 }
 
+__device__ inline float PowerHeuristic(int nf, float fPdf, int ng, float gPdf) {
+	float f = nf * fPdf, g = ng * gPdf;
+	return (f * f) / (f * f + g * g);
+}
+
 // LOOK: "fake" shader demonstrating what you might do with the info in
 // a ShadeableIntersection, as well as how to use thrust's random number
 // generator. Observe that since the thrust random number generator basically
@@ -403,12 +410,15 @@ __global__ void shadeBSDF(
 			const glm::vec3 rands(u01(rng), u01(rng), u01(rng));
 			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
 			initBSDF(bsdfStruct, intersection.uv);
-			//pathSegment.color = glm::vec3(intersection.uv.x, intersection.uv.y, 0.0f);
-			////printf("intersection.uv: %f, %f\n", intersection.uv.x, intersection.uv.y);
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
-				pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength * pathSegment.constantTerm);
+				if (depth == 0) {
+					pathSegment.color = bsdfStruct.emissiveFactor;
+				}
+				else {
+					pathSegment.color += (Math::luminance(bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm);
+				}
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
 			// like what you would expect from shading in a rasterizer like OpenGL.
@@ -433,6 +443,8 @@ __global__ void shadeBSDF(
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
+				float weight = 0.0f;
+
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Uniformly pick a light, will change to selecting by importance in the future */
 				if (lights_size > 0) {
@@ -441,8 +453,56 @@ __global__ void shadeBSDF(
 					float sampled_light_pdf = 1.0f / lights_size;
 				
 					const auto& light = lights[sampled_light_index];
-					const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
-					const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, u);
+
+					//const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
+#ifndef HIDDEN
+					glm::vec3 Ld(0.0f);
+					float light_pdf = 0.0f, scattering_pdf = 0.0f;
+					const auto & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(rands));
+					glm::vec3 _f;
+					glm::vec3 Li = ls.L;
+					if (ls.pdf > EPSILON) {
+						light_pdf = ls.pdf;
+						glm::vec3 light_wi = w2o * ls.wi;
+						_f = f(bsdfStruct, wo, light_wi, intersection.uv) * abs(glm::dot(ls.wi, intersection.surfaceNormal));
+						scattering_pdf = PDF(bsdfStruct, wo, light_wi);
+						if (!(_f.x < EPSILON && _f.y < EPSILON && _f.z < EPSILON)) {
+							Ray light_ray;
+							//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
+							light_ray.direction = ls.wi;
+							light_ray.origin = intersect;
+							light_ray.min_t = EPSILON;
+							light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
+							ShadeableIntersection light_ray_intersection{ -1.0f }; // set t = -1
+							bool hasOcculusion = intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection);
+							if (hasOcculusion) {
+								Li = glm::vec3(0.0f);
+							}
+
+							if (!(Li.x < EPSILON && Li.y < EPSILON && Li.z < EPSILON) && scattering_pdf > 0) {
+								/* Determine whether delta */
+								if (light.type== AREA_LIGHT) {
+									weight = PowerHeuristic(1, light_pdf, 1, scattering_pdf);
+									//weight = 1.0f;
+									//Ld += _f * Li * weight / light_pdf;
+									Ld = 0.5f * _f * Li * weight;
+							//Ld += _f * Li * weight / (light_pdf * sampled_light_pdf);
+							//pathSegment.color = Ld;
+									//pathSegment.color += Ld;
+								}
+							}
+
+						}
+					}
+					pathSegment.color += Ld * pathSegment.constantTerm / sampled_light_pdf;
+					
+					//if (light.type == AREA_LIGHT) {
+					//	glm::vec3 f;
+					//	bool sampleSpecular = false;
+
+					//}
+#else
+					const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(rands));
 					if (ls.pdf > 0) {
 						Ray light_ray;
 						//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
@@ -453,11 +513,16 @@ __global__ void shadeBSDF(
 						ShadeableIntersection light_ray_intersection{-1.0f}; // set t = -1
 						if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) 
 						{
-							glm::vec3 light_wi = o2w * light_ray.direction;
+							glm::vec3 light_wi = w2o * light_ray.direction;
 							glm::vec3 light_bsdf = f(bsdfStruct, wo, light_wi, intersection.uv);
-							pathSegment.color += ls.L * light_bsdf * abs(light_wi.z) * pathSegment.constantTerm / (ls.pdf * sampled_light_pdf);
+							float scattering_pdf = PDF(bsdfStruct, wo, light_wi, rands);
+							//pathSegment.color = glm::vec3(light_wi);
+							//pathSegment.color = glm::vec3(scattering_pdf);
+							//pathSegment.color += ls.L * light_bsdf * abs(light_wi.z) * pathSegment.constantTerm / (ls.pdf);
+							pathSegment.color += ls.L * light_bsdf * pathSegment.constantTerm * abs(light_wi.z) / (ls.pdf * sampled_light_pdf);
 						}
 					}
+#endif
 				}
 #endif			
 				glm::vec3 wi;
@@ -467,7 +532,8 @@ __global__ void shadeBSDF(
 				}
 				else {
 					float cosineTerm = abs(wi.z);
-					pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
+					pathSegment.constantTerm *= (1.0f - weight) * (bsdf * cosineTerm / pdf);
+					//pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 					pathSegment.ray.direction = o2w * wi;
 					pathSegment.ray.origin = intersect;
 					pathSegment.remainingBounces--;
@@ -494,6 +560,8 @@ __global__ void shadeBSDF(
 				pathSegment.color += env_map_sample * pathSegment.constantTerm;
 			}
 			pathSegments[idx].remainingBounces = 0;
+			//printf("pathSegment.color: %f %f %f\n", pathSegment.color.x, pathSegment.color.y, pathSegment.color.z);
+
 		}
 		
 		if (glm::all(glm::isinf(pathSegment.color)) || glm::all(glm::isnan(pathSegment.color))) {
