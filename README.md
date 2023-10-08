@@ -11,7 +11,8 @@ A GPU Path Tracer implemented on CUDA C++.
 Astartes of Warhammer 40,000
 ![](/img/astartes.png)
 
-Thanks [Constantine Nikolaenko](https://www.cgtrader.com/badmaker91) from [cgtrader](https://www.cgtrader.com/) and [Games Workshop](https://www.games-workshop.com/en-US/Warhammer-40-000?_requestid=20431942) for this fantastic [Astartes of Steppe Hawks chapter Free 3D model](https://www.cgtrader.com/free-3d-models/character/sci-fi-character/astartes-of-steppe-hawks-chapter)!!
+- **Thanks [Constantine Nikolaenko](https://www.cgtrader.com/badmaker91) from [cgtrader](https://www.cgtrader.com/) and [Games Workshop](https://www.games-workshop.com/en-US/Warhammer-40-000?_requestid=20431942) for this fantastic [Astartes of Steppe Hawks chapter Free 3D model](https://www.cgtrader.com/free-3d-models/character/sci-fi-character/astartes-of-steppe-hawks-chapter)!!**
+- **Thanks for this [Rathaus Environment Map](https://polyhaven.com/a/rathaus) HDR environment map.**
 
 ## Features
 - [Camera Controll & GUI](#camera-control--gui)
@@ -28,16 +29,20 @@ Thanks [Constantine Nikolaenko](https://www.cgtrader.com/badmaker91) from [cgtra
   - Subsurface Scattering
 - [Physically-based depth-of-field]()
 ### Camera Control & GUI
+-----------------------------
 #### Camera
 - `ctrl + LMB` : Rotate camera around reference point
 - `shift + LMB` : Pan camera and reference point 
 - `mouse scroll whell`: camera zomm in/out
 #### GUI
-- ![](/img/gui_1.png)
-- ![](/img/gui_2.png)
-- ![](/img/gui_3.png)
+|Description|ImGui|
+|-------|------|
+|Display fram time, frame rate per second, and same image button|![](/img/gui_1.png)|
+|Display and adjust camera configuration|![](/img/gui_2.png)|
+|Display and adjust parameters of the default material|![](/img/gui_3.png)|
 
 ### JSON scene file
+-----------------------------
 To accelerate develop, testing, and scene set-up, I defined json-basde scene files as well as implemented a json reader based on [Json File Reader](https://github.com/nlohmann/json).
 Here is a simple example of a scene with a camera, a Cube and a Light.
 ```
@@ -86,14 +91,21 @@ Here is a simple example of a scene with a camera, a Cube and a Light.
 }
 ```
 This is an example of [CornellBox scene](/resources/scenes/CornellBox). You can find more samples in [Resources](/resources/scenes/)
-![](/img/cornellBox.png)
+<p align = "center">
+ <img src = "/img/cornellBox.png"/>
+</p>
+
+**Defualt material will be applied to a geomertiy if not explicit indicate its material in both scene file and obj file**
 
 ### Stochastic Sampled Anti-aliasing
+-----------------------------------
 |Without Anti-aliasing|With Anti-aliasing|
-|---------|---------|
-|![](img/cornellBox_without_AA_detial.png)![](img/cornellBox_without_AA.png)|![](img/cornellBox_with_AA_detial.png)![](img/cornellBox_with_AA.png)|
+|:---------:|:---------:|
+|![](img/cornellBox_without_AA_detial.png)|![](img/cornellBox_with_AA_detial.png)|
+|![](img/cornellBox_without_AA.png)|![](img/cornellBox_with_AA.png)|
 
 ### Bounding Volume Hierarchy
+----------------------------------
 If we want to make the scene interesting, polygons with more triangles are required, which means more ray-scene intersection testing time! To optimize this, I implemented Bounding Volume Herearchy (BVH) in the project to accelerate the intersection testing process.
 
 I test the BVH with a [Astartes of Steppe Hawks chapter Free 3D model](https://www.cgtrader.com/free-3d-models/character/sci-fi-character/astartes-of-steppe-hawks-chapter) *338869 triangles*
@@ -105,6 +117,7 @@ I test the BVH with a [Astartes of Steppe Hawks chapter Free 3D model](https://w
 |fps|0.1|130.27|134.7|
 
 ### Tone mapping
+-----------------------------
 |Without tone mapping|With tone mapping|
 |---------|---------|
 |![](img/cornellBox_without_tm.png)|![](img/cornellBox_with_AA.png)|
@@ -112,28 +125,33 @@ I test the BVH with a [Astartes of Steppe Hawks chapter Free 3D model](https://w
 In this project, I simply used $x = \frac{x}{1 + x}$. However, there are more interesting tone mapping  to be tried.
 
 ### Mesh Loader(obj) and texture mapping
+-----------------------------
 Now, it is time to make the scene vivid! I implemented a mesh loader based on [TinyObjLoader](https://github.com/tinyobjloader/tinyobjloader) to load obj files with materials(albedo map, normal map, roughness map, and metallic map). 
 |Without normal mapping|With normal mapping|
 |---------|---------|
 |![](img/without_normal.png)|![](img/with_normal.png)|
 
 Here are two image render with diffuse reflection material
-|Without normal mapping|With normal mapping|
+|mario|astartes|
 |---------|---------|
 |![](img/mario_diffuse.png)|![](img/astartes_diffuse.png)|
 
 ### BSDFs
+-----------------------------
 To make the scene more fancy, I implement multiple BSDFS
-![](/img/demo_1.png)
+<p align = "center">
+ <img src = "/img/demo_1.png"/>
+</p>
 
 |Diffuse Reflection|Specular Reflection|Specular Refraction|Microfacet Reflection|Microfacet Reflection(with metallic parameter)|
 |------|-------|-------|------|------|
 |![](/img/diffuse_ball.png)|![](/img/specular_reflect_ball.png)|![](/img/specular_refract_ball.png)|![](/img/microfacet_reflect_ball.png)|![](/img/microfacet_mix_ball.png)|
 
 #### Subsurface Scattering
-![](/img/subsurface_cow.png)
-
-I implemented a simple subsurface scattering by allowing rays to scattering randomly within the object, which requires large path depth(usually larger than 16) to obtain a relatively clear image.
+<p align = "center">
+ <img src = "/img/subsurface_cow.png"/>
+</p>
+I implemented a simple subsurface scattering by allowing rays to scatter randomly within the object, which requires large path depth(usually larger than 16) to obtain a relatively clear image.
 
 #### BSDF with texture mapping
 After applying texture mapping, we can have an impressive rendered Astartes! 
@@ -146,7 +164,7 @@ Finally, I implemented Physically-based depth-of-field to make photo-realistic i
 |![](/img/cornell_dof.png)|![](/img/ball_dof.png)|![](/img/env_dof.png)|
 
 ### Performance Analysis
-
+-----------------------------
 #### Compact terminated pathes
 ![](img/performance_chart_1.png)
 - *[Astartes of Steppe Hawks chapter Free 3D model](https://www.cgtrader.com/free-3d-models/character/sci-fi-character/astartes-of-steppe-hawks-chapter) *338869 triangles*
@@ -169,6 +187,7 @@ Considering the use of large number of registers in thread will limit the occupa
 I guess this might because large shared memory also limits the occupany, which is the even worse than using registers.
 
 ### Third Party Credit
+-----------------------------
 #### Third party Resources
 - [Astartes of Steppe Hawks chapter Free 3D model](https://www.cgtrader.com/free-3d-models/character/sci-fi-character/astartes-of-steppe-hawks-chapter)
 - [Rathaus Environment Map](https://polyhaven.com/a/rathaus)
