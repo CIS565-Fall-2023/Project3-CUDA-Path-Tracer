@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <stb_image_write.h>
+#include <stb_image.h>
 
 #include "image.h"
 
@@ -8,6 +9,22 @@ image::image(int x, int y) :
         xSize(x),
         ySize(y),
         pixels(new glm::vec3[x * y]) {
+}
+
+image::image(const std::string &baseFilename){
+    int width, height, bpp;
+    
+    uint8_t* rgb_image = stbi_load(baseFilename.c_str(), &width, &height, &bpp, 3);
+    pixels=new glm::vec3[width*height];
+    ySize=height;
+    xSize=width;
+    for(int i=0;i<width*height;i++){
+        pixels[i]=glm::vec3((int)rgb_image[i*3+0],(int)rgb_image[i*3+1],(int)rgb_image[i*3+2])/255.0f;
+        //if(glm::length(pixels[i])<1.0f)
+            //cout<<"color "<< pixels[i].x<<" "<<pixels[i].y<<" "<<pixels[i].z<<endl;
+    }
+
+    stbi_image_free(rgb_image);
 }
 
 image::~image() {

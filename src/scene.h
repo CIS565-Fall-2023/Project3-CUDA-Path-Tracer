@@ -7,7 +7,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
-
+#include "image.h"
 using namespace std;
 
 class Scene {
@@ -21,6 +21,12 @@ public:
     ~Scene();
 
     std::vector<Geom> geoms;
+    std::vector<BVHnode> BVH;
+    std::vector<int> lightmat;
+    std::vector<int> Lights;
+    std::vector<float> LightArea;
     std::vector<Material> materials;
+    std::vector<glm::vec3> imgtext;
+    glm::vec3 backColor=glm::vec3(0.0f);
     RenderState state;
 };

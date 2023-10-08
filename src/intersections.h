@@ -6,6 +6,7 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -64,7 +65,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
             float tb = glm::max(t1, t2);
             glm::vec3 n;
             n[xyz] = t2 < t1 ? +1 : -1;
-            if (ta > 0 && ta > tmin) {
+            if (ta > -0.0001f && ta > tmin) {
                 tmin = ta;
                 tmin_n = n;
             }
@@ -77,7 +78,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
 
     if (tmax >= tmin && tmax > 0) {
         outside = true;
-        if (tmin <= 0) {
+        if (tmin <= -0.0001f) {
             tmin = tmax;
             tmin_n = tmax_n;
             outside = false;
@@ -88,6 +89,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
     }
     return -1;
 }
+
 
 // CHECKITOUT
 /**
@@ -124,7 +126,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     float t = 0;
     if (t1 < 0 && t2 < 0) {
         return -1;
-    } else if (t1 > 0 && t2 > 0) {
+    } else if (t1 > 0 && t2 > -0.0001f) {
         t = min(t1, t2);
         outside = true;
     } else {
@@ -139,6 +141,100 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     if (!outside) {
         normal = -normal;
     }
-
+    
     return glm::length(r.origin - intersectionPoint);
+}
+
+
+__host__ __device__ float triIntersectionTest(Geom geom, Ray r,
+        glm::vec3 &intersectionPoint,glm::vec2 &uv,glm::vec3 &dpdu,glm::vec3 &dpdv,  glm::vec3 &normal, bool &outside) {
+
+    glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+    Triangle &triangle=geom.tri;
+    //refenrenced from wikipedia: https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+    outside=true;
+    float a, f, u, v;
+    glm::vec3 edge1=triangle.vertices[1]- triangle.vertices[0];
+    glm::vec3 edge2=triangle.vertices[2]- triangle.vertices[0];
+    float len1 = glm::length(triangle.vertices[1]);
+    float len2 = glm::length(edge2);
+    glm::vec3 h=glm::cross(rt.direction, edge2);
+    float lenh = glm::length(h);
+    a = glm::dot(edge1,h);
+
+    if (a > -0.0000001f && a < 0.0000001f) {
+        return -1;    // This ray is parallel to this triangle.
+    }
+
+    f = 1.0f / a;
+    glm::vec3 s=rt.origin-triangle.vertices[0];
+    u = f * (glm::dot(s,h));
+
+    if (u < 0.0 || u > 1.0) {
+        return -1;
+    }
+
+    glm::vec3 q=glm::cross(s, edge1);
+    v = f *glm::dot(rt.direction,q);
+
+    if (v < 0.0 || u + v > 1.0) {
+        return -1;
+    }
+
+    // At this stage we can compute t to find out where the intersection point is on the line.
+    float t = f *glm::dot(edge2,q);
+    if (t > 0.0000001f) // ray intersection
+    {
+        intersectionPoint = getPointOnRay(rt, t);
+        normal=(1.0f-u-v)*triangle.normals[0]+u*triangle.normals[1]+v*triangle.normals[2];
+        uv=(1.0f-u-v)*triangle.uvs[0]+u*triangle.uvs[1]+v*triangle.uvs[2];
+        //normal=triangle.g_norm;
+        if(glm::dot(triangle.g_norm,rt.direction)>0.0f){
+            outside=false;
+        }
+    } else // This means that there is a line intersection but not a ray intersection.
+    {
+        return -1;
+    }
+    dpdu=glm::normalize(multiplyMV(geom.transform, glm::vec4(triangle.dpdu, 0.f)));
+    dpdv=glm::normalize(multiplyMV(geom.transform, glm::vec4(triangle.dpdv, 0.f)));
+    intersectionPoint = multiplyMV(geom.transform, glm::vec4(intersectionPoint, 1.f));
+    normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(triangle.g_norm, 0.f)));
+    if(outside==false){
+        normal=-normal;
+    }
+    return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__ float aabbIntersectionTest(BVHnode box, Ray r,
+        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
+
+    float tmin = -1e38f;
+    float tmax = 1e38f;
+    for (int xyz = 0; xyz < 3; ++xyz) {
+        float qdxyz = r.direction[xyz];
+        /*if (glm::abs(qdxyz) > 0.00001f)*/ //{
+            float t1 = (box.min[xyz] - r.origin[xyz]) / qdxyz;
+            float t2 = (box.max[xyz] - r.origin[xyz]) / qdxyz;
+            float ta = glm::min(t1, t2);
+            float tb = glm::max(t1, t2);
+            if (ta > -0.0001f && ta > tmin) {
+                tmin = ta;
+            }
+            if (tb < tmax) {
+                tmax = tb;
+            }
+        //}
+    }
+
+    if (tmax >= tmin && tmax > 0) {
+        if (tmin <= -0.0001f) 
+            tmin = tmax;
+        return tmin;
+    }
+    return -1;
 }

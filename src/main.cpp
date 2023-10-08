@@ -12,6 +12,11 @@ static double lastX;
 static double lastY;
 
 static bool camchanged = true;
+static bool withFBC = true;
+static bool alias = false;
+static bool sortmat = true;
+static bool bvh = true;
+static int shading = 0;
 static float dtheta = 0, dphi = 0;
 static glm::vec3 cammove;
 
@@ -142,7 +147,14 @@ void runCuda() {
 
 		// execute the kernel
 		int frame = 0;
-		pathtrace(pbo_dptr, frame, iteration);
+		pathtraceSortMatWCacheBVH(pbo_dptr, frame, iteration,withFBC,alias,sortmat,bvh,shading);
+
+		/*
+		if(withFBC)
+			pathtraceSortMatWCache(pbo_dptr, frame, iteration);
+		else
+			pathtraceSortMat(pbo_dptr, frame, iteration);
+		*/
 
 		// unmap buffer object
 		cudaGLUnmapBufferObject(pbo);
@@ -168,8 +180,73 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 		case GLFW_KEY_SPACE:
 			camchanged = true;
 			renderState = &scene->state;
-			Camera& cam = renderState->camera;
-			cam.lookAt = ogLookAt;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_C:
+			withFBC=true;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_V:
+			withFBC=false;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_A:
+			alias=true;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_Q:
+			alias=false;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_M:
+			sortmat=true;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_N:
+			sortmat=false;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_B:
+			bvh=true;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_H:
+			bvh=false;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_0:
+			shading=0;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_1:
+			shading=1;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
+			break;
+		case GLFW_KEY_2:
+			shading=2;
+			camchanged = true;
+			renderState = &scene->state;
+			renderState->camera.lookAt = ogLookAt;
 			break;
 		}
 	}
