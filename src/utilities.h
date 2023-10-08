@@ -9,10 +9,7 @@
 #include <string>
 #include <vector>
 
-#define PI                3.1415926535897932384626422832795028841971f
-#define TWO_PI            6.2831853071795864769252867665590057683943f
-#define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
-#define EPSILON           0.00001f
+#include "common.h"
 
 class GuiDataContainer
 {
@@ -29,5 +26,29 @@ namespace utilityCore {
     extern std::vector<std::string> tokenizeString(std::string str);
     extern glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
     extern std::string convertIntToString(int number);
-    extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413
+    extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/
+}
+
+__forceinline CPU_GPU void CoordinateSystem(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
+{
+	glm::vec3 up = glm::abs(normal.z) < 0.999f ? glm::vec3(0.f, 0.f, 1.f) : glm::vec3(1.f, 0.f, 0.f);
+	tangent = glm::normalize(glm::cross(up, normal));
+	bitangent = glm::cross(normal, tangent);
+}
+
+__forceinline CPU_GPU glm::mat3 LocalToWorld(const::glm::vec3& nor)
+{
+	glm::vec3 tan, bit;
+	CoordinateSystem(nor, tan, bit);
+	return glm::mat3(tan, bit, nor);
+}
+__forceinline CPU_GPU glm::mat3 WorldToLocal(const::glm::vec3& nor)
+{
+	return glm::transpose(LocalToWorld(nor));
+}
+
+template<typename T>
+CPU_GPU T BarycentricInterpolation(const T& c0, const T& c1, const T& c2, const glm::vec2& uv)
+{
+	return (1.f - uv.x - uv.y) * c0 + uv.x * c1 + uv.y * c2;
 }

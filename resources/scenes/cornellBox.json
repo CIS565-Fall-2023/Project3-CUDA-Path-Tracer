@@ -1,0 +1,111 @@
+{
+  "resources path": "resources/",
+  "camera": {
+    "ref": [ 0, 2.5, 0 ],
+    "position": [ 0, 5.5, -30 ],
+    "fovy": 19.5,
+    "resolution": [ 680, 680 ],
+    "interation": 1000,
+    "depth": 8
+  },
+  "materials": [
+    {
+      "name": "WhiteLight",
+      "albedo": [ 1, 1, 1 ],
+      "emittance": 40.0
+    },
+    {
+      "name": "MatteWhite",
+      "type": "DiffuseReflection",
+      "albedo": [ 0.85, 0.81, 0.78 ]
+    },
+    {
+      "name": "MatteRed",
+      "type": "DiffuseReflection",
+      "albedo": [ 0.63, 0.065, 0.05 ]
+    },
+    {
+      "name": "MatteGreen",
+      "type": "DiffuseReflection",
+      "albedo": [ 0.14, 0.45, 0.091 ]
+    }
+  ],
+  "geomerties": [
+    {
+      "type": "obj",
+      "path": "meshes/plane.obj",
+      "name": "light",
+      "material": "WhiteLight",
+      "translation": [ 0, 7.45, 0 ],
+      "rotation": [ 0, 0, 0 ],
+      "scale": [ 1.5, 1, 1.5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/plane.obj",
+      "name": "floor",
+      "material": "MatteWhite",
+      "translation": [ 0, -2.5, 0 ],
+      "rotation": [ 0, 0, 0 ],
+      "scale": [ 5, 1, 5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/plane.obj",
+      "name": "red wall",
+      "material": "MatteRed",
+      "translation": [ 5, 2.5, 0 ],
+      "rotation": [ 0, 0, 90 ],
+      "scale": [ 5, 1, 5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/plane.obj",
+      "name": "green wall",
+      "material": "MatteGreen",
+      "translation": [ -5, 2.5, 0 ],
+      "rotation": [ 0, 0, -90 ],
+      "scale": [ 5, 1, 5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/plane.obj",
+      "name": "back wall",
+      "translation": [ 0, 2.5, 5 ],
+      "rotation": [ -90, 0, 0 ],
+      "scale": [ 5, 1, 5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/plane.obj",
+      "name": "ceiling",
+      "material": "MatteWhite",
+      "translation": [ 0, 7.5, 0 ],
+      "rotation": [ 180, 0, 0 ],
+      "scale": [ 5, 1, 5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/cube.obj",
+      "name": "long Cube",
+      "material": "MatteWhite",
+      "translation": [ 2, 0, 3 ],
+      "rotation": [ 0, 27.5, 0 ],
+      "scale": [ 1.5, 3, 1.5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/cube.obj",
+      "name": "short Cube",
+      "material": "MatteWhite",
+      "translation": [ -2, -1, 0.75 ],
+      "rotation": [ 0, -17.5, 0 ],
+      "scale": [ 1.5, 1.5, 1.5 ]
+    }
+  ],
+  "environment map": {
+    "path": "env_maps/small_apartment_1.hdr",
+    "flip": true
+  }
+}
+  

@@ -1,0 +1,96 @@
+{
+  "resources path": "resources/",
+  "camera": {
+    "ref": [ 0, 0, 0 ],
+    "position": [ 0, 10, -50 ],
+    "up": [ 0, 1, 0 ],
+    "fovy": 19.5,
+    "resolution": [ 1600, 900 ],
+    "interation": 200,
+    "depth": 8
+  },
+  "materials": [
+    {
+      "name": "WhiteLight",
+      "albedo": [ 1, 1, 1 ],
+      "emittance": 40.0
+    },
+    {
+      "name": "MatteGreen",
+      "type": "DiffuseReflection",
+      "albedo": [ 0.9, 0.9, 0.9 ]
+    },
+    {
+      "name": "WahooTexture",
+      "type": "DiffuseReflection",
+      "albedo map": {
+        "path": "textures/wahoo.bmp",
+        "flip": true
+      }
+    },
+    {
+      "name": "Mirror",
+      "type": "SpecularReflection",
+      "albedo": [ 1, 1, 1 ]
+    },
+    {
+      "name": "Glass",
+      "type": "SpecularGlass",
+      "albedo": [ 0.9, 0.9, 1 ],
+      "eta": 1.55
+    },
+    {
+      "name": "roughMirror",
+      "type": "MicrofacetReflection",
+      "albedo": [ 0.9, 0.9, 1 ],
+      "roughness": 0.1
+    }
+  ],
+  "geomerties": [
+    {
+      "type": "obj",
+      "path": "meshes/sphere.obj",
+      "name": "light",
+      "material": "WhiteLight",
+      "translation": [ 0, 7.45, 0 ],
+      "rotation": [ 0, 0, 0 ],
+      "scale": [ 1, 1, 1 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/sphere.obj",
+      "material": "Glass",
+      "translation": [ 0, 0, -2 ],
+      "rotation": [ 0, 0, 0 ],
+      "scale": [ 2, 2, 2 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/wahoo.obj",
+      "material": "WahooTexture",
+      "translation": [ 10, 0, 5 ],
+      "rotation": [ 0, 210, 0 ],
+      "scale": [ 1, 1, 1 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/cube.obj",
+      "material": "roughMirror",
+      "translation": [ -10, 0, 3 ],
+      "rotation": [ 0, -60, 0 ],
+      "scale": [ 10, 8, 0.5 ]
+    },
+    {
+      "type": "obj",
+      "path": "meshes/cow.obj",
+      "translation": [ 0, 0, 5 ],
+      "rotation": [ 0, 0, 0 ],
+      "scale": [ 1, 1, 1 ]
+    }
+  ],
+  "environment map": {
+    "path": "env_maps/small_apartment_1.hdr",
+    "flip": true
+  }
+}
+  
