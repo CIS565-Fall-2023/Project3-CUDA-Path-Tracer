@@ -23,6 +23,8 @@ public:
     ~Scene();
 
     bool hasEnvMap;
+    int numLights;
+    std::vector<Geom> lights;
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     std::vector<Triangle> tris;

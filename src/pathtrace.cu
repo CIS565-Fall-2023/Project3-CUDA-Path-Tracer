@@ -99,6 +99,7 @@ static ShadeableIntersection* dev_first_pass = NULL;
 static Triangle* dev_tris = NULL;
 static cudaArray* imgArray = NULL;
 static cudaTextureObject_t textureObject = NULL;
+static Geom* dev_lights = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -132,6 +133,9 @@ void pathtraceInit(Scene* scene) {
 
 	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Geom));
+	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
 	if (scene->hasEnvMap) {
 		auto channelDesc = cudaCreateChannelDesc<float4>();
@@ -196,9 +200,10 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
-		segment.accumRay = glm::vec3(0.f);
+		segment.accumRay = glm::vec3(0.0f);
 
 		segment.dead = false;
+		segment.reflecting = false;
 
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
@@ -222,7 +227,6 @@ __global__ void computeIntersections(
 	, Geom* geoms
 	, int geoms_size
 	, Triangle* tris
-	, int tri_size
 	, ShadeableIntersection* intersections
 )
 {
@@ -301,6 +305,11 @@ __global__ void shadeFakeMaterial(
 	, Material* materials,
 	const int depth
 	, cudaTextureObject_t textureObject
+	, Geom* lights
+	, int numLights
+	, Geom* geoms
+	, int geoms_size
+	, Triangle* tris
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -320,26 +329,85 @@ __global__ void shadeFakeMaterial(
 				glm::vec3 materialColor = material.color;
 
 				// If the material indicates that the object was a light, "light" the ray
-				if (material.emittance > 0.0f) {
-					path.color *= (materialColor * material.emittance);
-					path.dead = true;
-				}
-				// Otherwise, do some pseudo-lighting computation. This is actually more
-				// like what you would expect from shading in a rasterizer like OpenGL.
-				// TODO: replace this! you should be able to start with basically a one-liner
-				else {
-					glm::vec3 intersection_point = getPointOnRay(path.ray, intersection.t);
-					scatterRay(path, intersection_point, intersection.surfaceNormal, material, rng);
+				glm::vec3 intersection_point = getPointOnRay(path.ray, intersection.t);
 
-					// Russian Roulette
-					if (depth > 2) {
-						float maxComponent = max(max(path.color.r, path.color.g), path.color.b);
-						if (maxComponent > u01(rng)) {
-							path.color /= maxComponent;
+				// apply direct lighting
+				if (material.emittance == 0 && !material.hasReflective) {
+					int rand = int(u01(rng) * (numLights + 1)) % (numLights + 1);
+
+					glm::vec3 L;
+					float pdf;
+					Ray light;
+					int target = -1;
+
+					glm::vec2 xi = glm::vec2(-0.5f) + glm::vec2(u01(rng), u01(rng));
+					if (rand == numLights) {
+						light.origin = intersection_point;
+						light.direction = calculateRandomDirectionInHemisphere(path.ray.direction, rng);
+						glm::vec3 d = light.direction;
+						glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
+						uv *= glm::vec2(0.1591, -0.3183);
+						uv += 0.5;
+						pdf = 1.0f;
+
+						float4 env_color = tex2D<float4>(textureObject, uv.x, uv.y);
+						L.x = env_color.x;
+						L.y = env_color.y;
+						L.z = env_color.z;
+					}
+					else {
+						Geom l = lights[rand];
+						target = l.index;
+						glm::vec3 point_on_light;
+						
+						pdf = closestPointOnCube(l, xi, intersection_point, point_on_light, light, u01(rng));
+						light.direction = point_on_light - intersection_point;
+						L = materials[l.materialid].color * materialColor * pow(abs(dot(intersection.surfaceNormal, light.direction)), 2.0f) / pdf;
+					}
+					float t;
+					float t_min = FLT_MAX;
+					int hit_geom_index = -1;
+					bool outside = true;
+					glm::vec3 tmp_intersect;
+					glm::vec3 tmp_normal;
+
+					for (int i = 0; i < geoms_size; i++)
+					{
+						Geom& geom = geoms[i];
+						if (geom.type == CUBE)
+						{
+							t = boxIntersectionTest(geom, light, tmp_intersect, tmp_normal, outside);
+						}
+						else if (geom.type == SPHERE)
+						{
+							t = sphereIntersectionTest(geom, light, tmp_intersect, tmp_normal, outside);
 						}
 						else {
-							path.dead = true;
+							t = meshIntersectionTest(geom, tris, light, tmp_intersect, tmp_normal, outside);
 						}
+						if (t > 0.0f && t_min > t)
+						{
+							t_min = t;
+							hit_geom_index = i;
+						}
+					}
+
+					if (pdf < 0.001f || (hit_geom_index != target)) {
+						L = glm::vec3(0.0f);
+					}
+					path.accumRay += L * path.color * float(numLights + 1);
+				}
+
+				scatterRay(path, intersection_point, intersection.surfaceNormal, material, rng, depth);
+
+				// Russian Roulette
+				if (depth > 3) {
+					float maxComponent = max(max(path.accumRay.r, path.accumRay.g), path.accumRay.b);
+					if (maxComponent > u01(rng)) {
+						path.accumRay /= maxComponent;
+					}
+					else {
+						path.dead = true;
 					}
 				}
 				// If there was no intersection, color the ray black.
@@ -349,16 +417,17 @@ __global__ void shadeFakeMaterial(
 			}
 			else {
 				// sample environment map 
-				glm::vec3 d = path.ray.direction;
-				glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
-				uv *= glm::vec2(0.1591, -0.3183);
-				uv += 0.5;
+				if (depth == 1) {
+					glm::vec3 d = path.ray.direction;
+					glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
+					uv *= glm::vec2(0.1591, -0.3183);
+					uv += 0.5;
 
-				float4 env_color = tex2D<float4>(textureObject, uv.x, uv.y);
-				path.color.x = env_color.x;
-				path.color.y = env_color.y;
-				path.color.z = env_color.z;
-
+					float4 env_color = tex2D<float4>(textureObject, uv.x, uv.y);
+					path.accumRay.x = env_color.x;
+					path.accumRay.y = env_color.y;
+					path.accumRay.z = env_color.z;
+				}
 				path.dead = true;
 			}
 		}
@@ -373,7 +442,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.color;
+		image[iterationPath.pixelIndex] += iterationPath.accumRay;
 	}
 }
 
@@ -480,7 +549,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_geoms
 				, hst_scene->geoms.size()
 				, dev_tris
-				, hst_scene->tris.size()
 				, dev_intersections
 				);
 			checkCUDAError("trace one bounce");
@@ -513,7 +581,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_paths,
 			dev_materials,
 			depth,
-			textureObject
+			textureObject,
+			dev_lights,
+			hst_scene->numLights
+			, dev_geoms
+			, hst_scene->geoms.size()
+			, dev_tris
 			);
 		iterationComplete = (depth == hst_scene->state.traceDepth); // TODO: should be based off stream compaction results.
 

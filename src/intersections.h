@@ -35,6 +35,79 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+__host__ __device__ float closestPointOnCube(Geom c, glm::vec2 xi, glm::vec3 isect_point, glm::vec3& hit_point, Ray& light, float r) {
+    glm::vec3 p_local = multiplyMV(c.inverseTransform, glm::vec4(isect_point, 1.0f));
+    float dist = 1e38f;
+    glm::vec3 nor;
+    glm::vec2 scaling;
+
+    float areaX = c.scale.y * c.scale.z;
+    float areaY = c.scale.x * c.scale.z;
+    float areaZ = c.scale.x * c.scale.y;
+
+    float area = areaX + areaY + areaZ;
+    if (r < areaX / area) {
+        // x
+        glm::vec3 p1 = glm::vec3(c.scale.x * 0.5f, c.scale.y * xi.x, c.scale.z * xi.y);
+        if (dist > distance(p_local, p1)) {
+            dist = distance(p_local, p1);
+            hit_point = p1;
+            nor = glm::vec3(1.0f, 0.0f, 0.0f);
+            scaling = glm::vec2(c.scale.y, c.scale.z);
+        }
+        glm::vec3 p2 = glm::vec3(c.scale.x * -0.5f, c.scale.y * xi.x, c.scale.z * xi.y);
+        if (dist > distance(p_local, p2)) {
+            dist = distance(p_local, p2);
+            hit_point = p2;
+            nor = glm::vec3(-1.0f, 0.0f, 0.0f);
+            scaling = glm::vec2(c.scale.y, c.scale.z);
+        }
+    }
+    else if (r < (areaX + areaY) / area) {
+        // y
+        glm::vec3 p3 = glm::vec3(c.scale.x * xi.x, c.scale.y * 0.5f, c.scale.z * xi.y);
+        if (dist > distance(p_local, p3)) {
+            dist = distance(p_local, p3);
+            hit_point = p3;
+            nor = glm::vec3(0.0f, 1.0f, 0.0f);
+            scaling = glm::vec2(c.scale.x, c.scale.z);
+        }
+        glm::vec3 p4 = glm::vec3(c.scale.x * xi.x, c.scale.y * -0.5f, c.scale.z * xi.y);
+        if (dist > distance(p_local, p4)) {
+            dist = distance(p_local, p4);
+            hit_point = p4;
+            nor = glm::vec3(0.0f, -1.0f, 0.0f);
+            scaling = glm::vec2(c.scale.x, c.scale.z);
+        }
+    }
+    else {
+        // z
+        glm::vec3 p5 = glm::vec3(c.scale.x * xi.x, c.scale.y * xi.y, c.scale.z * 0.5f);
+        if (dist > distance(p_local, p5)) {
+            dist = distance(p_local, p5);
+            hit_point = p5;
+            nor = glm::vec3(0.0f, 0.0f, 1.0f);
+            scaling = glm::vec2(c.scale.y, c.scale.x);
+        }
+        glm::vec3 p6 = glm::vec3(c.scale.x * xi.x, c.scale.y * xi.y, c.scale.z * -0.5f);
+        if (dist > distance(p_local, p6)) {
+            dist = distance(p_local, p6);
+            hit_point = p6;
+            nor = glm::vec3(0.0f, 0.0f, -1.0f);
+            scaling = glm::vec2(c.scale.y, c.scale.x);
+        }
+    }
+    light.origin = isect_point;
+    hit_point = multiplyMV(c.transform, glm::vec4(hit_point, 1.0f));
+    light.direction = normalize(hit_point - isect_point);
+    dist = distance(hit_point, isect_point);
+    nor = glm::normalize(multiplyMV(c.transform, glm::vec4(nor, 0.0f)));
+    float pdf = pow(dist, 2.0f) / (area);
+    return pdf;
+
+    // add intersection test
+}
+
 __host__ __device__ float meshIntersectionTest(Geom m, Triangle* tris, Ray r,
     glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
     Ray q;

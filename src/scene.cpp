@@ -43,6 +43,7 @@ Scene::Scene(string filename) {
             }
         }
     }
+    numLights = lights.size();
 }
 
 int Scene::loadGeom(string objectid) {
@@ -54,7 +55,7 @@ int Scene::loadGeom(string objectid) {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
-
+        newGeom.index = id;
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
@@ -98,6 +99,9 @@ int Scene::loadGeom(string objectid) {
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
         geoms.push_back(newGeom);
+        if (materials[newGeom.materialid].emittance > 0) {
+            lights.push_back(newGeom);
+        }
         return 1;
     }
 }

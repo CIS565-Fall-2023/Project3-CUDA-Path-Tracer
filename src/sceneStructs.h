@@ -26,6 +26,7 @@ struct Ray {
 };
 
 struct Geom {
+    int index;
     enum GeomType type;
     int materialid;
     int triCount;
@@ -86,6 +87,7 @@ struct PathSegment {
     bool dead;
     int pixelIndex;
     int remainingBounces;
+    bool reflecting;
 };
 
 // Use with a corresponding PathSegment to do:
