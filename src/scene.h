@@ -13,8 +13,6 @@
 // #define JITTER_RAY
 // #define DEBUG_OUTPUT
 #define USING_BVH
-#define USING_FAST_BVH
-// #define PRINT_TREE
 
 using namespace std;
 
@@ -39,7 +37,4 @@ public:
 
     RenderState state;
     int objCount = 0;
-
-private:
-    std::vector<TriangleArray> triArr;
 };

@@ -309,19 +309,17 @@ void Scene::buildTree()
     cout << ", max = "; printVec(max); cout << endl;
     splitTree(0, tris.size(), 0, 0);
 
-#ifdef PRINT_TREE
-    printTree();
-#endif
-    cout << "bbox num = " << bvh.size() << ", triArr num = " << triArr.size() << endl;
+    // printTree();
+
+    cout << "bbox num = " << bvh.size() << endl;
     checkTree();
 
-    triArr.clear();
 }
 
 
 void Scene::splitTree(int leftEnd, int rightEnd, int bboxId, int axis)
 {    
-    if (rightEnd - leftEnd <= BBOX_TRI_NUM - 1) {
+    if (rightEnd - leftEnd <= BBOX_TRI_NUM) {
         bvh[bboxId].beginTriId = leftEnd;
         bvh[bboxId].triNum = rightEnd - leftEnd;
         return;
@@ -377,10 +375,7 @@ void Scene::printTree() {
         cout << "box[" << bi << "]:"; printVec(bvh[bi].min); printVec(bvh[bi].max);
         cout << endl;
         if (bvh[bi].beginTriId >= 0) {
-            cout << "triIds: ";
-            for (int i = 0; i < BBOX_TRI_NUM; i++) {
-                cout << triArr[bvh[bi].beginTriId].triIds[i] << " ";
-            }cout << endl;
+            cout << "triIds: " << bvh[bi].beginTriId << " to " << bvh[bi].beginTriId + bvh[bi].triNum << endl;
         }
         else {
             cout << "box[" << bi << "] -> box[" << bvh[bi].leftId << "] bbox[" << bvh[bi].rightId << "]" << endl;
@@ -392,12 +387,10 @@ void Scene::printTree() {
 }
 
 inline bool bigger(glm::vec3 v0, glm::vec3 v1) {
-    return v0.x > FLT_EPSILON + v1.x && v0.y > FLT_EPSILON + v1.y && v0.z > FLT_EPSILON + v1.z;
+    return v0.x > 1e-5 + v1.x && v0.y > 1e-5 + v1.y && v0.z > 1e-5 + v1.z;
 }
 
 bool Scene::checkTree() {
-    return true;
-    /*
     if (bvh.empty()) {
         return true;
     }
@@ -408,16 +401,10 @@ bool Scene::checkTree() {
     while (!bids.empty()) {
         int bi = bids.front();
         bids.pop_front();
-        if (bvh[bi].triArrId >= 0) {
-            for (int i = 0; i < BBOX_TRI_NUM; i++) {
-                if (triArr[bvh[bi].triArrId].triIds[i] >= 0) {
-                    tri_set.insert(triArr[bvh[bi].triArrId].triIds[i]);
-                    maxi = max(maxi, triArr[bvh[bi].triArrId].triIds[i]);
-                }
-                else {
-                    break;
-                }
-                
+        if (bvh[bi].beginTriId >= 0) {
+            for (int ti = bvh[bi].beginTriId; ti < bvh[bi].beginTriId + bvh[bi].triNum; ti++) {
+                tri_set.insert(ti);
+                maxi = max(maxi, ti);
             }
         }
         else {
@@ -436,5 +423,4 @@ bool Scene::checkTree() {
 
     cout << "tris num = " << tris.size() << ", check num = " << tri_set.size() << ", maxi = " << maxi << endl;
     return tris.size() == tri_set.size();
-    */
 }

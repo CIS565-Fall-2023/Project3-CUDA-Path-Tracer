@@ -87,8 +87,6 @@ static int* dev_scanNBools = NULL;
 static Triangle* dev_tris = NULL;
 static BoundingBox* dev_bvh = NULL;
 
-// TODO: static variables for device memory, any extra info you need, etc
-// ...
 
 void printArr(int n, int* odata, int* dev_odata) {
 	cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
@@ -234,7 +232,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-// TODO:
+
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
 // Feel free to modify the code below.
@@ -432,9 +430,6 @@ __global__ void computeIntersectionsBVH(
 					arr[sign + 2] = bbox.rightId;
 					sign += 2;
 				}
-				//else {
-				//	break;
-				//}
 			}
 		}
 
@@ -550,14 +545,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.color * (float)abs(iterationPath.remainingBounces);
-		/*if (iterationPath.remainingBounces == 0) {
-			image[iterationPath.pixelIndex] += glm::vec3(1.0f, 0.0f, 1.0f);
-		}
-		else {
-			image[iterationPath.pixelIndex] += iterationPath.color * (float)abs(iterationPath.remainingBounces);
-		}*/
-		
+		image[iterationPath.pixelIndex] += iterationPath.color * (float)abs(iterationPath.remainingBounces);		
 	}
 }
 
@@ -621,32 +609,6 @@ __global__ void pathSegmentAndIntersectionScatter(
  */
  ///////////////////////////////////////////////////////////////////////////
 
- // Recap:
- // * Initialize array of path rays (using rays that come out of the camera)
- //   * You can pass the Camera object to that kernel.
- //   * Each path ray must carry at minimum a (ray, color) pair,
- //   * where color starts as the multiplicative identity, white = (1, 1, 1).
- //   * This has already been done for you.
- // * For each depth:
- //   * Compute an intersection in the scene for each path ray.
- //     A very naive version of this has been implemented for you, but feel
- //     free to add more primitives and/or a better algorithm.
- //     Currently, intersection distance is recorded as a parametric distance,
- //     t, or a "distance along the ray." t = -1.0 indicates no intersection.
- //     * Color is attenuated (multiplied) by reflections off of any object
- //   * TODO: Stream compact away all of the terminated paths.
- //     You may use either your implementation or `thrust::remove_if` or its
- //     cousins.
- //     * Note that you can't really use a 2D kernel launch any more - switch
- //       to 1D.
- //   * TODO: Shade the rays that intersected something or didn't bottom out.
- //     That is, color the ray by performing a color computation according
- //     to the shader, then generate a new ray to continue the ray path.
- //     We recommend just updating the ray's PathSegment in place.
- //     Note that this step may come before or after stream compaction,
- //     since some shaders you write may also cause a path to terminate.
- // * Finally, add this iteration's results to the image. This has been done
- //   for you.
 void pathtrace(uchar4* pbo, int frame, int iter) {
 	const int traceDepth = hst_scene->state.traceDepth;
 	const Camera& cam = hst_scene->state.camera;
@@ -681,37 +643,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 
 
-	//cout << "cam pos = " << cam.position.x << ", " << cam.position.y << ", " << cam.position.z << endl;
-	//Ray testRay = Ray();
-	//testRay.origin = cam.position;
-	//testRay.direction = glm::normalize(glm::vec3(-1, 4, -5) - cam.position);
-	//int testTriID = -1;
-	//glm::vec3 testIntersectionPoint;
-	//glm::vec3 testNormal;
-	//bool testOutside;
-	//bvhSearch(testRay, testTriID, hst_scene->tris.data(), hst_scene->tris.size(), hst_scene->bvh.data(), hst_scene->bvh.size(),
-	//	hst_scene->triArr.data(), hst_scene->triArr.size(), testIntersectionPoint, testNormal, testOutside);
-	//cout << "Test: triId = " << testTriID << ", matId = " << hst_scene->tris[testTriID].materialid << endl;
-
-
-	//Ray testRay = Ray();
-	//testRay.origin = cam.position;
-	//testRay.direction = glm::normalize(glm::vec3(0.14668556f, 0.66375220f, -0.73342776f));
-	//glm::vec3 testIntersectionPoint;
-	//glm::vec3 testNormal;
-	//bool testOutside;
-	//float test_tri_t = triangleIntersectionTest(hst_scene->tris[2], testRay, testIntersectionPoint, testNormal, testOutside);
-	//glm::vec3 minDiff = hst_scene->bvh[61].min - testRay.origin;
-	//glm::vec3 maxDiff = hst_scene->bvh[61].max - testRay.origin;
-	//float test_bt_x = (abs(testRay.direction[0]) < 1e-5) ? -1.0f : glm::max(-1.0f, min(minDiff.x / testRay.direction[0], maxDiff.x / testRay.direction[0]));
-	//float test_bt_y = (abs(testRay.direction[1]) < 1e-5) ? -1.0f : glm::max(-1.0f, min(minDiff.y / testRay.direction[1], maxDiff.y / testRay.direction[1]));
-	//float test_bt_z = (abs(testRay.direction[2]) < 1e-5) ? -1.0f : glm::max(-1.0f, min(minDiff.z / testRay.direction[2], maxDiff.z / testRay.direction[2]));
-
-
-	
-	// PathSegment* dev_path_end = dev_paths + pixelcount;
-	// int num_paths = dev_path_end - dev_paths;
-	
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 	int mat_num = hst_scene->materials.size();
 
@@ -767,13 +698,12 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		depth++;
 
-		// TODO:
 		// --- Shading Stage ---
 		// Shade path segments based on intersections and generate new rays by
 		// evaluating the BSDF.
 		// Start off with just a big kernel that handles all the different
 		// materials you have in the scenefile.
-		// TODO: compare between directly shading the path segments and shading
+		// compare between directly shading the path segments and shading
 		// path segments that have been reshuffled to be contiguous in memory.
 
 

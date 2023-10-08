@@ -29,10 +29,6 @@ struct Triangle {
 
     glm::vec3 min;
     glm::vec3 max;
-    // glm::vec3 center;
-    // glm::vec3 nor[3];
-    // Triangle() {}
-    // Triangle(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2) :pos{ p0, p1, p2 } {}
 
     void set(){
         min = glm::vec3(
@@ -45,7 +41,6 @@ struct Triangle {
             glm::max(glm::max(pos[0].y, pos[1].y), pos[2].y),
             glm::max(glm::max(pos[0].z, pos[1].z), pos[2].z)
         );
-        // center = (pos[0] + pos[1] + pos[2])
     }
 };
 
@@ -54,8 +49,6 @@ struct BoundingBox {
     glm::vec3 max;
     int leftId;
     int rightId;
-    // int triArrId;
-    // int triIds[BBOX_TRI_NUM];
     int beginTriId;
     int triNum;
 
@@ -66,15 +59,6 @@ struct BoundingBox {
 
     BoundingBox(const Triangle& tri, int tai = -1) :
         min(tri.min), max(tri.max), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
-};
-
-struct TriangleArray {
-    int triIds[BBOX_TRI_NUM];
-    // int triIds[BBOX_TRI_NUM];
-
-    TriangleArray() {
-        memset(&triIds, -1, BBOX_TRI_NUM * sizeof(int));
-    }
 };
 
 struct Geom {
