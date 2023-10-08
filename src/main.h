@@ -18,9 +18,6 @@
 #include "image.h"
 #include "pathtrace.h"
 #include "utilities.h"
-#include "scene.h"
-
-using namespace std;
 
 //-------------------------------
 //----------PATH TRACER----------

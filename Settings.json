@@ -1,0 +1,48 @@
+{
+    "GLTF": {
+        "from file": true,
+        "path": "D:/OneDrive/GitHub/glTF-Sample-Models/2.0/ABeautifulGame/glTF/ABeautifulGame.gltf"
+    },
+    "RenderState": {
+        "camera": {
+            "aspect ratio": 1,
+            "screen height": 1200,
+            "focal length": 0.5,
+            "aperture size": 0.005,
+            "position": [0, 0, 0.8],
+            "lookAt": [0, 0.3, 0.8],
+            "view": [0, 0, -1],
+            "up": [0, 1, 0],
+            "fovy": 45
+        },
+        "iterations": 5000,
+        "traceDepth": 8,
+        "imageName": "output.png",
+        "antiAliasing": true,
+        "dof": true,
+        "test normal": false,
+        "test intersect": false,
+        "test color":[1,1,1]
+    },
+    "Materials": [
+        {
+            "type": 1,
+            "emissiveFactor": [1, 1, 1],
+            "alphaCutoff": 0.5,
+            "doubleSided": false,
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [1, 0, 0, 1],
+                "metallicFactor": 0.5,
+                "roughnessFactor": 0.3
+            }
+        }
+    ],
+    "procedural": {
+        "on": false,
+        "scale": 16
+    },
+    "environmentMap": {
+        "path":"D:/OneDrive/GitHub/Upenn/CIS_5650/Project3-CUDA-Path-Tracer/scenes/envmap/rural_asphalt_road_4k.hdr",
+        "on": true
+    }
+}

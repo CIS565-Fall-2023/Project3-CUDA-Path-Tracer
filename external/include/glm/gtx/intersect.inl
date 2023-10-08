@@ -48,8 +48,7 @@ namespace glm
 
 		typename genType::value_type a = glm::dot(e1, p);
 
-		typename genType::value_type Epsilon = std::numeric_limits<typename genType::value_type>::epsilon();
-		if(a < Epsilon)
+		if(a < 1e-10)
 			return false;
 
 		typename genType::value_type f = typename genType::value_type(1.0f) / a;

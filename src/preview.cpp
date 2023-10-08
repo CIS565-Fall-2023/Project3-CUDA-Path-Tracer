@@ -2,6 +2,7 @@
 #include <ctime>
 #include "main.h"
 #include "preview.h"
+#include "scene.h"
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_glfw.h"
 #include "ImGui/imgui_impl_opengl3.h"
@@ -14,6 +15,7 @@ GLFWwindow* window;
 GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
+bool valChanged = false;
 
 std::string currentTimeString() {
 	time_t now;
@@ -203,28 +205,51 @@ void RenderImGui()
 	static float f = 0.0f;
 	static int counter = 0;
 
-	ImGui::Begin("Path Tracer Analytics");                  // Create a window called "Hello, world!" and append into it.
-	
+	ImGui::Begin("Path Tracer Analytics");				  // Create a window called "Hello, world!" and append into it.
+
 	// LOOK: Un-Comment to check the output window and usage
-	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-	//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+	//ImGui::Text("This is some useful text.");			   // Display some text (you can use a format strings too)
+	//ImGui::Checkbox("Demo Window", &show_demo_window);	  // Edit bools storing our window open/close state
 	//ImGui::Checkbox("Another Window", &show_another_window);
 
-	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);			// Edit 1 float using a slider from 0.0f to 1.0f
 	//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
-	//if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+	//if (ImGui::Button("Button"))							// Buttons return true when clicked (most widgets return true when edited/activated)
 	//	counter++;
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
 	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
+	ImGui::Checkbox("Sort By Material", &imguiData->SortByMaterial);
+	ImGui::Checkbox("Enable BVH", &imguiData->UseBVH);
+	ImGui::Checkbox("Enable ACES Film", &imguiData->ACESFilm);
+	ImGui::Checkbox("Enable Reinhard", &imguiData->Reinhard);
+	ImGui::Checkbox("Disable Gamma Correction", &imguiData->NoGammaCorrection);
+	bool cacheFirstBounce = ImGui::Checkbox("Cache First Bounce", &imguiData->CacheFirstBounce);
+	float availWidth = ImGui::GetContentRegionAvail().x;
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool focalLengthChanged = ImGui::DragFloat("Focal Length", &imguiData->focalLength, 0.1f, 0.0f, 8.0f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool apertureSizeChanged = ImGui::DragFloat("Aperture Size", &imguiData->apertureSize, 0.001f, 0.000f, 0.05f, "%.4f", ImGuiInputTextFlags_CallbackEdit);
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool cameraPhiChanged = ImGui::DragFloat("Camera Phi", &imguiData->phi, 0.1f, -PI, PI, "%.4f");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(availWidth * 0.25f);
+	bool cameraThetaChanged = ImGui::DragFloat("Camera Theta", &imguiData->theta, 0.1f, 0.001f, PI - 0.001f, "%.4f");
+	bool cameraLookAtChanged = ImGui::DragFloat3("Camera Look At", &imguiData->cameraLookAt.x, 0.1f, -200.0f, 200.0f, "%.4f");
+	bool zoomChanged = ImGui::DragFloat("Zoom", &imguiData->zoom, 0.01f, 0.01f, 100.0f, "%.4f");
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::Text("Number of triangles %d", scene->geoms.size());
 	ImGui::End();
 
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+	if (focalLengthChanged || apertureSizeChanged || cameraPhiChanged || cameraThetaChanged || cameraLookAtChanged || zoomChanged || cacheFirstBounce) {
+		valChanged = true;
+	}
 }
 
 bool MouseOverImGuiWindow()
@@ -232,14 +257,24 @@ bool MouseOverImGuiWindow()
 	return mouseOverImGuiWinow;
 }
 
+bool ValueChanged()
+{
+	return valChanged;
+}
+
+void ResetValueChanged()
+{
+	valChanged = false;
+}
+
 void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
-		
+
 		glfwPollEvents();
 
 		runCuda();
 
-		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
+		std::string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 		glBindTexture(GL_TEXTURE_2D, displayImage);
@@ -250,7 +285,7 @@ void mainLoop() {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
 		// VAO, shader program, and texture already bound
-		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
 		// Render ImGui Stuff
 		RenderImGui();

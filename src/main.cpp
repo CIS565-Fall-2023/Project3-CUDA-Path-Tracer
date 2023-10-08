@@ -1,6 +1,7 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+#include "scene.h"
 
 static std::string startTimeString;
 
@@ -75,7 +76,7 @@ int main(int argc, char** argv) {
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
-	InitDataContainer(guiData);
+	InitDataContainer(guiData, scene);
 
 	// GLFW main loop
 	mainLoop();
@@ -91,8 +92,15 @@ void saveImage() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
-			glm::vec3 pix = renderState->image[index];
-			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
+			glm::vec3 pix = renderState->image[index] / samples;
+            if (guiData->ACESFilm)
+                pix = pix * (pix * (pix * 2.51f + 0.03f) + 0.024f) / (pix * (pix * 3.7f + 0.078f) + 0.14f);
+            if (guiData->Reinhard)
+                pix = pix / (1.f + pix);
+            if (!guiData->NoGammaCorrection)
+                pix = glm::pow(pix, glm::vec3(1.f / 2.2f));
+
+			img.setPixel(width - 1 - x, y, glm::vec3(pix));
 		}
 	}
 
@@ -107,6 +115,14 @@ void saveImage() {
 }
 
 void runCuda() {
+	if (ValueChanged()) {
+		camchanged = true;
+		phi = guiData->phi;
+		theta = guiData->theta;
+		renderState->camera.lookAt = guiData->cameraLookAt;
+		zoom = guiData->zoom;
+		ResetValueChanged();
+	}
 	if (camchanged) {
 		iteration = 0;
 		Camera& cam = renderState->camera;
@@ -125,6 +141,8 @@ void runCuda() {
 		cameraPosition += cam.lookAt;
 		cam.position = cameraPosition;
 		camchanged = false;
+		renderState->isCached = false;
+		UpdateDataContainer(guiData, scene, zoom, theta, phi);
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -158,6 +176,14 @@ void runCuda() {
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (action == GLFW_PRESS) {
 		switch (key) {
+		case GLFW_KEY_Q:
+			camchanged = true;
+			renderState->camera.lookAt += glm::vec3(0, 0.1, 0);
+			break;
+		case GLFW_KEY_E:
+			camchanged = true;
+			renderState->camera.lookAt += glm::vec3(0, -0.1, 0);
+			break;
 		case GLFW_KEY_ESCAPE:
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
@@ -178,6 +204,8 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	if (MouseOverImGuiWindow())
 	{
+		renderState->camera.focalLength = guiData->focalLength;
+		renderState->camera.apertureSize = guiData->apertureSize;
 		return;
 	}
 	leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);

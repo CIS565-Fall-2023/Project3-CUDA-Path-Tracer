@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <glm/glm.hpp>
 #include <glm/gtx/intersect.hpp>
@@ -31,114 +31,95 @@ __host__ __device__ glm::vec3 getPointOnRay(Ray r, float t) {
 /**
  * Multiplies a mat4 and a vec4 and returns a vec3 clipped from the vec4.
  */
-__host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
+__host__ __device__ glm::vec3 multiplyMV(const glm::mat4& m, const glm::vec4& v) {
     return glm::vec3(m * v);
 }
 
-// CHECKITOUT
-/**
- * Test intersection between a ray and a transformed cube. Untransformed,
- * the cube ranges from -0.5 to 0.5 in each axis and is centered at the origin.
- *
- * @param intersectionPoint  Output parameter for point of intersection.
- * @param normal             Output parameter for surface normal.
- * @param outside            Output param for whether the ray came from outside.
- * @return                   Ray parameter `t` value. -1 if no intersection.
- */
-__host__ __device__ float boxIntersectionTest(Geom box, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
-    Ray q;
-    q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
-    q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
+/*
+* return val:
+* x: t
+* y: v0's weight
+* z: v1's weight
+*/
+__host__ __device__ float3 triangleIntersectionTest(TriangleDetail triangle, Ray r)
+{
+    glm::vec3 v0 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v0, 1.f));
+    glm::vec3 v1 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v1, 1.f));
+    glm::vec3 v2 = multiplyMV(triangle.t.transform, glm::vec4(triangle.v2, 1.f));
 
-    float tmin = -1e38f;
-    float tmax = 1e38f;
-    glm::vec3 tmin_n;
-    glm::vec3 tmax_n;
-    for (int xyz = 0; xyz < 3; ++xyz) {
-        float qdxyz = q.direction[xyz];
-        /*if (glm::abs(qdxyz) > 0.00001f)*/ {
-            float t1 = (-0.5f - q.origin[xyz]) / qdxyz;
-            float t2 = (+0.5f - q.origin[xyz]) / qdxyz;
-            float ta = glm::min(t1, t2);
-            float tb = glm::max(t1, t2);
-            glm::vec3 n;
-            n[xyz] = t2 < t1 ? +1 : -1;
-            if (ta > 0 && ta > tmin) {
-                tmin = ta;
-                tmin_n = n;
-            }
-            if (tb < tmax) {
-                tmax = tb;
-                tmax_n = n;
-            }
-        }
-    }
+    glm::vec3 bary;
+    bool intersect = false;
+    if (triangle.doubleSided)
+        intersect = glm::intersectRayTriangle(r.origin, r.direction, v2, v1, v0, bary);
+    intersect |= glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, bary);
 
-    if (tmax >= tmin && tmax > 0) {
-        outside = true;
-        if (tmin <= 0) {
-            tmin = tmax;
-            tmin_n = tmax_n;
-            outside = false;
-        }
-        intersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
-        normal = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(tmin_n, 0.0f)));
-        return glm::length(r.origin - intersectionPoint);
+    if (!intersect) {
+        return float3{ -1.0f, 0.f, 0.f }; // No intersection
     }
-    return -1;
+    float t = bary.z;
+    if (t < 0.0f || t > 1e38f)
+        return float3{ -1.0f, 0.f, 0.f }; // No intersection
+    return float3{ t, 1 - bary.x - bary.y,bary.x };
+}
+__device__ bool intersectTBB(const Ray& ray, const TBB& aabb, float& tmin) {
+    glm::vec3 invDir = 1.0f / ray.direction;
+
+    float t1 = (aabb.min.x - ray.origin.x) * invDir.x;
+    float t2 = (aabb.max.x - ray.origin.x) * invDir.x;
+    float t3 = (aabb.min.y - ray.origin.y) * invDir.y;
+    float t4 = (aabb.max.y - ray.origin.y) * invDir.y;
+    float t5 = (aabb.min.z - ray.origin.z) * invDir.z;
+    float t6 = (aabb.max.z - ray.origin.z) * invDir.z;
+    float tmin_temp = glm::max(glm::max(glm::min(t1, t2), glm::min(t3, t4)), glm::min(t5, t6));
+    float tmax_temp = glm::min(glm::min(glm::max(t1, t2), glm::max(t3, t4)), glm::max(t5, t6));
+    if (tmax_temp < 0 || tmin_temp > tmax_temp)
+        return false;
+    if (tmin_temp > 0)
+        tmin = tmin_temp;
+    else
+        tmin = tmax_temp;
+
+    return true;
 }
 
-// CHECKITOUT
-/**
- * Test intersection between a ray and a transformed sphere. Untransformed,
- * the sphere always has radius 0.5 and is centered at the origin.
- *
- * @param intersectionPoint  Output parameter for point of intersection.
- * @param normal             Output parameter for surface normal.
- * @param outside            Output param for whether the ray came from outside.
- * @return                   Ray parameter `t` value. -1 if no intersection.
- */
-__host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
-    float radius = .5;
+__device__ __inline__ int mapDirToIdx(cudaTextureObject_t cubemap, const glm::vec3& direction) {
+    return texCubemap<int>(cubemap, direction.x, direction.y, direction.z);
+}
 
-    glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
-    glm::vec3 rd = glm::normalize(multiplyMV(sphere.inverseTransform, glm::vec4(r.direction, 0.0f)));
+__device__ float3 sceneIntersectionTest(TriangleDetail* triangles, TBVHNode* nodes, int nodesNum, Ray r, int& hit_geom_index, cudaTextureObject_t cubemap) {
+    int tbbOffset = mapDirToIdx(cubemap, r.direction);
+    int currentNodeIdx = 0;
+    float t_min = FLT_MAX;
+    float3 tmp_t;
+    float3 t;
+    hit_geom_index = -1;
 
-    Ray rt;
-    rt.origin = ro;
-    rt.direction = rd;
-
-    float vDotDirection = glm::dot(rt.origin, rt.direction);
-    float radicand = vDotDirection * vDotDirection - (glm::dot(rt.origin, rt.origin) - powf(radius, 2));
-    if (radicand < 0) {
-        return -1;
+    while (currentNodeIdx != -1 && currentNodeIdx < nodesNum)
+    {
+        float tbbTmin = FLT_MAX;
+        const TBVHNode& currNode = nodes[tbbOffset * nodesNum + currentNodeIdx];
+        if (intersectTBB(r, currNode.tbb, tbbTmin) && tbbTmin <= t_min) {
+            if (currNode.isLeaf)
+            {
+                t = triangleIntersectionTest(triangles[currNode.triId], r);
+                if (t.x > 0.0f && t_min > t.x) {
+                    tmp_t = t;
+                    t_min = t.x;
+                    hit_geom_index = currNode.triId;
+                }
+            }
+            currentNodeIdx++;
+        }
+        else
+        {
+            currentNodeIdx = currNode.miss;
+        }
     }
+    return tmp_t;
+}
 
-    float squareRoot = sqrt(radicand);
-    float firstTerm = -vDotDirection;
-    float t1 = firstTerm + squareRoot;
-    float t2 = firstTerm - squareRoot;
-
-    float t = 0;
-    if (t1 < 0 && t2 < 0) {
-        return -1;
-    } else if (t1 > 0 && t2 > 0) {
-        t = min(t1, t2);
-        outside = true;
-    } else {
-        t = max(t1, t2);
-        outside = false;
-    }
-
-    glm::vec3 objspaceIntersection = getPointOnRay(rt, t);
-
-    intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
-    normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
-    if (!outside) {
-        normal = -normal;
-    }
-
-    return glm::length(r.origin - intersectionPoint);
+__host__ __device__
+thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
+    int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
+    return thrust::default_random_engine(h);
 }

@@ -2,8 +2,6 @@
 
 #include <glm/glm.hpp>
 
-using namespace std;
-
 class image {
 private:
     int xSize;

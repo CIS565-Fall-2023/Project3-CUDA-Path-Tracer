@@ -11,7 +11,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Enable C++11 for host code
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 # Set a default build type if none was specified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -23,9 +23,9 @@ endif()
 ########################################
 # CUDA Setup
 ########################################
-find_package(CUDA 10 REQUIRED)
+find_package(CUDA 12 REQUIRED)
 include(${CMAKE_MODULE_PATH}/CUDAComputesList.cmake)
-
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} --extended-lambda)
 list(APPEND CUDA_NVCC_FLAGS ${CUDA_GENERATE_CODE})
 list(APPEND CUDA_NVCC_FLAGS_DEBUG "-g -G")
 set(CUDA_VERBOSE_BUILD ON)
@@ -65,13 +65,13 @@ include_directories(${GLM_INCLUDE_DIRS})
 set(headers
     src/main.h
     src/image.h
-    src/interactions.h
     src/intersections.h
     src/glslUtility.hpp
     src/pathtrace.h
     src/scene.h
     src/sceneStructs.h
     src/preview.h
+    src/material.h
     src/utilities.h
     src/ImGui/imconfig.h
 	
@@ -95,6 +95,7 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/bvh.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
