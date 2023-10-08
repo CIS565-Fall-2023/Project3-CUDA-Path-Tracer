@@ -318,6 +318,7 @@ int Scene::loadGeom(string objectid) {
                         glm::vec3 scolor=glm::vec3(material.specular[0],material.specular[1],material.specular[2]);
                         if(material.illum==1||material.illum==2){
                             mat.hasReflective=0.0f;
+                            mat.color=glm::vec3(material.diffuse[0],material.diffuse[1],material.diffuse[2]);
                         }else if(material.illum==3||material.illum==4){
                             mat.hasReflective=1.0f;
                             mat.specular.exponent=material.shininess;
@@ -325,8 +326,10 @@ int Scene::loadGeom(string objectid) {
                         }
                         //cout<<"material loading specular"<<endl;   
                         glm::vec3 transparency=glm::vec3(material.transmittance[0],material.transmittance[1],material.transmittance[2]);
-                        if(glm::length(transparency)<1){
-                            mat.hasRefractive=1.0f-glm::length(transparency);
+                        if(glm::length(transparency)>0){
+                            //cout<<"?"<<endl;
+                            //printvec3(transparency);
+                            mat.hasRefractive=glm::length(transparency);
                             mat.indexOfRefraction=material.ior;
                         }else{
                             mat.hasRefractive=0.0f;
