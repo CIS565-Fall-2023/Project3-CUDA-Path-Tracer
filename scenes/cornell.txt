@@ -124,7 +124,7 @@ ROTAT       0 0 0
 SCALE       .01 10 10
 
 // OBJ 1
-OBJ_FILE ../scenes/cube.obj
+GLTF_FILE ../scenes/sphere.gltf
 material 3
 TRANS       -2 0 0
 ROTAT       0 0 0

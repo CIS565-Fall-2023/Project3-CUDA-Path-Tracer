@@ -7,6 +7,15 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
+#include <stb_image.h>
+
+#define TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_NO_EXTERNAL_IMAGE
+#define TINYGLTF_NO_STB_IMAGE
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+
+#include "tiny_gltf.h"
+
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
@@ -32,6 +41,9 @@ Scene::Scene(string filename) {
                 cout << " " << endl;
             } else if (strcmp(tokens[0].c_str(), "OBJ_FILE") == 0) {
                 loadObj(tokens[1].c_str());
+                cout << " " << endl;
+            } else if (strcmp(tokens[0].c_str(), "GLTF_FILE") == 0) {
+                loadGLTF(tokens[1].c_str());
                 cout << " " << endl;
             }
         }
@@ -81,7 +93,7 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
-
+            
             utilityCore::safeGetline(fp_in, line);
         }
 
@@ -262,6 +274,185 @@ int Scene::loadObj(const char* filename)
             triangles.push_back(tri);
             if (f == 0) curBB = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
             else curBB = Union(curBB, BBox(tri.verts[0], tri.verts[1], tri.verts[2]));
+        }
+    }
+
+    newGeom.triEnd = triangles.size();
+    newGeom.bbMin = curBB.minP;
+    newGeom.bbMax = curBB.maxP;
+    geoms.push_back(newGeom);
+
+    return 1;
+}
+
+int Scene::loadGLTF(const char* filename)
+{
+    cout << "loading GLTF file: " << filename << endl;
+    tinygltf::Model model;
+    tinygltf::TinyGLTF reader;
+    std::string warn;
+    std::string err;
+
+    bool ret = false;
+    std::string ext1 = ".glb";
+    std::string ext2 = ".gltf";
+    std::string filestr = filename;
+    if (equal(ext1.rbegin(), ext1.rend(), filestr.rbegin())) 
+    {
+        ret = reader.LoadBinaryFromFile(&model, &err, &warn, filename);
+    }
+    else if (equal(ext2.rbegin(), ext2.rend(), filestr.rbegin())) 
+    {
+        ret = reader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    }
+
+    if (!warn.empty()) cout << "WARN: " << warn << endl;
+    if (!err.empty()) cout << "Err: " << err << endl;
+    if (!ret)
+    {
+        cout << "Failed to load GLTF file. " << endl;
+        return 0;
+    }
+
+    Geom newGeom;
+    newGeom.type = OBJ;
+    string line;
+
+    // link material
+    utilityCore::safeGetline(fp_in, line);
+    if (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        newGeom.materialid = atoi(tokens[1].c_str());
+    }
+
+    //load transformations
+    utilityCore::safeGetline(fp_in, line);
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+
+        //load tranformations
+        if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+            newGeom.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+            newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+            newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+
+        utilityCore::safeGetline(fp_in, line);
+    }
+
+    newGeom.transform = utilityCore::buildTransformationMatrix(
+        newGeom.translation, newGeom.rotation, newGeom.scale);
+    newGeom.inverseTransform = glm::inverse(newGeom.transform);
+    newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+    newGeom.triStart = triangles.size();
+
+    BBox curBB;
+
+    for (int m = 0; m < model.meshes.size(); m++) 
+    {
+        const tinygltf::Mesh& mesh = model.meshes[m];
+        for (int p = 0; p < mesh.primitives.size(); p++) 
+        {
+            const tinygltf::Primitive& primitive = mesh.primitives[p];
+            const tinygltf::Accessor& vertAcc = model.accessors[primitive.attributes.at("POSITION")];
+            const tinygltf::BufferView& vertBufView = model.bufferViews[vertAcc.bufferView];
+            const tinygltf::Buffer& vertBuf = model.buffers[vertBufView.buffer];
+            const float* verts = reinterpret_cast<const float*>(&vertBuf.data[vertBufView.byteOffset + vertAcc.byteOffset]);
+
+            const float* nors = nullptr; 
+            if(primitive.attributes.find("NORMAL") != primitive.attributes.end())
+            {
+                const tinygltf::Accessor& norAcc = model.accessors[primitive.attributes.at("NORMAL")];
+                const tinygltf::BufferView& norBufView = model.bufferViews[norAcc.bufferView];
+                const tinygltf::Buffer& norBuf = model.buffers[norBufView.buffer];
+                nors = reinterpret_cast<const float*>(&norBuf.data[norBufView.byteOffset + norAcc.byteOffset]);
+            }
+
+            const float* uvs = nullptr;
+            if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end())
+            {
+                const tinygltf::Accessor& uvAcc = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+                const tinygltf::BufferView& uvBufView = model.bufferViews[uvAcc.bufferView];
+                const tinygltf::Buffer& uvBuf = model.buffers[uvBufView.buffer];
+                uvs = reinterpret_cast<const float*>(&uvBuf.data[uvBufView.byteOffset + uvAcc.byteOffset]);
+            }
+
+            if (primitive.indices >= 0) 
+            {
+                const tinygltf::Accessor& idxAcc = model.accessors[primitive.indices];
+                const tinygltf::BufferView& idxBufView = model.bufferViews[idxAcc.bufferView];
+                const tinygltf::Buffer& idxBuf = model.buffers[idxBufView.buffer];
+                const uint16_t* indices = reinterpret_cast<const uint16_t*>(&idxBuf.data[idxBufView.byteOffset + idxAcc.byteOffset]);
+
+                Triangle tri;
+                
+                for (size_t i = 0; i < idxAcc.count; i += 3) 
+                {
+                    int idx0 = indices[i];
+                    int idx1 = indices[i + 1];
+                    int idx2 = indices[i + 2];
+
+                    tri.verts[0] = glm::vec3(verts[idx0 * 3], verts[idx0 * 3 + 1], verts[idx0 * 3 + 2]);
+                    tri.verts[1] = glm::vec3(verts[idx1 * 3], verts[idx1 * 3 + 1], verts[idx1 * 3 + 2]);
+                    tri.verts[2] = glm::vec3(verts[idx2 * 3], verts[idx2 * 3 + 1], verts[idx2 * 3 + 2]);
+
+                    if (nors) 
+                    {
+                        tri.nors[0] = glm::vec3(nors[idx0 * 3], nors[idx0 * 3 + 1], nors[idx0 * 3 + 2]);
+                        tri.nors[1] = glm::vec3(nors[idx1 * 3], nors[idx1 * 3 + 1], nors[idx1 * 3 + 2]);
+                        tri.nors[2] = glm::vec3(nors[idx2 * 3], nors[idx2 * 3 + 1], nors[idx2 * 3 + 2]);
+                    }
+
+                    if (uvs) 
+                    {
+                        tri.uvs[0] = glm::vec2(uvs[idx0 * 2], uvs[idx0 * 2 + 1]);
+                        tri.uvs[1] = glm::vec2(uvs[idx1 * 2], uvs[idx1 * 2 + 1]);
+                        tri.uvs[2] = glm::vec2(uvs[idx2 * 2], uvs[idx2 * 2 + 1]);
+                    }
+
+                    triangles.push_back(tri);
+                    if (i == 0) curBB = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
+                    else curBB = Union(curBB, BBox(tri.verts[0], tri.verts[1], tri.verts[2]));
+                }
+            }
+            else 
+            {
+                Triangle tri;
+
+                for (size_t i = 0; i < vertAcc.count; i += 3)
+                {
+                    int idx0 = i;
+                    int idx1 = i + 1;
+                    int idx2 = i + 2;
+
+                    tri.verts[0] = glm::vec3(verts[idx0 * 3], verts[idx0 * 3 + 1], verts[idx0 * 3 + 2]);
+                    tri.verts[1] = glm::vec3(verts[idx1 * 3], verts[idx1 * 3 + 1], verts[idx1 * 3 + 2]);
+                    tri.verts[2] = glm::vec3(verts[idx2 * 3], verts[idx2 * 3 + 1], verts[idx2 * 3 + 2]);
+
+                    if (nors)
+                    {
+                        tri.nors[0] = glm::vec3(nors[idx0 * 3], nors[idx0 * 3 + 1], nors[idx0 * 3 + 2]);
+                        tri.nors[1] = glm::vec3(nors[idx1 * 3], nors[idx1 * 3 + 1], nors[idx1 * 3 + 2]);
+                        tri.nors[2] = glm::vec3(nors[idx2 * 3], nors[idx2 * 3 + 1], nors[idx2 * 3 + 2]);
+                    }
+
+                    if (uvs)
+                    {
+                        tri.uvs[0] = glm::vec2(uvs[idx0 * 2], uvs[idx0 * 2 + 1]);
+                        tri.uvs[1] = glm::vec2(uvs[idx1 * 2], uvs[idx1 * 2 + 1]);
+                        tri.uvs[2] = glm::vec2(uvs[idx2 * 2], uvs[idx2 * 2 + 1]);
+                    }
+
+                    triangles.push_back(tri);
+                    if (i == 0) curBB = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
+                    else curBB = Union(curBB, BBox(tri.verts[0], tri.verts[1], tri.verts[2]));
+                }
+            }
         }
     }
 

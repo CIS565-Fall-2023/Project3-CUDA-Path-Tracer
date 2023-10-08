@@ -17,6 +17,7 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     int loadObj(const char* filename);
+    int loadGLTF(const char* filename);
 public:
     Scene(string filename);
     ~Scene();
