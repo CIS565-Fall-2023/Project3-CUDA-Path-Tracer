@@ -40,6 +40,8 @@ public:
     Sphere* dev_spheres;
     Primitive** dev_primitives;
     SceneConfig config;
+    Texture environmentalMap;
+    bool has_env_map = false;
     int getPrimitiveSize() const{
         return triangles.size() + spheres.size();
     }

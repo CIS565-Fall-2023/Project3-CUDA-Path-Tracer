@@ -110,12 +110,13 @@ int SceneConfig::loadEnvironmentMap()
 
             float* exr_pixels;
             int width, height;
-            const char* err;
+            const char* err = nullptr;
             //const char* filename = "img/colorful_studio_4k.exr";
 
             int ret;
+            const char * file = tokens[1].c_str();
             // Load the EXR image using tinyexr
-            if ((ret = LoadEXR(&exr_pixels, &width, &height, tokens[1].c_str(), &err))) {
+            if ((ret = LoadEXR(&exr_pixels, &width, &height, file, &err))) {
                 // Handle error loading EXR image
                 if (err) {
                     fprintf(stderr, "ERR : %s\n", err);
@@ -123,15 +124,55 @@ int SceneConfig::loadEnvironmentMap()
                     assert(0);
                 }
             }
-            
-            env_map.width = width;
-            env_map.height = height;
-            env_map.nrChannels = 4;
-            env_map.data.assign(env_map.width * env_map.height * env_map.nrChannels, 0.0f);
-            for (size_t i = 0; i < width* height * 4; i++)
-            {
-                env_map.data[i] = exr_pixels[i];
+            EXRVersion exr_version;
+            if ((ret = ParseEXRVersionFromFile(&exr_version, file))) {
+                fprintf(stderr, "ERR : %s\n", err);
+                assert(0);
             }
+
+            if (exr_version.multipart) {
+                assert(0);
+            }
+
+            EXRHeader exr_header;
+            InitEXRHeader(&exr_header);
+
+            if ((ret = ParseEXRHeaderFromFile(&exr_header, &exr_version, file, &err))) {
+                fprintf(stderr, "ERR : %s\n", err);
+                assert(0);
+            }
+
+            EXRImage exr_image;
+            InitEXRImage(&exr_image);
+
+            ret = LoadEXRImageFromFile(&exr_image, &exr_header, file, &err);
+            if (ret != 0) {
+                fprintf(stderr, "Load EXR err: %s\n", err);
+                FreeEXRHeader(&exr_header);
+                FreeEXRErrorMessage(err); // free's buffer for an error message
+                //return ret;
+            }
+            printf("Loaded!\n");
+            env_map.width = exr_image.width;
+            env_map.height = exr_image.height;
+            env_map.nrChannels = exr_image.num_channels;
+            env_map.data.assign(env_map.width * env_map.height * env_map.nrChannels, 0.0f);
+            auto images = exr_image.images;
+            auto image_r = reinterpret_cast<float*>(images[0]);
+            auto image_g = reinterpret_cast<float*>(images[1]);
+            auto image_b = reinterpret_cast<float*>(images[2]);
+            for (size_t i = 0; i < width* height; i++)
+            {
+                auto pixel = glm::vec3(image_r[i], image_g[i], image_b[i]);
+                //printf("pixel: %X %X %X\n", pixel[0], pixel[1], pixel[2]);
+                //printf("pixel: %d %d %d\n\n", pixel[0], pixel[1], pixel[2]);
+                env_map.data[i * 3 + 0] = glm::clamp(powf(pixel[2], 0.55f) * 255, 0.0f, 255.0f);
+                env_map.data[i * 3 + 1] = glm::clamp(powf(pixel[1], 0.55f) * 255, 0.0f, 255.0f);
+                env_map.data[i * 3 + 2] = glm::clamp(powf(pixel[0], 0.55f) * 255, 0.0f, 255.0f);
+                //env_map.data[i * 3 + 1] = 0;
+                //env_map.data[i * 3 + 2] = 0;
+            }
+            has_env_map = true;
         }
         utilityCore::safeGetline(fp_in, line);
     }

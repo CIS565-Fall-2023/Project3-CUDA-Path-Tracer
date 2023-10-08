@@ -25,9 +25,9 @@
 
 //#include "utilities.cuh"
 
-#define USE_FIRST_BOUNCE_CACHE 1
+#define USE_FIRST_BOUNCE_CACHE 0
 #define USE_SORT_BY_MATERIAL 0
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
+#define ONE_BOUNCE_DIRECT_LIGHTINIG 0
 #define USE_BVH 1
 
 #define ERRORCHECK 1
@@ -97,14 +97,13 @@ static Triangle* dev_triangles= nullptr;
 /* TODO: Solve the weird shiny line in the empty room! */
 //static Scene* pa = new Scene("..\\scenes\\pathtracer_empty_room.glb");
 
-static Scene * pa = new Scene("..\\scenes\\pathtracer_bunny.glb");
+static Scene * pa = new Scene("..\\scenes\\pathtracer_bunny_matte.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
 static ShadeableIntersection * dev_first_iteration_first_bounce_cache_intersections = nullptr;
 static Texture * dev_textures = nullptr;
 static TextureInfo * dev_textureInfos = nullptr;
-static Texture* dev_env_map = nullptr;
 static Light* dev_lights = nullptr;
 int textureSize = 0;
 
@@ -128,8 +127,8 @@ __global__ void initDeviceTextures(Texture & dev_texture, const TextureInfo & de
 	dev_texture.data = data;
 	printf("dev_texture.data[0]: %d\n", dev_texture.data[0]);
 
-	auto test_sample = sampleTextureRGBA(dev_texture, glm::vec2(1.0f, 1.0f));
-	printf("test_sample: %f, %f, %f, %f\n", test_sample.x, test_sample.y, test_sample.z, test_sample.w);
+	auto test_sample = sampleTextureRGB(dev_texture, glm::vec2(1.0f, 1.0f));
+	printf("test_sample: %f, %f, %f, %f\n", test_sample.x, test_sample.y, test_sample.z);
 }
 
 __global__ void initPrimitivesNormalTexture(Triangle* triangles, Texture* textures, int triangle_size) {
@@ -160,10 +159,10 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 
 	textureSize = pa->textures.size();
 	auto textureInfos = pa->textures.data();
-	cudaMalloc(&dev_textureInfos, textureSize * sizeof(TextureInfo));
-	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_textureInfos, (textureSize +1)* sizeof(TextureInfo)); // env_map also malloced
+	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice); // First copy textureSize of common texture
 
-	cudaMalloc(&dev_textures, textureSize * sizeof(Texture));
+	cudaMalloc(&dev_textures, (textureSize +1)* sizeof(Texture)); // env_map also malloced
 	checkCUDAError("cudaMalloc textures invalid!");
 	unsigned char* dev_texture_data = nullptr;
 	for (int i = 0; i < textureSize; i++)
@@ -174,6 +173,7 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 		printf("Loaded Texture %d\n", i);
 		checkCUDAError("initDeviceTextures");
 	}
+
 
 	auto bsdfStructs = pa->bsdfStructs.data();
 	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
@@ -199,11 +199,25 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 	checkCUDAError("cudaMemcpy dev_lights");
 
 	pa->initEnvironmentalMap();
+	const TextureInfo & env_map = pa->config.env_map;
+	cudaMemcpy(dev_textureInfos + textureSize, &env_map, 1 * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_texture_data, env_map.width * env_map.height * env_map.nrChannels * sizeof(unsigned char));
+	cudaMemcpy(dev_texture_data, env_map.data.data(), env_map.width * env_map.height * env_map.nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+	checkCUDAError("cudaMemcpy dev_textureInfos1");
+	initDeviceTextures << <1, 1 >> > (dev_textures[textureSize], dev_textureInfos[textureSize], dev_texture_data);
+
+	checkCUDAError("cudaMemcpy dev_textureInfos");
 	int triangle_size = bvh->orderedPrims.size();
 	int blockSize = 256;
 	dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
-
-	initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
+	if (triangle_size) {
+		initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
+	}
+	else {
+		printf("WARNING: NO TRIANGLES IN THE SCENE!\n");
+	}
+	
+	checkCUDAError("pathtracer Init!");
 
 }
 
@@ -358,6 +372,7 @@ __global__ void intersect(
 __global__ void shadeBSDF(
 	int iter
 	, int num_paths
+	, int depth
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, BSDFStruct * bsdfStructs
@@ -369,6 +384,9 @@ __global__ void shadeBSDF(
 	, Light * lights
 	, int lights_size
 #endif
+	, int screenHeight
+	, int screenWidth
+	, Texture * env_map
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -380,14 +398,13 @@ __global__ void shadeBSDF(
 		  // Set up the RNG
 		  // LOOK: this is how you use thrust's RNG! Please look at
 		  // makeSeededRandomEngine as well.
-			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 			const glm::vec3 rands(u01(rng), u01(rng), u01(rng));
-			BSDFStruct & bsdfStruct = bsdfStructs[intersection.materialId];
-			//pathSegment.color = glm::vec3(intersection.surfaceNormal);
+			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
+			initBSDF(bsdfStruct, intersection.uv);
 			//pathSegment.color = glm::vec3(intersection.uv.x, intersection.uv.y, 0.0f);
 			////printf("intersection.uv: %f, %f\n", intersection.uv.x, intersection.uv.y);
-			//return;
 			// If the material indicates that the object was a light, "light" the ray
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
@@ -400,11 +417,17 @@ __global__ void shadeBSDF(
 				glm::mat3x3 o2w;
 				make_coord_space(o2w, intersection.surfaceNormal);
 				glm::mat3x3 w2o(glm::transpose(o2w));
-				if (bsdfStructs[intersection.materialId].normalTextureID != -1) {
-					glm::vec3 sampledNormal = sampleTextureRGB(*(bsdfStructs[intersection.materialId].normalTexture), intersection.uv) * 2.0f - 1.0f;
+				if (bsdfStruct.normalTextureID != -1) {
+					glm::vec3 sampledNormal = sampleTextureRGB(*(bsdfStruct.normalTexture), intersection.uv) * 2.0f - 1.0f;
 					intersection.surfaceNormal = o2w * sampledNormal;
 					make_coord_space(o2w, intersection.surfaceNormal);
 					w2o = glm::transpose(o2w);
+					/* Fix bump mapping potential bug */
+					//auto dir = -pathSegment.ray.direction;
+					//glm::vec3 _wo = w2o * -pathSegment.ray.direction;
+					//printf("_wo: %f, %f, %f dir: %f, %f, %f\n", _wo.x, _wo.y, _wo.z, dir.x, dir.y, dir.z);
+					//pathSegment.color = glm::vec3(intersection.surfaceNormal);
+					//return;
 				}
 				//return;
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
@@ -412,36 +435,43 @@ __global__ void shadeBSDF(
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 #if  ONE_BOUNCE_DIRECT_LIGHTINIG
 				/* Uniformly pick a light, will change to selecting by importance in the future */
-				thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
-				int sampled_light_index = uLight(rng);
-				float sampled_light_pdf = 1.0f / lights_size;
+				if (lights_size > 0) {
+					thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
+					int sampled_light_index = uLight(rng);
+					float sampled_light_pdf = 1.0f / lights_size;
 				
-				const auto& light = lights[sampled_light_index];
-				const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
-				const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, u);
-				if (ls.pdf > 0) {
-					Ray light_ray;
-					//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
-					light_ray.direction = ls.wi;
-					light_ray.origin = intersect;
-					light_ray.min_t = EPSILON;
-					light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
-					ShadeableIntersection light_ray_intersection{-1.0f}; // set t = -1
-					if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) 
-					{
-						glm::vec3 light_wi = o2w * light_ray.direction;
-						glm::vec3 light_bsdf = f(bsdfStruct, wo, light_wi, intersection.uv);
-						pathSegment.color += 0.5f * ls.L * light_bsdf * abs(light_wi.z) * pathSegment.constantTerm / (ls.pdf * sampled_light_pdf);
+					const auto& light = lights[sampled_light_index];
+					const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
+					const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, u);
+					if (ls.pdf > 0) {
+						Ray light_ray;
+						//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
+						light_ray.direction = ls.wi;
+						light_ray.origin = intersect;
+						light_ray.min_t = EPSILON;
+						light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
+						ShadeableIntersection light_ray_intersection{-1.0f}; // set t = -1
+						if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) 
+						{
+							glm::vec3 light_wi = o2w * light_ray.direction;
+							glm::vec3 light_bsdf = f(bsdfStruct, wo, light_wi, intersection.uv);
+							pathSegment.color += ls.L * light_bsdf * abs(light_wi.z) * pathSegment.constantTerm / (ls.pdf * sampled_light_pdf);
+						}
 					}
 				}
 #endif			
 				glm::vec3 wi;
 				glm::vec3 bsdf = sample_f(bsdfStruct, wo, wi, &pdf, rng, intersection.uv, rands);
-				float cosineTerm = abs(wi.z);
-				pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
-				pathSegment.ray.direction = o2w * wi;
-				pathSegment.ray.origin = intersect;
-				pathSegment.remainingBounces--;
+				if (glm::length(wi) < 1.0f - EPSILON) {
+					pathSegment.remainingBounces = 0;
+				}
+				else {
+					float cosineTerm = abs(wi.z);
+					pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
+					pathSegment.ray.direction = o2w * wi;
+					pathSegment.ray.origin = intersect;
+					pathSegment.remainingBounces--;
+				}
 			}
 			// If there was no intersection, color the ray black.
 			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -449,7 +479,26 @@ __global__ void shadeBSDF(
 			// This can be useful for post-processing and image compositing.
 		}
 		else {
+
+			const auto & d = pathSegment.ray.direction;
+			const float phi = atan2f(d.z, d.x);
+			const float theta = acosf(d.y);
+			const float u = (phi + PI) / (2 * PI);
+			const float v = theta / PI;
+			const glm::vec2 uv(u, v);
+			auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
+			if (depth == 0) {
+				pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			}
+			else {
+				pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			}
 			pathSegments[idx].remainingBounces = 0;
+		}
+		
+		if (glm::all(glm::isinf(pathSegment.color)) || glm::all(glm::isnan(pathSegment.color))) {
+			assert(0);
+			pathSegment.color = glm::vec3(0.0f);
 		}
 	}
 }
@@ -623,7 +672,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();
-		depth++;
 
 		// TODO:
 		// --- Shading Stage ---
@@ -637,6 +685,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		shadeBSDF << <numblocksPathSegmentTracing, blockSize1d >> > (
 			iter,
 			num_paths,
+			depth,
 			dev_intersections,
 			dev_paths,
 			dev_bsdfStructs,
@@ -648,6 +697,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_lights
 			, pa->lights.size()
 #endif
+			, cam.resolution.y
+			, cam.resolution.x
+			, dev_textures + textureSize
 			);
 		cudaDeviceSynchronize();
 		checkCUDAError("shadeMaterial failed\n");
@@ -660,6 +712,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		iterationComplete = (num_paths == 0); // TODO: should be based off stream compaction results.
 		//iterationComplete = (true);
+		depth++;
 		
 		if (guiData != NULL)
 		{

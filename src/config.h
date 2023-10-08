@@ -29,6 +29,7 @@ public:
     SceneConfig() = default;
     SceneConfig(string filename);
 
+    bool has_env_map = false;
     EnvrionmentalMapInfo env_map;
     RenderState state;
     int geoms_size;

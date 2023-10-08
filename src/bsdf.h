@@ -67,10 +67,10 @@ __device__ float microfacetBSDF_G(const glm::vec3 & wo, const glm::vec3 & wi, co
 }
 
 __device__ float microfacetBSDF_D(const glm::vec3 & h, const float alpha) {
-    float alpha_square = alpha * alpha;
+    float alpha_square = glm::max(alpha * alpha, EPSILON);
     auto tan2Theta = Tan2Theta(h);
     if (glm::isinf(tan2Theta)) return 0.;
-    auto cos4Theta = Cos2Theta(h) * Cos2Theta(h);
+    auto cos4Theta = glm::max(Cos2Theta(h) * Cos2Theta(h), EPSILON);
 	return exp(-tan2Theta / alpha_square) 
         / (PI * alpha_square * cos4Theta);
 }
@@ -112,26 +112,12 @@ __device__ glm::vec3 f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::vec3& w
     switch (bsdfStruct.bsdfType)
     {
     case DIFFUSE:
-        if (bsdfStruct.baseColorTextureID != -1) {
-            return sampleTextureRGB(*bsdfStruct.baseColorTexture, uv) * INV_PI;
-		}
-		else
-			return bsdfStruct.reflectance * INV_PI;
+		return bsdfStruct.reflectance * INV_PI;
     case MICROFACET:
         glm::vec3 baseColor;
         glm::vec2 metallicRoughness;
-        if (bsdfStruct.baseColorTextureID != -1) {
-            baseColor = sampleTextureRGB(*bsdfStruct.baseColorTexture, uv);
-		}
-		else
-			baseColor = bsdfStruct.reflectance;
-
-        if (bsdfStruct.metallicRoughnessTextureID != -1) {
-            metallicRoughness = sampleTextureRG(*bsdfStruct.metallicRoughnessTexture, uv);
-        }
-        else {
-            metallicRoughness = glm::vec2(bsdfStruct.metallicFactor, bsdfStruct.roughnessFactor);
-        }
+		baseColor = bsdfStruct.reflectance;
+        metallicRoughness = glm::vec2(bsdfStruct.metallicFactor, bsdfStruct.roughnessFactor);
         //auto alpha = roughnessToAlpha(metallicRoughness.y);
         auto alpha = metallicRoughness.y * metallicRoughness.y;
         auto h = glm::normalize(wi + wo);
@@ -174,7 +160,8 @@ __device__ float PDF(BSDFStruct& bsdfStruct, const glm::vec3& wo, const glm::vec
         case MICROFACET:
             auto wh = glm::normalize(wi + wo);
             float alpha = bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor;
-            return glm::mix(abs(wi.z) * INV_PI, microfacetBSDF_D(wh, alpha) * wh.z / (4 * glm::dot(wo, wh)), 1.f / (2.f - bsdfStruct.metallicFactor));
+            float denominator = glm::max(4 * glm::dot(wo, wh), EPSILON);
+            return glm::mix(abs(wi.z) * INV_PI, microfacetBSDF_D(wh, alpha) * wh.z / denominator, 1.f / (2.f - bsdfStruct.metallicFactor));
         default:
             break;
     }
@@ -197,7 +184,7 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         //return f(bsdfStruct, wo, wi, uv);
 
         thrust::uniform_real_distribution<float> u01(0, 1);
-        float alpha = bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor;
+        float alpha = glm::max(bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor, EPSILON);
         glm::vec3 wi_diffuse;
         float pdf_diffuse;
         //wi_diffuse = hemiSphereRandomSample(glm::vec2(rands), &pdf_diffuse);
@@ -205,6 +192,7 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         if (rands.z > (1.f / (2.f - bsdfStruct.metallicFactor))) {
             wi = hemiSphereRandomSample(glm::vec2(rands), &pdf_diffuse);
             wh = glm::normalize(wi + wo);
+            //printf("Diffuse wi.z: %f\n", wi.z);
         }
         else {
             glm::vec2 u(rands);
@@ -218,10 +206,16 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
             wh = glm::vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
             auto d = glm::dot(wo, wh);
             *pdf = 1.0f;
-            if (d < 0) return glm::vec3();
-            wi = glm::reflect(-wo, wh);
+            if (d <= EPSILON) return glm::vec3();
+            wi = -wo + 2.0f * d * wh;
+            //wi = glm::reflect(-wo, wh);
+            //printf("Specular wi.z: %f wo: %f %f %f wh : %f %f %f\n", wi.z, wo.x, wo.y, wo.z, wh.x, wh.y, wh.z);
         }
         *pdf = PDF(bsdfStruct, wo, wi, rands);
+        if (glm::isnan(pdf)) {
+			printf("pdf is nan\n");
+        }
+
         return f(bsdfStruct, wo, wi, uv);
         
     case EMISSIVE:
@@ -229,6 +223,19 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
     default:
         return glm::vec3();
         break;
+    }
+}
+
+__device__ void initBSDF(BSDFStruct& bsdfStruct, const glm::vec2 & uv) {
+    if (bsdfStruct.baseColorTextureID != -1) {
+        bsdfStruct.reflectance = sampleTextureRGB(*bsdfStruct.baseColorTexture, uv);
+    }
+
+    glm::vec2 metallicRoughness;
+    if (bsdfStruct.metallicRoughnessTextureID != -1) {
+        metallicRoughness = sampleTextureRG(*bsdfStruct.metallicRoughnessTexture, uv);
+        bsdfStruct.metallicFactor = glm::max(metallicRoughness.x, EPSILON);
+        bsdfStruct.roughnessFactor = glm::max(metallicRoughness.y, EPSILON);
     }
 }
 
