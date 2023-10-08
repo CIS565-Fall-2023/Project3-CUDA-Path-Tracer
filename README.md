@@ -50,8 +50,6 @@ Using [tinygltf](https://github.com/syoyo/tinygltf). The above images show, from
 
 #### BVH construction and traversal
 
-TODO: replace these FPS numbers
-
 The [above scene](#environment-map-lights) renders at 40.9 FPS using a BVH and 2.2 FPS without a BVH. The mesh has 17,386 triangles and it takes about 11.5 ms to construct the BVH.
 
 More detailed performance analysis is given [below](#bvh).
@@ -72,22 +70,42 @@ Using [Intel Open Image Denoise](https://www.openimagedenoise.org/). Left is raw
 
 ## Performance Analysis
 
-TODO
+I started with the following set of parameters:
+- 1D block size of 768, 2D block size of 8x8
+- Enable BVH, partition rays, and russian roulette
+- Disable sorting rays by material and first bounce cache
+- Max ray depth = 8
+- Denoising every 3 frames
+
+Most of the following analyses will refer to the two scenes at the [top of this page](#cuda-path-tracer): Open (red ocean with a bright plushie in the backround) and Closed (yellow room with a guy in a chair). Open is rendered at 1080x1350 and Closed is rendered at 1920x1080.
 
 ### Block size
 
-TODO
+First, I compared various 1D block sizes to find which one would give the best performance. 1D block dimensions are used for most of the kernels, including checking for intersections and shading materials.
+
+![](img/charts/block_size_1D.png)
+
+From this, I found that a 1D block size of 64 gave the best performance. Then, I compared 2D block sizes, which are used solely for generating initial rays from the camera:
+
+![](img/charts/block_size_2D.png)
+
+There was almost no difference between the performance given by these block sizes, so I stuck with the original size of 8x8.
 
 ### Partition rays
 
-TODO
+By default, after every round of intersections and shading, the path tracer partitions the rays by whether they have bounces left. Then, only those that can still bounce are considered for the next round. With this feature, the number of drops with each successive round:
 
-Seems like it's faster with this off. Maybe the cost of partitioning 2 million rays is a lot higher than the potential savings.
+![](img/charts/partition_num_rays.png)
 
-Might want to look at an iteration of this in nsight, but I'm also really lazy so probably not.
+However, this feature is toggleable. When partitioning is off, the path tracer will instead send all rays to all kernels every time and simply return immediately in threads where the associated ray has no bounces left.
 
-- Stream compaction helps most after a few bounces. Print and plot the effects of stream compaction within a single iteration (i.e. the number of unterminated rays after each bounce) and evaluate the benefits you get from stream compaction.
-- Compare scenes which are open (like the given cornell box) and closed (i.e. no light can escape the scene). Again, compare the performance effects of stream compaction! Remember, stream compaction only affects rays which terminate, so what might you expect?
+Comparing the two options, I initially thought partition would increase performance since all warps would be densely packed. However, the results surprised me:
+
+![](img/charts/partition_time.png)
+
+My guess is that partitioning large amounts of rays (more than 2 million for a 1920x1080 image) simply takes too much time for the kernel speedup to be worth it. With that in mind, I turned ray partitioning off for the remaining analyses.
+
+TODO: look at timeline in Nsight and answer this more concretely
 
 ### Sort rays by material type
 
