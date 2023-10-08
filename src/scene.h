@@ -13,7 +13,7 @@
 // #define JITTER_RAY
 // #define DEBUG_OUTPUT
 #define USING_BVH
-// #define USING_FAST_BVH
+#define USING_FAST_BVH
 // #define PRINT_TREE
 
 using namespace std;
@@ -25,7 +25,7 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     void buildTree();
-    void splitTree(std::vector<int>& triIds, int left, int right, int bbox, int axis);
+    void splitTree(int left, int right, int bbox, int axis);
     void printTree();
     bool checkTree();
 public:

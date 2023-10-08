@@ -278,7 +278,7 @@ __global__ void computeIntersectionsNaive(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
+			// add more intersection tests here... triangle? metaball? CSG?
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -362,7 +362,7 @@ __global__ void computeIntersectionsBVH(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
+			// add more intersection tests here... triangle? metaball? CSG?
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -376,12 +376,6 @@ __global__ void computeIntersectionsBVH(
 		}
 
 
-		//t = bvhSearch(pathSegment.ray, hit_tri_index,
-		//	tris, tris_size, bvh, bvh_size, tri_arr, tri_arr_size, tmp_intersect, tmp_normal, outside,
-		//	blockDim.x, threadIdx.x);
-
-		// float t_min = 1e4;
-
 		// __shared__ int arr[BLOCK_SIZE_1D][BVH_GPU_STACK_SIZE];
 		int arr[BVH_GPU_STACK_SIZE];
 
@@ -390,47 +384,30 @@ __global__ void computeIntersectionsBVH(
 		arr[0] = 0;
 
 		float o[3] = { pathSegment.ray.origin.x, pathSegment.ray.origin.y, pathSegment.ray.origin.z };
-		float dir[3] = { pathSegment.ray.direction.x, pathSegment.ray.direction.y, pathSegment.ray.direction.z };
-		float inv_dir[3] = {
-			(abs(dir[0]) < 1e-5) ? 0.0f : 1.0f / dir[0],
-			(abs(dir[1]) < 1e-5) ? 0.0f : 1.0f / dir[1],
-			(abs(dir[2]) < 1e-5) ? 0.0f : 1.0f / dir[2]
-		};
-		// bool dir_zero[3] = { (abs(dir[0]) < 1e-5), (abs(dir[1]) < 1e-5), (abs(dir[2]) < 1e-5) };
+
+		glm::vec3 inv_dir = 1.0f / pathSegment.ray.direction;
 
 		while (sign >= 0) {
+			
 			BoundingBox& bbox = bvh[arr[sign]];
 			int beginId = bbox.beginTriId;
-			glm::vec3& bmin = bbox.min;
-			glm::vec3& bmax = bbox.max;
 			sign--;
 
-			// glm::vec3 minDiff = bbox.min - pathSegment.ray.origin;
-			// glm::vec3 maxDiff = bbox.max - pathSegment.ray.origin;
-			float minDiff[3] = { bmin[0] - o[0], bmin[1] - o[1], bmin[2] - o[2] };
-			float maxDiff[3] = { bmax[0] - o[0], bmax[1] - o[1], bmax[2] - o[2] };
-			//bool inside = (minDiff[0] * maxDiff[0] <= 0 &&
-			//	minDiff[1] * maxDiff[1] <= 0 &&
-			//	minDiff[2] * maxDiff[2] <= 0);
-			// bool inside = false;
 
+			float bbox_min_t = 1e-5;
+			float bboX_max_t = 1e5;
 
-			float bt = max(max(
-				min(minDiff[1] * inv_dir[1], maxDiff[1] * inv_dir[1]),
-				min(minDiff[2] * inv_dir[2], maxDiff[2] * inv_dir[2])
-			), min(minDiff[0] * inv_dir[0], maxDiff[0] * inv_dir[0]));
+			for (int a = 0; a < 3; a++) {
 
-			//float bt = max(-1.0f, min(minDiff[0] * inv_dir[0], maxDiff[0] * inv_dir[1]));
-			//bt = max(bt, min(minDiff[1] * inv_dir[1], maxDiff[1] * inv_dir[1]));
-			//bt = max(bt, min(minDiff[2] * inv_dir[2], maxDiff[2] * inv_dir[2]));
+				float t0 = (bbox.min[a] - o[a]) * inv_dir[a];
+				float t1 = (bbox.max[a] - o[a]) * inv_dir[a];
 
-			if ((bt > 1e-5 && bt < t_min)
-#ifndef USING_FAST_BVH
-				|| (minDiff[0] * maxDiff[0] <= 0 &&
-				minDiff[1] * maxDiff[1] <= 0 &&
-				minDiff[2] * maxDiff[2] <= 0)
-#endif
-			){
+				bbox_min_t = fmax(min(t0, t1), bbox_min_t);
+				bboX_max_t = fmin(max(t0, t1), bboX_max_t);
+			}
+
+			if(bboX_max_t >= bbox_min_t && bboX_max_t > 0.0f && bbox_min_t < t_min)
+			{
 				// reach leaf node of bvh
 				if (beginId >= 0) {
 

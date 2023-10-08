@@ -38,42 +38,27 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
 __host__ __device__ float boundingboxIntersectionTest(Ray& r,
     glm::vec3& minv, glm::vec3& maxv) {
 
-    // return true;
+    float min_t = EPSILON;
+    float max_t = 1000.f;
 
-    //if (r.origin[0] > minv[0] && r.origin[0] < maxv[0] &&
-    //    r.origin[1] > minv[1] && r.origin[0] < maxv[1] &&
-    //    r.origin[2] > minv[2] && r.origin[0] < maxv[2]) { return true; }
+    for (int a = 0; a < 3; a++) {
+        float o = r.origin[a];
+        float invD = 1.0f / r.direction[a];
 
-    //if (r.origin[0] > minv[0] && r.origin[0] < maxv[0] &&
-    //    r.origin[1] > minv[1] && r.origin[0] < maxv[1] &&
-    //    r.origin[2] > minv[2] && r.origin[0] < maxv[2]) {
-    //    return true;
-    //}
+        float t0 = (minv[a] - o) * invD;
+        float t1 = (maxv[a] - o) * invD;
 
-    float tmin = -1.0f;
-    // float tmax[3] = {-1, -1, -1};
+        if (invD < 0) {
+            float tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
 
-    #pragma unroll
-    for (int i = 0; i < 3; i++) {
-
-        tmin = max(tmin, min((minv[i] - r.origin[i]) / r.direction[i], (maxv[i] - r.origin[i]) / r.direction[i]));
-
-        //if (abs(r.direction[i]) < FLT_EPSILON) {
-        //    if (r.origin[i] < minv[i] || r.origin[i] > maxv[i]) {
-        //        return false;
-        //    }
-        //}
-        //else {
-        //    tmin = max(tmin, min((minv[i] - r.origin[i]) / r.direction[i], (maxv[i] - r.origin[i]) / r.direction[i]));
-        //}
+        min_t = fmax(t0, min_t);
+        max_t = fmin(t1, max_t);
     }
 
-    // float dstB = glm::min(tmax[0], glm::min(tmax[1], tmax[2]));
-
-    //float dstToBox = std::max(0, dstA);
-    //float dstInsideBox = max(0, dstB - dstToBox);
-    //return float2(dstToBox, dstInsideBox);
-    return tmin;
+    return max_t >= min_t && max_t > 0.0f;
 }
 
 // CHECKITOUT

@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
-#define BBOX_TRI_NUM 100
+#define BBOX_TRI_NUM 4
 #define BVH_GPU_STACK_SIZE 64
 #define BLOCK_SIZE_1D 64
 

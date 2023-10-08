@@ -294,8 +294,8 @@ void Scene::buildTree()
 
     if (tris.size() == 0) { return; }
 
-    std::vector<int> triIds;
-    for (int ti = 0; ti < tris.size(); ti++) { triIds.push_back(ti); }
+    //std::vector<int> triIds;
+    //for (int ti = 0; ti < tris.size(); ti++) { triIds.push_back(ti); }
 
     glm::vec3 min = tris[0].min;
     glm::vec3 max = tris[0].max;
@@ -307,24 +307,7 @@ void Scene::buildTree()
 
     cout << "global, min = "; printVec(min);
     cout << ", max = "; printVec(max); cout << endl;
-
-    splitTree(triIds, 0, tris.size(), 0, 0);
-
-    std::vector<Triangle> new_tris = std::vector<Triangle>();
-    for (BoundingBox& bbox : bvh) {
-        if (bbox.beginTriId > -1) {
-            int taid = bbox.beginTriId;
-            // bbox.beginTriId = new_tris.size();
-            bbox.triNum = triArr[taid].triIds[0];
-            for (int ti = 1; ti <= bbox.triNum; ti++) {
-                int real_ti = triArr[taid].triIds[ti];
-                triArr[taid].triIds[ti] = new_tris.size();
-                new_tris.push_back(tris[real_ti]);
-            }
-            bbox.beginTriId = triArr[taid].triIds[1];
-        }
-    }
-    tris = new_tris;
+    splitTree(0, tris.size(), 0, 0);
 
 #ifdef PRINT_TREE
     printTree();
@@ -336,64 +319,49 @@ void Scene::buildTree()
 }
 
 
-void Scene::splitTree(std::vector<int>& triIds, int leftEnd, int rightEnd, int bboxId, int axis)
+void Scene::splitTree(int leftEnd, int rightEnd, int bboxId, int axis)
 {    
     if (rightEnd - leftEnd <= BBOX_TRI_NUM - 1) {
-        // buld triangle array
-        TriangleArray triArrObj;
-        triArrObj.triIds[0] = rightEnd - leftEnd;
-        for (int i = 0; i < rightEnd - leftEnd; i++) {
-            triArrObj.triIds[i + 1] = triIds[leftEnd + i];
-        }
-
-        triArr.push_back(triArrObj);
-        bvh[bboxId].beginTriId = triArr.size() - 1;
+        bvh[bboxId].beginTriId = leftEnd;
+        bvh[bboxId].triNum = rightEnd - leftEnd;
         return;
     }
 
+    if (axis == 0) {
+        sort(tris.begin() + leftEnd, tris.begin() + rightEnd, [](const Triangle& a, const Triangle& b) {return a.min[0] + a.max[0] < b.min[0] + b.max[0]; });
+    }
+    else if (axis == 1) {
+        sort(tris.begin() + leftEnd, tris.begin() + rightEnd, [](const Triangle& a, const Triangle& b) {return a.min[1] + a.max[1] < b.min[1] + b.max[1]; });
+    }
+    else {
+        sort(tris.begin() + leftEnd, tris.begin() + rightEnd, [](const Triangle& a, const Triangle& b) {return a.min[2] + a.max[2] < b.min[2] + b.max[2]; });
+    }
+    
+
     glm::vec3 lmin, lmax, rmin, rmax;
 
-    int midPoint = rightEnd;
-    float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
-    int ti = leftEnd;
-
-    while (ti < midPoint) {    
-        if (tris[triIds[ti]].min[axis] + tris[triIds[ti]].max[axis] <= midsum) {
-            // cout << "left, ti = " << ti << ", midPoint = " << midPoint << ", " << tris[triIds[ti]].min[axis] << endl;
-            if (ti == leftEnd) {
-                lmin = tris[triIds[ti]].min;
-                lmax = tris[triIds[ti]].max;
-            }
-            else {
-                lmin = glm::min(lmin, tris[triIds[ti]].min);
-                lmax = glm::max(lmax, tris[triIds[ti]].max);
-            }
-            ti++;
-        }
-        else {
-            if (midPoint == rightEnd) {
-                rmin = tris[triIds[ti]].min;
-                rmax = tris[triIds[ti]].max;
-            }
-            else {
-                rmin = glm::min(rmin, tris[triIds[ti]].min);
-                rmax = glm::max(rmax, tris[triIds[ti]].max);
-            }
-            midPoint--;
-            if (midPoint != ti) {
-                int temp = triIds[midPoint];
-                triIds[midPoint] = triIds[ti];
-                triIds[ti] = temp;
-            }
-        }
+    int mid = (leftEnd + rightEnd + 1) / 2;
+    // float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
+    int ti = leftEnd + 1;
+    lmin = tris[leftEnd].min;
+    lmax = tris[leftEnd].max;
+    while (ti < mid) {
+        lmin = glm::min(lmin, tris[ti].min);
+        lmax = glm::max(lmax, tris[ti].max);
+        ti++;
+    }
+    while (ti < rightEnd) {
+        rmin = glm::min(rmin, tris[ti].min);
+        rmax = glm::max(rmax, tris[ti].max);
+        ti++;
     }
     
     bvh.emplace_back(lmin, lmax);
     bvh.emplace_back(rmin, rmax);
     bvh[bboxId].leftId = bvh.size() - 2;
     bvh[bboxId].rightId = bvh.size() - 1;
-    splitTree(triIds, leftEnd, midPoint, bvh[bboxId].leftId, (axis + 1) % 3);
-    splitTree(triIds, midPoint, rightEnd, bvh[bboxId].rightId, (axis + 1) % 3);
+    splitTree(leftEnd, mid, bvh[bboxId].leftId, (axis + 1) % 3);
+    splitTree(mid, rightEnd, bvh[bboxId].rightId, (axis + 1) % 3);
 }
 
 void Scene::printTree() {
