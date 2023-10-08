@@ -1,0 +1,100 @@
+// PLANET MATERIAL
+MATERIAL 0
+texture 0
+bump 1
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// MOON MATERIAL
+MATERIAL 1
+texture 2
+bump 1
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// RING MATERIAL
+MATERIAL 2
+texture 3
+bump 4
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+MATERIAL 3
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   15
+
+TEXTURE 0
+planet.png
+
+TEXTURE 1
+planet_norm.png
+
+TEXTURE 2
+moon.png
+
+TEXTURE 3
+ring.png
+
+TEXTURE 4
+ring_norm.png
+
+
+// Camera
+CAMERA
+RES         800 800
+FOVY        45
+ITERATIONS  5000
+DEPTH       8
+FILE        cornell
+EYE         0.0 1.5 -5
+LOOKAT      0 0 0
+UP          0 1 0
+
+MESH 0
+planet.obj
+material 0
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
+
+MESH 1
+moon.obj
+material 1
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
+
+MESH 2
+ring.obj
+material 2
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
+
+// Short cube
+MESH 3
+cube.obj
+material 3
+TRANS       3 3 0.75
+ROTAT       0 0 0
+SCALE       1 1 1
