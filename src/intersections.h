@@ -6,6 +6,8 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+#define BOUNDING_BOX 1
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -183,10 +185,13 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* triangles, int triSize,
     glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside) 
 {
+
+#if BOUNDING_BOX
     if (!hasIntersection(r, mesh)) 
     {
         return -1;
     }
+#endif
 
     Ray q;
     q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
