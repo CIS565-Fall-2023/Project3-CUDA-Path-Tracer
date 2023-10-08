@@ -12,7 +12,7 @@
 #define CACHE_FIRST_BOUNCE
 // #define JITTER_RAY
 // #define DEBUG_OUTPUT
-// #define USING_BVH
+#define USING_BVH
 // #define USING_FAST_BVH
 // #define PRINT_TREE
 
@@ -25,7 +25,7 @@ private:
     int loadGeom(string objectid);
     int loadCamera();
     void buildTree();
-    void splitTree(std::vector<int>& triIds, int left, int right, int bbox, glm::vec3 maxmin, int axis);
+    void splitTree(std::vector<int>& triIds, int left, int right, int bbox, int axis);
     void printTree();
     bool checkTree();
 public:

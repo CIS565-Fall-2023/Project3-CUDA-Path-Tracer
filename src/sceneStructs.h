@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
-#define BBOX_TRI_NUM 4
+#define BBOX_TRI_NUM 100
 #define BVH_GPU_STACK_SIZE 64
 #define BLOCK_SIZE_1D 64
 
@@ -54,14 +54,16 @@ struct BoundingBox {
     int rightId;
     int triArrId;
     // int triIds[BBOX_TRI_NUM];
+    int beginTriId;
+    int triNum;
 
-    BoundingBox() : min(), max(), leftId(-1), rightId(-1), triArrId(-1) {}
+    BoundingBox() : min(), max(), leftId(-1), rightId(-1), triArrId(-1), beginTriId(-1), triNum(-1) {}
 
     BoundingBox(glm::vec3 minPos, glm::vec3 maxPos, int tai = -1) :
-        min(minPos), max(maxPos), leftId(-1), rightId(-1), triArrId(tai) {}
+        min(minPos), max(maxPos), leftId(-1), rightId(-1), triArrId(tai), beginTriId(-1), triNum(-1) {}
 
     BoundingBox(const Triangle& tri, int tai = -1) :
-        min(tri.min), max(tri.max), leftId(-1), rightId(-1), triArrId(tai) {}
+        min(tri.min), max(tri.max), leftId(-1), rightId(-1), triArrId(tai), beginTriId(-1), triNum(-1) {}
 };
 
 struct TriangleArray {
