@@ -133,17 +133,17 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
             auto& indexBufferView = model.bufferViews[indexAccessor.bufferView];
             auto& indexBuffer = model.buffers[indexBufferView.buffer].data;
             int numIndices = indexAccessor.count;
-            unsigned int* indicesVec = new unsigned int[indexAccessor.count];
-            if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
-                unsigned short* indicesVec_ = new unsigned short[indexAccessor.count];
-                std::memcpy(indicesVec_, indexBuffer.data() + indexBufferView.byteOffset + indexAccessor.byteOffset, indexAccessor.count * sizeof(unsigned short));
+            unsigned short* indicesVec = new unsigned short[indexAccessor.count];
+            if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
+                unsigned int* indicesVec_ = new unsigned int[indexAccessor.count];
+                std::memcpy(indicesVec_, indexBuffer.data() + indexBufferView.byteOffset + indexAccessor.byteOffset, indexAccessor.count * sizeof(unsigned int));
                 for (int i = 0; i < indexAccessor.count; i++) {
-                    indicesVec[i] = (unsigned int)indicesVec_[i];
+                    indicesVec[i] = (unsigned short)indicesVec_[i];
                 }
                 delete[] indicesVec_;
             }
-            else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
-                std::memcpy(indicesVec, indexBuffer.data() + indexBufferView.byteOffset + indexAccessor.byteOffset, indexAccessor.count * sizeof(unsigned int));
+            else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                std::memcpy(indicesVec, indexBuffer.data() + indexBufferView.byteOffset + indexAccessor.byteOffset, indexAccessor.count * sizeof(unsigned short));
             }
             else {
                 std::cout << "unsupported index accessor type" << std::endl;
@@ -181,7 +181,7 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
             newMesh.numVertices = numVertices;
             if (numIndices % 3 != 0) {
                 std::cout << "numIndices is not a multiple of 3" << std::endl;
-                return -1;
+                status = -1;
             }
             newMesh.numIndices = numIndices;
             newMesh.transform = transform;
@@ -200,21 +200,10 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
             newMesh.boundingVolume = boundingVolume;
 
             meshes.push_back(newMesh);
-            
-            // std::cout << "mesh size: " << meshes.size() << std::endl;
-            // std::cout << "vertices: " << std::endl;
-            // for (int i = 0; i < numVertices; i++) {
-            //     std::cout << vertices[i * 3] << " " << vertices[i * 3 + 1] << " " << vertices[i * 3 + 2] << std::endl;
-            // }   
-            // std::cout << "indices: " << std::endl;
-            // for (int i = 0; i < numIndices; i++) {
-            //     std::cout << indicesVec[i] << std::endl;
-            // }
-
 
             Octree tree = buildOctree(newMesh);
-            octrees.push_back(tree);
-            std::cout << "octree size: " << tree.nodes.size() << std::endl;
+            octrees.emplace_back(tree);
+            std::cout << "*******************octree size: " << tree.nodes.size() << std::endl;
             for (int i=0; i<tree.nodes.size(); i++) {
                 std::cout << "node: " << i << std::endl;
                 for (int j=0; j<8; j++) {
@@ -251,7 +240,7 @@ Geom Scene::findBoundingVolume(float* vertices, int numVertices) {
     float maxX, maxY, maxZ = 0.0;
     float minX, minY, minZ = 0.0;
 
-    for (int i = 0; i < numVertices; i++) {
+    for (int i = 0; i < numVertices; i+=3) {
         maxX = std::max(maxX, vertices[i * 3]);
         maxY = std::max(maxY, vertices[i * 3 + 1]);
         maxZ = std::max(maxZ, vertices[i * 3 + 2]);
@@ -266,7 +255,7 @@ Geom Scene::findBoundingVolume(float* vertices, int numVertices) {
     boundingVolume.translation = translation;
     glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
     boundingVolume.rotation = rotation;
-
+    std::cout << "min max y: " << minY << " " << maxY << std::endl;
     float xBound = (maxX - minX);
     float yBound = (maxY - minY);
     float zBound = (maxZ - minZ);
@@ -281,33 +270,67 @@ Geom Scene::findBoundingVolume(float* vertices, int numVertices) {
 
 Octree Scene::buildOctree(const Mesh& mesh) {
     Octree tree;
+    std::vector<Triangle> triangles;
     for (int i = 0; i < mesh.numIndices; i+=3) {
         Triangle triangle;
-        triangle.vertices[0] = glm::vec3(mesh.vertices[mesh.indices[i]*3], mesh.vertices[mesh.indices[i]*3 + 1], mesh.vertices[mesh.indices[i]*3 + 2]);
-        triangle.vertices[1] = glm::vec3(mesh.vertices[mesh.indices[i+1]*3], mesh.vertices[mesh.indices[i+1]*3 + 1], mesh.vertices[mesh.indices[i+1]*3 + 2]);
-        triangle.vertices[2] = glm::vec3(mesh.vertices[mesh.indices[i+2]*3], mesh.vertices[mesh.indices[i+2]*3 + 1], mesh.vertices[mesh.indices[i+2]*3 + 2]);
+
+        triangle.vertices[0] = glm::vec3(mesh.vertices[mesh.indices[i]*3], 
+                                         mesh.vertices[mesh.indices[i]*3 + 1], 
+                                         mesh.vertices[mesh.indices[i]*3 + 2]);
+        triangle.vertices[1] = glm::vec3(mesh.vertices[mesh.indices[i+1]*3], 
+                                         mesh.vertices[mesh.indices[i+1]*3 + 1], 
+                                         mesh.vertices[mesh.indices[i+1]*3 + 2]);
+        triangle.vertices[2] = glm::vec3(mesh.vertices[mesh.indices[i+2]*3], 
+                                         mesh.vertices[mesh.indices[i+2]*3 + 1], 
+                                         mesh.vertices[mesh.indices[i+2]*3 + 2]);
         glm::vec3 centroid = (triangle.vertices[0] + triangle.vertices[1] + triangle.vertices[2]) / 3.0f;
         centroid = glm::vec3(mesh.transform * glm::vec4(centroid, 1.0f));
         triangle.centroid = centroid;
         tree.triangles.push_back(triangle);
     }
-    tree.root = buildOctreeImpl(tree, mesh.boundingVolume, 0, tree.triangles.begin(), tree.triangles.end());
+    Geom boundingBox;
+    boundingBox.type = CUBE;
+    boundingBox.materialid = 0;
+    boundingBox.translation = mesh.translation;
+
+    boundingBox.scale = glm::vec3(glm::max(mesh.scale.x, glm::max(mesh.scale.y, mesh.scale.z)));
+    boundingBox.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    boundingBox.transform = utilityCore::buildTransformationMatrix(
+        boundingBox.translation, boundingBox.rotation, boundingBox.scale);
+    boundingBox.inverseTransform = glm::inverse(boundingBox.transform);
+    boundingBox.invTranspose = glm::inverseTranspose(boundingBox.transform);
+
+    tree.root = buildOctreeImpl(tree, boundingBox, 0, tree.triangles.begin(), tree.triangles.end());
     tree.dataStarts.push_back(tree.triangles.size());
     return tree;
 }
 
 template <typename Iterator>
 int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Iterator begin, Iterator end) {
-    if (begin == end || depth > OCTREE_MAX_DEPTH) return -1;
-
     int newNodeId = tree.nodes.size();
+    std::cout << "BUILDOCTTREE: " << newNodeId << " depth: " << depth << std::endl;
+    
+    if (begin == end) {
+        std::cout << "   ===>no triangles " << newNodeId << std::endl;
+        return -1;
+    }
+    if (depth > OCTREE_MAX_DEPTH) {
+        std::cout << "   ===>max depth reached" << newNodeId << std::endl;
+        return -1;
+    }
+
+    
+    
     tree.nodes.emplace_back();
     tree.dataStarts.emplace_back();
     tree.dataStarts[newNodeId] = begin - tree.triangles.begin();
 
-    if (begin + 1 == end) return newNodeId;
-
+    if (begin + 1 == end) {
+        std::cout << "   ===> only one triangle" << newNodeId << std::endl;
+        return newNodeId;
+    }
     glm::vec3 center = boundingBox.translation;
+    std::cout << "center: " << center.x << " " << center.y << " " << center.z << std::endl;
 
     auto xComp = [center](const Triangle& triangle) {
         return triangle.centroid.x < center.x;
@@ -347,23 +370,40 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
             }
         }
     }
-    // -x -y -z
-    tree.nodes[newNodeId].children[0] = buildOctreeImpl(tree, childBoundingBoxes[0], depth + 1, begin, split_y_lower_z_lower);
-    // -x -y +z
-    tree.nodes[newNodeId].children[1] = buildOctreeImpl(tree, childBoundingBoxes[1], depth + 1, split_y_lower_z_lower, split_y_lower);
-    // -x +y -z
-    tree.nodes[newNodeId].children[2] = buildOctreeImpl(tree, childBoundingBoxes[2], depth + 1, split_y_lower, split_y_lower_z_upper);
-    // -x +y +z
-    tree.nodes[newNodeId].children[3] = buildOctreeImpl(tree, childBoundingBoxes[3], depth + 1, split_y_lower_z_upper, split_x);
-    // +x -y -z
-    tree.nodes[newNodeId].children[4] = buildOctreeImpl(tree, childBoundingBoxes[4], depth + 1, split_x, split_y_upper_z_lower);
-    // +x -y +z
-    tree.nodes[newNodeId].children[5] = buildOctreeImpl(tree, childBoundingBoxes[5], depth + 1, split_y_upper_z_lower, split_y_upper);
-    // +x +y -z
-    tree.nodes[newNodeId].children[6] = buildOctreeImpl(tree, childBoundingBoxes[6], depth + 1, split_y_upper, split_y_upper_z_upper);
-    // +x +y +z
-    tree.nodes[newNodeId].children[7] = buildOctreeImpl(tree, childBoundingBoxes[7], depth + 1, split_y_upper_z_upper, end);
 
+    // // -x -y -z
+    int child_idx = buildOctreeImpl(tree, childBoundingBoxes[0], depth + 1, begin, split_y_lower_z_lower);
+    std::cout << "    node: " << newNodeId << " child: " << child_idx << std::endl;
+    tree.nodes[newNodeId].children[0] = child_idx;
+
+    // -x -y +z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[1], depth + 1, split_y_lower_z_lower, split_y_lower);
+    tree.nodes[newNodeId].children[1] = child_idx;
+    // -x +y -z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[2], depth + 1, split_y_lower, split_y_lower_z_upper);
+    tree.nodes[newNodeId].children[2] = child_idx;
+    // +x -y -z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[3], depth + 1, split_y_lower_z_upper, split_x);
+    tree.nodes[newNodeId].children[3] = child_idx;
+
+    // +x -y -z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[4], depth + 1, split_x, split_y_upper_z_lower);
+    tree.nodes[newNodeId].children[4] = child_idx;
+    // +x -y +z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[5], depth + 1, split_y_upper_z_lower, split_y_upper);
+    tree.nodes[newNodeId].children[5] = child_idx;
+    // +x +y -z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[6], depth + 1, split_y_upper, split_y_upper_z_upper);
+    tree.nodes[newNodeId].children[6] = child_idx;
+    // +x +y +z
+    child_idx = buildOctreeImpl(tree, childBoundingBoxes[7], depth + 1, split_y_upper_z_upper, end);
+    tree.nodes[newNodeId].children[7] = child_idx;
+    for (int i = 0; i < 8; i++) {
+        std::cout << "    node: " << newNodeId << std::endl;
+        std::cout << "    child: " << tree.nodes[newNodeId].children[i] << std::endl;
+    }
+
+    std::cout << "   ===>return node: " << newNodeId << std::endl;
     return newNodeId;
 }
 

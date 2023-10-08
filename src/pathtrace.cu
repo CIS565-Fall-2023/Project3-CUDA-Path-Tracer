@@ -129,12 +129,12 @@ void pathtraceInit(Scene* scene) {
 	for (int i = 0; i < mesh_size; i++)
 	{
 		float* dev_vertices;
-		unsigned int* dev_indices;
+		unsigned short* dev_indices;
 		cudaMalloc(&dev_vertices, scene->meshes[i].numVertices * sizeof(float) * 3);
-		cudaMalloc(&dev_indices, scene->meshes[i].numIndices * sizeof(unsigned int));
+		cudaMalloc(&dev_indices, scene->meshes[i].numIndices * sizeof(unsigned short));
 
 		cudaMemcpy(dev_vertices, scene->meshes[i].vertices, scene->meshes[i].numVertices * sizeof(float) * 3, cudaMemcpyHostToDevice);
-		cudaMemcpy(dev_indices, scene->meshes[i].indices, scene->meshes[i].numIndices * sizeof(unsigned int), cudaMemcpyHostToDevice);
+		cudaMemcpy(dev_indices, scene->meshes[i].indices, scene->meshes[i].numIndices * sizeof(unsigned short), cudaMemcpyHostToDevice);
 		dev_meshes[i].vertices = dev_vertices;
 		dev_meshes[i].indices = dev_indices;
 	}
