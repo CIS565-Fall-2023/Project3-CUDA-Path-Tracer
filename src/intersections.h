@@ -196,12 +196,6 @@ __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
         intersectionPoint = multiplyMV(mesh.transform, glm::vec4(localIntersectionPt, 1.0f));
         normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(localNor, 0.0f)));
     }
-    else
-    {
-        //intersectionPoint = r.origin + r.direction * 10.0f;
-        //normal = glm::vec3(0.0f, 0.0f, 1.0f);
-        //return 10.0f;
-    }
 
     return triIdx == -1 ? -1 : glm::length(intersectionPoint - r.origin);
 }
