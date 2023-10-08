@@ -199,7 +199,6 @@ __device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3
 {
 	float a2 = roughness * roughness;
 	glm::vec3 wh = glm::normalize(wo + wi);
-	if (wo.z < 0 || wi.z < 0) return 0.0;
 	float G1 = util_math_smith_ggx_masking(wo, a2);
 	float D = util_math_ggx_normal_distribution(wh, a2);
 
@@ -285,7 +284,7 @@ __device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
 __device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 surfaceNormal, glm::vec3 receivePos)
 {
 	glm::vec3 L = surfacePos - receivePos;
-	return glm::clamp(glm::dot(glm::normalize(-L), surfaceNormal),0.0f,1.0f)/ glm::distance2(surfacePos, receivePos);
+	return glm::clamp(glm::dot(glm::normalize(-L), surfaceNormal), 0.0f, 1.0f) / glm::distance2(surfacePos, receivePos);
 }
 
 __device__ inline float util_mis_weight_balanced(float pdf1, float pdf2)
@@ -341,6 +340,7 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
 	Material& lightMat = sceneInfo.dev_materials[lightObj.materialid];
 	float prob = 1.0f / sceneInfo.lightsSize;
+	float tArea = 0.0f;
 	if (lightObj.type == GeomType::SPHERE)//Assume uniform scale of xyz
 	{
 		glm::vec3 originWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.0), 1.0f));
@@ -353,6 +353,7 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 		*lightNormal = glm::normalize(glm::mat3(T, B, N) * localSample);
 		*lightPos = originWorld + *lightNormal * R;
 		prob /= (TWO_PI * R * R);
+		tArea = (PI * 4 * R * R);
 	}
 	else if(lightObj.type == GeomType::CUBE)//TODO: use quad light to replace all cubes
 	{
@@ -366,7 +367,7 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 		float Ayz = abs(glm::length(glm::cross(vy, vz)));
 		float area = 2 * (Axy + Axz + Ayz);
 		prob /= area;
-		float s = random.x * area;
+		float s = u * area;
 		double limit = Axy;
 		float i = random.y, j = random.z;
 		if (s < limit) {
@@ -393,6 +394,7 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 			*lightPos = v0 + vx + vy * i + vz * j;
 			*lightNormal = glm::normalize(vx);
 		}
+		tArea = area;
 	}
 	else
 	{
@@ -409,6 +411,7 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 		float area = abs(glm::length(nNormal)) / 2;
 		*lightNormal = nNormal / (area > 0.0 ? area : 1e-8f);
 		prob /= area;
+		tArea = area;
 	}
 	bool vis = glm::dot(position - *lightPos, *lightNormal) > 0;
 	vis = vis && glm::dot(*lightPos - position, normal) > 0;

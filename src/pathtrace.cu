@@ -110,6 +110,7 @@ static PathSegment* dev_paths1 = NULL;
 static PathSegment* dev_paths2 = NULL;
 static ShadeableIntersection* dev_intersections1 = NULL;
 static ShadeableIntersection* dev_intersections2 = NULL;
+static ShadeableIntersection* dev_intersectionCache = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -701,7 +702,9 @@ __global__ void scatter_on_intersection(
 				materialColor.x = color.x;
 				materialColor.y = color.y;
 				materialColor.z = color.z;
+				
 			}
+			
 			if (color.w <= ALPHA_CUTOFF)
 			{
 				bxdf = pathSegments[idx].remainingBounces == 0 ? glm::vec3(0, 0, 0) : glm::vec3(1, 1, 1);
@@ -815,6 +818,7 @@ __global__ void scatter_on_intersection_mis(
 		{
 			float roughness = material.roughness, metallic = material.metallic;
 			float4 color = { 0,0,0,1 };
+			float alpha = 1.0f;
 			//Texture mapping
 			if (material.baseColorMap != 0)
 			{
@@ -822,6 +826,7 @@ __global__ void scatter_on_intersection_mis(
 				materialColor.x = color.x;
 				materialColor.y = color.y;
 				materialColor.z = color.z;
+				alpha = color.w;
 			}
 			if (material.metallicRoughnessMap != 0)
 			{
@@ -834,7 +839,7 @@ __global__ void scatter_on_intersection_mis(
 			float lightPdf = -1.0;
 			lights_sample(sceneInfo, glm::vec3(u01(rng), u01(rng), u01(rng)), intersection.worldPos, N, &lightPos, &lightNormal, &emissive, &lightPdf);
 			
-			if (lightPdf > 0.0 && (emissive.x > 0.0 || emissive.y > 0.0 || emissive.z > 0.0))
+			if (emissive.x > 0.0 || emissive.y > 0.0 || emissive.z > 0.0)
 			{
 				glm::vec3 light_wi = lightPos - intersection.worldPos;
 				light_wi = glm::normalize(glm::transpose(TBN) * (light_wi));
@@ -859,11 +864,7 @@ __global__ void scatter_on_intersection_mis(
 				{
 					float misW = util_mis_weight_balanced(lightPdf, matPdf * G);
 					materialMISw = 1.0 - misW;
-					/*image[pathSegments[idx].pixelIndex] += glm::vec3(lightPdf);
-					rayValid[idx] = 0;
-					return;*/
-
-					image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW / (lightPdf/ G);
+					image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW * G / (lightPdf);
 				}
 			}
 			//Sampling material bsdf
@@ -877,7 +878,7 @@ __global__ void scatter_on_intersection_mis(
 			}
 			else//diffuse
 			{
-				if (color.w <= ALPHA_CUTOFF)
+				if (alpha <= ALPHA_CUTOFF)
 				{
 					bxdf = pathSegments[idx].remainingBounces == 0 ? glm::vec3(0, 0, 0) : glm::vec3(1, 1, 1);
 					wi = -wo;
@@ -1023,7 +1024,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	dev_sceneInfo.lightsSize = hst_scene->lights.size();
 
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, MAX_ITER, dev_paths1);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, MAX_DEPTH, dev_paths1);
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
@@ -1040,7 +1041,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
-	while (numRays && depth < MAX_ITER) {
+	while (numRays && depth < MAX_DEPTH) {
 
 		// clean shading chunks
 		cudaMemset(dev_intersections1, 0, pixelcount * sizeof(ShadeableIntersection));

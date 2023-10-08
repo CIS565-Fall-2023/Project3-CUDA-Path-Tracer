@@ -260,17 +260,21 @@ __device__ inline bool util_bvh_leaf_intersect(
             const glm::vec3& v1 = dev_sceneInfo.modelInfo.dev_vertices[tri[1]];
             const glm::vec3& v2 = dev_sceneInfo.modelInfo.dev_vertices[tri[2]];
             t = triangleIntersectionTest(obj.Transform, v0, v1, v2, ray, tmp_intersect, tmp_normal, tmp_baryCoord);
-            if (dev_sceneInfo.modelInfo.dev_normals && dev_sceneInfo.modelInfo.dev_uvs)
+            if (dev_sceneInfo.modelInfo.dev_uvs)
+            {
+                const glm::vec2& uv0 = dev_sceneInfo.modelInfo.dev_uvs[tri[0]];
+                const glm::vec2& uv1 = dev_sceneInfo.modelInfo.dev_uvs[tri[1]];
+                const glm::vec2& uv2 = dev_sceneInfo.modelInfo.dev_uvs[tri[2]];
+                tmp_uv = uv0 * tmp_baryCoord[0] + uv1 * tmp_baryCoord[1] + uv2 * tmp_baryCoord[2];
+            }
+            if (dev_sceneInfo.modelInfo.dev_normals)
             {
                 const glm::vec3& n0 = dev_sceneInfo.modelInfo.dev_normals[tri[0]];
                 const glm::vec3& n1 = dev_sceneInfo.modelInfo.dev_normals[tri[1]];
                 const glm::vec3& n2 = dev_sceneInfo.modelInfo.dev_normals[tri[2]];
                 tmp_normal = n0 * tmp_baryCoord[0] + n1 * tmp_baryCoord[1] + n2 * tmp_baryCoord[2];
                 tmp_normal = glm::vec3(obj.Transform.invTranspose * glm::vec4(tmp_normal, 0.0));//TODO: precompute transformation
-                const glm::vec2& uv0 = dev_sceneInfo.modelInfo.dev_uvs[tri[0]];
-                const glm::vec2& uv1 = dev_sceneInfo.modelInfo.dev_uvs[tri[1]];
-                const glm::vec2& uv2 = dev_sceneInfo.modelInfo.dev_uvs[tri[2]];
-                tmp_uv = uv0 * tmp_baryCoord[0] + uv1 * tmp_baryCoord[1] + uv2 * tmp_baryCoord[2];
+                
                 const glm::vec3& t0 = dev_sceneInfo.modelInfo.dev_tangents[tri[0]];
                 const glm::vec3& t1 = dev_sceneInfo.modelInfo.dev_tangents[tri[1]];
                 const glm::vec3& t2 = dev_sceneInfo.modelInfo.dev_tangents[tri[2]];

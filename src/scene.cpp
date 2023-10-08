@@ -54,7 +54,7 @@ void Scene::loadSkybox()
     utilityCore::safeGetline(fp_in, line);
     if (!line.empty() && fp_in.good()) {
         std::cout << "Loading Skybox " << line << " ..." << endl;
-        textureLoadJobs.emplace_back(line, -1);
+        LoadTextureFromFileJobs.emplace_back(line, -1);
     }
 }
 
@@ -72,7 +72,7 @@ namespace std {
 
 void Scene::LoadAllTextures()
 {
-    for (auto& p : textureLoadJobs)
+    for (auto& p : LoadTextureFromFileJobs)
     {
         cudaTextureObject_t* texObj = p.second == -1 ? &skyboxTextureObj : &materials[p.second].baseColorMap;
         if (!strToTextureObj.count(p.first))
@@ -86,7 +86,7 @@ void Scene::LoadAllTextures()
         }
     }
 
-    for (auto& p : gltfTextureLoadJobs)
+    for (auto& p : LoadTextureFromMemoryJobs)
     {
         Material& mat = materials[p.matIndex];
         cudaTextureObject_t* texObj;
@@ -353,7 +353,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
             newMat.color[2] = mat.diffuse[2];
             if (!mat.diffuse_texname.empty())
             {
-                textureLoadJobs.emplace_back(mtlPath + mat.diffuse_texname, materials.size());
+                LoadTextureFromFileJobs.emplace_back(mtlPath + mat.diffuse_texname, materials.size());
             }
             materials.emplace_back(newMat);
 
@@ -522,7 +522,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& image = model.images[tex.source];
                 char* tmpBuffer = new char[image.image.size()];
                 memcpy(tmpBuffer, &image.image[0], image.image.size());
-                gltfTextureLoadJobs.emplace_back(tmpBuffer, materials.size(), TextureType::color, image.width, image.height, image.bits, image.component);
+                LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::color, image.width, image.height, image.bits, image.component);
             }
             if (metallicRoughnessTex.index != -1)
             {
@@ -531,7 +531,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& image = model.images[tex.source];
                 char* tmpBuffer = new char[image.image.size()];
                 memcpy(tmpBuffer, &image.image[0], image.image.size());
-                gltfTextureLoadJobs.emplace_back(tmpBuffer, materials.size(), TextureType::metallicroughness, image.width, image.height, image.bits, image.component);
+                LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::metallicroughness, image.width, image.height, image.bits, image.component);
             }
             if (normalTex.index != -1)
             {
@@ -540,7 +540,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 auto& image = model.images[tex.source];
                 char* tmpBuffer = new char[image.image.size()];
                 memcpy(tmpBuffer, &image.image[0], image.image.size());
-                gltfTextureLoadJobs.emplace_back(tmpBuffer, materials.size(), TextureType::normal, image.width, image.height, image.bits, image.component);
+                LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::normal, image.width, image.height, image.bits, image.component);
             }
             if (gltfMat.extensions.count("KHR_materials_transmission")|| gltfMat.extensions.count("KHR_materials_volume")||gltfMat.alphaMode=="BLEND")//limited support for translucency
             {
@@ -919,26 +919,39 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 6; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
-            if (strcmp(tokens[0].c_str(), "RGB") == 0) {
+            if (strcmp(tokens[0].c_str(), "TYPE") == 0) {
+                if (tokens[1] == "diffuse")
+                    newMaterial.type = diffuse;
+                else if (tokens[1] == "frenselSpecular")
+                    newMaterial.type = frenselSpecular;
+                else if (tokens[1] == "microfacet")
+                    newMaterial.type = microfacet;
+                else if (tokens[1] == "metallicWorkflow")
+                    newMaterial.type = metallicWorkflow;
+                else
+                    newMaterial.type = emitting;
+            }
+            else if (strcmp(tokens[0].c_str(), "RGB") == 0) {
                 glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
                 newMaterial.color = color;
             } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 float ior = atof(tokens[1].c_str());
-                if (ior != 0.0) newMaterial.type = MaterialType::frenselSpecular;
                 newMaterial.indexOfRefraction = ior;
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 float emittance = atof(tokens[1].c_str());
-                if (emittance != 0.0) newMaterial.type = MaterialType::emitting;
                 newMaterial.emittance = emittance;
             }
             else if (strcmp(tokens[0].c_str(), "ROUGHNESS") == 0) {
                 float roughness = atof(tokens[1].c_str());
-                if (roughness != -1.0f) newMaterial.type = MaterialType::microfacet;
                 newMaterial.roughness = roughness;
+            }
+            else if (strcmp(tokens[0].c_str(), "METALLIC") == 0) {
+                float metallic = atof(tokens[1].c_str());
+                newMaterial.metallic = metallic;
             }
 
         }

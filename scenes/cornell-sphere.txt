@@ -1,49 +1,62 @@
 // Emissive material (light)
 MATERIAL 0
+TYPE emitting
 RGB         1 1 1
-ROUGHNESS   -1.0
+ROUGHNESS   0.0
+METALLIC    0
 REFRIOR     0
 EMITTANCE   5
 
 // Diffuse white
 MATERIAL 1
+TYPE diffuse
 RGB         .98 .98 .98
-ROUGHNESS   -1.0
+ROUGHNESS   0.0
+METALLIC    0
 REFRIOR     0
 EMITTANCE   0
 
 // Diffuse red
 MATERIAL 2
+TYPE diffuse
 RGB         .85 .35 .35
-ROUGHNESS   -1.0
+ROUGHNESS   0.0
+METALLIC    0
 REFRIOR     0
 EMITTANCE   0
 
 // Diffuse green
 MATERIAL 3
+TYPE diffuse
 RGB         .35 .85 .35
-ROUGHNESS   -1.0
+ROUGHNESS   0.0
+METALLIC    0
 REFRIOR     0
 EMITTANCE   0
 
-// Specular white
 MATERIAL 4
+TYPE diffuse
 RGB         .98 .98 .98
-ROUGHNESS   -1.0
+ROUGHNESS   0.0
+METALLIC    0
 REFRIOR     0
 EMITTANCE   0
 
 // Glass
 MATERIAL 5
+TYPE frenselSpecular
 RGB         0.99 0.99 0.99
-ROUGHNESS   -1.0
+ROUGHNESS   0.0
+METALLIC    0
 REFRIOR     1.6
 EMITTANCE   0
 
 // Metal
 MATERIAL 6
+TYPE microfacet
 RGB         0.99 0.99 0.99
 ROUGHNESS   0.1
+METALLIC    0
 REFRIOR     0
 EMITTANCE   0
 
@@ -62,11 +75,11 @@ UP          0 1 0
 
 // Ceiling light
 OBJECT 0
-geometry sphere
+geometry cube
 material 0
-TRANS       0 8 0
+TRANS       0 10 0
 ROTAT       0 0 0
-SCALE       1.0 1.0 1.0
+SCALE       3.0 0.3 3.0
 
 // Floor
 OBJECT 1
