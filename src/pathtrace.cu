@@ -268,8 +268,7 @@ __global__ void shadeFakeMaterial(
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
-				scatterRay(path, getPointOnRay(path.ray, intersection.t), getPointOnRay(path.ray, intersection.t + 0.001f),
-					intersection.surfaceNormal, material, rng);
+				scatterRay(path, path.ray.origin + intersection.t * path.ray.direction, intersection.surfaceNormal, material, rng);
 				if (pathSegments[idx].remainingBounces == 0) {
 					float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
 					path.color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
