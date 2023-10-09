@@ -105,7 +105,7 @@ Looking at the Nsight timeline for rendering one frame of Closed provides somewh
 
 ![](img/charts/partition_nsight.png)
 
-There's a gap between each pair of CUDA kernel and `thrust::partition` calls; I've highlighted the first few gaps with green arrows. I'm not sure why there's so many gaps, but they do explain the significant performance downgrade when using partitioning. With that in mind, I disabled ray partitioning for the remaining analyses.
+There's a gap between each pair of CUDA kernel and `thrust::partition` calls; I've highlighted the first few with green arrows. I'm not sure why there's so many gaps, but they do explain the significant performance downgrade when using partitioning. With that in mind, I disabled ray partitioning for the remaining analyses.
 
 ### Sort rays by material type
 
