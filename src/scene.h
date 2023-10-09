@@ -9,6 +9,7 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
+#include "bvh.h"
 #include "tiny_gltf.h"
 
 using namespace std;
@@ -17,6 +18,8 @@ class Scene {
 private:
     ifstream fp_in;
     std::unordered_map<string, SceneMeshGroup> loadedMeshGroups;
+    std::unordered_map<string, uPtr<BVH>> meshBVHs;
+
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
     SceneMeshGroup loadGltfMesh(string path);
@@ -26,15 +29,17 @@ private:
     /// </summary>
     /// <param name="model"></param>
     /// <param name="node"></param>
-    int parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax);
+    int parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node, AABB& aabb);
     /// <summary>
     /// Does the actual parsing from the recursive function.
     /// Calculates the AABB for the SceneMesh generated here.
     /// </summary>
     /// <param name="model"></param>
     /// <param name="node"></param>
-    int parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax);
+    int parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, AABB& aabb);
     int loadCamera();
+
+    void constructBVH(string meshPath, unsigned int startTriIdx, unsigned int endTriIdx);
 public:
     Scene(string filename);
     ~Scene();
@@ -43,6 +48,7 @@ public:
     std::vector<Material> materials;
     std::vector<Triangle> tris;
     std::vector<SceneMesh> meshes;
+    std::vector<BVHNode> bvhNodes;
 
     RenderState state;
 };

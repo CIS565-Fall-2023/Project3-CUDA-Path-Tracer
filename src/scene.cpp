@@ -7,7 +7,7 @@
 #include "scene.h"
 
 Scene::Scene(string filename)
-    : tris(), meshes(), loadedMeshGroups()
+    : tris(), meshes(), loadedMeshGroups(), meshBVHs(), bvhNodes()
 {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
@@ -71,8 +71,9 @@ int Scene::loadGeom(string objectid) {
 
                     newGeom.startTriIdx = meshGroup.startTriIdx;
                     newGeom.endTriIdx = meshGroup.endTriIdx;
-                    newGeom.aabbMin = meshGroup.aabbMin;
-                    newGeom.aabbMax = meshGroup.aabbMax;
+                    newGeom.aabb = meshGroup.aabb;
+                    BVH* bvh = meshBVHs[tokens[1].c_str()].get();
+                    //std::swap_ranges(tris.begin() + meshGroup.startTriIdx, tris.begin() + meshGroup.endTriIdx, bvh->orderedTris.begin());
                 }
             }
         }
@@ -154,7 +155,7 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
     for (int nodeIdx : model.scenes[model.defaultScene].nodes)
     {
         const tinygltf::Node& node = model.nodes[nodeIdx];
-        totalTris += parseGltfNodeRecursive(model, node, meshGroup.aabbMin, meshGroup.aabbMax);
+        totalTris += parseGltfNodeRecursive(model, node, meshGroup.aabb);
     }
 
     if (totalTris > 0)
@@ -164,21 +165,22 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
         meshGroup.valid = true;
 
         loadedMeshGroups.emplace(path, meshGroup);
+        constructBVH(path, meshGroup.startTriIdx, meshGroup.endTriIdx + 1);
     }
 
     return meshGroup;
 }
 
-int Scene::parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax)
+int Scene::parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::Node& node, AABB& aabb)
 {
     int totalTris = 0;
     for (int childNodeIdx : node.children)
     {
         // if there are children, parse those here
-        totalTris += parseGltfNodeRecursive(model, model.nodes[childNodeIdx], aabbMin, aabbMax);
+        totalTris += parseGltfNodeRecursive(model, model.nodes[childNodeIdx], aabb);
     }
 
-    totalTris += parseGltfNodeHelper(model, node, aabbMin, aabbMax);
+    totalTris += parseGltfNodeHelper(model, node, aabb);
 
     return totalTris;
 }
@@ -189,7 +191,7 @@ int Scene::parseGltfNodeRecursive(const tinygltf::Model& model, const tinygltf::
 /// <param name="model"></param>
 /// <param name="node"></param>
 /// <returns></returns>
-int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, glm::vec3& aabbMin, glm::vec3& aabbMax)
+int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, AABB& aabb)
 {
     int totalTris = 0;
 
@@ -233,8 +235,8 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     //cout << "(" << gltfMesh.positions[pCount].x << "," << gltfMesh.positions[pCount].y << "," << gltfMesh.positions[pCount].z << ")" << endl;
                     pCount++;
 
-                    gltfMesh.aabbMin = glm::min(gltfMesh.aabbMin, pos);
-                    gltfMesh.aabbMax = glm::max(gltfMesh.aabbMax, pos);
+                    gltfMesh.aabb.min = glm::min(gltfMesh.aabb.min, pos);
+                    gltfMesh.aabb.max = glm::max(gltfMesh.aabb.max, pos);
                 }
             }
             else
@@ -243,8 +245,8 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 return 0;
             }
 
-            aabbMin = glm::min(aabbMin, gltfMesh.aabbMin);
-            aabbMax = glm::max(aabbMax, gltfMesh.aabbMax);
+            aabb.min = glm::min(aabb.min, gltfMesh.aabb.min);
+            aabb.max = glm::max(aabb.max, gltfMesh.aabb.max);
 
             it = prim.attributes.find("NORMAL");
             if (it != prim.attributes.end())
@@ -308,6 +310,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v0.pos = gltfMesh.positions[gltfMesh.indices[i]];
                     tri.v1.pos = gltfMesh.positions[gltfMesh.indices[i+1]];
                     tri.v2.pos = gltfMesh.positions[gltfMesh.indices[i+2]];
+                    tri.computeAabbAndCentroid();
 
                     totalTris++;
 
@@ -341,6 +344,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v0.pos = gltfMesh.positions[i * 3];
                     tri.v1.pos = gltfMesh.positions[i * 3 + 1];
                     tri.v2.pos = gltfMesh.positions[i * 3 + 2];
+                    tri.computeAabbAndCentroid();
 
                     totalTris++;
 
@@ -367,6 +371,51 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
     return totalTris;
 }
 
+//void traverse(const BVHNode* node)
+//{
+//    if (node->left)
+//    {
+//        cout << node->left->nodeIdx << endl;
+//    }
+//    if (node->right)
+//    {
+//        cout << node->right->nodeIdx << endl;
+//    }
+//
+//    if (node->left && node->right)
+//    {
+//        traverse(node->left);
+//        traverse(node->right);
+//    }    
+//}
+
+void Scene::constructBVH(const string meshPath, unsigned int startTriIdx, unsigned int endTriIdx)
+{
+    meshBVHs[meshPath] = mkU<BVH>();
+    BVH* bvh = meshBVHs[meshPath].get();
+
+    int totalNodesSoFar = bvhNodes.size();
+
+    int nTris = endTriIdx - startTriIdx;
+
+    // Make a vector of pointers pointing to triangles
+    // We will sort on these later based on longest axis
+    //std::vector<Triangle*> triPtrs(nTris);
+    std::vector<int> triIndices(nTris);
+    for (unsigned int i = 0; i < nTris; i++)
+    {
+        //triPtrs[i] = &tris[startTriIdx + i];
+        triIndices[i] = startTriIdx + i;
+    }
+
+    bvh->buildBVHRecursively(totalNodesSoFar, 0, nTris, tris, triIndices, bvhNodes);
+
+    //cout << "=========== TRIS BEFORE BVH ORDERING ===========" << endl;
+    //reshuffleBVHTris(bvh, startTriIdx, endTriIdx);
+    //cout << "=========== TRIS AFTER BVH ORDERING ===========" << endl;
+    //cout << meshBVHs[meshPath]->getRootNode()->nodeIdx << endl;
+    //traverse(meshBVHs[meshPath]->getRootNode());
+}
 
 int Scene::loadCamera() {
     cout << "Loading Camera ..." << endl;

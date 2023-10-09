@@ -16,6 +16,13 @@
 #define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
 #define EPSILON           0.00001f
 
+// Easing how much I have to write when using unique pointers
+#define uPtr std::unique_ptr
+#define mkU std::make_unique
+#define X_AXIS 0
+#define Y_AXIS 1
+#define Z_AXIS 2
+
 class GuiDataContainer
 {
 public:
