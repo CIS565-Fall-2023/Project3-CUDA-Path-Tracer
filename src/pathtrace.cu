@@ -22,7 +22,7 @@
 #define ERRORCHECK 1
 #define ANTIALIA 1
 #define DEPTHOFFIELD 0
-#define MOTIONBLUR 1
+#define MOTIONBLUR 0
 #define MOVESPEED 0.5
 #define LOOPTIME 100.f
 #define MOVEDIRECTION glm::vec4(1,0,0,0)
@@ -278,7 +278,7 @@ __global__ void computeIntersections(
 //we modify the gemo position in each iter to make it realize motion blur effect
 #if MOTIONBLUR
 				float current_move = glm::sin(iter / LOOPTIME);
-				glm::vec3 curr_vec = glm::vec3(0, 2*current_move, 0);
+				glm::vec3 curr_vec = glm::vec3(current_move, current_move, 0);
 				//geom.transform = origTrans;
 				geom.translation = geom.origionalTranslation + curr_vec;
 
