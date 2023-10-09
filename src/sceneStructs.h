@@ -100,4 +100,5 @@ struct ShadeableIntersection {
   int materialId;
   int hitGeomIdx;
   glm::vec2 uv;
+  bool outside;
 };

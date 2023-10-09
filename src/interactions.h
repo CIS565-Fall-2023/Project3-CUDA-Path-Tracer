@@ -71,13 +71,16 @@ void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
+        bool outside,
         const Material &m,
         thrust::default_random_engine &rng,
         const int depth) {
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
-    glm::vec3 wo;
+    glm::vec3 wi;
+    glm::vec3 wo = normalize(pathSegment.ray.direction);
+
     if (depth == 1 || pathSegment.reflecting) {
         pathSegment.accumRay += pathSegment.color * m.emittance;
     }
@@ -86,16 +89,31 @@ void scatterRay(
         pathSegment.dead = true;
     }
     else {
-        if (m.hasReflective) {
+        if (m.hasRefractive) {
             pathSegment.reflecting = true;
-            wo = glm::reflect(pathSegment.ray.direction, normal);
+            pathSegment.color *= m.specular.color;
+
+            if (outside)
+            {
+                wi = glm::refract(wo, normal, 1.0f / m.indexOfRefraction);
+            }
+            else
+            {
+                wi = glm::refract(wo, -normal, m.indexOfRefraction);
+            }
+
+        }
+        else if (m.hasReflective) {
+            pathSegment.color *= m.specular.color;
+            pathSegment.reflecting = true;
+            wi = glm::reflect(wo, normal);
         }
         else {
             pathSegment.reflecting = false;
-            wo = calculateRandomDirectionInHemisphere(normal, rng);
+            wi = calculateRandomDirectionInHemisphere(normal, rng);
         }
         
-        pathSegment.ray.direction = glm::normalize(wo);
+        pathSegment.ray.direction = glm::normalize(wi);
         pathSegment.ray.origin = intersect;
     }
 }

@@ -210,6 +210,9 @@ void RenderImGui()
 	ImGui::Checkbox("Cache first iteration", &imguiData->caching);
 	ImGui::Checkbox("Material Sort", &imguiData->material_sort);
 
+	ImGui::SliderFloat("Camera Lens Radius", &imguiData->lens_radius, 0.0f, 5.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+	ImGui::SliderFloat("Camera focal distance", &imguiData->focal_distance, 0.0f, 40.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+
 	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
 	//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 

@@ -200,7 +200,7 @@ void pathtraceFreeAll() {
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
+__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments, float lens_radius, float focal_distance)
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -208,9 +208,9 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	if (x < cam.resolution.x && y < cam.resolution.y) {
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
-
+				
 		segment.ray.origin = cam.position;
-		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+		segment.color = glm::vec3(1.0f);
 		segment.accumRay = glm::vec3(0.0f);
 
 		segment.dead = false;
@@ -222,6 +222,40 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
 
+		// random
+
+		if (lens_radius > 0.0f) {
+			thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
+			thrust::uniform_real_distribution<float> u01(0, 1);
+
+			float x = (u01(rng) - 0.5) * 2;
+			float y = (u01(rng) - 0.5) * 2;
+			glm::vec2 offset;
+
+			if (pow(x, 2) > pow(y, 2)) {
+
+				float angle = (PI / 4) * (y / x);
+				offset = glm::vec2(x * cos(angle), x * sin(angle));
+
+			}
+			else {
+
+				float angle = (PI / 2) - (PI / 4 * (x / y));
+				offset = glm::vec2(y * cos(angle), y * sin(angle));
+			}
+
+			offset *= lens_radius;
+			float ft = -focal_distance / segment.ray.direction.z;
+
+			glm::vec3 pFocus = segment.ray.origin + ft * segment.ray.direction;
+
+			segment.ray.origin.x += offset.x;
+			segment.ray.origin.y += offset.y;
+
+			segment.ray.direction = glm::normalize(pFocus - segment.ray.origin);
+
+			
+		}
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
@@ -300,6 +334,7 @@ __global__ void computeIntersections(
 			intersections[path_index].surfaceNormal = normal;
 			intersections[path_index].hitGeomIdx = hit_geom_index;
 			intersections[path_index].uv = uv;
+			intersections[path_index].outside = outside;
 		}
 	}
 }
@@ -352,17 +387,16 @@ __global__ void shadeFakeMaterial(
 				if (material.emittance == 0 && !material.hasReflective) {
 					int rand;
 					if (envMap == -1) {
-						int(u01(rng) * (numLights)) % (numLights);
+						rand = int(u01(rng) * numLights) % numLights;
 					}
 					else {
-						int(u01(rng) * numLights) % numLights;
+						rand = int(u01(rng) * (numLights + 1)) % (numLights + 1);
 					}
 
 					glm::vec3 L;
 					float pdf;
 					Ray light;
 					int target = -1;
-					rand = 0;
 
 					glm::vec2 xi = glm::vec2(-0.5f) + glm::vec2(u01(rng), u01(rng));
 					if (rand == numLights) {
@@ -372,12 +406,12 @@ __global__ void shadeFakeMaterial(
 						glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
 						uv *= glm::vec2(0.1591, -0.3183);
 						uv += 0.5;
-						pdf = abs(dot(normalize(light.direction), -intersection.surfaceNormal));
+						pdf = abs(dot((light.direction), -intersection.surfaceNormal));
 
 						float4 env_color = tex2D<float4>(tex[envMap], uv.x, uv.y);
-						L.x = env_color.x;
-						L.y = env_color.y;
-						L.z = env_color.z;
+						L.x = env_color.x / 2.2f;
+						L.y = env_color.y / 2.2f;
+						L.z = env_color.z / 2.2f;
 					}
 					else {
 						Geom l = lights[rand];
@@ -421,18 +455,17 @@ __global__ void shadeFakeMaterial(
 					path.accumRay += L * path.color;
 				}
 
-				scatterRay(path, intersection_point, intersection.surfaceNormal, material, rng, depth);
+				scatterRay(path, intersection_point, intersection.surfaceNormal, intersection.outside, material, rng, depth);
 				if (geoms[intersection.hitGeomIdx].textureIdx != -1) {
 					float4 c = tex2D<float4>(tex[geoms[intersection.hitGeomIdx].textureIdx], intersection.uv.x, intersection.uv.y);
-					path.color *= material.color;
 					path.color *= glm::vec3(c.x, c.y, c.z);
 				}
-				else {
+				else if (!material.hasReflective && !material.hasRefractive) {
 					path.color *= material.color;
 				}
 
 				// Russian Roulette
-				if (depth > 3) {
+				if (depth > 2) {
 					float maxComponent = max(max(path.accumRay.r, path.accumRay.g), path.accumRay.b);
 					if (maxComponent > u01(rng)) {
 						path.accumRay /= maxComponent;
@@ -448,7 +481,7 @@ __global__ void shadeFakeMaterial(
 			}
 			else {
 				// sample environment map 
-				if (depth == 1) {
+				if (depth == 1 && envMap != -1) {
 					glm::vec3 d = path.ray.direction;
 					glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
 					uv *= glm::vec2(0.1591, -0.3183);
@@ -459,6 +492,10 @@ __global__ void shadeFakeMaterial(
 					path.accumRay.y = env_color.y;
 					path.accumRay.z = env_color.z;
 				}
+				else {
+					path.color = glm::vec3(0.0f);
+				}
+				
 				path.dead = true;
 			}
 		}
@@ -473,7 +510,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	if (index < nPaths)
 	{
 		PathSegment iterationPath = iterationPaths[index];
-		image[iterationPath.pixelIndex] += iterationPath.accumRay;
+		image[iterationPath.pixelIndex] += iterationPath.color;
 	}
 }
 
@@ -545,7 +582,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// TODO: perform one iteration of path tracing
 
-	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths, guiData->lens_radius, guiData->focal_distance);
 	checkCUDAError("generate camera ray");
 
 	if (currentlyCaching && !guiData->caching) {

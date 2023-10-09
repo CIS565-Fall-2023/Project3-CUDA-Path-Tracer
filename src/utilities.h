@@ -18,10 +18,13 @@
 class GuiDataContainer
 {
 public:
-    GuiDataContainer() : TracedDepth(0), caching(true), material_sort(false) {}
+    GuiDataContainer() : TracedDepth(0), caching(true), material_sort(false), lens_radius(1.0f), focal_distance(5.0f) {}
     int TracedDepth;
     bool caching;
     bool material_sort;
+    float lens_radius;
+    float focal_distance;
+
 };
 
 namespace utilityCore {

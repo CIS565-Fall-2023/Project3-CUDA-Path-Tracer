@@ -45,7 +45,7 @@ cube
 material 0
 TRANS       0 40 0
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       10 3 10
 
 // Floor
 OBJECT 1
@@ -58,7 +58,7 @@ SCALE       60 60 60
 // Sheep
 FILE 0
 sheep01.glb
-test.jpg
+sheep01.png
 material 1
 TRANS       0 2 0
 ROTAT       0 0 0
