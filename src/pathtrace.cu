@@ -326,7 +326,8 @@ __global__ void computeDirectLight(
 		ShadeableIntersection intersection = intersections[path_index];	
 
 		Material mIsect = materials[intersection.materialId];
-		if(mIsect.hasReflective) {
+		if(mIsect.type == SPEC_GLASS || mIsect.type == SPEC_REFL ||
+           mIsect.type == SPEC_TRANS) {
 		    directLights[path_index] = glm::vec3(0.0f);
 		    return;
 		}
@@ -472,7 +473,7 @@ __global__ void shadeFakeMaterial(
 		}
 
 		// Russian roulette
-		if (bounces > 3) {	
+		if (bounces > 3 && pathSegments[idx].remainingBounces > 0) {	
 		    float y = glm::max(pathSegments[idx].throughput.r, pathSegments[idx].throughput.g);
 			y = glm::max(y, pathSegments[idx].throughput.b);
 		    float q = glm::max(0.05f, 1 - y);
@@ -519,12 +520,16 @@ __global__ void shadeMaterialDirectLighting(
 			glm::vec3 intersect = getPointOnRay(pathSegments[idx].ray, intersection.t);
 			glm::vec3 normal = intersection.surfaceNormal;
 
-			if(material.hasReflective){
+			if(material.type == SPEC_GLASS || material.type == SPEC_REFL ||
+               material.type == SPEC_TRANS || material.type == PLASTIC){
 			    pathSegments[idx].specularBounce = true;
 			}
 			else{
-			    pathSegments[idx].specularBounce = false;
-				pathSegments[idx].L += pathSegments[idx].throughput * directLights[idx];
+			    pathSegments[idx].specularBounce = false;			
+			}
+
+			if(material.type == DIFFUSE || material.type == PLASTIC){
+			    pathSegments[idx].L += pathSegments[idx].throughput * directLights[idx];
 			}
 		
 			scatterRay(pathSegments[idx], intersect, normal, material, rng);
@@ -533,10 +538,12 @@ __global__ void shadeMaterialDirectLighting(
 		}
 		else {
 		    pathSegments[idx].remainingBounces = 0;
+			// Env color
+			//pathSegments[idx].L += pathSegments[idx].throughput * glm::vec3(0.25, 0.25, 0.25);
 		}
 
 		// Russian roulette
-		if (bounces > 3) {	
+		if (bounces > 3 && pathSegments[idx].remainingBounces > 0) {	
 		    float y = glm::max(pathSegments[idx].throughput.r, pathSegments[idx].throughput.g);
 			y = glm::max(y, pathSegments[idx].throughput.b);
 		    float q = glm::max(0.05f, 1 - y);

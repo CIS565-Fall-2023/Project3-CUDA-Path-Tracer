@@ -13,6 +13,14 @@ enum GeomType {
     MESH,
 };
 
+enum MatType {
+    DIFFUSE,
+    SPEC_GLASS,
+    SPEC_REFL,
+    SPEC_TRANS,
+    PLASTIC,
+};
+
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
@@ -53,6 +61,7 @@ struct Geom {
 };
 
 struct Material {
+    MatType type;
     glm::vec3 color;
     struct {
         float exponent;

@@ -210,6 +210,21 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.emittance = atof(tokens[1].c_str());
             }
         }
+
+        newMaterial.type = DIFFUSE;
+        if (newMaterial.hasReflective >= 1.0f) {
+            newMaterial.type = SPEC_REFL;  
+        }
+        else if (newMaterial.hasRefractive >= 1.0f) {
+            newMaterial.type = SPEC_TRANS;
+        }
+        else if (newMaterial.hasReflective > 0.0f && newMaterial.hasRefractive == 0) {
+            newMaterial.type = PLASTIC;
+        }
+        else if (newMaterial.hasReflective > 0.0f && newMaterial.hasRefractive > 0) {
+            newMaterial.type = SPEC_GLASS;
+        }
+
         materials.push_back(newMaterial);
         return 1;
     }
