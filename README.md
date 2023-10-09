@@ -57,3 +57,26 @@ In this part, I write an interesting camera effect called depth of field. It ref
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-34-10z.547samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_15-00-34z.637samp.png" width="300" height="300">
 
 
+# Analysis
+
+### Stream Compaction
+
+
+### Material Sorting
+
+
+
+
+### Open Space & close space
+|in the box|without the box|
+|:-----:|:-----:|
+|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/compare1.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/compare2.png" width="300" height="300">
+
+
+
+# reference
+
+https://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models#ProjectiveCamera::focalDistance
+https://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations#ConcentricSampleDisk
+https://en.wikipedia.org/wiki/Schlick%27s_approximation
+561 HW6 (personal reference)
