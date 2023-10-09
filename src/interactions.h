@@ -99,13 +99,12 @@ void scatterRay(
     // calculateRandomDirectionInHemisphere defined above.
     Ray newRay;        
 
-    //if (m.hasRefractive)
     if (m.hasRefractive)
     {
         glm::vec3 indir = pathSegment.ray.direction;
         float costheta = glm::dot(-1.0f * indir, normal);
         float sintheta = sqrtf(1 - costheta * costheta);
-        float ratio = 1.0 / 1.4f;
+        float ratio = 1.0f / m.indexOfRefraction;
         //if the angle between normal and ray is more then 90 degree
         if (costheta <= 0.0f)
         {
@@ -121,15 +120,13 @@ void scatterRay(
         if (canRefract && prob > 0.07f)
         {
             newRay = { intersect, glm::refract(indir, normal, ratio) };
-            pathSegment.color *= 1.02f;
+            pathSegment.color *= 1.67f * m.color;
         }
         else
         {
             newRay = { intersect, calculateSpecularReflection(normal, pathSegment) };
             pathSegment.color = pathSegment.color * m.color * 0.9f;
         }
-
-        //newRay = { intersect, pathSegment.ray.direction };
 
     }
     else if (m.hasReflective)

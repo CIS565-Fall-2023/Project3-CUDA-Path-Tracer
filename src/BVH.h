@@ -48,9 +48,11 @@ __device__ unsigned int genMortonCode(AABB bbox, glm::vec3 geoMin, glm::vec3 geo
 }
 
 
-__device__ unsigned long expandMorton(int index,unsigned int mortonCode)
+__device__ unsigned long long expandMorton(int index,unsigned int mortonCode)
 {
-	unsigned long exMortonCode = (mortonCode << 32) + index;
+	unsigned long long exMortonCode = mortonCode;
+	exMortonCode <<= 32;
+	exMortonCode += index;
 	return exMortonCode;
 }
 
@@ -61,17 +63,17 @@ thrust::stable_sort_by_key(mortonCodes, mortonCodes + triangleCount, triangleInd
 //total input is a 30 x N matrix
 //currentIndex is between 0 - N-1
 //the input morton codes should be in the reduced form, no same elements are expected to appear twice!
-__device__ unsigned int getSplit(unsigned int* mortonCodes, unsigned int currIndex, unsigned int nextIndex, unsigned int bound)
+__device__ int getSplit(unsigned int* mortonCodes, unsigned int currIndex, int nextIndex, unsigned int bound)
 {
 	if (nextIndex < 0 || nextIndex >= bound)
 		return -1;
 	//NOTE: if use small size model, this step can be skipped
 	// just to ensure the morton codes are unique!
 	//unsigned int mask = mortonCodes[currIndex] ^ mortonCodes[nextIndex];
-	unsigned long mask = expandMorton(currIndex, mortonCodes[currIndex]) ^ expandMorton(nextIndex, mortonCodes[nextIndex]);
-	// __clz gives the number of consecutive zero bits in that number
+	unsigned long long mask = expandMorton(currIndex, mortonCodes[currIndex]) ^ expandMorton(nextIndex, mortonCodes[nextIndex]);
+	// __clzll gives the number of consecutive zero bits in that number
 	// this gives us the index of the most significant bit between the two numbers
-	int commonPrefix = __clz(mask);
+	int commonPrefix = __clzll(mask);
 	return commonPrefix;
 }
 

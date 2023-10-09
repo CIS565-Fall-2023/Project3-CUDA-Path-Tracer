@@ -20,15 +20,15 @@
 #include <bitset>
 
 #define ERRORCHECK 1
-#define DENOISING 1
-#define SVGF 1
+#define DENOISING 0
+#define SVGF 0
 #define ANTIALISING 0
 #define CACHEFIRSTRAY 1
 #define DEFOCUSING 0
 #define BVHON 1
 #define DIRECTLIGHTING 1
 
-#define LEN 5.0f
+#define LEN 7.0f
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -180,11 +180,6 @@ void initMeshInfo(Scene* scene)
 		offsets.push_back(triangles.size());
 		bboxes.push_back(AABB{ mesh1.bbmin, mesh1.bbmax });
 	}
-	/**
-	for (int i = 0; i < 10; i++)
-	{
-		cout << (hst_scene->gltfMeshes)[0].triangles[i].v1.x << "," << (hst_scene->gltfMeshes)[0].triangles[i].v1.y << "," << (hst_scene->gltfMeshes)[0].triangles[i].v1.z << endl;
-	}*/
 	cudaMalloc(&dev_triangles, triangles.size()*sizeof(Triangle));
 	cudaMemcpy(dev_triangles, triangles.data() ,triangles.size()*sizeof(Triangle), cudaMemcpyHostToDevice);
 	cudaMalloc(&dev_bboxes, bboxes.size() * sizeof(AABB));
@@ -886,9 +881,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			lightSrcNumber
 			);
 		dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_paths + num_paths, stay_bouncing());
-		std::cout << tempPaths << std::endl;
+		//std::cout << tempPaths << std::endl;
 		tempPaths = dev_path_end - dev_paths;
-		std::cout << tempPaths << std::endl;
+		//std::cout << tempPaths << std::endl;
 		iterationComplete = (tempPaths == 0); // TODO: should be based off stream compaction results.
 
 		if (guiData != NULL)
@@ -940,7 +935,7 @@ void buildBVHTree(int startIndexBVH, int startIndexTri, GLTFMesh mesh1, int triC
 	thrust::stable_sort_by_key(thrust::device, dev_mortonCodes, dev_mortonCodes + triCount, dev_tmpBVHNodes + triCount - 1);
 
 
-	/**
+	/*
 	unsigned int* hstMorton = (unsigned int*)malloc(sizeof(unsigned int) * triCount);
 	cudaMemcpy(hstMorton, dev_mortonCodes, triCount * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
@@ -949,12 +944,12 @@ void buildBVHTree(int startIndexBVH, int startIndexTri, GLTFMesh mesh1, int triC
 		cout << std::bitset<30>(hstMorton[i]) << endl;
 	}
 	cout << endl;
-	free(hstMorton);
-	*/
+	free(hstMorton);*/
+	
 	
 
 	buildSplitList << <numblocks, blockSize1d >> > (triCount, dev_mortonCodes, dev_tmpBVHNodes);
-	//the maximum of level is 30 + 32
+
 	//can use atomic operation for further optimization
 	for (int i = 0; i < triCount; i++)
 	{
@@ -963,13 +958,13 @@ void buildBVHTree(int startIndexBVH, int startIndexTri, GLTFMesh mesh1, int triC
 
 	cudaMemcpy(dev_BVHNodes + startIndexBVH, dev_tmpBVHNodes, (triCount * 2 - 1) * sizeof(BVHNode), cudaMemcpyDeviceToDevice);
 	
-	/**
-	BVHNode* hstBVHNodes = (BVHNode*)malloc(sizeof(BVHNode) * (startIndex + 2 * triCount - 1));
-	cudaMemcpy(hstBVHNodes, dev_BVHNodes, sizeof(BVHNode) * (startIndex + 2 * triCount - 1), cudaMemcpyDeviceToHost);
-	for (int i = 0; i < startIndex + 2 * triCount - 1; i++)
+	/*
+	BVHNode* hstBVHNodes = (BVHNode*)malloc(sizeof(BVHNode) * (startIndexBVH + 2 * triCount - 1));
+	cudaMemcpy(hstBVHNodes, dev_BVHNodes, sizeof(BVHNode) * (startIndexBVH + 2 * triCount - 1), cudaMemcpyDeviceToHost);
+	for (int i = 0; i < startIndexBVH + 2 * triCount - 1; i++)
 	{
 		cout << i << ": " << hstBVHNodes[i].leftIndex << "," << hstBVHNodes[i].rightIndex << "  parent:" << hstBVHNodes[i].parent << endl;
-		//cout << i << ": " << hstBVHNodes[i].bbox.max.x << "," << hstBVHNodes[i].bbox.max.y << "," << hstBVHNodes[i].bbox.max.z << endl;
+		cout << i << ": " << hstBVHNodes[i].bbox.max.x << "," << hstBVHNodes[i].bbox.max.y << "," << hstBVHNodes[i].bbox.max.z << endl;
 		//cout << i << ": " << hstBVHNodes[i].bbox.min.x << "," << hstBVHNodes[i].bbox.min.y << "," << hstBVHNodes[i].bbox.min.z << endl;
 	}
 	cout << endl;

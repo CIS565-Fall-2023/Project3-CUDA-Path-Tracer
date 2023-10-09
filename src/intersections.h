@@ -152,6 +152,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
+
     if (!outside) {
         normal = -normal;
     }
@@ -246,10 +247,6 @@ __host__ __device__ float meshIntersectionTest(Geom geo, Triangle* triangles, in
         }
     }
     intersectionPoint = multiplyMV(geo.transform, glm::vec4(getPointOnRay(q, closest), 1.0f));
-    if (!outside)
-    {
-        normal = -normal;
-    }
     return closest;
 }
 
@@ -382,10 +379,6 @@ __device__ float traverseTree(BVHNode* nodes, Geom geo, Triangle* triangles,
         }
     }
     intersectionPoint = multiplyMV(geo.transform, glm::vec4(getPointOnRay(objectRay, closest), 1.0f));
-    if (!outside)
-    {
-        normal = -normal;
-    }
     return closest;
 }
 
