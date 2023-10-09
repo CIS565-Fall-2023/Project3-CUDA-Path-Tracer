@@ -48,6 +48,135 @@ Scene::Scene(string filename) {
             }
         }
     }
+    constructBVHforAllGeom();
+}
+
+void Scene::constructBVHforAllGeom()
+{
+    for (int i = 0; i < geoms.size(); i++) 
+    {
+        if (geoms[i].type == OBJ) 
+        {
+            buildBVH(geoms[i].triStart, geoms[i].triEnd);
+        }
+    }
+}
+
+int Scene::buildBVH(int start, int end)
+{
+    if (triangles.empty()) return -1;
+
+    std::vector<BVHPrimitiveInfo> primInfo;
+
+    for (int i = start; i < end; i++) 
+    {
+        const Triangle& tri = triangles[i];
+
+        const glm::vec3& v1 = tri.verts[0];
+        const glm::vec3& v2 = tri.verts[1];
+        const glm::vec3& v3 = tri.verts[2];
+
+        glm::vec3 centroid = (v1 + v2 + v3) * (1.0f / 3.0f);
+        BVHPrimitiveInfo info(i, BBox(v1, v2, v3), centroid);
+        primInfo.push_back(info);
+    }
+
+    int rootIdx = 0;
+    int numNodes = (end - start) * 2 - 1;
+    std::vector<BVHNode> nodes(numNodes);
+
+    BVHNode& root = nodes[rootIdx];
+    root.left = 0;
+    root.right = 0;
+    root.firstPrimOffset = 0;
+    root.nPrimitives = end - start;
+
+    updateBVHNode(primInfo, nodes, rootIdx);
+
+    int nodesVisited = 1;
+    int maxSize;
+    int maxDepth = subdivide(primInfo, nodes, rootIdx, nodesVisited, maxSize);
+
+    std::vector<Triangle> tempTris(end - start);
+    for (int i = 0; i < end - start; i++) 
+    {
+        tempTris[i] = triangles[primInfo[i].id];
+    }
+    for (int i = 0; i < end - start; i++)
+    {
+        triangles[start + i] = tempTris[i];
+    }
+
+    bvhNodes.insert(bvhNodes.end(), nodes.begin(), nodes.begin() + nodesVisited);
+    return maxDepth;
+}
+
+void Scene::updateBVHNode(const std::vector<BVHPrimitiveInfo>& primInfo, std::vector<BVHNode>& nodes, int idx)
+{
+    if (idx < 0 || idx >= nodes.size()) return;
+
+    BVHNode& node = nodes[idx];
+    node.bbox = BBox();
+    
+    for (int i = node.firstPrimOffset; i < node.firstPrimOffset + node.nPrimitives; i++) 
+    {
+        node.bbox = Union(node.bbox, primInfo[i].bbox);
+    }
+}
+
+int Scene::subdivide(std::vector<BVHPrimitiveInfo>& primInfo, std::vector<BVHNode>& nodes, int idx, int& nodesVisited, int& maxSize)
+{
+    if (idx < 0 || idx >= nodes.size()) return -1;
+
+    BVHNode& node = nodes[idx];
+    node.splitAxis = node.bbox.MaximumExtent();
+
+    int saxis = node.splitAxis;
+
+    float splitPos = node.bbox.minP[saxis] + node.bbox.getDiagonal()[saxis] * 0.5f;
+
+    int left = node.firstPrimOffset;
+    int right = left + node.nPrimitives - 1;
+    while (left <= right) 
+    {
+        if (primInfo[left].bbox.minP[saxis] < splitPos && primInfo[left].bbox.maxP[saxis] < splitPos)
+            left++;
+        else 
+        {
+            std::swap(primInfo[left], primInfo[right]);
+            right--;
+        }        
+    }
+
+    int leftNum = left - node.firstPrimOffset;
+    if (leftNum == 0 || leftNum == node.nPrimitives) 
+    {
+        maxSize = node.nPrimitives;
+        return 1;
+    }
+
+    int leftIdx = nodesVisited++;
+    int rightIdx = nodesVisited++;
+    node.left = leftIdx;
+    node.right = rightIdx;
+
+    nodes[leftIdx].firstPrimOffset = node.firstPrimOffset;
+    nodes[leftIdx].nPrimitives = leftNum;
+    nodes[rightIdx].firstPrimOffset = left;
+    nodes[rightIdx].nPrimitives = node.nPrimitives - leftNum;
+    node.nPrimitives = 0;
+
+    updateBVHNode(primInfo, nodes, leftIdx);
+    updateBVHNode(primInfo, nodes, rightIdx);
+
+    int maxLeftSize;
+    int maxRightSize;
+
+    int leftDepth = subdivide(primInfo, nodes, leftIdx, nodesVisited, maxLeftSize);
+    int rightDepth = subdivide(primInfo, nodes, rightIdx, nodesVisited, maxRightSize);
+
+    maxSize = glm::max(maxLeftSize, maxRightSize);
+    return glm::max(leftDepth, rightDepth) + 1;
 }
 
 int Scene::loadGeom(string objectid) {
@@ -271,15 +400,15 @@ int Scene::loadObj(const char* filename)
                 }          
             }
             index_offset += 3;
+            tri.bbox = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
             triangles.push_back(tri);
-            if (f == 0) curBB = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
-            else curBB = Union(curBB, BBox(tri.verts[0], tri.verts[1], tri.verts[2]));
+            if (f == 0) curBB = tri.bbox;
+            else curBB = Union(curBB, tri.bbox);
         }
     }
 
     newGeom.triEnd = triangles.size();
-    newGeom.bbMin = curBB.minP;
-    newGeom.bbMax = curBB.maxP;
+    newGeom.box = curBB;
     geoms.push_back(newGeom);
 
     return 1;
@@ -448,17 +577,17 @@ int Scene::loadGLTF(const char* filename)
                         tri.uvs[2] = glm::vec2(uvs[idx2 * 2], uvs[idx2 * 2 + 1]);
                     }
 
+                    tri.bbox = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
                     triangles.push_back(tri);
-                    if (i == 0) curBB = BBox(tri.verts[0], tri.verts[1], tri.verts[2]);
-                    else curBB = Union(curBB, BBox(tri.verts[0], tri.verts[1], tri.verts[2]));
+                    if (i == 0) curBB = tri.bbox;
+                    else curBB = Union(curBB, tri.bbox);
                 }
             }
         }
     }
 
     newGeom.triEnd = triangles.size();
-    newGeom.bbMin = curBB.minP;
-    newGeom.bbMax = curBB.maxP;
+    newGeom.box = curBB;
     geoms.push_back(newGeom);
 
     return 1;

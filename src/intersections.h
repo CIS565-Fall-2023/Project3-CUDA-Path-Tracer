@@ -7,6 +7,7 @@
 #include "utilities.h"
 
 #define BOUNDING_BOX 1
+#define BVH_MAX_SIZE 128
 
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
@@ -37,21 +38,18 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
-__host__ __device__ bool hasIntersection(const Ray& ray, const Geom& geom)
+__host__ __device__ bool hasIntersection(const Ray& transformedRay, const BBox& box)
 {
-    Ray q;
-    q.origin = multiplyMV(geom.inverseTransform, glm::vec4(ray.origin, 1.0f));
-    q.direction = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(ray.direction, 0.0f)));
-
     float tmin = -1e38f;
     float tmax = 1e38f;
     glm::vec3 tmin_n;
     glm::vec3 tmax_n;
     for (int xyz = 0; xyz < 3; ++xyz) {
-        float qdxyz = q.direction[xyz];
+        float qdxyz = transformedRay.direction[xyz];
+        float qoxyz = transformedRay.origin[xyz];
         if (glm::abs(qdxyz) > 0.00001f) {
-            float t1 = (geom.bbMin[xyz] - q.origin[xyz]) / qdxyz;
-            float t2 = (geom.bbMax[xyz] - q.origin[xyz]) / qdxyz;
+            float t1 = (box.minP[xyz] - qoxyz) / qdxyz;
+            float t2 = (box.maxP[xyz] - qoxyz) / qdxyz;
             float ta = glm::min(t1, t2);
             float tb = glm::max(t1, t2);
             glm::vec3 n;
@@ -66,12 +64,7 @@ __host__ __device__ bool hasIntersection(const Ray& ray, const Geom& geom)
             }
         }
     }
-
-    if (tmax >= tmin && tmax > 0) {
-        glm::vec3 intersectionPoint = getPointOnRay(ray, tmin);
-        return true;
-    }
-    return false;
+    return tmax >= tmin && tmax > 0;
 }
 
 // CHECKITOUT
@@ -186,16 +179,16 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* t
     glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside) 
 {
 
+    Ray q;
+    q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+    q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
 #if BOUNDING_BOX
-    if (!hasIntersection(r, mesh)) 
+    if (!hasIntersection(q, mesh.box))
     {
         return -1;
     }
 #endif
-
-    Ray q;
-    q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
-    q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     float tmin = 1e38f;
     Triangle minTri;
@@ -221,6 +214,89 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* t
     }
 
     if (tmin < 1e38f) 
+    {
+        float b1 = minBcenter[0];
+        float b2 = minBcenter[1];
+        float b = 1 - b1 - b2;
+        normal = b1 * minTri.nors[0] + b2 * minTri.nors[1] + b * minTri.nors[2];
+
+        glm::vec3 objspaceIntersection = getPointOnRay(q, tmin);
+
+        intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objspaceIntersection, 1.f));
+        normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.f)));
+
+        outside = glm::dot(normal, q.direction) < 0;
+
+        if (!outside)
+        {
+            normal = -normal;
+        }
+
+        return glm::length(r.origin - intersectionPoint);
+    }
+
+    return -1;
+}
+
+__host__ __device__ float bvhTriangleIntersectionTest(Geom mesh, Ray r, Triangle* triangles, BVHNode* bvhNodes, int triSize,
+    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside) 
+{
+    Ray q;
+    q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+    q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    BVHNode* curBVH = bvhNodes + mesh.triStart;
+
+    int bvhStack[BVH_MAX_SIZE];
+    bvhStack[0] = 0;
+    int endIdx = 0;
+
+    float tmin = FLT_MAX;
+    Triangle minTri;
+    glm::vec3 minBcenter;
+
+    while (endIdx >= 0 && endIdx < BVH_MAX_SIZE) 
+    {
+        int curIdx = bvhStack[endIdx];
+        endIdx--;
+        const BVHNode& curNode = bvhNodes[curIdx];
+
+        if (!hasIntersection(q, curNode.bbox)) continue;
+
+        if (curNode.nPrimitives > 0) 
+        {
+            for (int i = curNode.firstPrimOffset; i < curNode.firstPrimOffset + curNode.nPrimitives; i++) 
+            {
+                const Triangle& tri = triangles[i];
+                glm::vec3 bcenter;
+                bool intersect = glm::intersectRayTriangle(q.origin, q.direction, tri.verts[0], tri.verts[1], tri.verts[2], bcenter);
+
+                if (!intersect) continue;
+
+                float t = bcenter.z;
+
+                if (t < tmin && t > 0.0)
+                {
+                    tmin = t;
+                    minTri = tri;
+                    minBcenter = bcenter;
+                }
+            }
+        }
+        else 
+        {
+            if (curNode.left != -1)
+            {
+                bvhStack[++endIdx] = curNode.left;
+            }
+            if (curNode.right != -1)
+            {
+                bvhStack[++endIdx] = curNode.right;
+            }
+        }
+    }
+
+    if (tmin < 1e38f)
     {
         float b1 = minBcenter[0];
         float b2 = minBcenter[1];

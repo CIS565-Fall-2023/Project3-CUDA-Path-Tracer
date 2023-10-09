@@ -29,4 +29,10 @@ public:
     std::vector<Geom> lights;
 
     std::vector<Triangle> triangles;
+    std::vector<BVHNode> bvhNodes;
+
+    void constructBVHforAllGeom();
+    int buildBVH(int start, int end);
+    void updateBVHNode(const std::vector<BVHPrimitiveInfo>& primInfo, std::vector<BVHNode>& nodes, int idx);
+    int subdivide(std::vector<BVHPrimitiveInfo>& primInfo, std::vector<BVHNode>& nodes, int idx, int& nodesVisited, int& maxSize);
 };

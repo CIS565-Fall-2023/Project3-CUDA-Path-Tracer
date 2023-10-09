@@ -27,6 +27,7 @@
 #define DIRECT_LIGHTING 1
 #define MOTION_BLUR 0
 #define MOTION_VELO glm::vec3(0.5, 0.5, 0.0)
+#define BVH 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -97,6 +98,7 @@ static ShadeableIntersection* dev_intersections = NULL;
 static ShadeableIntersection* dev_first_bounce = NULL;
 static Geom* dev_lights = NULL;
 static Triangle* dev_triangles = NULL;
+static BVHNode* dev_bvh_nodes = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -130,6 +132,8 @@ void pathtraceInit(Scene* scene) {
 	cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 	cudaMalloc(&dev_triangles, scene->triangles.size() * sizeof(Triangle));
 	cudaMemcpy(dev_triangles, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_bvh_nodes, scene->bvhNodes.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvh_nodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
 
 	checkCUDAError("pathtraceInit");
 }
@@ -144,6 +148,7 @@ void pathtraceFree() {
 	cudaFree(dev_first_bounce);
 	cudaFree(dev_lights);
 	cudaFree(dev_triangles);
+	cudaFree(dev_bvh_nodes);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -238,6 +243,7 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, Triangle* triangles
+	, BVHNode* bvhNodes
 	, int tri_size
 	, int geoms_size
 	, ShadeableIntersection* intersections
@@ -277,7 +283,11 @@ __global__ void computeIntersections(
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
 			else if (geom.type == OBJ) 
 			{
+#if BVH
+				t = bvhTriangleIntersectionTest(geom, pathSegment.ray, triangles, bvhNodes, tri_size, tmp_intersect, tmp_normal, tmp_uv, outside);
+#else
 				t = triangleIntersectionTest(geom, pathSegment.ray, triangles, tri_size, tmp_intersect, tmp_normal, tmp_uv, outside);
+#endif
 			}
 
 			// Compute the minimum t from the intersection tests to determine what
@@ -532,6 +542,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, dev_triangles
+				, dev_bvh_nodes
 				, hst_scene->triangles.size()
 				, hst_scene->geoms.size()
 				, dev_first_bounce
@@ -552,6 +563,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, dev_triangles
+				, dev_bvh_nodes
 				, hst_scene->triangles.size()
 				, hst_scene->geoms.size()
 				, dev_intersections
@@ -566,6 +578,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_paths
 			, dev_geoms
 			, dev_triangles
+			, dev_bvh_nodes
 			, hst_scene->triangles.size()
 			, hst_scene->geoms.size()
 			, dev_intersections
