@@ -88,18 +88,19 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	}
 }
 
-static SceneConfig* hst_scene = NULL;
+static SceneConfig* scene_config = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle* dev_triangles= nullptr;
+static DevScene* scene;
 
 /* TODO: Solve the weird shiny line in the empty room! */
-//static Scene* pa = new Scene("..\\scenes\\pathtracer_empty_room.glb");
+//static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_empty_room.glb");
 
-//static Scene* pa = new Scene("..\\scenes\\pathtracer_direct_lighting.glb");
-static Scene * pa = new Scene("..\\scenes\\pathtracer_bunny.glb");
+//static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_direct_lighting.glb");
+static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_bunny_scaled.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -159,8 +160,8 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 
 	// TODO: initialize any extra device memeory you need
 
-	textureSize = pa->textures.size();
-	auto textureInfos = pa->textures.data();
+	textureSize = hst_scene->textures.size();
+	auto textureInfos = hst_scene->textures.data();
 	cudaMalloc(&dev_textureInfos, (textureSize +1)* sizeof(TextureInfo)); // env_map also malloced
 	cudaMemcpy(dev_textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice); // First copy textureSize of common texture
 
@@ -177,31 +178,31 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 	}
 
 
-	auto bsdfStructs = pa->bsdfStructs.data();
-	cudaMalloc(&dev_bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct));
-	cudaMemcpy(dev_bsdfStructs, bsdfStructs, pa->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
+	auto bsdfStructs = hst_scene->bsdfStructs.data();
+	cudaMalloc(&dev_bsdfStructs, hst_scene->bsdfStructs.size() * sizeof(BSDFStruct));
+	cudaMemcpy(dev_bsdfStructs, bsdfStructs, hst_scene->bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
 
-	initBSDFWithTextures << <1, 1 >> > (dev_bsdfStructs, dev_textures, pa->bsdfStructs.size());
+	initBSDFWithTextures << <1, 1 >> > (dev_bsdfStructs, dev_textures, hst_scene->bsdfStructs.size());
 	checkCUDAError("initBSDFWithTextures");
 
 
 	bvh = new BVHAccel();
-	bvh->initBVH(pa->triangles);
+	bvh->initBVH(hst_scene->triangles);
 	auto triangles = bvh->orderedPrims.data();
-	cudaMalloc(&dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
-	cudaMemcpy(dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	cudaMalloc(&hst_scene->dev_triangles, bvh->orderedPrims.size() * sizeof(Triangle));
+	cudaMemcpy(hst_scene->dev_triangles, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 	cudaMalloc(&dev_bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
 	cudaMemcpy(dev_bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
 
-	pa->initConfig(*config);
-	pa->initLights(bvh->orderedPrims);
-	cudaMalloc(&dev_lights, pa->lights.size() * sizeof(Light));
-	cudaMemcpy(dev_lights, pa->lights.data(), pa->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
+	hst_scene->initConfig(*config);
+	hst_scene->initLights(bvh->orderedPrims);
+	cudaMalloc(&dev_lights, hst_scene->lights.size() * sizeof(Light));
+	cudaMemcpy(dev_lights, hst_scene->lights.data(), hst_scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 	checkCUDAError("cudaMemcpy dev_lights");
 
-	pa->initEnvironmentalMap();
-	const TextureInfo & env_map = pa->config.env_map;
+	hst_scene->initEnvironmentalMap();
+	const TextureInfo & env_map = hst_scene->config.env_map;
 	cudaMemcpy(dev_textureInfos + textureSize, &env_map, 1 * sizeof(TextureInfo), cudaMemcpyHostToDevice);
 	cudaMalloc(&dev_texture_data, env_map.width * env_map.height * env_map.nrChannels * sizeof(unsigned char));
 	cudaMemcpy(dev_texture_data, env_map.data.data(), env_map.width * env_map.height * env_map.nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
@@ -213,7 +214,7 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 	int blockSize = 256;
 	dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
 	if (triangle_size) {
-		initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (dev_triangles, dev_textures, triangle_size);
+		initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (hst_scene->dev_triangles, dev_textures, triangle_size);
 	}
 	else {
 		printf("WARNING: NO TRIANGLES IN THE SCENE!\n");
@@ -223,11 +224,11 @@ void pathtraceInitBeforeMainLoop(SceneConfig * config) {
 
 }
 
-void pathtraceInit(SceneConfig* scene) {
+void pathtraceInit(SceneConfig* hst_scene) {
 	
-	hst_scene = scene;
+	scene_config = hst_scene;
 
-	const Camera& cam = hst_scene->state.camera;
+	const Camera& cam = scene_config->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
 	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
@@ -270,19 +271,19 @@ void pathtraceFree() {
 }
 
 void pathtraceFreeAfterMainLoop() {
-	cudaFree(dev_triangles);
+	cudaFree(hst_scene->dev_triangles);
 	cudaFree(dev_bsdfStructs);
 	cudaFree(dev_textureInfos);
 
 	/* TODO: Also need to free the texture that dev_texture point to*/
 	cudaFree(dev_textures);
 	delete bvh;
-	delete pa;
+	delete hst_scene;
 }
 
 /**
 * Generate PathSegments with rays from the camera through the screen into the
-* scene, which is the first bounce of rays.
+* hst_scene, which is the first bounce of rays.
 *
 * Antialiasing - add rays for sub-pixel sampling
 * motion blur - jitter rays "in time"
@@ -313,6 +314,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 		segment.constantTerm = glm::vec3(1.0f, 1.0f, 1.0f);
+		segment.prevWeight = -1.0f;
 	}
 }
 
@@ -390,6 +392,7 @@ __global__ void shadeBSDF(
 #if ONE_BOUNCE_DIRECT_LIGHTINIG
 	, Light * lights
 	, int lights_size
+	, float inverse_sum_power
 #endif
 	, int screenHeight
 	, int screenWidth
@@ -402,9 +405,6 @@ __global__ void shadeBSDF(
 		ShadeableIntersection intersection = shadeableIntersections[idx];
 		PathSegment& pathSegment = pathSegments[idx];
 		if (intersection.t > 0.0f) { // if the intersection exists...
-		  // Set up the RNG
-		  // LOOK: this is how you use thrust's RNG! Please look at
-		  // makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 			const glm::vec3 rands(u01(rng), u01(rng), u01(rng));
@@ -417,12 +417,9 @@ __global__ void shadeBSDF(
 					pathSegment.color = bsdfStruct.emissiveFactor;
 				}
 				else {
-					pathSegment.color += (Math::luminance(bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm);
+					pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm;
 				}
 			}
-			// Otherwise, do some pseudo-lighting computation. This is actually more
-			// like what you would expect from shading in a rasterizer like OpenGL.
-			// TODO: replace this! you should be able to start with basically a one-liner
 			else {
 				glm::mat3x3 o2w;
 				make_coord_space(o2w, intersection.surfaceNormal);
@@ -432,12 +429,14 @@ __global__ void shadeBSDF(
 					intersection.surfaceNormal = o2w * sampledNormal;
 					make_coord_space(o2w, intersection.surfaceNormal);
 					w2o = glm::transpose(o2w);
+#pragma region bump-bug
 					/* Fix bump mapping potential bug */
 					//auto dir = -pathSegment.ray.direction;
 					//glm::vec3 _wo = w2o * -pathSegment.ray.direction;
 					//printf("_wo: %f, %f, %f dir: %f, %f, %f\n", _wo.x, _wo.y, _wo.z, dir.x, dir.y, dir.z);
 					//pathSegment.color = glm::vec3(intersection.surfaceNormal);
 					//return;
+#pragma endregion
 				}
 				//return;
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
@@ -461,6 +460,7 @@ __global__ void shadeBSDF(
 					const auto & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(rands));
 					glm::vec3 _f;
 					glm::vec3 Li = ls.L;
+					pathSegment.prevWeight = -1.0f;
 					if (ls.pdf > EPSILON) {
 						light_pdf = ls.pdf;
 						glm::vec3 light_wi = w2o * ls.wi;
@@ -472,29 +472,31 @@ __global__ void shadeBSDF(
 							light_ray.direction = ls.wi;
 							light_ray.origin = intersect;
 							light_ray.min_t = EPSILON;
-							light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
+							float distance = glm::length(ls.lightIntersection.intersectionPoint - intersect);
+							light_ray.max_t = distance - 1e-4f; // Do occulusion test by setting max_t
 							ShadeableIntersection light_ray_intersection{ -1.0f }; // set t = -1
 							bool hasOcculusion = intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection);
 							if (hasOcculusion) {
 								Li = glm::vec3(0.0f);
 							}
+							else {
+							}
 
 							if (!(Li.x < EPSILON && Li.y < EPSILON && Li.z < EPSILON) && scattering_pdf > 0) {
 								/* Determine whether delta */
 								if (light.type== AREA_LIGHT) {
+									float power_pdf = Math::luminance(Li) * triangles[light.primIndex].area() * TWO_PI * inverse_sum_power;
+									light_pdf = power_pdf * ls.pdf;
 									weight = PowerHeuristic(1, light_pdf, 1, scattering_pdf);
-									//weight = 1.0f;
-									//Ld += _f * Li * weight / light_pdf;
-									Ld = 0.5f * _f * Li * weight;
-							//Ld += _f * Li * weight / (light_pdf * sampled_light_pdf);
-							//pathSegment.color = Ld;
-									//pathSegment.color += Ld;
+									//printf("light_pdf: %f\n", light_pdf);
+									Ld = _f * Li * pathSegment.constantTerm  * abs(light_wi.z) * weight / light_pdf;
+									pathSegment.prevWeight = weight;
 								}
 							}
 
 						}
 					}
-					pathSegment.color += Ld * pathSegment.constantTerm / sampled_light_pdf;
+					pathSegment.color += Ld;
 					
 					//if (light.type == AREA_LIGHT) {
 					//	glm::vec3 f;
@@ -531,8 +533,32 @@ __global__ void shadeBSDF(
 					pathSegment.remainingBounces = 0;
 				}
 				else {
+					//pathSegment.constantTerm *= (bsdf * abs(wi.z) / pdf);
+					//Ray next_bounce_ray;
+					////light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
+					//next_bounce_ray.direction = o2w * wi;
+					//next_bounce_ray.origin = intersect;
+					//next_bounce_ray.min_t = EPSILON;
+					//next_bounce_ray.max_t = FLT_MAX; // Do occulusion test by setting max_t
+					//ShadeableIntersection next_bounce_intersection{ -1.0f }; // set t = -1
+					//bool hasIntersection = intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, next_bounce_ray, next_bounce_intersection);
+					//if (hasIntersection) {
+					//	auto next_bsdfStruct = bsdfStructs[next_bounce_intersection.materialId];
+					//	if (next_bsdfStruct.bsdfType == EMISSIVE) {
+					//		pathSegment.remainingBounces = 0;
+					//		pathSegment.color += (next_bsdfStruct.emissiveFactor * next_bsdfStruct.strength) * pathSegment.constantTerm;
+					//	}
+					//	else {
+					//		pathSegment.ray = next_bounce_ray;
+					//		pathSegment.remainingBounces--;
+					//	}
+					//}
+					//else {
+					//	pathSegment.remainingBounces = 0;
+					//	// Move env map stuff here...
+					//}
 					float cosineTerm = abs(wi.z);
-					pathSegment.constantTerm *= (1.0f - weight) * (bsdf * cosineTerm / pdf);
+					pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 					//pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
 					pathSegment.ray.direction = o2w * wi;
 					pathSegment.ray.origin = intersect;
@@ -546,19 +572,19 @@ __global__ void shadeBSDF(
 		}
 		else {
 
-			const auto & d = pathSegment.ray.direction;
-			const float phi = atan2f(d.z, d.x);
-			const float theta = acosf(d.y);
-			const float u = (phi + PI) / (2 * PI);
-			const float v = theta / PI;
-			const glm::vec2 uv(u, v);
-			auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
-			if (depth == 0) {
-				pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			}
-			else {
-				pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			}
+			//const auto & d = pathSegment.ray.direction;
+			//const float phi = atan2f(d.z, d.x);
+			//const float theta = acosf(d.y);
+			//const float u = (phi + PI) / (2 * PI);
+			//const float v = theta / PI;
+			//const glm::vec2 uv(u, v);
+			//auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
+			//if (depth == 0) {
+			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			//}
+			//else {
+			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			//}
 			pathSegments[idx].remainingBounces = 0;
 			//printf("pathSegment.color: %f %f %f\n", pathSegment.color.x, pathSegment.color.y, pathSegment.color.z);
 
@@ -607,8 +633,8 @@ struct HasHit{
 void pathtrace(uchar4* pbo, int frame, int iter) {
 	checkCUDAError("before generate camera ray");
 
-	const int traceDepth = hst_scene->state.traceDepth;
-	const Camera& cam = hst_scene->state.camera;
+	const int traceDepth = scene_config->state.traceDepth;
+	const Camera& cam = scene_config->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
 	// 2D block for generating ray from camera
@@ -629,7 +655,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//   * where color starts as the multiplicative identity, white = (1, 1, 1).
 	//   * This has already been done for you.
 	// * For each depth:
-	//   * Compute an intersection in the scene for each path ray.
+	//   * Compute an intersection in the hst_scene for each path ray.
 	//     A very naive version of this has been implemented for you, but feel
 	//     free to add more primitives and/or a better algorithm.
 	//     Currently, intersection distance is recorded as a parametric distance,
@@ -658,7 +684,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	int num_paths = dev_path_end - dev_paths;
 
 	// --- PathSegment Tracing Stage ---
-	// Shoot ray into scene, bounce between objects, push shading chunks
+	// Shoot ray into hst_scene, bounce between objects, push shading chunks
 
 	bool iterationComplete = false;
 	while (!iterationComplete) {
@@ -677,7 +703,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, num_paths
 				, dev_paths
 				, dev_triangles
-				, pa->triangles.size()
+				, scene->triangles.size()
 				, dev_intersections
 				, dev_bvhNodes
 				, bvh->nodes.size()
@@ -701,7 +727,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 					, num_paths
 					, dev_paths
 					, dev_triangles
-					, pa->triangles.size()
+					, scene->triangles.size()
 					, dev_intersections
 					, dev_bvhNodes
 					, bvh->nodes.size()
@@ -721,8 +747,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			depth
 			, num_paths
 			, dev_paths
-			, dev_triangles
-			, pa->triangles.size()
+			, hst_scene->dev_triangles
+			, hst_scene->triangles.size()
 			, dev_intersections
 			, dev_bvhNodes
 			, bvh->nodes.size()
@@ -757,13 +783,14 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_intersections,
 			dev_paths,
 			dev_bsdfStructs,
-			dev_triangles,
-			pa->triangles.size(),
+			hst_scene->dev_triangles,
+			hst_scene->triangles.size(),
 			dev_bvhNodes,
 			bvh->nodes.size()
 #if ONE_BOUNCE_DIRECT_LIGHTINIG
 			, dev_lights
-			, pa->lights.size()
+			, hst_scene->lights.size()
+			, hst_scene->inverse_sum_power
 #endif
 			, cam.resolution.y
 			, cam.resolution.x
@@ -771,10 +798,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			);
 		cudaDeviceSynchronize();
 		checkCUDAError("shadeMaterial failed\n");
-		// Use dev_paths for compaction result
-		// check if compacted dev_intersections has zero element, if it is, then iteraionComplete should be true.
-		// If no, then we might be able to store the pixel that has not finished dev_intersection to largely decrease the number 
-		// of pixels that are required to continue raytracing.
+
 		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, HasHit());
 		num_paths = dev_path_end - dev_paths;
 
@@ -794,8 +818,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
-	//int imageWidth = hst_scene->state.camera.resolution.x;
-	//int imageHeight = hst_scene->state.camera.resolution.y;
+	//int imageWidth = scene_config->state.camera.resolution.x;
+	//int imageHeight = scene_config->state.camera.resolution.y;
 	//sampleScreen << <1, 1 >> > (dev_image, dev_textures[0], imageWidth, imageHeight);
 
 	// Test texture sampling
@@ -805,7 +829,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 
 	// Retrieve image from GPU
-	cudaMemcpy(hst_scene->state.image.data(), dev_image,
+	cudaMemcpy(scene_config->state.image.data(), dev_image,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 
 	checkCUDAError("pathtrace");

@@ -12,6 +12,7 @@
 #include "textureStruct.h"
 #include "lightStruct.h"
 #include "config.h"
+#include "bvh.h"
 
 enum GLTFDataType {
 	GLTF_DATA_TYPE_SIGNED_BYTE = 5120,
@@ -42,6 +43,8 @@ public:
     SceneConfig config;
     Texture environmentalMap;
     bool has_env_map = false;
+
+    float inverse_sum_power = 0.0f;
     int getPrimitiveSize() const{
         return triangles.size() + spheres.size();
     }
@@ -51,6 +54,19 @@ public:
     void initLights(const std::vector<Triangle>& orderedPrims);
     void initConfig(SceneConfig& conf);
     void initEnvironmentalMap();
+};
+
+
+class DevScene {
+    int textureSize;
+
+public:
+    Triangle* primitives;
+    Texture* textures;
+    BSDFStruct* bsdfStructs;
+    BVHAccel* bvh;
+    BVHNode* bvhNodes;
+    void createDevScene(const Scene& scene);
 };
 
 

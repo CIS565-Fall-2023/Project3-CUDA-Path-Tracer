@@ -6,12 +6,12 @@
 #define Clamp(x, min, max) (x < min ? min : (x > max ? max : x))
 
 namespace Math {
-	__host__ __device__ float luminance(const glm::vec3 & color) {
+	__host__ __device__ inline float luminance(const glm::vec3 & color) {
 		return glm::dot(color, glm::vec3(0.2126f, 0.7152f, 0.0722f));
 	}
 
 	/* Return a sampled barycentric coordinate for triangle */
-	__host__ __device__ glm::vec2 uniformSampleTriangle(const glm::vec2& u) {
+	__host__ __device__ inline glm::vec2 uniformSampleTriangle(const glm::vec2& u) {
 		float su0 = sqrtf(u.x);
 		return glm::vec2(1 - su0, u.y * su0);
 	}
@@ -56,7 +56,7 @@ namespace Math {
     }
 
 
-    __device__ float Lambda(const glm::vec3& w, const float alpha) {
+    __device__ inline float Lambda(const glm::vec3& w, const float alpha) {
         float absTanTheta = std::abs(TanTheta(w));
         if (glm::isinf(absTanTheta)) return 0.;
         float alpha_lambda = glm::sqrt(Cos2Phi(w) +

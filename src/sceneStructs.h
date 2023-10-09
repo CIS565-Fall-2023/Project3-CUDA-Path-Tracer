@@ -81,6 +81,7 @@ struct PathSegment {
     int pixelIndex;
     int remainingBounces;
     glm::vec3 constantTerm;
+    float prevWeight;
 };
 
 class Primitive;

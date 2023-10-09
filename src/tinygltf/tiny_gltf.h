@@ -5168,21 +5168,21 @@ static bool ParseNode(Node *node, std::string *err, const detail::json &o,
   return true;
 }
 
-static bool ParseScene(Scene *scene, std::string *err, const detail::json &o,
+static bool ParseScene(Scene *hst_scene, std::string *err, const detail::json &o,
                        bool store_original_json_for_extras_and_extensions) {
-  ParseStringProperty(&scene->name, err, o, "name", false);
-  ParseIntegerArrayProperty(&scene->nodes, err, o, "nodes", false);
+  ParseStringProperty(&hst_scene->name, err, o, "name", false);
+  ParseIntegerArrayProperty(&hst_scene->nodes, err, o, "nodes", false);
 
-  ParseExtrasAndExtensions(scene, err, o,
+  ParseExtrasAndExtensions(hst_scene, err, o,
                            store_original_json_for_extras_and_extensions);
 
   // Parse KHR_audio global emitters
-  if (scene->extensions.count("KHR_audio") != 0) {
-    auto const &audio_ext = scene->extensions["KHR_audio"];
+  if (hst_scene->extensions.count("KHR_audio") != 0) {
+    auto const &audio_ext = hst_scene->extensions["KHR_audio"];
     if (audio_ext.Has("emitters")) {
       auto emittersArr = audio_ext.Get("emitters");
       for (size_t i = 0; i < emittersArr.ArrayLen(); ++i) {
-        scene->audioEmitters.emplace_back(emittersArr.Get(i).GetNumberAsInt());
+        hst_scene->audioEmitters.emplace_back(emittersArr.Get(i).GetNumberAsInt());
       }
     } else {
       if (err) {
@@ -5929,7 +5929,7 @@ bool TinyGLTF::LoadFromString(Model *model, std::string *err, std::string *warn,
     }
   }
 
-  // scene is not mandatory.
+  // hst_scene is not mandatory.
   // FIXME Maybe a better way to handle it than removing the code
 
   auto IsArrayMemberPresent = [](const detail::json &_v,
@@ -6224,13 +6224,13 @@ bool TinyGLTF::LoadFromString(Model *model, std::string *err, std::string *warn,
         return false;
       }
 
-      Scene scene;
-      if (!ParseScene(&scene, err, o,
+      Scene hst_scene;
+      if (!ParseScene(&hst_scene, err, o,
                       store_original_json_for_extras_and_extensions_)) {
         return false;
       }
 
-      model->scenes.emplace_back(std::move(scene));
+      model->scenes.emplace_back(std::move(hst_scene));
       return true;
     });
 
@@ -7866,16 +7866,16 @@ static void SerializeGltfCamera(const Camera &camera, detail::json &o) {
   SerializeExtrasAndExtensions(camera, o);
 }
 
-static void SerializeGltfScene(const Scene &scene, detail::json &o) {
-  SerializeNumberArrayProperty<int>("nodes", scene.nodes, o);
+static void SerializeGltfScene(const Scene &hst_scene, detail::json &o) {
+  SerializeNumberArrayProperty<int>("nodes", hst_scene.nodes, o);
 
-  if (scene.name.size()) {
-    SerializeStringProperty("name", scene.name, o);
+  if (hst_scene.name.size()) {
+    SerializeStringProperty("name", hst_scene.name, o);
   }
-  SerializeExtrasAndExtensions(scene, o);
+  SerializeExtrasAndExtensions(hst_scene, o);
 
   // KHR_audio
-  if (!scene.audioEmitters.empty()) {
+  if (!hst_scene.audioEmitters.empty()) {
     detail::json_iterator it;
     if (!detail::FindMember(o, "extensions", it)) {
       detail::json extensions;
@@ -7890,7 +7890,7 @@ static void SerializeGltfScene(const Scene &scene, detail::json &o) {
       detail::JsonAddMember(extensions, "KHR_audio", std::move(audio));
       detail::FindMember(o, "KHR_audio", it);
     }
-    SerializeNumberArrayProperty("emitters", scene.audioEmitters,
+    SerializeNumberArrayProperty("emitters", hst_scene.audioEmitters,
                                  detail::GetValue(it));
   } else {
     detail::json_iterator ext_it;

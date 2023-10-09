@@ -129,6 +129,8 @@ set(common
     #src/utilities.cu
     src/glslUtility.hpp
     src/glslUtility.cpp
+    src/mathUtil.h
+    src/mathUtil.cpp
     #src/stb.cpp
     )
 
@@ -149,7 +151,7 @@ source_group(Material FILES ${material})
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
-cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${tinygltf} ${scene} ${core}  ${common} ${material})
+cuda_add_executable(${CMAKE_PROJECT_NAME} ${imgui} ${tinygltf} ${core} ${scene} ${common} ${material})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction

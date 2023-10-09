@@ -13,8 +13,8 @@
 
 using namespace std;
 /*
-    As the poor support of blender over gltf, this raytracer adopts a mixed scene representation
-    gltf is used to represent the scene, but some other information is still defined in the config file
+    As the poor support of blender over gltf, this raytracer adopts a mixed hst_scene representation
+    gltf is used to represent the hst_scene, but some other information is still defined in the config file
     Practically, Camera, Environment Map, and some other parameters are defined in the config file
 */
 

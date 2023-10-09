@@ -1,4 +1,6 @@
 #include "scene.h"
+#include "cudaUtil.h"
+#include "mathUtil.h"
 
 //// Define these only in *one* .cc file.
 #define TINYGLTF_IMPLEMENTATION
@@ -134,7 +136,10 @@ void Scene::initTextures()
 
 void Scene::initLights(const std::vector<Triangle> & orderedPrims)
 {
+    float sum_power = 0.0f;
     // Init light from tinygltf::Light
+
+    // Init light from env_map
 
     // Init light from triangles
     for (size_t i = 0; i < orderedPrims.size(); i++)
@@ -150,9 +155,11 @@ void Scene::initLights(const std::vector<Triangle> & orderedPrims)
             light.scale = bsdfStruct.strength;
             light.nSample = 1;
 			lights.push_back(light);
+            sum_power += Math::luminance(light.color * light.scale) * 2.0f * PI;
         }
     }
 
+    inverse_sum_power = 1.0f / sum_power;
 }
 
 void Scene::initConfig( SceneConfig& conf)
@@ -297,4 +304,78 @@ void Scene::applyNodeTransform(const tinygltf::Node & node, glm::mat4x4& parentT
     localTransform = T * R * S;
     // Update the parent transformation matrix with the node's transformation
     parentTransform = parentTransform * localTransform;
+}
+
+__host__ void DevScene::createDevScene(const Scene& hst_scene)
+{
+    // Omit texture for now
+    //TextureInfo* textureInfos;
+    //textureSize = hst_scene.textures.size();
+    //auto textureInfos = hst_scene.textures.data();
+
+    //cudaMalloc(&textureInfos, (textureSize + 1) * sizeof(TextureInfo)); // env_map also malloced
+    //cudaMemcpy(textureInfos, textureInfos, textureSize * sizeof(TextureInfo), cudaMemcpyHostToDevice); // First copy textureSize of common texture
+
+    //cudaMalloc(&textures, (textureSize + 1) * sizeof(Texture)); // env_map also malloced
+    //checkCUDAError("cudaMalloc textures invalid!");
+    //unsigned char* dev_texture_data = nullptr;
+    //for (int i = 0; i < textureSize; i++)
+    //{
+    //    cudaMalloc(&dev_texture_data, textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char));
+    //    cudaMemcpy(dev_texture_data, textureInfos[i].data.data(), textureInfos[i].width * textureInfos[i].height * textureInfos[i].nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    //    initDeviceTextures << <1, 1 >> > (dev_textures[i], dev_textureInfos[i], dev_texture_data);
+    //    printf("Loaded Texture %d\n", i);
+    //    checkCUDAError("initDeviceTextures");
+    //}
+
+    cudaMalloc(&bsdfStructs, hst_scene.bsdfStructs.size() * sizeof(BSDFStruct));
+    cudaMemcpy(bsdfStructs, hst_scene.bsdfStructs.data(), hst_scene.bsdfStructs.size() * sizeof(BSDFStruct), cudaMemcpyHostToDevice);
+
+    //initBSDFWithTextures << <1, 1 >> > (dev_bsdfStructs, dev_textures, hst_scene->bsdfStructs.size());
+    //checkCUDAError("initBSDFWithTextures");
+
+
+    bvh = new BVHAccel();
+    bvh->initBVH(hst_scene.triangles);
+    auto triangles = bvh->orderedPrims.data();
+    cudaMalloc(&primitives, bvh->orderedPrims.size() * sizeof(Triangle));
+    cudaMemcpy(primitives, triangles, bvh->orderedPrims.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
+    cudaMalloc(&bvhNodes, bvh->nodes.size() * sizeof(BVHNode));
+    cudaMemcpy(bvhNodes, bvh->nodes.data(), bvh->nodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
+    //hst_scene->initConfig(*config);
+    //hst_scene->initLights(bvh->orderedPrims);
+    //cudaMalloc(&dev_lights, hst_scene->lights.size() * sizeof(Light));
+    //cudaMemcpy(dev_lights, hst_scene->lights.data(), hst_scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
+    //checkCUDAError("cudaMemcpy dev_lights");
+    //
+    //hst_scene->initEnvironmentalMap();
+    //const TextureInfo& env_map = hst_scene->config.env_map;
+    //cudaMemcpy(dev_textureInfos + textureSize, &env_map, 1 * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+    //cudaMalloc(&dev_texture_data, env_map.width * env_map.height * env_map.nrChannels * sizeof(unsigned char));
+    //cudaMemcpy(dev_texture_data, env_map.data.data(), env_map.width * env_map.height * env_map.nrChannels * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    //checkCUDAError("cudaMemcpy dev_textureInfos1");
+    //initDeviceTextures << <1, 1 >> > (dev_textures[textureSize], dev_textureInfos[textureSize], dev_texture_data);
+    //
+    //checkCUDAError("cudaMemcpy dev_textureInfos");
+    //int triangle_size = bvh->orderedPrims.size();
+    //int blockSize = 256;
+    //dim3 initNormalTextureBlock((triangle_size + blockSize - 1) / blockSize);
+    //if (triangle_size) {
+    //    initPrimitivesNormalTexture << <initNormalTextureBlock, blockSize >> > (hst_scene->dev_triangles, dev_textures, triangle_size);
+    //}
+    //else {
+    //    printf("WARNING: NO TRIANGLES IN THE SCENE!\n");
+    //}
+    //
+    //checkCUDAError("pathtracer Init!");
+    // create primitives
+
+    // create bvh nodes
+
+    // create textures
+
+    // create materials
+
 }
