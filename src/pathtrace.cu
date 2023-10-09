@@ -28,7 +28,8 @@
 
 #define USE_FIRST_BOUNCE_CACHE 0
 #define USE_SORT_BY_MATERIAL 0
-#define ONE_BOUNCE_DIRECT_LIGHTINIG 1
+#define DIRECT_LIGHTING 0
+#define MIS 1
 #define USE_BVH 1
 
 #define ERRORCHECK 1
@@ -389,7 +390,7 @@ __global__ void shadeBSDF(
 	, int triangles_size
 	, BVHNode * bvhNodes
 	, int bvhNodes_size
-#if ONE_BOUNCE_DIRECT_LIGHTINIG
+#if DIRECT_LIGHTING
 	, Light * lights
 	, int lights_size
 	, float inverse_sum_power
@@ -416,9 +417,6 @@ __global__ void shadeBSDF(
 				if (depth == 0) {
 					pathSegment.color = bsdfStruct.emissiveFactor;
 				}
-				else {
-					pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm;
-				}
 			}
 			else {
 				glm::mat3x3 o2w;
@@ -443,23 +441,20 @@ __global__ void shadeBSDF(
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 
-#if  ONE_BOUNCE_DIRECT_LIGHTINIG
+#if  DIRECT_LIGHTING
 				/* Uniformly pick a light, will change to selecting by importance in the future */
 				if (lights_size > 0) {
 					thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
-					int n_sample_light = 3;
+					int n_sample_light = 1;
 					for (size_t i = 0; i < n_sample_light; i++)
 					{
 						int sampled_light_index = uLight(rng);
 						float sampled_light_pdf = 1.0f / lights_size;
 				
 						const auto& light = lights[sampled_light_index];
-
-						//const glm::vec2 & u = glm::vec2(u01(rng), u01(rng));
-	#ifndef HIDDEN
 						glm::vec3 Ld(0.0f);
 						float light_pdf = 0.0f, scattering_pdf = 0.0f;
-						const auto & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(rands));
+						const auto & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(u01(rng), u01(rng)));
 						glm::vec3 _f;
 						glm::vec3 Li = ls.L;
 						if (ls.pdf > EPSILON) {
@@ -467,21 +462,16 @@ __global__ void shadeBSDF(
 							glm::vec3 light_wi = w2o * ls.wi;
 							_f = f(bsdfStruct, wo, light_wi, intersection.uv) * abs(glm::dot(ls.wi, intersection.surfaceNormal));
 							scattering_pdf = PDF(bsdfStruct, wo, light_wi);
-							if (!(_f.x < EPSILON && _f.y < EPSILON && _f.z < EPSILON)) {
+							if (!(_f.x < EPSILON && _f.y < EPSILON && _f.z < EPSILON)
+								&& scattering_pdf > 0) {
 								Ray light_ray;
-								//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
 								light_ray.direction = ls.wi;
 								light_ray.origin = intersect;
 								light_ray.min_t = EPSILON;
 								float distance = glm::length(ls.lightIntersection.intersectionPoint - intersect);
 								light_ray.max_t = distance - 1e-4f; // Do occulusion test by setting max_t
 								ShadeableIntersection light_ray_intersection{ -1.0f }; // set t = -1
-								bool hasOcculusion = intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection);
-								if (hasOcculusion) {
-									Li = glm::vec3(0.0f);
-								}
-
-								if (!(Li.x < EPSILON && Li.y < EPSILON && Li.z < EPSILON) && scattering_pdf > 0) {
+								if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) {
 									/* Determine whether delta */
 									if (light.type== AREA_LIGHT) {
 										float power_pdf = 1.0f / lights_size;
@@ -497,35 +487,6 @@ __global__ void shadeBSDF(
 						}
 
 					}
-					//pathSegment.color += Ld;
-					
-					//if (light.type == AREA_LIGHT) {
-					//	glm::vec3 f;
-					//	bool sampleSpecular = false;
-
-					//}
-#else
-					const LightLiSample & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(rands));
-					if (ls.pdf > 0) {
-						Ray light_ray;
-						//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
-						light_ray.direction = ls.wi;
-						light_ray.origin = intersect;
-						light_ray.min_t = EPSILON;
-						light_ray.max_t = glm::length(ls.lightIntersection.intersectionPoint - intersect) - 1e-4f; // Do occulusion test by setting max_t
-						ShadeableIntersection light_ray_intersection{-1.0f}; // set t = -1
-						if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) 
-						{
-							glm::vec3 light_wi = w2o * light_ray.direction;
-							glm::vec3 light_bsdf = f(bsdfStruct, wo, light_wi, intersection.uv);
-							float scattering_pdf = PDF(bsdfStruct, wo, light_wi, rands);
-							//pathSegment.color = glm::vec3(light_wi);
-							//pathSegment.color = glm::vec3(scattering_pdf);
-							//pathSegment.color += ls.L * light_bsdf * abs(light_wi.z) * pathSegment.constantTerm / (ls.pdf);
-							pathSegment.color += ls.L * light_bsdf * pathSegment.constantTerm * abs(light_wi.z) / (ls.pdf * sampled_light_pdf);
-						}
-					}
-#endif
 				}
 #endif			
 				glm::vec3 wi;
@@ -536,7 +497,6 @@ __global__ void shadeBSDF(
 				else {
 					pathSegment.constantTerm *= (bsdf * abs(wi.z) / pdf);
 					Ray next_bounce_ray;
-					//light_ray.direction = glm::normalize(ls.lightIntersection.intersectionPoint - intersect);
 					next_bounce_ray.direction = o2w * wi;
 					next_bounce_ray.origin = intersect;
 					next_bounce_ray.min_t = EPSILON;
@@ -547,18 +507,19 @@ __global__ void shadeBSDF(
 						auto next_bsdfStruct = bsdfStructs[next_bounce_intersection.materialId];
 						if (next_bsdfStruct.bsdfType == EMISSIVE) {
 							pathSegment.remainingBounces = 0;
+#if DIRECT_LIGHTING
 							float power_pdf = 1.0f / lights_size;
-								//Math::luminance(bsdfStruct.emissiveFactor * bsdfStruct.strength) * 
-								//next_bounce_intersection.primitive->area() // TODO: Change this one!!!
-								//* TWO_PI * inverse_sum_power;
-
 							float distance_sqr = glm::length2(next_bounce_intersection.intersectionPoint - intersect);
 							float next_light_pdf =  power_pdf * distance_sqr / 
 								(next_bounce_intersection.primitive->area() * 
 									abs(glm::dot(next_bounce_intersection.surfaceNormal, -next_bounce_ray.direction)));
 							float weight = PowerHeuristic(1, pdf, 1, next_light_pdf);
-							//weight = 0.0f;
 							pathSegment.color += weight * (next_bsdfStruct.emissiveFactor * next_bsdfStruct.strength) * pathSegment.constantTerm;
+#else
+							pathSegment.color += (next_bsdfStruct.emissiveFactor * next_bsdfStruct.strength) * pathSegment.constantTerm;
+#endif
+							
+							//weight = 0.0f;
 							//pathSegment.color = glm::vec3(weight);
 						}
 						else {
@@ -567,6 +528,19 @@ __global__ void shadeBSDF(
 						}
 					}
 					else {
+						const auto& d = next_bounce_ray.direction;
+						const float phi = atan2f(d.z, d.x);
+						const float theta = acosf(d.y);
+						const float u = (phi + PI) / (2 * PI);
+						const float v = theta / PI;
+						const glm::vec2 uv(u, v);
+						auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
+						if (depth == 0) {
+							pathSegment.color += env_map_sample * pathSegment.constantTerm;
+						}
+						else {
+							pathSegment.color += env_map_sample * pathSegment.constantTerm;
+						}
 						pathSegment.remainingBounces = 0;
 						// Move env map stuff here...
 					}
@@ -585,19 +559,19 @@ __global__ void shadeBSDF(
 		}
 		else {
 
-			//const auto & d = pathSegment.ray.direction;
-			//const float phi = atan2f(d.z, d.x);
-			//const float theta = acosf(d.y);
-			//const float u = (phi + PI) / (2 * PI);
-			//const float v = theta / PI;
-			//const glm::vec2 uv(u, v);
-			//auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
-			//if (depth == 0) {
-			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			//}
-			//else {
-			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			//}
+			const auto & d = pathSegment.ray.direction;
+			const float phi = atan2f(d.z, d.x);
+			const float theta = acosf(d.y);
+			const float u = (phi + PI) / (2 * PI);
+			const float v = theta / PI;
+			const glm::vec2 uv(u, v);
+			auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
+			if (depth == 0) {
+				pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			}
+			else {
+				pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			}
 			pathSegments[idx].remainingBounces = 0;
 			//printf("pathSegment.color: %f %f %f\n", pathSegment.color.x, pathSegment.color.y, pathSegment.color.z);
 
@@ -658,37 +632,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// 1D block for path tracing
 	const int blockSize1d = 128;
-
-	///////////////////////////////////////////////////////////////////////////
-
-	// Recap:
-	// * Initialize array of path rays (using rays that come out of the camera)
-	//   * You can pass the Camera object to that kernel.
-	//   * Each path ray must carry at minimum a (ray, color) pair,
-	//   * where color starts as the multiplicative identity, white = (1, 1, 1).
-	//   * This has already been done for you.
-	// * For each depth:
-	//   * Compute an intersection in the hst_scene for each path ray.
-	//     A very naive version of this has been implemented for you, but feel
-	//     free to add more primitives and/or a better algorithm.
-	//     Currently, intersection distance is recorded as a parametric distance,
-	//     t, or a "distance along the ray." t = -1.0 indicates no intersection.
-	//     * Color is attenuated (multiplied) by reflections off of any object
-	//   * TODO: Stream compact away all of the terminated paths.
-	//     You may use either your implementation or `thrust::remove_if` or its
-	//     cousins.
-	//     * Note that you can't really use a 2D kernel launch any more - switch
-	//       to 1D.
-	//   * TODO: Shade the rays that intersected something or didn't bottom out.
-	//     That is, color the ray by performing a color computation according
-	//     to the shader, then generate a new ray to continue the ray path.
-	//     We recommend just updating the ray's PathSegment in place.
-	//     Note that this step may come before or after stream compaction,
-	//     since some shaders you write may also cause a path to terminate.
-	// * Finally, add this iteration's results to the image. This has been done
-	//   for you.
-
-	// TODO: perform one iteration of path tracing
 
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
@@ -800,7 +743,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			hst_scene->triangles.size(),
 			dev_bvhNodes,
 			bvh->nodes.size()
-#if ONE_BOUNCE_DIRECT_LIGHTINIG
+#if DIRECT_LIGHTING
 			, dev_lights
 			, hst_scene->lights.size()
 			, hst_scene->inverse_sum_power

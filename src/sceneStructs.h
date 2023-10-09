@@ -75,15 +75,6 @@ struct RenderState {
     std::string imageName;
 };
 
-struct PathSegment {
-    Ray ray;
-    glm::vec3 color;
-    int pixelIndex;
-    int remainingBounces;
-    glm::vec3 constantTerm;
-    float prevWeight;
-};
-
 class Primitive;
 class Triangle;
 
@@ -100,6 +91,15 @@ struct ShadeableIntersection {
   const Triangle* primitive;
 };
 
+
+struct PathSegment {
+    Ray ray;
+    glm::vec3 color;
+    int pixelIndex;
+    int remainingBounces;
+    glm::vec3 constantTerm;
+    float prevWeight;
+};
 
 
 class Primitive {
