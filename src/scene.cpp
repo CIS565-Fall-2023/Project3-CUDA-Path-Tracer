@@ -6,6 +6,70 @@
 #define TINYGLTF_IMPLEMENTATION
 #include "scene.h"
 
+#pragma region traversal_test_helpers
+void traverse(int nodeIdx, const std::vector<BVHNode>& bvhNodes)
+{
+    const BVHNode* node = &bvhNodes[nodeIdx];
+
+    cout << "node: " << nodeIdx << endl;
+    if (node->triIdx > -1)
+    {
+        // leaf node
+        return;
+    }
+
+    cout << "left: " << node->leftChildIdx << ", right: " << node->rightChildIdx << endl;
+    traverse(node->leftChildIdx, bvhNodes);
+    traverse(node->rightChildIdx, bvhNodes);
+}
+
+void traverseGPUStyle(const Geom& mesh, const std::vector<BVHNode>& bvhNodes, const std::vector<Triangle>& tris)
+{
+    cout << "======= GPU STYLE TRAVERSE ========" << endl;
+    int curNodeIdx = mesh.startBvhNodeIdx;
+
+    bool hit = false;
+
+    int nodeStack[64];
+    int stackPtr = 0;
+
+    BVHNode curNode;
+    glm::vec3 minBary(FLT_MAX);
+    int triIdx = -1;
+
+    while (true)
+    {
+        curNode = bvhNodes[curNodeIdx];
+        //cout << "-------- node: " << curNodeIdx << endl;
+        //cout << "aabb: " << "[ (" << curNode.bounds.min.x << "," << curNode.bounds.min.y << "," << curNode.bounds.min.z << ") , ("
+        //    << curNode.bounds.max.x << "," << curNode.bounds.max.y << "," << curNode.bounds.max.z << ") ]" << endl;
+        // It does! Is this a leaf node?
+        if (curNode.triIdx > -1)
+        {
+            cout << curNode.triIdx << endl;
+            
+            assert(curNode.triIdx == (tris[curNode.triIdx].triIdx));
+            
+            if (stackPtr == 0)
+            {
+                // Finished traversing through BVH
+                break;
+            }
+            curNodeIdx = nodeStack[--stackPtr];     // pop from stack
+        }
+        else
+        {
+            cout << "splitAxis: " << curNode.splitAxis << endl;
+            //cout << "left: " << bvhNodes[curNodeIdx].leftChildIdx << ", right: " << bvhNodes[curNodeIdx].rightChildIdx << endl;
+
+            // Not a leaf node, advance to next left child and add right child to stack
+            nodeStack[stackPtr++] = curNode.rightChildIdx;  // we're going to visit this child after the left children are done
+            curNodeIdx++;   // go to next pointer
+        }
+    }
+}
+#pragma endregion
+
 Scene::Scene(string filename)
     : tris(), meshes(), loadedMeshGroups(), bvhNodes()
 {
@@ -75,6 +139,10 @@ int Scene::loadGeom(string objectid) {
                     newGeom.startBvhNodeIdx = meshGroup.startBvhNodeIdx;
                     //BVH* bvh = meshBVHs[tokens[1].c_str()].get();
                     //std::swap_ranges(tris.begin() + meshGroup.startTriIdx, tris.begin() + meshGroup.endTriIdx, bvh->orderedTris.begin());
+
+                    // verify that traverse and gpu style traverse are both working fine
+                    //traverse(meshGroup.startBvhNodeIdx, bvhNodes);
+                    //traverseGPUStyle(newGeom, bvhNodes, tris);
                 }
             }
         }
@@ -112,23 +180,6 @@ int Scene::loadGeom(string objectid) {
         geoms.push_back(newGeom);
         return 1;
     }
-}
-
-
-void traverse(const std::vector<BVHNode>& bvhNodes, int nodeIdx)
-{
-    const BVHNode* node = &bvhNodes[nodeIdx];
-
-    cout << "node: " << nodeIdx << endl;
-    if (node->triIdx > -1)
-    {
-        // leaf node
-        return;
-    }
-
-    cout << "left: " << node->leftChildIdx << ", right: " << node->rightChildIdx << endl;
-    traverse(bvhNodes, node->leftChildIdx);
-    traverse(bvhNodes, node->rightChildIdx);
 }
 
 SceneMeshGroup Scene::loadGltfMesh(string path)
@@ -184,7 +235,6 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
 
         loadedMeshGroups.emplace(path, meshGroup);
         meshGroup.startBvhNodeIdx = constructBVH(path, meshGroup.startTriIdx, meshGroup.endTriIdx + 1);
-        traverse(bvhNodes, meshGroup.startBvhNodeIdx);
     }
 
     return meshGroup;
@@ -329,7 +379,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v0.pos = gltfMesh.positions[gltfMesh.indices[i]];
                     tri.v1.pos = gltfMesh.positions[gltfMesh.indices[i+1]];
                     tri.v2.pos = gltfMesh.positions[gltfMesh.indices[i+2]];
-                    tri.computeAabbAndCentroid();
+                    tri.computeAabbAndCentroid(tris.size());
 
                     totalTris++;
 
@@ -363,7 +413,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v0.pos = gltfMesh.positions[i * 3];
                     tri.v1.pos = gltfMesh.positions[i * 3 + 1];
                     tri.v2.pos = gltfMesh.positions[i * 3 + 2];
-                    tri.computeAabbAndCentroid();
+                    tri.computeAabbAndCentroid(tris.size());
 
                     totalTris++;
 
@@ -559,7 +609,7 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
         //orderedTris.push_back(&tris[startTriIdx]);
         bvhNodes[nodeIndex].initAsLeafNode(triIndices[startOffset], aabb);
 
-        cout << "node, " << nodeIndex << endl;
+        //cout << "node, " << nodeIndex << endl;
     }
     else
     {
@@ -590,7 +640,7 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
         int leftChildIdx = buildBVHRecursively(totalNodes, startOffset, half, tris, triIndices, bvhNodes);
         int rightChildIdx = buildBVHRecursively(totalNodes, mid, nTris - half, tris, triIndices, bvhNodes);
 
-        cout << "node, " << nodeIndex << " left, " << leftChildIdx << " right: " << rightChildIdx << endl;
+        //cout << "node, " << nodeIndex << " left, " << leftChildIdx << " right: " << rightChildIdx << endl;
         bvhNodes[nodeIndex].initInterior(splitAxis, leftChildIdx, rightChildIdx, bvhNodes);
     }
 

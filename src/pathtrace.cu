@@ -144,6 +144,7 @@ static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static Intersection* dev_intersections = NULL;
 static Triangle* dev_tris = NULL;
+static BVHNode* dev_bvhNodes = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -174,6 +175,9 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_tris, scene->tris.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->tris.data(), scene->tris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_bvhNodes, scene->bvhNodes.size() * sizeof(BVHNode));
+	cudaMemcpy(dev_bvhNodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
@@ -195,6 +199,7 @@ void pathtraceFree() {
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
 	cudaFree(dev_tris);
+	cudaFree(dev_bvhNodes);
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
@@ -273,6 +278,8 @@ __global__ void computeIntersections(
 	, int geoms_size
 	, Triangle* tris
 	, int tri_size
+	, BVHNode* bvhNodes
+	, int bvhNodes_size
 	, Intersection* intersections
 )
 {
@@ -308,7 +315,7 @@ __global__ void computeIntersections(
 			}
 			else if (geom.type == GLTF_MESH)
 			{
-				t = geomIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tris);
+				t = geomIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, tris, bvhNodes);
 			}
 
 			// TODO: add more intersection tests here... triangle? metaball? CSG?
@@ -548,6 +555,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, hst_scene->geoms.size()
 				, dev_tris
 				, hst_scene->tris.size()
+				, dev_bvhNodes
+				, hst_scene->bvhNodes.size()
 				, dev_intersections
 				);
 			checkCUDAError("trace one bounce");

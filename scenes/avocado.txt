@@ -133,4 +133,4 @@ gltf		../scenes/gltf/Avocado/Avocado.gltf
 material 5
 TRANS       -2 3 -3.5
 ROTAT       0 0 0
-SCALE       2 2 2
+SCALE       90 90 90
