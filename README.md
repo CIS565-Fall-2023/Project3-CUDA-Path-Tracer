@@ -3,11 +3,29 @@ CUDA Path Tracer
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+Han Wang
 
-### (TODO: Your README)
+Tested on: Windows 11, 11th Gen Intel(R) Core(TM) i9-11900H @ 2.50GHz 22GB, GTX 3070 Laptop GPU
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+### Analysis
+
+### Finished features:
+
+# 1. Refraction (e.g. glass/water)
+
+
+
+# 2. Physically-based depth-of-field
+
+
+
+# 3. Stochastic Sampled Antialiasing
+
+
+
+# 4. Subsurface scattering
+
+
+
+# 5. defining object motion, and motion blur
 
