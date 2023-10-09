@@ -29,6 +29,10 @@
 #define ENABLE_NAIVE_AABB_OPTIMISATION 1
 #define ENABLE_BVH 0
 
+
+
+#define DEBUG 1
+
 class GuiDataContainer
 {
 public:

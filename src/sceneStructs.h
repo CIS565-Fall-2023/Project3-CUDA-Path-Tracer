@@ -76,17 +76,27 @@ struct Triangle
     Vertex v0, v1, v2;
     bool hasNormals{ false };   // when normals are not defined we approximate them on cuda side
     AABB aabb;
+#if DEBUG
+    int triIdx{ -1 };
+#endif
     glm::vec3 centroid;
     union {
         int a;
         int b;
     };
 
+#if DEBUG
+    void computeAabbAndCentroid(int idx)
+#else
     void computeAabbAndCentroid()
+#endif
     {
         aabb.min = glm::min(glm::min(glm::min(aabb.min, v2.pos), v1.pos), v0.pos);
         aabb.max = glm::max(glm::max(glm::max(aabb.max, v2.pos), v1.pos), v0.pos);
         centroid = (v0.pos + v1.pos + v2.pos) * 0.333333f;
+#if DEBUG
+        triIdx = idx;
+#endif
     }
 };
 
@@ -198,7 +208,11 @@ struct BVHNode
     //BVHNode* left;
     //BVHNode* right;
 
+#if DEBUG
     int leftChildIdx;
+    // no need to store this value in release because we don't really need it
+    // im only enabling it in debug mode to be able to test stuff!
+#endif
     int rightChildIdx;
     int splitAxis;
     int triIdx;
@@ -208,13 +222,17 @@ struct BVHNode
     {
         this->bounds = bounds;
         this->triIdx = triIdx;
+#if DEBUG
         this->leftChildIdx = -1;
+#endif
         this->rightChildIdx = -1;
     }
 
     void initInterior(int splitAxis, int leftChildIdx, int rightChildIdx, const std::vector<BVHNode>& bvhNodes)
     {
+#if DEBUG
         this->leftChildIdx = leftChildIdx;
+#endif
         this->rightChildIdx = rightChildIdx;
         bounds = AABB::combine(bvhNodes[leftChildIdx].bounds, bvhNodes[rightChildIdx].bounds);
         this->splitAxis = splitAxis;

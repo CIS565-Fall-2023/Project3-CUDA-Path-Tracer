@@ -7,6 +7,7 @@
 #include "scene.h"
 
 #pragma region traversal_test_helpers
+#if DEBUG
 void traverse(int nodeIdx, const std::vector<BVHNode>& bvhNodes)
 {
     const BVHNode* node = &bvhNodes[nodeIdx];
@@ -68,6 +69,7 @@ void traverseGPUStyle(const Geom& mesh, const std::vector<BVHNode>& bvhNodes, co
         }
     }
 }
+#endif
 #pragma endregion
 
 Scene::Scene(string filename)
@@ -137,12 +139,12 @@ int Scene::loadGeom(string objectid) {
                     newGeom.endTriIdx = meshGroup.endTriIdx;
                     newGeom.aabb = meshGroup.aabb;
                     newGeom.startBvhNodeIdx = meshGroup.startBvhNodeIdx;
-                    //BVH* bvh = meshBVHs[tokens[1].c_str()].get();
-                    //std::swap_ranges(tris.begin() + meshGroup.startTriIdx, tris.begin() + meshGroup.endTriIdx, bvh->orderedTris.begin());
 
+#if DEBUG
                     // verify that traverse and gpu style traverse are both working fine
                     //traverse(meshGroup.startBvhNodeIdx, bvhNodes);
                     //traverseGPUStyle(newGeom, bvhNodes, tris);
+#endif
                 }
             }
         }
@@ -379,7 +381,11 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v0.pos = gltfMesh.positions[gltfMesh.indices[i]];
                     tri.v1.pos = gltfMesh.positions[gltfMesh.indices[i+1]];
                     tri.v2.pos = gltfMesh.positions[gltfMesh.indices[i+2]];
+#if DEBUG
                     tri.computeAabbAndCentroid(tris.size());
+#else
+                    tri.computeAabbAndCentroid();
+#endif
 
                     totalTris++;
 
@@ -413,8 +419,11 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v0.pos = gltfMesh.positions[i * 3];
                     tri.v1.pos = gltfMesh.positions[i * 3 + 1];
                     tri.v2.pos = gltfMesh.positions[i * 3 + 2];
+#if DEBUG
                     tri.computeAabbAndCentroid(tris.size());
-
+#else
+                    tri.computeAabbAndCentroid();
+#endif
                     totalTris++;
 
                     if (gltfMesh.hasNormals)
@@ -442,17 +451,12 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
 
 int Scene::constructBVH(const string meshPath, unsigned int startTriIdx, unsigned int endTriIdx)
 {
-    //meshBVHs[meshPath] = mkU<BVH>();
-    //BVH* bvh = meshBVHs[meshPath].get();
-    //BVH bvh;
-
     int totalNodesSoFar = bvhNodes.size();
 
     int nTris = endTriIdx - startTriIdx;
 
     // Make a vector of pointers pointing to triangles
     // We will sort on these later based on longest axis
-    //std::vector<Triangle*> triPtrs(nTris);
     std::vector<int> triIndices(nTris);
     for (unsigned int i = 0; i < nTris; i++)
     {
@@ -605,8 +609,6 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
     if (nTris == 1)
     {
         // base case
-        //int firstTriIdx = orderedTris.size();
-        //orderedTris.push_back(&tris[startTriIdx]);
         bvhNodes[nodeIndex].initAsLeafNode(triIndices[startOffset], aabb);
 
         //cout << "node, " << nodeIndex << endl;
