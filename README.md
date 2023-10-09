@@ -1,5 +1,3 @@
-this readme is still in progress, pls be patient thank you
-
 # CUDA Path Tracer
 
 <img src="img/cool_renders/029_backrooms_final.png" width="64%"/><img src="img/cool_renders/030_evangelion_final.png" width="28.8%"/>
@@ -13,7 +11,7 @@ this readme is still in progress, pls be patient thank you
 
 ## Introduction
 
-TODO
+This project is a CUDA path tracer with various features, including but not limited to diffuse and specular shading, glTF and texture loading, depth of field, and denoising. The following is an explanation of the path tracer's features, as well as performance analysis of different optimizations and enhancements.
 
 ## Features
 
@@ -77,7 +75,7 @@ I started with the following set of parameters:
 - Max ray depth = 8
 - Denoising every 3 frames
 
-Most of the following analyses will refer to the two scenes at the [top of this page](#cuda-path-tracer): Open (red ocean with a bright plushie in the backround) and Closed (yellow room with a guy in a chair). Open is rendered at 1080x1350 and Closed is rendered at 1920x1080.
+Most of the following analyses refer to the two scenes at the [top of this page](#cuda-path-tracer): Open (red ocean with a bright plushie in the backround) and Closed (yellow room with a guy in a chair). Open was rendered at 1080x1350 and Closed was rendered at 1920x1080.
 
 ### Block size
 
@@ -93,39 +91,67 @@ There was almost no difference between the performance given by these block size
 
 ### Partition rays
 
-By default, after every round of intersections and shading, the path tracer partitions the rays by whether they have bounces left. Then, only those that can still bounce are considered for the next round. With this feature, the number of drops with each successive round:
+By default, after every round of intersections and shading, the path tracer partitions the rays by whether they have bounces left. Then, only those that can still bounce are considered for the next round. With this feature, the number of rays drops with each successive round:
 
 ![](img/charts/partition_num_rays.png)
 
 However, this feature is toggleable. When partitioning is off, the path tracer will instead send all rays to all kernels every time and simply return immediately in threads where the associated ray has no bounces left.
 
-Comparing the two options, I initially thought partition would increase performance since all warps would be densely packed. However, the results surprised me:
+Comparing the two options, I initially thought partitioning would increase performance since all warps would be densely packed. However, the results surprised me:
 
 ![](img/charts/partition_time.png)
 
-My guess is that partitioning large amounts of rays (more than 2 million for a 1920x1080 image) simply takes too much time for the kernel speedup to be worth it. With that in mind, I turned ray partitioning off for the remaining analyses.
+My guess is that partitioning large amounts of rays (more than 2 million for a 1920x1080 image) simply takes too much time for the potential kernel speedup to be worth it. With that in mind, I turned ray partitioning off for the remaining analyses.
 
 TODO: look at timeline in Nsight and answer this more concretely
 
 ### Sort rays by material type
 
-TODO
+Another feature is the ability to sort rays by their material type. This hypothetically leads to increased performance in the shading kernel since adjacent threads will process the same material and will have less divergence. However, in practice, the cost of sorting is simply too much and this feature actually degrades performance:
+
+![](img/charts/sort_time.png)
+
+Interestingly, enabling ray partitioning in addition to sorting increased performance compared to just enabling sorting. However, the time per frame was still significantly higher than with neither feature enabled. After seeing these results, I decided to keep ray sorting off for the remaining analyses.
 
 ### Russian roulette path termination
 
-TODO
+Yet another performance feature is Russian roulette path termination, which involves terminating rays with probability proportional to their light contribution. Rays that survive have their contributions multiplied proportional to the termination probability to ensure the final image remains consistent. This feature activates after 3 ray bounces and can significantly decrease the number of rays, especially for closed scenes:
 
-- Compare number of rays per depth with and without russian roulette
+![](img/charts/roulette_num_rays.png)
+
+The drop off is clearly visible after depth 3. Having less rays to deal with leads to increased performance:
+
+![](img/charts/roulette_time.png)
+
+The difference is negligible for Open but very significant for Closed. Given that this feature increases performance without diminishing image quality, I opted to keep it enabled.
 
 ### First bounce cache
 
-TODO
+This one involves caching the first intersection of the first iteration of rays and reusing that for subsequent iterations. This option exists for performance comparisons but does not make sense to use for actual renders because it doesn't play nice with anti-aliasing or depth of field. Additionally, the performance improvement is relatively insignificant:
 
-This option exists for performance comparisons but does not make sense to use for actual renders because it doesn't play nice with anti-aliasing or depth of field.
+![](img/charts/fbc_time.png)
 
-- Provide performance benefit analysis across different max ray depths.
+The effect is more pronounced when the maximum ray depth is low, but it diminishes at higher depths (which would be required for more complex scenes).
 
 ### BVH
+
+A BVH (bounding volume hierarchy) is a data structure used to accelerate testing for ray intersections. It is a tree structure where each node has a bounding volume and deeper nodes represent smaller volumes, which allows for pruning away large subtrees and minimizing the number of intersection checks. The BVH construction algorithm considers the surface area of potential child nodes when determining how to split a tree node while maximizing traversal efficiency.
+
+For this feature, I tested performance with simpler scenes since running Open and Closed without a BVH would take a prohibitively long amount of time. These are the two scenes I tested with:
+
+<img src="img/other/monkey.png" width="50%"/><img src="img/other/freddy_env_map.png" width="50%"/>
+
+Both scenes were rendered at 800x800. The left scene (monkey) contains 968 triangles and took around 0.5 ms to construct the BVH. The right scene (Freddy Fazbear) contains 17,386 triangles and took around 11.5 ms to construct the BVH.
+
+Here is the associated performance data:
+
+![](img/charts/bvh_time.png)
+
+The monkey scene saw about a 2x speedup while the Freddy Fazbear scene saw an almost 20x speedup. The speedup is much more pronounced for larger scenes. Without BVH construction, rendering more complex scenes like Open and Closed would likely not be possible (or at least very annoying).
+
+A potential future optimization could be to implement stackless BVH traversal, which could reduce the resources required by each thread and allow for higher occupancy. Additionally, there could be better heuristics than surface area for splitting tree nodes, which could also lead to higher traversal performance.
+
+### Denoising
 
 TODO
 
@@ -149,7 +175,7 @@ Seems like the monkey exploded?
 
 <img src="img/cool_renders/019_monkey_broke.png" width="50%">
 
-The monkey is empty inside, just like me after spending two weeks on this assignment.
+The monkey is empty inside, just like me after spending more than two weeks on this assignment.
 
 <img src="img/cool_renders/023_freddy_artifacts.png" width="50%">
 
