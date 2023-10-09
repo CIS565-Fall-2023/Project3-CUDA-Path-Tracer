@@ -19,9 +19,9 @@ This project is a Monte Carlo path tracer run on GPU based on CUDA. It is a rend
 # Render features:
 
 ### 1. Refraction (e.g. glass/water)
-|reflect|reflect+refrect|
-|:-----:|:-----:|
-|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_09-07-59z.1028samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_09-07-59z.1028samp.png" width="300" height="300">
+|reflect|reflect+refrect|difffuse
+|:-----:|:-----:|:-----:|
+|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_13-52-42z.1734samp.png" width="200" height="200">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_09-07-59z.1028samp.png" width="200" height="200">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-13-55z.1091samp.png" width="200" height="200">
 
 ### 2. Physically-based depth-of-field
 |with DOF|without DOF|
