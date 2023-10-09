@@ -7,6 +7,8 @@ REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   10
+SIGMAA      0 0 0
+SIGMAS      0 0 0 
 
 // Diffuse white
 MATERIAL 1
@@ -17,6 +19,8 @@ REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
+SIGMAA      0 0 0
+SIGMAS      0 0 0 
 
 // Diffuse red
 MATERIAL 2
@@ -27,6 +31,8 @@ REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
+SIGMAA      0 0 0
+SIGMAS      0 0 0 
 
 // Diffuse green
 MATERIAL 3
@@ -37,6 +43,8 @@ REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
+SIGMAA      0 0 0
+SIGMAS      0 0 0 
 
 // Specular white
 MATERIAL 4
@@ -47,6 +55,8 @@ REFL        1
 REFR        0
 REFRIOR     0
 EMITTANCE   0
+SIGMAA      0 0 0
+SIGMAS      0 0 0 
 
 // glass
 MATERIAL 5
@@ -57,26 +67,32 @@ REFL        1
 REFR        1
 REFRIOR     1.5
 EMITTANCE   0
+SIGMAA      0 0 0
+SIGMAS      0 0 0 
 
 // 
 MATERIAL 6
-RGB         .98 .83 .27
+RGB         .98 .98 .98
 SPECEX      0
-SPECRGB     .98 .83 .27
-REFL        1
-REFR        1
-REFRIOR     1.442
+SPECRGB     .98 .98 .98
+REFL        0
+REFR        0
+REFRIOR     3
 EMITTANCE   0  
+SIGMAA      0.74 1.14 1.66
+SIGMAS      2.44 1.66 1.23
 
 // yellow
 MATERIAL 7
-RGB         .98 .83 .27
+RGB         .98 .98 .98
 SPECEX      0
-SPECRGB     .98 .83 .27
+SPECRGB     .98 .98 .98
 REFL        0
 REFR        0
-REFRIOR     1.442
-EMITTANCE   0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        SDEPTH    0.5
+REFRIOR     3
+EMITTANCE   0   
+SIGMAA      0 0 0
+SIGMAS      0 0 0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       SDEPTH    0.5
 
 // Camera
 CAMERA
@@ -141,24 +157,25 @@ SCALE       .01 10 10
 // Sphere
 OBJECT 6
 sphere
-material 7
-TRANS       -1 4 -1
+material 6
+TRANS       -1 7 -1
 ROTAT       0 0 0
-SCALE       3 3 3
-VEL         1 1 1
+SCALE       2 2 2
+
 
 // Sphere
 OBJECT 7
 sphere
 material 5
-TRANS       3 5 3
+TRANS       3 3 3
 ROTAT       0 0 0
 SCALE       3 3 3
+VEL         0 0 0
 
 // Sphere
 OBJECT 8
 sphere
-material 6
-TRANS       1 2 1
+material 7
+TRANS       1 7 -1
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       2 2 2

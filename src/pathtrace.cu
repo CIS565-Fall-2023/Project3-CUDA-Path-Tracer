@@ -22,6 +22,8 @@
 #define ERRORCHECK 1
 #define SORTBY_MATERIAL_TYPE 0
 #define CACHE_FIRST_INTERSECTION 0
+#define APERTURE 0
+#define FOCUS 10
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -158,14 +160,28 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
+#if CACHE_FIRST_INTERSECTION
+		// TODO: implement antialiasing by jittering the ray
+		segment.ray.direction = glm::normalize(cam.view
+			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+		);
+#else
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
 		thrust::uniform_real_distribution<float> u01(0, 1);
 
-		// TODO: implement antialiasing by jittering the ray
-		segment.ray.direction = glm::normalize(cam.view
+		float r = u01(rng) * APERTURE;
+		float theta = u01(rng) * 2 * PI;
+
+		segment.ray.origin += cam.right * r * glm::sin(theta) + cam.up * r * glm::cos(theta);
+
+		glm::vec3 temp_direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)(x + u01(rng) - 0.5) - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)(y + u01(rng) - 0.5) - (float)cam.resolution.y * 0.5f)
 		);
+		segment.ray.direction = glm::normalize(temp_direction * (float)FOCUS + cam.position - segment.ray.origin);
+
+#endif
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;

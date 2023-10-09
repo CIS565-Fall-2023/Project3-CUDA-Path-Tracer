@@ -42,6 +42,8 @@ struct Material {
     float emittance;
     //glm::vec3 sssAlbedo;
     //float sssDepth;
+    glm::vec3 sigma_a = glm::vec3(0.f);
+    glm::vec3 sigma_s = glm::vec3(0.f);
 };
 
 struct Camera {

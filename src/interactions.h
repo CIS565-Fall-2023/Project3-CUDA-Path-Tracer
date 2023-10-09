@@ -118,6 +118,48 @@ void scatterRay(
     //    pathSegment.color *= m.sssAlbedo; 
     //    return;
     //}
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float random_num = u01(rng);
+
+    if (glm::length(m.sigma_a) > 0) {
+       /* pathSegment.color = glm::vec3(0);
+        return;*/
+        glm::vec3 accumulatedColor(1.0f);
+
+        for (int i = 0; i < 10; ++i) {
+            if (outside) {
+                glm::vec3 insideDirection = calculateRandomDirectionInHemisphere(-normal, rng);
+                pathSegment.ray.direction = insideDirection;
+                pathSegment.ray.origin = intersect + pathSegment.ray.direction * 0.001f;
+                outside = false;
+            }
+            else {
+                glm::vec3 insideDirection = calculateRandomDirectionInHemisphere(pathSegment.ray.direction, rng);
+
+                // Attenuation based on path length
+                float dist = glm::length(intersect - pathSegment.ray.origin);
+                glm::vec3 transmittance = exp(-dist * (m.sigma_a + m.sigma_s));
+
+                accumulatedColor *= transmittance;
+
+                // Check for ray exit based on scattering coefficient
+                float probabilityOfScattering = glm::length(m.sigma_s) / (glm::length(m.sigma_s) + glm::length(m.sigma_a));
+                if (random_num > probabilityOfScattering) {
+                    pathSegment.ray.direction = calculateRandomDirectionInHemisphere(pathSegment.ray.direction, rng);
+                    pathSegment.ray.origin = intersect + pathSegment.ray.direction * 0.001f;
+                    outside = true;
+                    break; // Exit the loop if the ray leaves the material
+                }
+                else {
+                    pathSegment.ray.direction = insideDirection;
+                    pathSegment.ray.origin = intersect + insideDirection * 0.001f;
+                }
+            }
+        }
+
+        pathSegment.color *= accumulatedColor;
+        return;
+    }
     
     if (m.hasRefractive) {
         thrust::uniform_real_distribution<float> u01(0, 1);
