@@ -211,3 +211,25 @@ orange and blue monkey scene (800 x 800) [968 tris] {~0.5 ms to construct BVH}
 ----------
 with: 17.2 ms/frame
 without: 31.7 ms/frame
+
+==================================================
+Denoising
+==================================================
+
+Open
+----------
+none: 45.6 ms/frame
+10: 48.5 ms/frame
+8: 49.7 ms/frame
+6: 52.5 ms/frame
+4: 57.9 ms/frame
+2: 72.9 ms/frame
+
+Closed
+----------
+none: 219.8 ms/frame
+10: 222.1 ms/frame
+8: 226.1 ms/frame
+6: 229.9 ms/frame
+4: 238.2 ms/frame
+2: 258.1 ms/frame

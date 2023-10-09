@@ -153,7 +153,11 @@ A potential future optimization could be to implement stackless BVH traversal, w
 
 ### Denoising
 
-TODO
+Denoising does decrease rendering performance since it uses the GPU. Here's what that looks like:
+
+![](img/charts/denoising_time.png)
+
+The highest performance is of course with no denoising, and performance decreases as the denoising interval decreases. I decided to use an interval of 3 frames to maintain a balance between image update frequency and performance.
 
 ## Bloopers
 
