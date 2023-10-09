@@ -101,11 +101,11 @@ Comparing the two options, I initially thought partitioning would increase perfo
 
 ![](img/charts/partition_time.png)
 
-Looking at the Nsight timeline provides somewhat of an explanation:
+Looking at the Nsight timeline for rendering one frame of Closed provides somewhat of an explanation:
 
 ![](img/charts/partition_nsight.png)
 
-I'm not sure why there's such a large gap between calls to the CUDA kernels and calls to `thrust::partition`, but that would explain the significant performance downgrade when using partitioning. With that in mind, I disabled ray partitioning for the remaining analyses.
+There's a gap between each pair of CUDA kernel and `thrust::partition` calls; I've highlighted the first few gaps with green arrows. I'm not sure why there's so many gaps, but they do explain the significant performance downgrade when using partitioning. With that in mind, I disabled ray partitioning for the remaining analyses.
 
 ### Sort rays by material type
 
