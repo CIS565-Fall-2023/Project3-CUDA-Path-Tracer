@@ -14,7 +14,7 @@ This project is a Monte Carlo path tracer run on GPU based on CUDA. It is a rend
 
 
 
-# Finished features:
+# Render features:
 
 ### 1. Refraction (e.g. glass/water)
 |reflect|reflect+refrect|
