@@ -6,8 +6,6 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
-#define RAY_MESH_AABB_INTERSECT_OPTIMISATION 1
-
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -152,7 +150,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 /// <param name="aabbMin"></param>
 /// <param name="aabbMax"></param>
 /// <returns></returns>
-__host__ __device__ bool raycastAABB(const Ray& r, const glm::vec3& aabbMin, const glm::vec3& aabbMax)
+__host__ __device__ bool raycastAABB(const Ray& r, const AABB& aabb)
 {
     float tmin = -1e38f;
     float tmax = 1e38f;
@@ -161,8 +159,8 @@ __host__ __device__ bool raycastAABB(const Ray& r, const glm::vec3& aabbMin, con
     for (int xyz = 0; xyz < 3; ++xyz) {
         float dirComponent = r.direction[xyz];
         /*if (glm::abs(qdxyz) > 0.00001f)*/ {
-            float t1 = (aabbMin[xyz] - r.origin[xyz]) / dirComponent;
-            float t2 = (aabbMax[xyz] - r.origin[xyz]) / dirComponent;
+            float t1 = (aabb.min[xyz] - r.origin[xyz]) / dirComponent;
+            float t2 = (aabb.max[xyz] - r.origin[xyz]) / dirComponent;
             float ta = glm::min(t1, t2);
             float tb = glm::max(t1, t2);
             glm::vec3 n;
@@ -227,14 +225,14 @@ __host__ __device__ float geomIntersectionTest(Geom mesh, Ray r,
     const glm::vec3 rayOriginLocal = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
     const glm::vec3 rayDirLocal = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
-#if RAY_MESH_AABB_INTERSECT_OPTIMISATION
+#if ENABLE_NAIVE_AABB_OPTIMISATION
     Ray localSpaceRay;
     localSpaceRay.origin = rayOriginLocal;
     localSpaceRay.direction = rayDirLocal;
 
     // First, check if the ray intersects with the AABB of the mesh.
     // If not, there is no need to further check through each ray
-    if (!raycastAABB(localSpaceRay, mesh.aabbMin, mesh.aabbMax))
+    if (!raycastAABB(localSpaceRay, mesh.aabb))
     {
         // No intersection with AABB
         // Won't intersect with mesh

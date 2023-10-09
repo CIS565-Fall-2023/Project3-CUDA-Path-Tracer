@@ -23,6 +23,12 @@
 #define Y_AXIS 1
 #define Z_AXIS 2
 
+#define SORT_BY_MATERIAL 0
+#define STREAM_COMPACT 0
+#define CACHE_FIRST_INTERSECTION 0
+#define ENABLE_NAIVE_AABB_OPTIMISATION 1
+#define ENABLE_BVH 1
+
 class GuiDataContainer
 {
 public:

@@ -14,9 +14,7 @@ struct BVHNode
     int rightChildIdx;
     int splitAxis;
     int triIdx;
-    int nodeIdx;
-
-    std::vector<int> meshIds;
+    //int nodeIdx;
 
     void initAsLeafNode(int triIdx, const AABB& bounds)
     {
@@ -30,27 +28,28 @@ struct BVHNode
     {
         this->leftChildIdx = leftChildIdx;
         this->rightChildIdx = rightChildIdx;
-        bounds = AABB::combine(bvhNodes[this->leftChildIdx].bounds, bvhNodes[this->leftChildIdx].bounds);
+        bounds = AABB::combine(bvhNodes[leftChildIdx].bounds, bvhNodes[rightChildIdx].bounds);
         this->splitAxis = splitAxis;
         this->triIdx = -1;  // no triangle here
     }
 };
 
-class BVH
-{
-private:
-    std::vector<uPtr<BVHNode>> nodes;
-	BVHNode* root;
-    int rootNodeIdx;
+//class BVH
+//{
+//private:
+//    //std::vector<uPtr<BVHNode>> nodes;
+//	//BVHNode* root;
+//    //int rootNodeIdx;
+//
+//public:
+//    BVH();
+//
+//    //std::vector<Triangle*> orderedTris;
+//
+//    //const BVHNode* getRootNode() const;
+//};
 
-public:
-    BVH();
-
-    std::vector<Triangle*> orderedTris;
-
-    int buildBVHRecursively(int& totalNodes, int startOffset, int nTris, const std::vector<Triangle>& tris, std::vector<int>& triIdices, std::vector<BVHNode>& bvhNodes);
-    const BVHNode* getRootNode() const;
-};
+int buildBVHRecursively(int& totalNodes, int startOffset, int nTris, const std::vector<Triangle>& tris, std::vector<int>& triIndices, std::vector<BVHNode>& bvhNodes);
 
 struct sortTriIndicesBasedOnDim
 {

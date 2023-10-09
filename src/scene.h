@@ -18,7 +18,7 @@ class Scene {
 private:
     ifstream fp_in;
     std::unordered_map<string, SceneMeshGroup> loadedMeshGroups;
-    std::unordered_map<string, uPtr<BVH>> meshBVHs;
+    //std::unordered_map<string, uPtr<BVH>> meshBVHs;
 
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
@@ -39,7 +39,14 @@ private:
     int parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Node& node, AABB& aabb);
     int loadCamera();
 
-    void constructBVH(string meshPath, unsigned int startTriIdx, unsigned int endTriIdx);
+    /// <summary>
+    /// Returns this geom's root node index for the BVH
+    /// </summary>
+    /// <param name="meshPath"></param>
+    /// <param name="startTriIdx"></param>
+    /// <param name="endTriIdx"></param>
+    /// <returns></returns>
+    int constructBVH(string meshPath, unsigned int startTriIdx, unsigned int endTriIdx);
 public:
     Scene(string filename);
     ~Scene();

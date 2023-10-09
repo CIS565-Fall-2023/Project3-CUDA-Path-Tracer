@@ -21,9 +21,6 @@
 #include "interactions.h"
 
 #define ERRORCHECK 1
-#define SORT_BY_MATERIAL 0
-#define STREAM_COMPACT 0
-#define CACHE_FIRST_INTERSECTION 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)

@@ -117,7 +117,7 @@ struct SceneMeshGroup
     int endTriIdx{ -1 };
     int startMeshIdx{ -1 };
     int endMeshIdx{ -1 };
-
+    int startBvhNodeIdx{ -1 };
     AABB aabb;
 };
 
@@ -133,6 +133,7 @@ struct Geom {
 
     int startTriIdx;
     int endTriIdx;
+    int startBvhNodeIdx;
 
     AABB aabb;
 };

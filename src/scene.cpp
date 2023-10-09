@@ -7,7 +7,7 @@
 #include "scene.h"
 
 Scene::Scene(string filename)
-    : tris(), meshes(), loadedMeshGroups(), meshBVHs(), bvhNodes()
+    : tris(), meshes(), loadedMeshGroups(), bvhNodes()
 {
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
@@ -72,7 +72,8 @@ int Scene::loadGeom(string objectid) {
                     newGeom.startTriIdx = meshGroup.startTriIdx;
                     newGeom.endTriIdx = meshGroup.endTriIdx;
                     newGeom.aabb = meshGroup.aabb;
-                    BVH* bvh = meshBVHs[tokens[1].c_str()].get();
+                    newGeom.startBvhNodeIdx = meshGroup.startBvhNodeIdx;
+                    //BVH* bvh = meshBVHs[tokens[1].c_str()].get();
                     //std::swap_ranges(tris.begin() + meshGroup.startTriIdx, tris.begin() + meshGroup.endTriIdx, bvh->orderedTris.begin());
                 }
             }
@@ -111,6 +112,21 @@ int Scene::loadGeom(string objectid) {
         geoms.push_back(newGeom);
         return 1;
     }
+}
+
+
+void traverse(const std::vector<BVHNode>& bvhNodes, int nodeIdx)
+{
+    const BVHNode* node = &bvhNodes[nodeIdx];
+    if (node->triIdx > -1)
+    {
+        // leaf node
+        return;
+    }
+
+    cout << "left: " << node->leftChildIdx << ", right: " << node->rightChildIdx << endl;
+    traverse(bvhNodes, node->leftChildIdx);
+    traverse(bvhNodes, node->rightChildIdx);
 }
 
 SceneMeshGroup Scene::loadGltfMesh(string path)
@@ -165,7 +181,8 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
         meshGroup.valid = true;
 
         loadedMeshGroups.emplace(path, meshGroup);
-        constructBVH(path, meshGroup.startTriIdx, meshGroup.endTriIdx + 1);
+        meshGroup.startBvhNodeIdx = constructBVH(path, meshGroup.startTriIdx, meshGroup.endTriIdx + 1);
+        traverse(bvhNodes, meshGroup.startBvhNodeIdx);
     }
 
     return meshGroup;
@@ -371,28 +388,11 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
     return totalTris;
 }
 
-//void traverse(const BVHNode* node)
-//{
-//    if (node->left)
-//    {
-//        cout << node->left->nodeIdx << endl;
-//    }
-//    if (node->right)
-//    {
-//        cout << node->right->nodeIdx << endl;
-//    }
-//
-//    if (node->left && node->right)
-//    {
-//        traverse(node->left);
-//        traverse(node->right);
-//    }    
-//}
-
-void Scene::constructBVH(const string meshPath, unsigned int startTriIdx, unsigned int endTriIdx)
+int Scene::constructBVH(const string meshPath, unsigned int startTriIdx, unsigned int endTriIdx)
 {
-    meshBVHs[meshPath] = mkU<BVH>();
-    BVH* bvh = meshBVHs[meshPath].get();
+    //meshBVHs[meshPath] = mkU<BVH>();
+    //BVH* bvh = meshBVHs[meshPath].get();
+    //BVH bvh;
 
     int totalNodesSoFar = bvhNodes.size();
 
@@ -408,13 +408,15 @@ void Scene::constructBVH(const string meshPath, unsigned int startTriIdx, unsign
         triIndices[i] = startTriIdx + i;
     }
 
-    bvh->buildBVHRecursively(totalNodesSoFar, 0, nTris, tris, triIndices, bvhNodes);
+    int rootNodeIdx = buildBVHRecursively(totalNodesSoFar, 0, nTris, tris, triIndices, bvhNodes);
 
     //cout << "=========== TRIS BEFORE BVH ORDERING ===========" << endl;
     //reshuffleBVHTris(bvh, startTriIdx, endTriIdx);
     //cout << "=========== TRIS AFTER BVH ORDERING ===========" << endl;
     //cout << meshBVHs[meshPath]->getRootNode()->nodeIdx << endl;
     //traverse(meshBVHs[meshPath]->getRootNode());
+    //cout << totalNodesSoFar << bvhNodes[3].leftChildIdx << endl;
+    return rootNodeIdx;
 }
 
 int Scene::loadCamera() {
