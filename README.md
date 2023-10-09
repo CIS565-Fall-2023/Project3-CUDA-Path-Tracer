@@ -72,8 +72,7 @@ In this part, I write an interesting camera effect called depth of field. It ref
 |:-----:|:-----:|
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/compare1.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/compare2.png" width="300" height="300">
 
-
-
+Based on the image, we can easily see that we need an average of 634.047 MS to generate an iter in the box while we only need 104.308 MS to generate an iter without the box. It's obvious that we need less time to iter without a box. The reason is also obvious: There is less light bouncing in the open space compared to the inside box, thus the iteration terminates early and needs fewer resources. 
 # reference
 
 https://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models#ProjectiveCamera::focalDistance
