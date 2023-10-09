@@ -8,16 +8,16 @@
 #define USE_BVH 1
 #define USE_MIS 1
 #define MTBVH 1
+#define DENOISE 1
 #define VIS_NORMAL 0
 #define TONEMAPPING 1
 #define DOF_ENABLED 1
-#define BACKGROUND_COLOR_MULT 1.0f
 #define SCATTER_ORIGIN_OFFSETMULT 0.001f
 #define BOUNDING_BOX_EXPAND 0.001f
 #define ALPHA_CUTOFF 0.01f
-#define STOCHASTIC_SAMPLING 1 
-#define FIRST_INTERSECTION_CACHING 0
-#define MAX_DEPTH 1
+#define STOCHASTIC_SAMPLING 1
+#define FIRST_INTERSECTION_CACHING 1
+#define MAX_DEPTH 8
 #define SORT_BY_MATERIAL_TYPE 0
 #define MAX_NUM_PRIMS_IN_LEAF 2
 #define SAH_BUCKET_SIZE 20
@@ -144,6 +144,8 @@ struct RenderState {
     unsigned int iterations;
     int traceDepth;
     std::vector<glm::vec3> image;
+    std::vector<glm::vec3> albedo;
+    std::vector<glm::vec3> normal;
     std::string imageName;
 };
 
@@ -193,5 +195,10 @@ struct SceneInfoDev {
     Primitive* dev_lights;
     int lightsSize;
     cudaTextureObject_t skyboxObj;
+};
+
+struct SceneGbuffer {
+    glm::vec3* dev_albedo;
+    glm::vec3* dev_normal;
 };
 

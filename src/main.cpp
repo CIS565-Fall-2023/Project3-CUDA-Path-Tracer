@@ -3,6 +3,7 @@
 #include <cstring>
 #include <chrono>
 #include <stb_image.h>
+#include <OpenImageDenoise/oidn.h>
 static std::string startTimeString;
 
 // For camera controls
@@ -30,6 +31,8 @@ int iteration;
 int width;
 int height;
 
+OIDNDevice device;
+
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
@@ -44,7 +47,6 @@ int main(int argc, char** argv) {
 
 	const char* sceneFile = argv[1];
 
-	stbi_set_flip_vertically_on_load(1);
 
 	// Load scene file
 	scene = new Scene(sceneFile);
@@ -81,16 +83,19 @@ int main(int argc, char** argv) {
 
 	// Initialize CUDA and GL components
 	init();
-
+	stbi_set_flip_vertically_on_load(1);
 	scene->LoadAllTextures();
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
 
+	device = oidnNewDevice(OIDN_DEVICE_TYPE_DEFAULT); // CPU or GPU if available
+	oidnCommitDevice(device);
 	// GLFW main loop
 	mainLoop();
 
+	oidnReleaseDevice(device);
 	return 0;
 }
 
@@ -98,11 +103,54 @@ void saveImage() {
 	float samples = iteration;
 	// output image file
 	image img(width, height);
+#if DENOISE
+	DrawGbuffer(16);
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
+			int index = x + (y * width);
+			renderState->image[index] /= samples;
+		}
+	}
+	samples = 1;
+	OIDNBuffer colorBuf = oidnNewBuffer(device, width * height * 3 * sizeof(float));
+	OIDNBuffer albedoBuf = oidnNewBuffer(device, width * height * 3 * sizeof(float));
+	OIDNBuffer normalBuf = oidnNewBuffer(device, width * height * 3 * sizeof(float));
+	OIDNFilter filter = oidnNewFilter(device, "RT");
+
+	oidnSetFilterImage(filter, "color", colorBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // beauty
+	oidnSetFilterImage(filter, "albedo", albedoBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // auxiliary
+	oidnSetFilterImage(filter, "normal", normalBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // auxiliary
+	oidnSetFilterImage(filter, "output", colorBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // denoised beauty
+	oidnSetFilterBool(filter, "hdr", true); // beauty image is HDR
+	oidnCommitFilter(filter);
+
+	float* colorPtr = (float*)oidnGetBufferData(colorBuf);
+	float* albedoPtr = (float*)oidnGetBufferData(albedoBuf);
+	float* normalPtr = (float*)oidnGetBufferData(normalBuf);
+	memcpy(colorPtr, renderState->image.data(), width * height * 3 * sizeof(float));
+	memcpy(albedoPtr, renderState->albedo.data(), width * height * 3 * sizeof(float));
+	memcpy(normalPtr, renderState->normal.data(), width * height * 3 * sizeof(float));
+
+	oidnExecuteFilter(filter);
+	const char* errorMessage;
+	if (oidnGetDeviceError(device, &errorMessage) != OIDN_ERROR_NONE)
+		printf("Error: %s\n", errorMessage);
+
+	memcpy(renderState->image.data(), colorPtr, width * height * 3 * sizeof(float));
+	oidnReleaseBuffer(colorBuf);
+	oidnReleaseBuffer(albedoBuf);
+	oidnReleaseBuffer(normalBuf);
+	oidnReleaseFilter(filter);
+#endif
 
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
-			glm::vec3 pix = renderState->image[index];
+			glm::vec3 pix = renderState->color[index];
 #if TONEMAPPING
 			img.setPixel(width - 1 - x, y, util_postprocess_gamma(util_postprocess_ACESFilm(pix / samples)));
 #else
@@ -114,6 +162,9 @@ void saveImage() {
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
 	ss << filename << "." << startTimeString << "." << samples << "samp";
+#if DENOISE
+	ss << "_denoised";
+#endif
 	filename = ss.str();
 
 	// CHECKITOUT

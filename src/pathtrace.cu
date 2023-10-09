@@ -108,6 +108,9 @@ static float* dev_fsigns = NULL;
 static Primitive* dev_lights = NULL;
 static PathSegment* dev_paths1 = NULL;
 static PathSegment* dev_paths2 = NULL;
+static int* dev_rayValidCache = NULL;
+static glm::vec3* dev_imageCache = NULL;
+static ShadeableIntersection* dev_pathCache = NULL;
 static ShadeableIntersection* dev_intersections1 = NULL;
 static ShadeableIntersection* dev_intersections2 = NULL;
 static ShadeableIntersection* dev_intersectionCache = NULL;
@@ -185,6 +188,13 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections1, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	cudaMalloc(&dev_intersections2, pixelcount * sizeof(ShadeableIntersection));
+
+#if !STOCHASTIC_SAMPLING && FIRST_INTERSECTION_CACHING
+	cudaMalloc(&dev_intersectionCache, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_pathCache, pixelcount * sizeof(PathSegment));
+	cudaMalloc(&dev_rayValidCache, pixelcount * sizeof(int));
+	cudaMalloc(&dev_imageCache, pixelcount * sizeof(glm::vec3));
+#endif
 	// TODO: initialize any extra device memeory you need
 
 	checkCUDAError("pathtraceInit");
@@ -227,6 +237,12 @@ void pathtraceFree(Scene* scene) {
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections1);
 	cudaFree(dev_intersections2);
+#if !STOCHASTIC_SAMPLING && FIRST_INTERSECTION_CACHING
+	cudaFree(dev_intersectionCache);
+	cudaFree(dev_pathCache);
+	cudaFree(dev_rayValidCache);
+	cudaFree(dev_imageCache);
+#endif
 	// TODO: clean up any extra device memory you created
 
 	checkCUDAError("pathtraceFree");
@@ -528,7 +544,7 @@ __global__ void compute_intersection_bvh_stackless(
 		glm::vec2 uv = util_sample_spherical_map(glm::normalize(rayDir));
 		float4 skyColorRGBA = tex2D<float4>(dev_sceneInfo.skyboxObj, uv.x, uv.y);
 		glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
-		image[pathSegment.pixelIndex] += pathSegment.color * skyColor * BACKGROUND_COLOR_MULT;
+		image[pathSegment.pixelIndex] += pathSegment.color * skyColor;
 	}
 }
 
@@ -592,7 +608,76 @@ __global__ void compute_intersection_bvh_stackless_mtbvh(
 		glm::vec2 uv = util_sample_spherical_map(glm::normalize(rayDir));
 		float4 skyColorRGBA = tex2D<float4>(dev_sceneInfo.skyboxObj, uv.x, uv.y);
 		glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
-		image[pathSegment.pixelIndex] += depth > 0 ? pathSegment.color * skyColor * BACKGROUND_COLOR_MULT : pathSegment.color * skyColor;
+		image[pathSegment.pixelIndex] += pathSegment.color * skyColor;
+	}
+}
+
+__global__ void draw_gbuffer(
+	int num_paths
+	, PathSegment* pathSegments
+	, SceneInfoDev dev_sceneInfo
+	, SceneGbuffer gbuffer
+)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+	if (path_index >= num_paths) return;
+	PathSegment& pathSegment = pathSegments[path_index];
+	Ray& ray = pathSegment.ray;
+	glm::vec3 rayDir = pathSegment.ray.direction;
+	glm::vec3 rayOri = pathSegment.ray.origin;
+	float x = fabs(rayDir.x), y = fabs(rayDir.y), z = fabs(rayDir.z);
+	int axis = x > y && x > z ? 0 : (y > z ? 1 : 2);
+	int sgn = rayDir[axis] > 0 ? 0 : 1;
+	int d = (axis << 1) + sgn;
+	const MTBVHGPUNode* currArray = dev_sceneInfo.dev_mtbvhArray + d * dev_sceneInfo.bvhDataSize;
+	int curr = 0;
+	ShadeableIntersection tmpIntersection;
+	tmpIntersection.t = 1e37f;
+	bool intersected = false;
+	while (curr >= 0 && curr < dev_sceneInfo.bvhDataSize)
+	{
+		bool outside = true;
+		float boxt = boundingBoxIntersectionTest(currArray[curr].bbox, ray, outside);
+		if (!outside) boxt = EPSILON;
+		if (boxt > 0 && boxt < tmpIntersection.t)
+		{
+			if (currArray[curr].startPrim != -1)//leaf node
+			{
+				int start = currArray[curr].startPrim, end = currArray[curr].endPrim;
+				bool intersect = util_bvh_leaf_intersect(start, end, dev_sceneInfo, ray, &tmpIntersection);
+				intersected = intersected || intersect;
+			}
+			curr = currArray[curr].hitLink;
+		}
+		else
+		{
+			curr = currArray[curr].missLink;
+		}
+	}
+	if (intersected)
+	{
+		int pixelIdx = pathSegment.pixelIndex;
+		gbuffer.dev_normal[pixelIdx] += tmpIntersection.surfaceNormal;
+		Material& mat = dev_sceneInfo.dev_materials[tmpIntersection.materialId];
+		glm::vec3 materialColor = mat.color;
+		if (mat.baseColorMap)
+		{
+			float4 color = tex2D<float4>(mat.baseColorMap, tmpIntersection.uv.x, tmpIntersection.uv.y);
+			materialColor.x = color.x;
+			materialColor.y = color.y;
+			materialColor.z = color.z;
+		}
+		gbuffer.dev_albedo[pixelIdx] += materialColor;
+	}
+	else
+	{
+		if (dev_sceneInfo.skyboxObj)
+		{
+			glm::vec2 uv = util_sample_spherical_map(glm::normalize(rayDir));
+			float4 skyColorRGBA = tex2D<float4>(dev_sceneInfo.skyboxObj, uv.x, uv.y);
+			glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
+			gbuffer.dev_albedo[pathSegment.pixelIndex] += skyColor;
+		}
 	}
 }
 
@@ -637,7 +722,7 @@ __global__ void scatter_on_intersection(
 		glm::vec3 nMap = glm::vec3(0, 0, 1);
 		if (material.normalMap != 0)
 		{
-			float4 nMapCol = tex2D<float4>(material.normalMap, intersection.uv.x, 1.0 - intersection.uv.y);
+			float4 nMapCol = tex2D<float4>(material.normalMap, intersection.uv.x, intersection.uv.y);
 			nMap.x = nMapCol.x;
 			nMap.y = nMapCol.y;
 			nMap.z = nMapCol.z;
@@ -670,14 +755,14 @@ __global__ void scatter_on_intersection(
 			float roughness = material.roughness, metallic = material.metallic;
 			if (material.baseColorMap != 0)
 			{
-				color = tex2D<float4>(material.baseColorMap, intersection.uv.x, 1.0 - intersection.uv.y);
+				color = tex2D<float4>(material.baseColorMap, intersection.uv.x, intersection.uv.y);
 				materialColor.x = color.x;
 				materialColor.y = color.y;
 				materialColor.z = color.z;
 			}
 			if (material.metallicRoughnessMap != 0)
 			{
-				color = tex2D<float4>(material.metallicRoughnessMap, intersection.uv.x, 1.0 - intersection.uv.y);
+				color = tex2D<float4>(material.metallicRoughnessMap, intersection.uv.x, intersection.uv.y);
 				roughness = color.y;
 				metallic = color.z;
 			}
@@ -781,7 +866,7 @@ __global__ void scatter_on_intersection_mis(
 		glm::vec3 nMap = glm::vec3(0, 0, 1);
 		if (material.normalMap != 0)
 		{
-			float4 nMapCol = tex2D<float4>(material.normalMap, intersection.uv.x, 1.0 - intersection.uv.y);
+			float4 nMapCol = tex2D<float4>(material.normalMap, intersection.uv.x, intersection.uv.y);
 			nMap.x = nMapCol.x;
 			nMap.y = nMapCol.y;
 			nMap.z = nMapCol.z;
@@ -822,7 +907,7 @@ __global__ void scatter_on_intersection_mis(
 			//Texture mapping
 			if (material.baseColorMap != 0)
 			{
-				color = tex2D<float4>(material.baseColorMap, intersection.uv.x, 1.0 - intersection.uv.y);
+				color = tex2D<float4>(material.baseColorMap, intersection.uv.x, intersection.uv.y);
 				materialColor.x = color.x;
 				materialColor.y = color.y;
 				materialColor.z = color.z;
@@ -830,7 +915,7 @@ __global__ void scatter_on_intersection_mis(
 			}
 			if (material.metallicRoughnessMap != 0)
 			{
-				color = tex2D<float4>(material.metallicRoughnessMap, intersection.uv.x, 1.0 - intersection.uv.y);
+				color = tex2D<float4>(material.metallicRoughnessMap, intersection.uv.x, intersection.uv.y);
 				roughness = color.y;
 				metallic = color.z;
 			}
@@ -908,6 +993,14 @@ __global__ void scatter_on_intersection_mis(
 		}
 
 	}
+}
+
+
+__global__ void addBackground(glm::vec3* dev_image, glm::vec3* dev_imageCache, int numPixels)
+{
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index >= numPixels) return;
+	dev_image[index] += dev_imageCache[index];
 }
 
 
@@ -1045,48 +1138,69 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		// clean shading chunks
 		cudaMemset(dev_intersections1, 0, pixelcount * sizeof(ShadeableIntersection));
-
-		// tracing
 		dim3 numblocksPathSegmentTracing = (numRays + blockSize1d - 1) / blockSize1d;
+#if !STOCHASTIC_SAMPLING && FIRST_INTERSECTION_CACHING
+		if (iter != 1 && depth == 0)
+		{
+			cudaMemcpy(dev_intersections1, dev_intersectionCache, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyHostToHost);
+			cudaMemcpy(dev_paths1, dev_pathCache, pixelcount * sizeof(PathSegment), cudaMemcpyHostToHost);
+			cudaMemcpy(rayValid, dev_rayValidCache, sizeof(int) * pixelcount, cudaMemcpyHostToHost);
+			addBackground << < numblocksPathSegmentTracing, blockSize1d >> > (dev_image, dev_imageCache, pixelcount);
+		}
+		if (iter == 1||(iter!=1&&depth>0))
+		{
+#endif
+			// tracing
 #if USE_BVH
 #if MTBVH
-		compute_intersection_bvh_stackless_mtbvh << <numblocksPathSegmentTracing, blockSize1d >> > (
-			depth
-			, numRays
-			, dev_paths1
-			, dev_sceneInfo
-			, dev_intersections1
-			, rayValid
-			, dev_image
-			);
+			compute_intersection_bvh_stackless_mtbvh << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, numRays
+				, dev_paths1
+				, dev_sceneInfo
+				, dev_intersections1
+				, rayValid
+				, dev_image
+				);
 #else
-		compute_intersection_bvh_stackless << <numblocksPathSegmentTracing, blockSize1d >> > (
-			depth
-			, numRays
-			, dev_paths1
-			, dev_sceneInfo
-			, dev_intersections1
-			, rayValid
-			, dev_image
-			);
+			compute_intersection_bvh_stackless << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, numRays
+				, dev_paths1
+				, dev_sceneInfo
+				, dev_intersections1
+				, rayValid
+				, dev_image
+				);
 #endif
 #else
-		compute_intersection << <numblocksPathSegmentTracing, blockSize1d >> > (
-			depth
-			, numRays
-			, dev_paths1
-			, dev_objs
-			, hst_scene->objects.size()
-			, dev_triangles
-			, dev_vertices
-			, dev_uvs
-			, dev_normals
-			, hst_scene->skyboxTextureObj
-			, dev_intersections1
-			, rayValid
-			, dev_image
-			);
+			compute_intersection << <numblocksPathSegmentTracing, blockSize1d >> > (
+				depth
+				, numRays
+				, dev_paths1
+				, dev_objs
+				, hst_scene->objects.size()
+				, dev_triangles
+				, dev_vertices
+				, dev_uvs
+				, dev_normals
+				, hst_scene->skyboxTextureObj
+				, dev_intersections1
+				, rayValid
+				, dev_image
+				);
 #endif
+#if !STOCHASTIC_SAMPLING && FIRST_INTERSECTION_CACHING
+		}
+		if (iter == 1 && depth == 0)
+		{
+			cudaMemcpy(dev_intersectionCache, dev_intersections1, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyHostToHost);
+			cudaMemcpy(dev_pathCache, dev_paths1, pixelcount * sizeof(PathSegment), cudaMemcpyHostToHost);
+			cudaMemcpy(dev_rayValidCache, rayValid, sizeof(int) * pixelcount, cudaMemcpyHostToHost);
+			cudaMemcpy(dev_imageCache, dev_image, sizeof(glm::vec3) * pixelcount, cudaMemcpyHostToHost);
+		}
+#endif
+
 		cudaDeviceSynchronize();
 		checkCUDAError("trace one bounce");
 
@@ -1160,4 +1274,64 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	cudaFree(rayIndex);
 
 	checkCUDAError("pathtrace");
+}
+
+void DrawGbuffer(int numIter)
+{
+	if (!USE_BVH) throw;
+
+	const Camera& cam = hst_scene->state.camera;
+	const int pixelcount = cam.resolution.x * cam.resolution.y;
+
+	SceneInfoDev dev_sceneInfo{};
+	dev_sceneInfo.dev_materials = dev_materials;
+	dev_sceneInfo.dev_objs = dev_objs;
+	dev_sceneInfo.objectsSize = hst_scene->objects.size();
+	dev_sceneInfo.modelInfo.dev_triangles = dev_triangles;
+	dev_sceneInfo.modelInfo.dev_vertices = dev_vertices;
+	dev_sceneInfo.modelInfo.dev_normals = dev_normals;
+	dev_sceneInfo.modelInfo.dev_uvs = dev_uvs;
+	dev_sceneInfo.modelInfo.dev_tangents = dev_tangents;
+	dev_sceneInfo.modelInfo.dev_fsigns = dev_fsigns;
+	dev_sceneInfo.dev_primitives = dev_primitives;
+#if USE_BVH
+#if MTBVH
+	dev_sceneInfo.dev_mtbvhArray = dev_mtbvhArray;
+	dev_sceneInfo.bvhDataSize = hst_scene->MTBVHArray.size() / 6;
+#else
+	dev_sceneInfo.dev_bvhArray = dev_bvhArray;
+	dev_sceneInfo.bvhDataSize = hst_scene->bvhTreeSize;
+#endif
+#endif // 
+	dev_sceneInfo.skyboxObj = hst_scene->skyboxTextureObj;
+
+	const dim3 blockSize2d(8, 8);
+	const dim3 blocksPerGrid2d(
+		(cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
+		(cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
+	
+	const int blockSize1d = 128;
+	dim3 numblocksPathSegmentTracing = (pixelcount + blockSize1d - 1) / blockSize1d;
+	SceneGbuffer dev_gbuffer;
+	glm::vec3* dev_albedo,*dev_normal;
+	cudaMalloc(&dev_albedo, pixelcount * sizeof(glm::vec3));
+	cudaMalloc(&dev_normal, pixelcount * sizeof(glm::vec3));
+	dev_gbuffer.dev_albedo = dev_albedo;
+	dev_gbuffer.dev_normal = dev_normal;
+	for (int i = 0; i < numIter; i++)
+	{
+		generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, i, MAX_DEPTH, dev_paths1);
+		draw_gbuffer << <numblocksPathSegmentTracing, blockSize1d >> > (pixelcount, dev_paths1, dev_sceneInfo, dev_gbuffer);
+	}
+	hst_scene->state.albedo.resize(pixelcount);
+	hst_scene->state.normal.resize(pixelcount);
+	cudaMemcpy(hst_scene->state.albedo.data(), dev_albedo, pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
+	cudaMemcpy(hst_scene->state.normal.data(), dev_normal, pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
+	cudaFree(dev_albedo);
+	cudaFree(dev_normal);
+	for (int i = 0; i < pixelcount; i++)
+	{
+		hst_scene->state.albedo[i] /= (float)numIter;
+		hst_scene->state.normal[i] /= (float)numIter;
+	}
 }

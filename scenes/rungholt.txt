@@ -2,7 +2,7 @@
 CAMERA
 RES         1920 1080
 FOVY        30
-ITERATIONS  10000
+ITERATIONS  1000
 DEPTH       8
 FILE        rungholt
 EYE         0.0 5 10.5
