@@ -30,7 +30,5 @@ struct LightLiSample {
 	glm::vec3 L;
 	glm::vec3 wi;
 	float pdf;
-	ShadeableIntersection lightIntersection;
-	//glm::vec3 intersectPoint;
-	//glm::vec3 normal;
+	glm::vec3 intersectPoint;
 };

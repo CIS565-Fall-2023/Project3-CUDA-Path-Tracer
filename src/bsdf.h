@@ -92,12 +92,9 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
         thrust::uniform_real_distribution<float> u01(0, 1);
         glm::vec3 rands(u01(rng), u01(rng), u01(rng));
         float alpha = glm::max(bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor, EPSILON);
-        glm::vec3 wi_diffuse;
-        float pdf_diffuse;
-        //wi_diffuse = hemiSphereRandomSample(glm::vec2(rands), &pdf_diffuse);
         glm::vec3 wh;
         if (rands.z > (1.f / (2.f - bsdfStruct.metallicFactor))) {
-            wi = hemiSphereRandomSample(glm::vec2(rands), &pdf_diffuse);
+            wi = hemiSphereRandomSample(glm::vec2(rands), pdf);
             wh = glm::normalize(wi + wo);
             //printf("Diffuse wi.z: %f\n", wi.z);
         }

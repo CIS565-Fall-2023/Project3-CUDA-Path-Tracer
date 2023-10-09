@@ -87,7 +87,6 @@ struct ShadeableIntersection {
   int materialId;
   glm::vec3 intersectionPoint;
   glm::vec2 uv;
-  glm::vec2 bary;
   const Triangle* primitive;
 };
 

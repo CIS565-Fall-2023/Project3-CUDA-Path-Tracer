@@ -5,7 +5,8 @@
 #include "sceneStructs.h"
 #include "mathUtil.h"
 struct ShapeSample {
-	ShadeableIntersection intersection;
+	glm::vec3 position;
+	glm::vec3 normal;
 	float pdf;
 };
 
@@ -18,7 +19,9 @@ __device__ static ShapeSample sampleTriangle(const Triangle & tri, const glm::ve
 	ShadeableIntersection intersection;
 	intersection.surfaceNormal		= (1.0f - b.x - b.y) * tri.n1 + b.x * tri.n2 + b.y * tri.n3;
 	intersection.intersectionPoint	= (1.0f - b.x - b.y) * tri.p1 + b.x * tri.p2 + b.y * tri.p3;
-	intersection.uv					= (1.0f - b.x - b.y) * tri.uv1 + b.x * tri.uv2 + b.y * tri.uv3;
-	intersection.bary				= b;
-	return { intersection, sampleTrianglePdf(tri)};
+	return { 
+		(1.0f - b.x - b.y) * tri.p1 + b.x * tri.p2 + b.y * tri.p3, // position 
+		(1.0f - b.x - b.y) * tri.n1 + b.x * tri.n2 + b.y * tri.n3, // normal
+		sampleTrianglePdf(tri)
+	};
 }

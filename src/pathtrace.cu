@@ -28,7 +28,6 @@
 
 #define USE_FIRST_BOUNCE_CACHE 0
 #define USE_SORT_BY_MATERIAL 0
-#define DIRECT_LIGHTING 0
 #define MIS 1
 #define USE_BVH 1
 
@@ -390,7 +389,7 @@ __global__ void shadeBSDF(
 	, int triangles_size
 	, BVHNode * bvhNodes
 	, int bvhNodes_size
-#if DIRECT_LIGHTING
+#if MIS
 	, Light * lights
 	, int lights_size
 	, float inverse_sum_power
@@ -408,6 +407,12 @@ __global__ void shadeBSDF(
 		if (intersection.t > 0.0f) { // if the intersection exists...
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 			thrust::uniform_real_distribution<float> u01(0, 1);
+			const float threshold_rr = 0.7f;
+			float prob_rr = u01(rng);
+			if (prob_rr > threshold_rr) {
+				pathSegment.remainingBounces = 0;
+				return;
+			}
 			const glm::vec3 rands(u01(rng), u01(rng), u01(rng));
 			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
 			initBSDF(bsdfStruct, intersection.uv);
@@ -415,7 +420,7 @@ __global__ void shadeBSDF(
 			if (bsdfStruct.bsdfType == BSDFType::EMISSIVE) {
 				pathSegments[idx].remainingBounces = 0;
 				if (depth == 0) {
-					pathSegment.color = bsdfStruct.emissiveFactor;
+					pathSegment.color = bsdfStruct.emissiveFactor * bsdfStruct.strength;
 				}
 			}
 			else {
@@ -441,34 +446,29 @@ __global__ void shadeBSDF(
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 
-#if  DIRECT_LIGHTING
+#if  MIS
 				/* Uniformly pick a light, will change to selecting by importance in the future */
 				if (lights_size > 0) {
 					thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
-					int n_sample_light = 1;
+					int n_sample_light = 3;
 					for (size_t i = 0; i < n_sample_light; i++)
 					{
 						int sampled_light_index = uLight(rng);
-						float sampled_light_pdf = 1.0f / lights_size;
-				
 						const auto& light = lights[sampled_light_index];
-						glm::vec3 Ld(0.0f);
 						float light_pdf = 0.0f, scattering_pdf = 0.0f;
-						const auto & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(u01(rng), u01(rng)));
-						glm::vec3 _f;
-						glm::vec3 Li = ls.L;
+						const auto & ls = sampleLi(light, triangles[light.primIndex], intersection, glm::vec2(rands));
 						if (ls.pdf > EPSILON) {
 							light_pdf = ls.pdf;
 							glm::vec3 light_wi = w2o * ls.wi;
-							_f = f(bsdfStruct, wo, light_wi, intersection.uv) * abs(glm::dot(ls.wi, intersection.surfaceNormal));
+							glm::vec3 f_direct_light = f(bsdfStruct, wo, light_wi, intersection.uv);
 							scattering_pdf = PDF(bsdfStruct, wo, light_wi);
-							if (!(_f.x < EPSILON && _f.y < EPSILON && _f.z < EPSILON)
+							if (!(f_direct_light.x < EPSILON && f_direct_light.y < EPSILON && f_direct_light.z < EPSILON)
 								&& scattering_pdf > 0) {
 								Ray light_ray;
 								light_ray.direction = ls.wi;
 								light_ray.origin = intersect;
 								light_ray.min_t = EPSILON;
-								float distance = glm::length(ls.lightIntersection.intersectionPoint - intersect);
+								float distance = glm::length(ls.intersectPoint - intersect);
 								light_ray.max_t = distance - 1e-4f; // Do occulusion test by setting max_t
 								ShadeableIntersection light_ray_intersection{ -1.0f }; // set t = -1
 								if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) {
@@ -479,7 +479,7 @@ __global__ void shadeBSDF(
 										//float power_pdf = Math::luminance(Li) * triangles[light.primIndex].area() * TWO_PI * inverse_sum_power; 
 										light_pdf = power_pdf * ls.pdf;
 										float weight = PowerHeuristic(1, light_pdf, 1, scattering_pdf);
-										pathSegment.color += _f * Li * pathSegment.constantTerm * abs(light_wi.z) * weight / (light_pdf * n_sample_light);
+										pathSegment.color += f_direct_light * ls.L * pathSegment.constantTerm * abs(light_wi.z) * weight / (light_pdf * n_sample_light * threshold_rr);
 									}
 								}
 
@@ -495,7 +495,7 @@ __global__ void shadeBSDF(
 					pathSegment.remainingBounces = 0;
 				}
 				else {
-					pathSegment.constantTerm *= (bsdf * abs(wi.z) / pdf);
+					pathSegment.constantTerm *= (bsdf * abs(wi.z) / (pdf * threshold_rr));
 					Ray next_bounce_ray;
 					next_bounce_ray.direction = o2w * wi;
 					next_bounce_ray.origin = intersect;
@@ -507,7 +507,7 @@ __global__ void shadeBSDF(
 						auto next_bsdfStruct = bsdfStructs[next_bounce_intersection.materialId];
 						if (next_bsdfStruct.bsdfType == EMISSIVE) {
 							pathSegment.remainingBounces = 0;
-#if DIRECT_LIGHTING
+#if MIS
 							float power_pdf = 1.0f / lights_size;
 							float distance_sqr = glm::length2(next_bounce_intersection.intersectionPoint - intersect);
 							float next_light_pdf =  power_pdf * distance_sqr / 
@@ -544,18 +544,8 @@ __global__ void shadeBSDF(
 						pathSegment.remainingBounces = 0;
 						// Move env map stuff here...
 					}
-					//float cosineTerm = abs(wi.z);
-					//pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
-					////pathSegment.constantTerm *= (bsdf * cosineTerm / pdf);
-					//pathSegment.ray.direction = o2w * wi;
-					//pathSegment.ray.origin = intersect;
-					//pathSegment.remainingBounces--;
 				}
 			}
-			// If there was no intersection, color the ray black.
-			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-			// used for opacity, in which case they can indicate "no opacity".
-			// This can be useful for post-processing and image compositing.
 		}
 		else {
 
@@ -743,7 +733,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			hst_scene->triangles.size(),
 			dev_bvhNodes,
 			bvh->nodes.size()
-#if DIRECT_LIGHTING
+#if MIS
 			, dev_lights
 			, hst_scene->lights.size()
 			, hst_scene->inverse_sum_power

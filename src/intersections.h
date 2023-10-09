@@ -37,16 +37,11 @@ __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableInterse
         if (r.min_t < t && t < r.max_t) {
             r.max_t = t;
             isect->t = t;
-            //isect->primitive = this;
             isect->materialId = tri.materialID;
             isect->intersectionPoint = r.at(t);
             isect->uv = (1.0f - bary.x - bary.y) * tri.uv1 + bary.x * tri.uv2 + bary.y * tri.uv3;
             isect->surfaceNormal = glm::normalize((1.0f - bary.x - bary.y) * tri.n1 + bary.x * tri.n2 + bary.y * tri.n3);
-            isect->bary = glm::vec2(bary);
             isect->primitive = &tri;
-   //         if (tri.normalTextureID != -1) {
-			//	isect->surfaceNormal = sampleTextureRGB(*tri.normalTexture, isect->uv);
-			//}
         }
     }
     return hasHit;
@@ -74,24 +69,12 @@ __device__ bool intersectAABB(const Ray& ray, const AABB& aabb)
         if (tmin > tmax) return false;
     }
     return !(tmin > ray.max_t || tmax < ray.min_t);
-    //return true;
 }
 
 
 __device__ bool intersectBVH(const BVHNode* nodes, int nodeCount, const Triangle* tris, Ray& ray, ShadeableIntersection& intersection)
 {
     int nodeIndex = 0;
-    //const BVHNode & root = nodes[nodeIndex];
-    //const BVHNode& left = nodes[root.left];
-    //const BVHNode & right = nodes[root.right];
-    //if (intersectAABB(ray, right.aabb)) {
-    //	for (size_t i = right.startPrim; i < right.endPrim; i++)
-    //	{
-    //		tris[i].intersect(ray, &intersection);
-    //	}
-    //}
-    //
-    //return intersection.t > EPSILON;
     while (nodeIndex < nodeCount) {
         const BVHNode& node = nodes[nodeIndex];
         if (intersectAABB(ray, node.aabb)) {
