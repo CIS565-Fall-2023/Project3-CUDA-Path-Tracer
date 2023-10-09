@@ -138,7 +138,7 @@ void scatterRay(
 
                 // Attenuation based on path length
                 float dist = glm::length(intersect - pathSegment.ray.origin);
-                glm::vec3 transmittance = exp(-dist * (m.sigma_a + m.sigma_s));
+                glm::vec3 transmittance = exp(-dist * m.sigma_a);
 
                 accumulatedColor *= transmittance;
 
