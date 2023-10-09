@@ -1,0 +1,165 @@
+// ==================================================
+// MATERIALS
+// ==================================================
+
+// warm light
+MATERIAL 0
+EMIT_COL 1 0.945 0.878
+EMIT_STR 7.5
+
+// diffuse gray
+MATERIAL 1
+DIFF_COL 0.5 0.5 0.5
+
+// freddy main
+MATERIAL 2
+DIFF_COL gltf/freddy/textures/Freddy_Body_baseColor.png
+NORM_MAP gltf/freddy/textures/Freddy_Body_normal.png
+
+// freddy eyes
+MATERIAL 3
+DIFF_COL gltf/freddy/textures/Freddy_Eyes_baseColor.png
+EMIT_COL gltf/freddy/textures/Freddy_Eyes_emissive.jpeg
+EMIT_STR 0.2
+
+// chair
+MATERIAL 4
+DIFF_COL gltf/shinji/textures/lambert2_baseColor.png
+NORM_MAP gltf/shinji/textures/lambert2_normal.png
+
+// hair
+MATERIAL 5
+DIFF_COL gltf/shinji/textures/shinji_hair.png
+
+// shinji
+MATERIAL 6
+DIFF_COL gltf/shinji/textures/Ch01_1001_Diffuse.png
+NORM_MAP gltf/shinji/textures/Ch01_1001_Normal.png
+
+// floor
+MATERIAL 7
+DIFF_COL gltf/backrooms/textures/carpet/Carpet011_2K-JPG_Color.jpg
+NORM_MAP gltf/backrooms/textures/carpet/Carpet011_2K-JPG_NormalDX.jpg
+
+// walls
+MATERIAL 8
+DIFF_COL gltf/backrooms/textures/wallpaper.jpg
+
+// ceiling base flat
+MATERIAL 9
+DIFF_COL 0.6 0.6 0.6
+
+// ceiling tiles
+MATERIAL 10
+DIFF_COL 0.8941 0.9020 0.6588
+
+// ==================================================
+// CAMERA
+// ==================================================
+
+// Camera
+CAMERA
+// RES          960 540
+RES          1920 1080
+FOVY         38
+ITERATIONS   5000
+DEPTH        8
+FILE         backrooms
+EYE          -11.39 9.44 7.82
+LOOKAT       -6.51 8.83 -0.89
+UP           0 1 0
+LENS_RADIUS  0.35
+FOCUS_DIST   20
+
+// ==================================================
+// OBJECTS
+// ==================================================
+
+// floor
+// OBJECT 0
+cube
+material 1
+TRANS       0 -0.5 0
+ROTAT       0 0 0
+SCALE       100 1 100
+
+// top light
+// OBJECT 1
+cube
+material 0
+TRANS       0 30.5 0
+ROTAT       0 0 0
+SCALE       100 1 100
+
+OBJECT 2
+mesh
+gltf/freddy/main.gltf
+material 2
+TRANS       6 0 -10
+ROTAT       0 -90 0
+SCALE       11.2
+
+OBJECT 3
+mesh
+gltf/freddy/eyes.gltf
+material 3
+CHILD_OF 2
+
+OBJECT 4
+mesh
+gltf/shinji/chair.glb
+material 4
+TRANS -7 0 -10
+ROTAT 0 90 0
+SCALE 1.6
+
+OBJECT 5
+mesh
+gltf/shinji/hair.glb
+material 5
+CHILD_OF 4
+
+OBJECT 6
+mesh
+gltf/shinji/shinji.glb
+material 6
+CHILD_OF 4
+
+OBJECT 7
+mesh
+gltf/backrooms/floor.glb
+material 1
+TRANS 0 0 0
+ROTAT 0 150 0
+SCALE 4
+
+OBJECT 11
+mesh
+gltf/backrooms/floor.glb
+material 7
+CHILD_OF 7
+
+OBJECT 12
+mesh
+gltf/backrooms/walls.glb
+material 8
+CHILD_OF 7
+
+OBJECT 13
+mesh
+gltf/backrooms/ceiling_base_flat.glb
+material 9
+CHILD_OF 7
+
+OBJECT 14
+mesh
+gltf/backrooms/ceiling_tiles.glb
+material 10
+CHILD_OF 13
+TRANS 0 0 -5
+
+OBJECT 15
+mesh
+gltf/backrooms/ceiling_lights.glb
+material 0
+CHILD_OF 14

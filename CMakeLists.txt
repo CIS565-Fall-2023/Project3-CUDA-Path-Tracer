@@ -62,6 +62,10 @@ set(GLM_ROOT_DIR "external")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
+# OIDN Setup
+include_directories(oidn-2.0.1.x64.windows/include)
+link_directories(oidn-2.0.1.x64.windows/lib)
+
 set(headers
     src/main.h
     src/image.h
@@ -73,18 +77,23 @@ set(headers
     src/sceneStructs.h
     src/preview.h
     src/utilities.h
+    src/extrautils.hpp
+    src/toggles.h
+
     src/ImGui/imconfig.h
-	
 	src/ImGui/imgui.h
     src/ImGui/imconfig.h
     src/ImGui/imgui_impl_glfw.h
-     src/ImGui/imgui_impl_opengl3.h 
-     src/ImGui/imgui_impl_opengl3_loader.h 
-     src/ImGui/imgui_internal.h 
-     src/ImGui/imstb_rectpack.h 
-     src/ImGui/imstb_textedit.h 
-     src/ImGui/imstb_truetype.h 
-    )
+    src/ImGui/imgui_impl_opengl3.h 
+    src/ImGui/imgui_impl_opengl3_loader.h 
+    src/ImGui/imgui_internal.h 
+    src/ImGui/imstb_rectpack.h 
+    src/ImGui/imstb_textedit.h 
+    src/ImGui/imstb_truetype.h 
+
+    src/tinygltf/json.hpp
+    src/tinygltf/tiny_gltf.h
+)
 
 set(sources
     src/main.cpp
@@ -97,13 +106,13 @@ set(sources
     src/utilities.cpp
 	
     src/ImGui/imgui.cpp 
-      src/ImGui/imgui_demo.cpp 
-      src/ImGui/imgui_draw.cpp 
-     src/ImGui/imgui_impl_glfw.cpp 
-     src/ImGui/imgui_impl_opengl3.cpp 
-     src/ImGui/imgui_tables.cpp 
-     src/ImGui/imgui_widgets.cpp 
-    )
+    src/ImGui/imgui_demo.cpp 
+    src/ImGui/imgui_draw.cpp 
+    src/ImGui/imgui_impl_glfw.cpp 
+    src/ImGui/imgui_impl_opengl3.cpp 
+    src/ImGui/imgui_tables.cpp 
+    src/ImGui/imgui_widgets.cpp 
+)
 
 list(SORT headers)
 list(SORT sources)
@@ -117,5 +126,14 @@ source_group(Sources FILES ${sources})
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
+    OpenImageDenoise
     #stream_compaction  # TODO: uncomment if using your stream compaction
     )
+    
+file(GLOB OIDN_DLLS "${CMAKE_SOURCE_DIR}/oidn-2.0.1.x64.windows/bin/*.dll")
+foreach(DLL ${OIDN_DLLS})
+    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E copy
+                       "${DLL}"
+                       "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
+endforeach()

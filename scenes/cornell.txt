@@ -1,64 +1,63 @@
-// Emissive material (light)
-MATERIAL 0
-RGB         1 1 1
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   5
+// ==================================================
+// MATERIALS
+// ==================================================
 
-// Diffuse white
-MATERIAL 1
-RGB         .98 .98 .98
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
+// emissive material (light)
+MATERIAL    0
+EMIT_COL    1 1 1
+EMIT_STR    5
 
-// Diffuse red
-MATERIAL 2
-RGB         .85 .35 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
+// diffuse white
+MATERIAL    1
+DIFF_COL    0.98 0.98 0.98
 
-// Diffuse green
-MATERIAL 3
-RGB         .35 .85 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
+// diffuse red
+MATERIAL    2
+DIFF_COL    0.85 0.35 0.35
 
-// Specular white
-MATERIAL 4
-RGB         .98 .98 .98
-SPECEX      0
-SPECRGB     .98 .98 .98
+// diffuse green
+MATERIAL    3
+DIFF_COL    0.35 0.85 0.35
+
+// specular white
+MATERIAL    4
+DIFF_COL    0.98 0.98 0.98
+SPEC_COL    0.98 0.98 0.98
 REFL        1
-REFR        0
-REFRIOR     0
-EMITTANCE   0
+
+// mirror
+MATERIAL 5
+SPEC_COL    1 1 1
+REFL        1
+
+// glass
+MATERIAL 6
+SPEC_COL    1 1 1
+SPEC_ROUGH  0
+REFL        1
+REFR        1
+REFR_IOR    1.45
+
+// ==================================================
+// CAMERA
+// ==================================================
 
 // Camera
 CAMERA
-RES         800 800
-FOVY        45
-ITERATIONS  5000
-DEPTH       8
-FILE        cornell
-EYE         0.0 5 10.5
-LOOKAT      0 5 0
-UP          0 1 0
+RES          800 800
+FOVY         45
+ITERATIONS   5000
+DEPTH        8
+FILE         cornell
+EYE          0.0 5 10.5
+LOOKAT       0 5 0
+UP           0 1 0
+LENS_RADIUS  0
+FOCUS_DIST   8
 
+// ==================================================
+// OBJECTS
+// ==================================================
 
 // Ceiling light
 OBJECT 0
@@ -108,10 +107,10 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
+// Sphere 1
 OBJECT 6
 sphere
-material 4
-TRANS       -1 4 -1
+material 1
+TRANS       -1 4 3
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       3

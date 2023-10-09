@@ -1,0 +1,123 @@
+// ==================================================
+// MATERIALS
+// ==================================================
+
+// emissive material (light)
+MATERIAL 0
+EMIT_COL    1 1 1
+EMIT_STR    5
+
+// diffuse white
+MATERIAL 1
+DIFF_COL    .98 .98 .98
+
+// diffuse red
+MATERIAL 2
+DIFF_COL    .85 .35 .35
+
+// diffuse green
+MATERIAL 3
+DIFF_COL    .35 .85 .35
+
+// specular white
+MATERIAL 4
+DIFF_COL    .98 .98 .98
+SPEC_COL    .98 .98 .98
+REFL        1
+
+// mirror
+MATERIAL 5
+SPEC_COL    1 1 1
+REFL        1
+
+// glass
+MATERIAL 6
+SPEC_COL    1 1 1
+REFL        1
+REFR        1
+REFRIOR     1.45
+
+// ==================================================
+// CAMERA
+// ==================================================
+
+// Camera
+CAMERA
+RES          800 800
+FOVY         45
+ITERATIONS   5000
+DEPTH        8
+FILE         cornell
+EYE          0.0 5 10.5
+LOOKAT       0 5 0
+UP           0 1 0
+LENS_RADIUS  0
+FOCUS_DIST   8
+
+// ==================================================
+// OBJECTS
+// ==================================================
+
+// Ceiling light
+OBJECT 0
+cube
+material 0
+TRANS       0 10 0
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Floor
+OBJECT 1
+cube
+material 1
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       10 .01 10
+
+// Ceiling
+OBJECT 2
+cube
+material 1
+TRANS       0 10 0
+ROTAT       0 0 90
+SCALE       .01 10 10
+
+// Back wall
+OBJECT 3
+cube
+material 1
+TRANS       0 5 -5
+ROTAT       0 90 0
+SCALE       .01 10 10
+
+// Left wall
+OBJECT 4
+cube
+material 2
+TRANS       -5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Right wall
+OBJECT 5
+cube
+material 3
+TRANS       5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Box 1
+OBJECT 6
+cube
+material 1
+TRANS       -2 2 -1
+ROTAT       0 45 0
+SCALE       2 7 2
+
+// Box 2
+OBJECT 7
+cube
+material 1
+TRANS       2 1 1
+ROTAT       0 60 0
+SCALE       2 7 2

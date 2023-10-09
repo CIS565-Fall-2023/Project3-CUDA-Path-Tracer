@@ -1,23 +1,19 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+#include <glm/gtx/string_cast.hpp>
 
 static std::string startTimeString;
 
 // For camera controls
 static bool leftMousePressed = false;
-static bool rightMousePressed = false;
-static bool middleMousePressed = false;
 static double lastX;
 static double lastY;
 
-static bool camchanged = true;
-static float dtheta = 0, dphi = 0;
-static glm::vec3 cammove;
+static bool camChanged = true;
 
-float zoom, theta, phi;
-glm::vec3 cameraPosition;
-glm::vec3 ogLookAt; // for recentering the camera
+static glm::vec3 camOriginalPos;
+static glm::vec3 camOriginalLookAt;
 
 Scene* scene;
 GuiDataContainer* guiData;
@@ -54,28 +50,18 @@ int main(int argc, char** argv) {
 	width = cam.resolution.x;
 	height = cam.resolution.y;
 
-	glm::vec3 view = cam.view;
-	glm::vec3 up = cam.up;
-	glm::vec3 right = glm::cross(view, up);
-	up = glm::cross(right, view);
+	guiData->lensRadius = cam.lensRadius;
+	guiData->focusDistance = cam.focusDistance;
 
-	cameraPosition = cam.position;
-
-	// compute phi (horizontal) and theta (vertical) relative 3D axis
-	// so, (0 0 1) is forward, (0 1 0) is up
-	glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
-	glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
-	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
-	theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
-	ogLookAt = cam.lookAt;
-	zoom = glm::length(cam.position - ogLookAt);
+	camOriginalPos = cam.position;
+	camOriginalLookAt = cam.lookAt;
 
 	// Initialize CUDA and GL components
 	init();
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
-	InitDataContainer(guiData);
+	Pathtracer::InitDataContainer(guiData);
 
 	// GLFW main loop
 	mainLoop();
@@ -91,8 +77,14 @@ void saveImage() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
-			glm::vec3 pix = renderState->image[index];
-			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
+			glm::vec3 pix = renderState->image[index] / samples;
+
+			if (guiData->showNormals)
+			{
+				pix = (pix + 1.f) / 2.f;
+			}
+
+			img.setPixel(width - 1 - x, y, pix);
 		}
 	}
 
@@ -102,37 +94,40 @@ void saveImage() {
 	filename = ss.str();
 
 	// CHECKITOUT
-	img.savePNG(filename);
+	img.savePNG(filename, guiData->showNormals);
 	//img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
-void runCuda() {
-	if (camchanged) {
+void runCuda(bool reset, GuiDataContainer* guiData) {
+	if (camChanged) {
 		iteration = 0;
+
 		Camera& cam = renderState->camera;
-		cameraPosition.x = zoom * sin(phi) * sin(theta);
-		cameraPosition.y = zoom * cos(theta);
-		cameraPosition.z = zoom * cos(phi) * sin(theta);
 
-		cam.view = -glm::normalize(cameraPosition);
-		glm::vec3 v = cam.view;
-		glm::vec3 u = glm::vec3(0, 1, 0);//glm::normalize(cam.up);
-		glm::vec3 r = glm::cross(v, u);
-		cam.up = glm::cross(r, v);
-		cam.right = r;
+		cam.view = glm::normalize(cam.lookAt - cam.position);
+		cam.right = glm::normalize(glm::cross(cam.view, glm::vec3(0, 1, 0)));
+		cam.up = glm::normalize(glm::cross(cam.right, cam.view));
 
-		cam.position = cameraPosition;
-		cameraPosition += cam.lookAt;
-		cam.position = cameraPosition;
-		camchanged = false;
+		Pathtracer::onCamChanged();
+
+		camChanged = false;
+	}
+
+	if (reset)
+	{
+		iteration = 0;
+
+		Camera& cam = renderState->camera;
+		cam.lensRadius = guiData->lensRadius;
+		cam.focusDistance = guiData->focusDistance;
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
 	// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not use this buffer
 
 	if (iteration == 0) {
-		pathtraceFree();
-		pathtraceInit(scene);
+		Pathtracer::free();
+		Pathtracer::init(scene);
 	}
 
 	if (iteration < renderState->iterations) {
@@ -142,37 +137,130 @@ void runCuda() {
 
 		// execute the kernel
 		int frame = 0;
-		pathtrace(pbo_dptr, frame, iteration);
+		Pathtracer::pathtrace(pbo_dptr, frame, iteration);
 
 		// unmap buffer object
 		cudaGLUnmapBufferObject(pbo);
 	}
 	else {
 		saveImage();
-		pathtraceFree();
+		Pathtracer::free();
 		cudaDeviceReset();
 		exit(EXIT_SUCCESS);
 	}
 }
 
+static glm::ivec3 camMovement = glm::ivec3(0);
+static int speed = 0;
+static const float baseSpeed = 0.3f;
+
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (action == GLFW_PRESS) {
-		switch (key) {
+		Camera& cam = renderState->camera;
+
+		switch (key)
+		{
 		case GLFW_KEY_ESCAPE:
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
-		case GLFW_KEY_S:
+		case GLFW_KEY_F:
 			saveImage();
 			break;
 		case GLFW_KEY_SPACE:
-			camchanged = true;
 			renderState = &scene->state;
-			Camera& cam = renderState->camera;
-			cam.lookAt = ogLookAt;
+			cam.position = camOriginalPos;
+			cam.lookAt = camOriginalLookAt;
+			camChanged = true;
+			break;
+		case GLFW_KEY_W:
+			++camMovement.z;
+			break;
+		case GLFW_KEY_S:
+			--camMovement.z;
+			break;
+		case GLFW_KEY_D:
+			++camMovement.x;
+			break;
+		case GLFW_KEY_A:
+			--camMovement.x;
+			break;
+		case GLFW_KEY_E:
+			++camMovement.y;
+			break;
+		case GLFW_KEY_Q:
+			--camMovement.y;
+			break;
+		case GLFW_KEY_LEFT_SHIFT:
+			++speed;
+			break;
+		case GLFW_KEY_LEFT_ALT:
+			--speed;
 			break;
 		}
 	}
+
+	if (action == GLFW_RELEASE)
+	{
+		switch (key)
+		{
+		case GLFW_KEY_W:
+			--camMovement.z;
+			break;
+		case GLFW_KEY_S:
+			++camMovement.z;
+			break;
+		case GLFW_KEY_D:
+			--camMovement.x;
+			break;
+		case GLFW_KEY_A:
+			++camMovement.x;
+			break;
+		case GLFW_KEY_E:
+			--camMovement.y;
+			break;
+		case GLFW_KEY_Q:
+			++camMovement.y;
+			break;
+		case GLFW_KEY_LEFT_SHIFT:
+			--speed;
+			break;
+		case GLFW_KEY_LEFT_ALT:
+			++speed;
+			break;
+		}
+	}
+}
+
+void moveCam()
+{
+	if (camMovement.x == 0 && camMovement.y == 0 && camMovement.z == 0)
+	{
+		return;
+	}
+
+	Camera& cam = renderState->camera;
+
+	glm::vec3 moveSpeed = glm::vec3(camMovement) * baseSpeed;
+	if (speed == -1)
+	{
+		moveSpeed *= 0.1f;
+	}
+	else if (speed == 1)
+	{
+		moveSpeed *= 10.f;
+	}
+
+	cam.move(moveSpeed.x * cam.right
+		+ moveSpeed.y * glm::vec3(0, 1, 0)
+		+ moveSpeed.z * cam.view);
+
+	camChanged = true;
+}
+
+const Camera& getCamera()
+{
+	return renderState->camera;
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
@@ -181,38 +269,32 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 		return;
 	}
 	leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
-	rightMousePressed = (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
-	middleMousePressed = (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
 }
 
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (xpos == lastX || ypos == lastY) return; // otherwise, clicking back into window causes re-start
+	
 	if (leftMousePressed) {
-		// compute new camera parameters
-		phi -= (xpos - lastX) / width;
-		theta -= (ypos - lastY) / height;
-		theta = std::fmax(0.001f, std::fmin(theta, PI));
-		camchanged = true;
-	}
-	else if (rightMousePressed) {
-		zoom += (ypos - lastY) / height;
-		zoom = std::fmax(0.1f, zoom);
-		camchanged = true;
-	}
-	else if (middleMousePressed) {
-		renderState = &scene->state;
-		Camera& cam = renderState->camera;
-		glm::vec3 forward = cam.view;
-		forward.y = 0.0f;
-		forward = glm::normalize(forward);
-		glm::vec3 right = cam.right;
-		right.y = 0.0f;
-		right = glm::normalize(right);
+		float sensitivity = 1.5f;
 
-		cam.lookAt -= (float)(xpos - lastX) * right * 0.01f;
-		cam.lookAt += (float)(ypos - lastY) * forward * 0.01f;
-		camchanged = true;
+		Camera& cam = scene->state.camera;
+
+		float dTheta = (xpos - lastX) * sensitivity / width;
+		float dPhi = -(ypos - lastY) * sensitivity / height;
+
+		glm::vec3 diff = cam.lookAt - cam.position;
+		float theta = atan2f(diff.z, diff.x) + dTheta;
+		float phi = atan2f(diff.y, sqrtf(diff.x * diff.x + diff.z * diff.z)) + dPhi;
+		phi = glm::clamp(phi, -PI_OVER_TWO, PI_OVER_TWO);
+
+		float newX = cosf(theta) * cosf(phi);
+		float newY = sinf(phi);
+		float newZ = sinf(theta) * cosf(phi);
+		cam.lookAt = cam.position + glm::vec3(newX, newY, newZ) * glm::length(diff);
+
+		camChanged = true;
 	}
+
 	lastX = xpos;
 	lastY = ypos;
 }

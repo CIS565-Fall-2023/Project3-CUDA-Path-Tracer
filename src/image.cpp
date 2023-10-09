@@ -1,8 +1,11 @@
 #include <iostream>
 #include <string>
 #include <stb_image_write.h>
+#include <cuda_runtime.h>
 
 #include "image.h"
+
+__host__ __device__ glm::vec3 hdrToLdr(glm::vec3 col);
 
 image::image(int x, int y) :
         xSize(x),
@@ -19,12 +22,19 @@ void image::setPixel(int x, int y, const glm::vec3 &pixel) {
     pixels[(y * xSize) + x] = pixel;
 }
 
-void image::savePNG(const std::string &baseFilename) {
+void image::savePNG(const std::string &baseFilename, bool isNormals) {
     unsigned char *bytes = new unsigned char[3 * xSize * ySize];
     for (int y = 0; y < ySize; y++) {
         for (int x = 0; x < xSize; x++) { 
             int i = y * xSize + x;
-            glm::vec3 pix = glm::clamp(pixels[i], glm::vec3(), glm::vec3(1)) * 255.f;
+
+            glm::vec3 pix = glm::clamp(pixels[i], glm::vec3(0.f), glm::vec3(1.f));
+            if (!isNormals)
+            {
+                pix = hdrToLdr(pix);
+            }
+            pix *= 255.f;
+
             bytes[3 * i + 0] = (unsigned char) pix.x;
             bytes[3 * i + 1] = (unsigned char) pix.y;
             bytes[3 * i + 2] = (unsigned char) pix.z;

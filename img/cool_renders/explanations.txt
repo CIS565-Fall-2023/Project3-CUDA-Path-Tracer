@@ -1,0 +1,30 @@
+001 - basic path tracing, but I didn't realize that the lambert term is canceled out by the PDF (see here: https://computergraphics.stackexchange.com/questions/9499/confusion-around-lamberts-cosine-law-in-ray-tracing-in-one-weekend)
+002 - sorting just the intersections but not sorting the segments in tandem (seen while debugging thrust sort)
+003 - perfectly specular glass ball with another one behind it (not correct though since normals inside sphere were flipped automatically)
+004 - glass but correct this time
+005 - I have no idea lol, seems like the first bounce cache screwed something up (wasn't even enabled but I was working on it at the time)
+006 - two boxes scene
+007 - dof first attempt
+008 - dof second attempt
+009 - dof but clearly wrong since there's weird vertical lines
+010 - dof works this time after I fixed input parameter to makeSeededRandomEngine (changed segment.bouncesSoFar to segment.remainingBounces)
+011 - monkey (seems like the normals are a bit messed up though)
+012 - monkey normals
+013 - monkey at an angle (doesn't look right)
+014 - testing barycentric coords
+015 - monkey normals for comparison with #014
+016 - ??? (barycentric coordinates machine broke)
+017 - monkey worky
+018 - two monkeys (with BVH)
+019 - monkey BVH broke
+020 - freddy fazbear (with binned BVH construction)
+021 - freddy with diffuse textures
+022 - freddy with normal map
+023 - strange interpolation artifacts
+024 - neon genesis evangelion
+025 - backrooms first image
+026 - backrooms with denoising (with albedo and normals auxiliary inputs)
+027 - backrooms AOVs
+028 - forgot that I changed default diffuse color to magenta
+029 - backrooms final render
+030 - evangelion final render

@@ -1,0 +1,37 @@
+// ==================================================
+// MATERIALS
+// ==================================================
+
+// diffuse white
+MATERIAL 0
+DIFF_COL 0.98 0.98 0.98
+
+// ==================================================
+// CAMERA
+// ==================================================
+
+// Camera
+CAMERA
+RES          800 800
+FOVY         45
+ITERATIONS   5000
+DEPTH        8
+FILE         monkey
+EYE          0 5 10
+LOOKAT       0 5 0
+UP           0 1 0
+LENS_RADIUS  0
+FOCUS_DIST   7
+ENV_MAP      env_maps/lake_pier_4k.hdr
+
+// ==================================================
+// OBJECTS
+// ==================================================
+
+OBJECT 0
+mesh
+gltf/monkey.gltf
+material 0
+TRANS       0 5 0
+ROTAT       0 0 0
+SCALE       4 4 4

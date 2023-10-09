@@ -5,6 +5,10 @@
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_glfw.h"
 #include "ImGui/imgui_impl_opengl3.h"
+#include <glm/gtx/string_cast.hpp>
+
+#include "toggles.h"
+
 GLuint positionLocation = 0;
 GLuint texcoordsLocation = 1;
 GLuint pbo;
@@ -39,8 +43,8 @@ void initVAO(void) {
 	GLfloat vertices[] = {
 		-1.0f, -1.0f,
 		1.0f, -1.0f,
-		1.0f,  1.0f,
-		-1.0f,  1.0f,
+		1.0f, 1.0f,
+		-1.0f, 1.0f,
 	};
 
 	GLfloat texcoords[] = {
@@ -187,9 +191,8 @@ void InitImguiData(GuiDataContainer* guiData)
 	imguiData = guiData;
 }
 
-
 // LOOK: Un-Comment to check ImGui Usage
-void RenderImGui()
+bool RenderImGui()
 {
 	mouseOverImGuiWinow = io->WantCaptureMouse;
 
@@ -199,11 +202,13 @@ void RenderImGui()
 
 	bool show_demo_window = true;
 	bool show_another_window = false;
-	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.0f);
 	static float f = 0.0f;
 	static int counter = 0;
 
-	ImGui::Begin("Path Tracer Analytics");                  // Create a window called "Hello, world!" and append into it.
+	bool shouldReset = false;
+
+	ImGui::Begin("Path Tracer Analytics", 0, ImGuiWindowFlags_AlwaysAutoResize);
 	
 	// LOOK: Un-Comment to check the output window and usage
 	//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
@@ -217,14 +222,69 @@ void RenderImGui()
 	//	counter++;
 	//ImGui::SameLine();
 	//ImGui::Text("counter = %d", counter);
-	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
-	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::Text("traced depth %d", imguiData->tracedDepth);
+	ImGui::Text("application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+	if (ImGui::CollapsingHeader("camera"))
+	{
+		const Camera& camera = getCamera();
+		ImGui::Text("position: %s", glm::to_string(camera.position).c_str());
+		ImGui::Text("look at: %s", glm::to_string(camera.lookAt).c_str());
+		shouldReset |= ImGui::SliderFloat("lens radius", &imguiData->lensRadius, 0.0f, 2.0f);
+		shouldReset |= ImGui::SliderFloat("focus distance", &imguiData->focusDistance, 0.0f, 50.0f);
+	}
+
+	if (ImGui::CollapsingHeader("toggles"))
+	{
+		ImGui::Checkbox("sort by material", &imguiData->sortByMaterial);
+#if FIRST_BOUNCE_CACHE
+		ImGui::Checkbox("first bounce cache", &imguiData->firstBounceCache);
+#endif
+		ImGui::Checkbox("russian roulette", &imguiData->russianRoulette);
+#if BVH_TOGGLE
+		ImGui::Checkbox("use BVH", &imguiData->useBvh);
+#endif
+		ImGui::Checkbox("partition rays", &imguiData->partitionRays);
+	}
+
+	if (ImGui::CollapsingHeader("denoising"))
+	{
+		ImGui::Checkbox("use denoising", &imguiData->denoising);
+		ImGui::SliderInt("denoise interval", &imguiData->denoiseInterval, 1, 10);
+	}
+
+	if (ImGui::CollapsingHeader("debug"))
+	{
+		static const char* items[] = { "final", "albedo", "normals" };
+		static const char* currentItem = items[0];
+
+		if (ImGui::BeginCombo("render output", currentItem))
+		{
+			for (int n = 0; n < IM_ARRAYSIZE(items); n++)
+			{
+				bool isSelected = (currentItem == items[n]);
+				if (ImGui::Selectable(items[n], isSelected))
+				{
+					currentItem = items[n];
+					imguiData->showAlbedo = (strcmp(currentItem, items[1]) == 0);
+					imguiData->showNormals = (strcmp(currentItem, items[2]) == 0);
+				}
+				if (isSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+	}
+
 	ImGui::End();
 
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+	return shouldReset;
 }
 
 bool MouseOverImGuiWindow()
@@ -232,14 +292,17 @@ bool MouseOverImGuiWindow()
 	return mouseOverImGuiWinow;
 }
 
+static bool shouldReset = false;
+
 void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
-		
 		glfwPollEvents();
 
-		runCuda();
+		moveCam();
 
-		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
+		runCuda(shouldReset, imguiData);
+
+		string title = "CIS565 Path Tracer | " + Utils::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
 		glBindTexture(GL_TEXTURE_2D, displayImage);
@@ -253,7 +316,7 @@ void mainLoop() {
 		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
 
 		// Render ImGui Stuff
-		RenderImGui();
+		shouldReset = RenderImGui();
 
 		glfwSwapBuffers(window);
 	}

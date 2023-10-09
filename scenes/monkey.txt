@@ -1,0 +1,62 @@
+// ==================================================
+// MATERIALS
+// ==================================================
+
+// emissive blue
+MATERIAL 0
+EMIT_COL 0 0.5 1
+EMIT_STR 5
+
+// emissive orange
+MATERIAL 1
+EMIT_COL 1 0.5 0
+EMIT_STR 5
+
+// diffuse white
+MATERIAL 2
+DIFF_COL 0.98 0.98 0.98
+
+// ==================================================
+// CAMERA
+// ==================================================
+
+// Camera
+CAMERA
+RES          800 800
+FOVY         45
+ITERATIONS   5000
+DEPTH        8
+FILE         monkey
+EYE          0 5 10
+LOOKAT       0 5 0
+UP           0 1 0
+LENS_RADIUS  0.3
+FOCUS_DIST   7
+
+// ==================================================
+// OBJECTS
+// ==================================================
+
+// Ceiling light
+OBJECT 0
+cube
+material 0
+TRANS       0 10 0
+ROTAT       0 0 0
+SCALE       10 .3 10
+
+// Floor light
+OBJECT 1
+cube
+material 1
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       10 .3 10
+
+OBJECT 2
+mesh
+gltf/monkey.gltf
+material 2
+TRANS       0 5 0
+ROTAT       0 0 0
+SCALE       4 4 4
