@@ -2,7 +2,7 @@
 CAMERA
 RES         1080 1080
 FOVY        45
-ITERATIONS  10000
+ITERATIONS  1000
 DEPTH       8
 FILE        mclaren
 EYE         0.0 5 10.5

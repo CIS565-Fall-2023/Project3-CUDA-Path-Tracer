@@ -150,7 +150,7 @@ void saveImage() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
-			glm::vec3 pix = renderState->color[index];
+			glm::vec3 pix = renderState->image[index];
 #if TONEMAPPING
 			img.setPixel(width - 1 - x, y, util_postprocess_gamma(util_postprocess_ACESFilm(pix / samples)));
 #else

@@ -311,7 +311,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 #endif
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
-		segment.misW = -1;
+		segment.lastMatPdf = -1;
 	}
 }
 
@@ -847,9 +847,14 @@ __global__ void scatter_on_intersection_mis(
 
 	// If the material indicates that the object was a light, "light" the ray
 	if (material.type == MaterialType::emitting) {
-		float misW = pathSegments[idx].misW;
-		if (misW > 0.0)
+		int lightPrimId = intersection.primitiveId;
+		
+		float matPdf = pathSegments[idx].lastMatPdf;
+		if (matPdf > 0.0)
 		{
+			float G = util_math_solid_angle_to_area(intersection.worldPos, intersection.surfaceNormal, pathSegments[idx].ray.origin);
+			float lightPdf = lights_sample_pdf(sceneInfo, lightPrimId);
+			float misW = util_mis_weight_balanced(matPdf * G, lightPdf);
 			pathSegments[idx].color *= (materialColor * material.emittance * misW);
 		}
 		else
@@ -893,7 +898,6 @@ __global__ void scatter_on_intersection_mis(
 		float pdf = 0;
 		glm::vec3 wi, bxdf;
 		glm::vec3 random = glm::vec3(u01(rng), u01(rng), u01(rng));
-		float materialMISw = -1.0f;
 		if (material.type == MaterialType::frenselSpecular)
 		{
 			glm::vec2 iors = glm::dot(woInWorld, N) < 0 ? glm::vec2(1.0, material.indexOfRefraction) : glm::vec2(material.indexOfRefraction, 1.0);
@@ -948,7 +952,6 @@ __global__ void scatter_on_intersection_mis(
 				if (matPdf > 0.0)
 				{
 					float misW = util_mis_weight_balanced(lightPdf, matPdf * G);
-					materialMISw = 1.0 - misW;
 					image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW * G / (lightPdf);
 				}
 			}
@@ -984,7 +987,7 @@ __global__ void scatter_on_intersection_mis(
 			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;
 			pathSegments[idx].ray.origin = intersection.worldPos + offset * offsetMult;
 			pathSegments[idx].ray.direction = newDir;
-			pathSegments[idx].misW = materialMISw;
+			pathSegments[idx].lastMatPdf = pdf;
 			rayValid[idx] = 1;
 		}
 		else
