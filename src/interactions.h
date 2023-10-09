@@ -83,11 +83,8 @@ void scatterRay(
         if (prob < 0.99f) {
             pathSegment.ray.origin = intersectIn;
             pathSegment.ray.direction = glm::refract(pathSegment.ray.direction, normal, m.indexOfRefraction);
-            //pathSegment.color *= 2.f;
-            //pathSegment.remainingBounces--;
             return;
         }
-        counteract *= 100.f;
     }
     pathSegment.ray.origin = intersectOut;
     if (m.hasReflective) {
