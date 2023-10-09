@@ -118,6 +118,8 @@ int Scene::loadGeom(string objectid) {
 void traverse(const std::vector<BVHNode>& bvhNodes, int nodeIdx)
 {
     const BVHNode* node = &bvhNodes[nodeIdx];
+
+    cout << "node: " << nodeIdx << endl;
     if (node->triIdx > -1)
     {
         // leaf node
@@ -524,6 +526,7 @@ int Scene::loadMaterial(string materialid) {
     }
 }
 
+
 /// <summary>
 /// Recursively builds a BVH by splitting triangles along the longest axis.
 /// BVH is built in a depth-first fashion. The vector of BVHNodes is a linearly compacted vector such that this logic from PBRT is followed: https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies#CompactBVHForTraversal
@@ -545,17 +548,18 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
 
     // Init new node
     //uPtr<BVHNode> uNode = mkU<BVHNode>();
-    BVHNode node = BVHNode();// uNode.get();
     int nodeIndex = totalNodes;
     totalNodes++;
-    bvhNodes.push_back(std::move(node));
+    bvhNodes.push_back(BVHNode());
 
     if (nTris == 1)
     {
         // base case
         //int firstTriIdx = orderedTris.size();
         //orderedTris.push_back(&tris[startTriIdx]);
-        node.initAsLeafNode(triIndices[startOffset], aabb);
+        bvhNodes[nodeIndex].initAsLeafNode(triIndices[startOffset], aabb);
+
+        cout << "node, " << nodeIndex << endl;
     }
     else
     {
@@ -585,7 +589,9 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
         //cout << "left: " << startOffset << ", mid: " << mid << ", end: " << mid + nTris - half << endl;
         int leftChildIdx = buildBVHRecursively(totalNodes, startOffset, half, tris, triIndices, bvhNodes);
         int rightChildIdx = buildBVHRecursively(totalNodes, mid, nTris - half, tris, triIndices, bvhNodes);
-        node.initInterior(splitAxis, leftChildIdx, rightChildIdx, bvhNodes);
+
+        cout << "node, " << nodeIndex << " left, " << leftChildIdx << " right: " << rightChildIdx << endl;
+        bvhNodes[nodeIndex].initInterior(splitAxis, leftChildIdx, rightChildIdx, bvhNodes);
     }
 
     return nodeIndex;
