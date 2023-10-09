@@ -58,7 +58,6 @@ REFR        1
 REFRIOR     1.5
 EMITTANCE   0
 
-
 // Camera
 CAMERA
 RES         800 800
@@ -72,6 +71,9 @@ UP          0 1 0
 FOCAL       5	
 LENSE       2
 
+// Texture
+TEXTURE 0
+PATH ../scenes/grid.png
 
 // Ceiling light
 OBJECT 0
@@ -80,8 +82,6 @@ material 0
 TRANS       0 10 0
 ROTAT       0 0 0
 SCALE       3 .3 3
-
-
 
 // Floor
 OBJECT 1
@@ -125,7 +125,8 @@ SCALE       .01 10 10
 
 // OBJ 1
 GLTF_FILE ../scenes/sphere.gltf
-material 3
-TRANS       -2 3 4
+material 4
+TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       2 2 2
+SCALE       3 3 3
+TEXTURE 0

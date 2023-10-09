@@ -176,7 +176,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 }
 
 __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* triangles, int triSize,
-    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside) 
+    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside)
 {
 
     Ray q;
@@ -219,6 +219,7 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* t
         float b2 = minBcenter[1];
         float b = 1 - b1 - b2;
         normal = b1 * minTri.nors[0] + b2 * minTri.nors[1] + b * minTri.nors[2];
+        uv = b1 * minTri.uvs[0] + b2 * minTri.uvs[1] + b * minTri.uvs[2];
 
         glm::vec3 objspaceIntersection = getPointOnRay(q, tmin);
 
@@ -239,7 +240,7 @@ __host__ __device__ float triangleIntersectionTest(Geom mesh, Ray r, Triangle* t
 }
 
 __host__ __device__ float bvhTriangleIntersectionTest(Geom mesh, Ray r, Triangle* triangles, BVHNode* bvhNodes, int triSize,
-    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside) 
+    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside)
 {
     Ray q;
     q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
@@ -302,6 +303,7 @@ __host__ __device__ float bvhTriangleIntersectionTest(Geom mesh, Ray r, Triangle
         float b2 = minBcenter[1];
         float b = 1 - b1 - b2;
         normal = b1 * minTri.nors[0] + b2 * minTri.nors[1] + b * minTri.nors[2];
+        uv = b1 * minTri.uvs[0] + b2 * minTri.uvs[1] + b * minTri.uvs[2];
 
         glm::vec3 objspaceIntersection = getPointOnRay(q, tmin);
 

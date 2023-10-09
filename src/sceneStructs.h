@@ -86,6 +86,8 @@ struct Geom {
     int triEnd;
 
     BBox box;
+
+    int texId = -1;
 };
 
 struct Material {
@@ -134,7 +136,9 @@ struct PathSegment {
 struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
+  glm::vec2 uv;
   int materialId;
+  int texId;
 };
 
 struct BVHPrimitiveInfo 
@@ -160,4 +164,12 @@ struct BVHNode
     int firstPrimOffset = -1;
     int nPrimitives = -1;
     
+};
+
+struct Texture 
+{
+    float* data;
+    int width;
+    int height;
+    int channels;
 };

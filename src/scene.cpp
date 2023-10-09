@@ -8,6 +8,7 @@
 #include "tiny_obj_loader.h"
 
 #include <stb_image.h>
+#include <stb_image_write.h>
 
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_EXTERNAL_IMAGE
@@ -44,6 +45,9 @@ Scene::Scene(string filename) {
                 cout << " " << endl;
             } else if (strcmp(tokens[0].c_str(), "GLTF_FILE") == 0) {
                 loadGLTF(tokens[1].c_str());
+                cout << " " << endl;
+            } else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
+                loadTexture(tokens[1]);
                 cout << " " << endl;
             }
         }
@@ -221,6 +225,9 @@ int Scene::loadGeom(string objectid) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
+                newGeom.texId = atoi(tokens[1].c_str());
+                cout << "Connecting Geom " << objectid << " to Texture " << newGeom.texId << "..." << endl;
             }
             
             utilityCore::safeGetline(fp_in, line);
@@ -352,6 +359,10 @@ int Scene::loadObj(const char* filename)
         else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
             newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         }
+        else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
+            newGeom.texId = atoi(tokens[1].c_str());
+            cout << "Connecting OBJ to Texture " << newGeom.texId << "..." << endl;
+        }
 
         utilityCore::safeGetline(fp_in, line);
     }
@@ -468,6 +479,10 @@ int Scene::loadGLTF(const char* filename)
         }
         else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
             newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
+            newGeom.texId = atoi(tokens[1].c_str());
+            cout << "Connecting OBJ to Texture " << newGeom.texId << "..." << endl;
         }
 
         utilityCore::safeGetline(fp_in, line);
@@ -591,6 +606,54 @@ int Scene::loadGLTF(const char* filename)
     geoms.push_back(newGeom);
 
     return 1;
+}
+
+int Scene::loadTexture(string textureid)
+{
+    int id = atoi(textureid.c_str());
+    if (id != textures.size()) {
+        cout << "ERROR: TEXTURE ID does not match expected number of textures" << endl;
+        return -1;
+    }
+    else {
+        cout << "Loading Texture " << id << "..." << endl;
+        textures.emplace_back();
+        Texture& newTexture = textures.back();
+        int width;
+        int height;
+        int channels;
+
+        //load static properties
+        string line;
+        utilityCore::safeGetline(fp_in, line);
+        vector<string> tokens = utilityCore::tokenizeString(line);
+        if (strcmp(tokens[0].c_str(), "PATH") == 0) {
+            const char* filepath = tokens[1].c_str();
+            float* data_loaded = stbi_loadf(filepath, &width, &height, &channels, 0);
+
+            newTexture.data = new float[width * height * 4];
+
+            if (newTexture.data && width > 0 && height > 0)
+            {
+                for (int i = 0; i < width * height; i++)
+                {
+                    for (int j = 0; j < channels; ++j)
+                    {
+                        newTexture.data[4 * i + j] = data_loaded[channels * i + j];
+                    }
+                    for (int j = channels; j < 4; ++j)
+                    {
+                        newTexture.data[4 * i + j] = 1.f;
+                    }
+                }
+                newTexture.width = width;
+                newTexture.height = height;
+                newTexture.channels = channels;
+            }
+            stbi_image_free(data_loaded);
+        }
+        return 1;
+    }
 }
 
 int Scene::loadMaterial(string materialid) {

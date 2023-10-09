@@ -18,6 +18,7 @@ private:
     int loadCamera();
     int loadObj(const char* filename);
     int loadGLTF(const char* filename);
+    int loadTexture(string textureid);
 public:
     Scene(string filename);
     ~Scene();
@@ -27,6 +28,7 @@ public:
     RenderState state;
 
     std::vector<Geom> lights;
+    std::vector<Texture> textures;
 
     std::vector<Triangle> triangles;
     std::vector<BVHNode> bvhNodes;

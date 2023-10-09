@@ -67,17 +67,40 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
+ __device__
 void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
+        glm::vec2 uv,
         const Material &m,
-        thrust::default_random_engine &rng) {
+        thrust::default_random_engine &rng,
+        cudaTextureObject_t* texObjects,
+        Texture* textures,
+        int texId) {
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
     thrust::uniform_real_distribution<float> u01(0, 1);
+
+    glm::vec3 texColor;
+
+    if (texId != -1) 
+    {
+
+        cudaTextureObject_t texObject = texObjects[texId];
+
+        float u = uv[0];
+        float v = uv[1];
+
+        float4 finalcol = tex2D<float4>(texObject, u, v);
+        texColor = glm::vec3(finalcol.x, finalcol.y, finalcol.z);
+
+    }
+    else 
+    {
+        texColor = m.color;
+    }
 
     // Pure Diffuse
     if (!m.hasReflective && !m.hasRefractive) 
@@ -85,7 +108,7 @@ void scatterRay(
         glm::vec3 direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
         pathSegment.ray.origin = intersect + EPSILON * normal;
         pathSegment.ray.direction = direction;
-        pathSegment.color *= m.color;
+        pathSegment.color *= texColor;
     }
     // Reflective
     else if (m.hasReflective && !m.hasRefractive) 
@@ -93,7 +116,7 @@ void scatterRay(
         glm::vec3 direction = glm::reflect(pathSegment.ray.direction, normal);
         pathSegment.ray.origin = intersect + EPSILON * normal;
         pathSegment.ray.direction = glm::normalize(direction);
-        pathSegment.color *= m.color;
+        pathSegment.color *= texColor;
     }
     // Refraction and Reflection
     else if(m.hasReflective && m.hasRefractive)
@@ -122,14 +145,14 @@ void scatterRay(
             glm::vec3 direction = glm::normalize(glm::refract(rayDir, normal, n1 / n2));
             pathSegment.ray.direction = direction;
             pathSegment.ray.origin = intersect + EPSILON * pathSegment.ray.direction;
-            pathSegment.color *= m.color;         
+            pathSegment.color *= texColor;
         }
         else // Reflection 
         {
             glm::vec3 direction = glm::reflect(rayDir, normal);
             pathSegment.ray.origin = intersect + EPSILON * normal;
             pathSegment.ray.direction = glm::normalize(direction);
-            pathSegment.color *= m.color;
+            pathSegment.color *= texColor;
         }
     }
 }
