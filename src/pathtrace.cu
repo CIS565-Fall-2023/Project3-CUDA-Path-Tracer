@@ -8,6 +8,8 @@
 #include <thrust/sort.h>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -27,13 +29,17 @@
 #define CACHE_FIRST_BOUNCE 0
 
 // Depth of field
-#define CAM_APERTURE_DIAM 1.0f // set to 0.0f for no depth of field
+#define CAM_APERTURE_DIAM 0.0f // set to 0.0f for no depth of field
 #define CAM_FOCAL_DIST 11.58f
 
 // toggle fisheye camera
 // not available when CACHE is ON
-#define CAM_FISHEYE 0
+// 0 for pin-hole, 1 for fish-eye, 2 for panorama
+#define CAM_STYLE 0
 #define CAM_FISHEYE_MAX_ANGLE PI/2.0f
+
+// motion blur: set to 0 to disable
+#define CAM_SHUTTER_TIME 0
 
 #define ERRORCHECK 1
 
@@ -105,7 +111,10 @@ static ShadeableIntersection* dev_intersections_tmp = NULL;
 static PathSegment* dev_first_paths = NULL;
 static ShadeableIntersection* dev_first_intersections = NULL;
 #endif // CACHE_FIRST_BOUNCE
-
+#if CAM_SHUTTER_TIME != 0
+// buffer to store moved geoms
+static Geom* dev_geoms_tmp = NULL;
+#endif
 
 // identifier rule for thrust::remove_if
 struct is_path_terminated {
@@ -187,6 +196,9 @@ void pathtraceInit(Scene* scene) {
 	checkCUDAError("trace first bounce");
 	cudaDeviceSynchronize();
 #endif // CACHE_FIRST_BOUNCE
+#if CAM_SHUTTER_TIME != 0
+	cudaMalloc(&dev_geoms_tmp, scene->geoms.size() * sizeof(Geom));
+#endif
 	checkCUDAError("pathtraceInit");
 }
 
@@ -206,10 +218,13 @@ void pathtraceFree() {
 	cudaFree(dev_first_paths);
 	cudaFree(dev_first_intersections);
 #endif // CACHE_FIRST_BOUNCE
+#if CAM_SHUTTER_TIME != 0
+	cudaFree(dev_geoms_tmp);
+#endif
 	checkCUDAError("pathtraceFree");
 }
 
-#if CAM_FISHEYE == 1
+#if CAM_STYLE == 1
 // calculate fish eye coordinate, given pixel coordinates in range [-1, 1]
 __host__ __device__ glm::vec3 calcFishEye(float u, float v) {
 	float radiant_dist = sqrtf(u * u + v * v);
@@ -218,14 +233,26 @@ __host__ __device__ glm::vec3 calcFishEye(float u, float v) {
 	}
 	// compute angles
 	float theta = radiant_dist * CAM_FISHEYE_MAX_ANGLE;
-	float phi = atan2f(-v, -u);
+	float phi = atan2f(v, u);
 	return glm::vec3(
 		sinf(theta) * cosf(phi),
 		sinf(theta) * sinf(phi),
 		cosf(theta)
 	);
 }
-#endif // CAM_FISHEYE
+#elif CAM_STYLE == 2
+__host__ __device__ glm::vec3 calcPanorama(float u, float v) {
+	// compute cylindar angles
+	float elevation = 0.5f * PI * (v);
+	float azimuth = ((u)) * PI;
+	// convert into local cartesian coordinates
+	return glm::vec3(
+		cosf(elevation) * sinf(azimuth),
+		sinf(elevation),
+		cosf(elevation) * cosf(azimuth)
+	);
+}
+#endif // CAM_STYLE
 
 
 /**
@@ -269,10 +296,13 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		float jit_aperture_x = radius * cosf(angle);
 		float jit_aperture_y = radius * sinf(angle);
 
-#if CAM_FISHEYE == 1
+#if CAM_STYLE != 0
+		// some cam type specified, have to compute pixel coordinates [-1, 1]
+		float u = -((float)x - (float)cam.resolution.x * 0.5f) / ((float)cam.resolution.x * 0.5f);
+		float v = -((float)y - (float)cam.resolution.y * 0.5f) / ((float)cam.resolution.y * 0.5f);
+#endif
+#if CAM_STYLE == 1
 		// FishEye camera
-		float u = ((float)x - (float)cam.resolution.x * 0.5f) / ((float)cam.resolution.x * 0.5f);
-		float v = ((float)y - (float)cam.resolution.y * 0.5f) / ((float)cam.resolution.y * 0.5f);
 		glm::vec3 fisheye_dir = calcFishEye(u, v);
 		if (glm::length(fisheye_dir) < 0.001f) {
 			segment.color = glm::vec3(0.f);
@@ -282,6 +312,12 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.direction = glm::normalize(cam.view * fisheye_dir.z +
 																					 cam.right * fisheye_dir.x +
 																					 cam.up * fisheye_dir.y);
+#elif CAM_STYLE == 2
+		// Panorama
+		glm::vec3 pano_dir = calcPanorama(u, v);
+		segment.ray.direction = glm::normalize(cam.view * pano_dir.z +
+                                           cam.right * pano_dir.x +
+                                           cam.up * pano_dir.y);
 #else
 		// setting origin (randomized on aperture)
 		segment.ray.origin = cam.position + cam.right * jit_aperture_x + cam.up * jit_aperture_y;
@@ -483,6 +519,43 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 	}
 }
 
+#if CAM_SHUTTER_TIME != 0
+// a GPU copy from CoreUtilities
+__host__ __device__ glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale) {
+	glm::mat4 translationMat = glm::translate(glm::mat4(), translation);
+	glm::mat4 rotationMat = glm::rotate(glm::mat4(), rotation.x * (float)PI / 180, glm::vec3(1, 0, 0));
+	rotationMat = rotationMat * glm::rotate(glm::mat4(), rotation.y * (float)PI / 180, glm::vec3(0, 1, 0));
+	rotationMat = rotationMat * glm::rotate(glm::mat4(), rotation.z * (float)PI / 180, glm::vec3(0, 0, 1));
+	glm::mat4 scaleMat = glm::scale(glm::mat4(), scale);
+	return translationMat * rotationMat * scaleMat;
+}
+
+// update matrices in g
+__host__ __device__ void updateGeom(Geom& g) {
+	g.transform = buildTransformationMatrix(
+		g.translation, g.rotation, g.scale);
+	g.inverseTransform = glm::inverse(g.transform);
+	g.invTranspose = glm::inverseTranspose(g.transform);
+}
+
+// compute geoms at a specific time
+__global__ void calcGeoms(Geom* geoms, Geom* geoms_tmp, int num_geoms, float time) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index >= num_geoms) {
+		return;
+	}
+	Geom g = geoms[index];
+	if (glm::length(g.velocity) < 0.001f) {
+		geoms_tmp[index] = g;
+		return;
+	}
+	g.translation += g.velocity * time;
+	updateGeom(g);
+	geoms_tmp[index] = g;
+	return;
+}
+#endif
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -531,6 +604,18 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	//   for you.
 
 	// TODO: perform one iteration of path tracing
+#if CAM_SHUTTER_TIME != 0
+	// randomize a time between 0 and shutter time
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, 0, 0);
+	thrust::uniform_real_distribution<float> u01(0, CAM_SHUTTER_TIME);
+	float time = u01(rng);
+	time = powf(time, 0.4f);
+
+	// generate new geoms based on time
+	int fullBlocksPerGeom = (hst_scene->geoms.size() + blockSize1d - 1) / blockSize1d;
+	calcGeoms<<<fullBlocksPerGeom, blockSize1d>>>(dev_geoms, dev_geoms_tmp, hst_scene->geoms.size(), time);
+#endif
+
 #if CACHE_FIRST_BOUNCE == 1
 	cudaMemcpy(dev_paths, dev_first_paths, pixelcount * sizeof(PathSegment), cudaMemcpyDeviceToDevice);
 #else
@@ -575,7 +660,11 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			depth,
 			num_paths,
 			dev_paths,
+#if CAM_SHUTTER_TIME != 0
+			dev_geoms_tmp,
+#else
 			dev_geoms,
+#endif
 			hst_scene->geoms.size(),
 			dev_intersections
 		);
