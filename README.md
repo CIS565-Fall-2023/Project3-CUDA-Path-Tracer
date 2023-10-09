@@ -22,7 +22,9 @@ This project is a Monte Carlo path tracer run on GPU based on CUDA. It is a rend
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_09-07-59z.1028samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_09-07-59z.1028samp.png" width="300" height="300">
 
 ### 2. Physically-based depth-of-field
-
+|with DOF|without DOF|
+|:-----:|:-----:|
+|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_13-31-12z.2063samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_13-31-12z.2063samp.png" width="300" height="300">
 
 
 ### 3. Stochastic Sampled Antialiasing
