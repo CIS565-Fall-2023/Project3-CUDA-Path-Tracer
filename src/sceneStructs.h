@@ -9,6 +9,9 @@
 #define BBOX_TRI_NUM 4
 #define BVH_GPU_STACK_SIZE 64
 #define BLOCK_SIZE_1D 64
+#define JITTER_RATIO 1e-2f
+#define DOF_LENS_RADIUS 0.35f
+#define DOF_FOCAL_DISTANCE 10.0f
 
 enum GeomType {
     SPHERE,

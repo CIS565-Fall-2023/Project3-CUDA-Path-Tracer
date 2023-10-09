@@ -69,6 +69,7 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  * You may need to change the parameter list for your purposes!
  */
 
+
 __host__ __device__
 glm::vec3 Sample_wh(
     glm::vec3 wo, thrust::default_random_engine& rng, float roughness

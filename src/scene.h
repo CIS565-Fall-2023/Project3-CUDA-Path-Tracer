@@ -9,8 +9,9 @@
 #include "sceneStructs.h"
 
 // #define MATERIAL_SORT
-#define CACHE_FIRST_BOUNCE
+// #define CACHE_FIRST_BOUNCE
 // #define JITTER_RAY
+#define DEPTH_OF_FIELD
 // #define DEBUG_OUTPUT
 #define USING_BVH
 

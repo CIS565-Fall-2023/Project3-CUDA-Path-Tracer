@@ -209,8 +209,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-#ifdef JITTER_RAY
 		thrust::random::default_random_engine rng = makeSeededRandomEngine(iter, x, y);
+#ifdef JITTER_RAY
 		thrust::uniform_real_distribution<float> u1(-1, 1);
 		thrust::uniform_real_distribution<float> u02PI(0, TWO_PI);
 		float rz = sqrt(u1(rng));
@@ -222,9 +222,39 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 #ifdef JITTER_RAY
-			+ glm::normalize(glm::vec3(__sinf(u02PI(rng)), __cosf(u02PI(rng)), rz)) * 1e-3f
+			+ glm::normalize(glm::vec3(__sinf(u02PI(rng)), __cosf(u02PI(rng)), rz)) * JITTER_RATIO
 #endif
 		);
+
+
+		// Depth of field
+#ifdef DEPTH_OF_FIELD
+		thrust::uniform_real_distribution<float> u01(-1, 1);
+		glm::vec2 sample = glm::vec2(u01(rng), u01(rng));
+		glm::vec2 sampleDisk;
+		if (length(sample) < 1e-5) { sampleDisk = glm::vec2(0, 0); }
+		else {
+			float theta, r;
+			if (std::abs(sample.x) > std::abs(sample.y)) {
+				r = sample.x;
+				theta = (PI / 4.0) * (sample.y / sample.x);
+			}
+			else {
+				r = sample.y;
+				theta = (PI / 2.0) - (PI / 4.0) * (sample.x / sample.y);
+			}
+			sampleDisk = r * glm::vec2(std::cos(theta), std::sin(theta));
+		}
+
+		glm::vec2 pLens = DOF_LENS_RADIUS * sampleDisk;
+
+		float ft = glm::abs(DOF_FOCAL_DISTANCE / segment.ray.direction.z);
+		glm::vec3 pFocus = segment.ray.origin + ft * segment.ray.direction;
+
+		segment.ray.origin += cam.right * pLens.x + cam.up * pLens.y;
+		segment.ray.direction = glm::normalize(pFocus - segment.ray.origin);
+#endif
+
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
