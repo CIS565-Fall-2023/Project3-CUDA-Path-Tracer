@@ -26,7 +26,7 @@
 #define FULL 1
 #define RUSSIAN_ROULETTE 1
 
-#define SUB_SCATTERING 1
+#define SUB_SCATTERING 0
 
 #define USE_KD_TREE 1
 
@@ -111,8 +111,10 @@ static ShadeableIntersection* dev_first_bounce_cache = NULL;
 #endif
 
 static KDAccelNode* dev_kdNodes = NULL;
-
 static glm::vec3* dev_envmap = NULL;
+
+static glm::vec3* dev_texturemaps = NULL;
+static TextureInfo* dev_textureInfos = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -168,6 +170,15 @@ void pathtraceInit(Scene* scene) {
 		cudaMalloc(&dev_envmap, scene->hdrImage.size() * sizeof(glm::vec3));
 		cudaMemcpy(dev_envmap, scene->hdrImage.data(), scene->hdrImage.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
 	}
+
+	// texture map
+	if (scene->textureInfos.size() > 0) {
+		cudaMalloc(&dev_texturemaps, scene->textures.size() * sizeof(glm::vec3));
+		cudaMemcpy(dev_texturemaps, scene->textures.data(), scene->textures.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+	
+		cudaMalloc(&dev_textureInfos, scene->textureInfos.size() * sizeof(TextureInfo));
+		cudaMemcpy(dev_textureInfos, scene->textureInfos.data(), scene->textureInfos.size() * sizeof(TextureInfo), cudaMemcpyHostToDevice);
+	}
 	
 	checkCUDAError("pathtraceInit");
 }
@@ -192,6 +203,11 @@ void pathtraceFree() {
 
 	if (dev_envmap != NULL) {
 		cudaFree(dev_envmap);
+	}
+
+	if (dev_texturemaps != NULL) {
+		cudaFree(dev_texturemaps);
+		cudaFree(dev_textureInfos);
 	}
 
 	checkCUDAError("pathtraceFree");
@@ -370,6 +386,9 @@ __global__ void shadeNaive(
 	, int envmapWidth
 	, int envmapHeight
 	, int numLights
+	, TextureInfo* textureInfos
+	, glm::vec3* texturemaps
+	
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -384,6 +403,18 @@ __global__ void shadeNaive(
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 
 			Material material = materials[intersection.materialId];
+
+			if (material.albedoTex != -1) {
+				// sample texture
+				int width = textureInfos[material.albedoTex].width;
+				int height = textureInfos[material.albedoTex].height;
+				int offset = textureInfos[material.albedoTex].offset;
+
+				int w = (int)((float)width * intersection.uv[0] - 0.5f);
+				int h = (int)((float)height * (1.0f - intersection.uv[1]) - 0.5f);
+				materials[intersection.materialId].color = texturemaps[h * width + w + offset];
+			}
+
 			glm::vec3 materialColor = material.color;
 
 			// If the material indicates that the object was a light, "light" the ray
@@ -485,6 +516,8 @@ __global__ void shadeFull(
 	, glm::vec3* envmap
 	, int envmapWidth
 	, int envmapHeight
+	, TextureInfo* textureInfos
+	, glm::vec3* texturemaps
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -498,6 +531,18 @@ __global__ void shadeFull(
 			// makeSeededRandomEngine as well.
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			Material material = materials[intersection.materialId];
+
+			if (material.albedoTex != -1) {
+				// sample texture
+				int width = textureInfos[material.albedoTex].width;
+				int height = textureInfos[material.albedoTex].height;
+				int offset = textureInfos[material.albedoTex].offset;
+
+				int w = (int)((float)width * intersection.uv[0] - 0.5f);
+				int h = (int)((float)height * (1.0f - intersection.uv[1]) - 0.5f);
+				materials[intersection.materialId].color = texturemaps[h * width + w + offset];
+			}
+
 			glm::vec3 point = getPointOnRay(cur.ray, intersection.t);
 
 			cur.hitSurface = true;
@@ -511,7 +556,6 @@ __global__ void shadeFull(
 			}
 #endif // SUB_SCATTERING
 
-			
 			// specular or direct from camera
 			if (material.emittance > 0.0f) {
 				if (cur.isFromCamera || cur.isSpecularBounce) {
@@ -735,7 +779,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_envmap,
 			hst_scene->hdrResult.width,
 			hst_scene->hdrResult.height,
-			hst_scene->numLights
+			hst_scene->numLights,
+			dev_textureInfos,
+			dev_texturemaps
 			);
 #endif
 #if DIRECT_MIS
@@ -771,7 +817,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			hst_scene->numLights,
 			dev_envmap,
 			hst_scene->hdrResult.width,
-			hst_scene->hdrResult.height
+			hst_scene->hdrResult.height,
+			dev_textureInfos,
+			dev_texturemaps
 			);
 #endif
 

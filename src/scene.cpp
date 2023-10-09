@@ -5,7 +5,7 @@
 
 #include "scene.h"
 #include "tiny_obj_loader.h"
-
+#include <stb_image.h>
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -170,6 +170,7 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
 
     cout << "Tiny obj load success!" << endl;
     bool containVertexNormal = attribs.normals.size() > 0;
+    bool containTexCoord = attribs.texcoords.size() > 0;
    
     for (auto& shape : shapes) {
         auto& mesh = shape.mesh;
@@ -209,18 +210,16 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
                        attribs.normals[3 * mesh.indices[i + 2].normal_index + 1],
                        attribs.normals[3 * mesh.indices[i + 2].normal_index + 2]);
            }
-           
 
-			//triangle.t0 = glm::vec2(
-			//		attribs.texcoords[2 * mesh.indices[i]],
-			//		attribs.texcoords[2 * mesh.indices[i] + 1]);
-			//triangle.t1 = glm::vec2(
-			//		attribs.texcoords[2 * mesh.indices[i + 1]],
-			//		attribs.texcoords[2 * mesh.indices[i + 1] + 1]);
-			//triangle.t2 = glm::vec2(
-			//		attribs.texcoords[2 * mesh.indices[i + 2]],
-			//		attribs.texcoords[2 * mesh.indices[i + 2] + 1]);
-
+           if (containTexCoord) {
+               triangle.texcoord[0] = glm::vec2(attribs.texcoords[2 * mesh.indices[i].texcoord_index],
+                       					   attribs.texcoords[2 * mesh.indices[i].texcoord_index + 1]);
+			   triangle.texcoord[1] = glm::vec2(attribs.texcoords[2 * mesh.indices[i + 1].texcoord_index],
+                       					   attribs.texcoords[2 * mesh.indices[i + 1].texcoord_index + 1]);
+			   triangle.texcoord[2] = glm::vec2(attribs.texcoords[2 * mesh.indices[i + 2].texcoord_index],
+                       					   attribs.texcoords[2 * mesh.indices[i + 2].texcoord_index + 1]);
+           }
+			
             Geom newGeom = geom;
             newGeom.geomId = geoms.size();
             newGeom.triangle = triangle;
@@ -231,6 +230,45 @@ bool Scene::loadObj(const Geom& geom, const string& objFile) {
     }
 
     return res;
+}
+
+int Scene::loadTexture(const string& textureFile) {
+    int id = textureInfos.size();
+    cout << "Loading texture: " << textureFile << "..." << endl;
+
+    FILE* f = fopen(textureFile.c_str(), "rb");
+    if (!f) {
+        return -1;
+    }
+
+    int width, height, channels;
+
+    unsigned char* data = stbi_load(textureFile.c_str(), &width, &height, &channels, 0);
+
+    if (width <= 0 || height <= 0) {
+        return -1;
+    }
+
+    int size = 3 * width * height;
+
+    TextureInfo textureInfo;
+    textureInfo.height = height;
+    textureInfo.width = width;
+    textureInfo.channel = channels;
+
+    cout << width << " " << height << endl;
+    textureInfo.offset = id == 0 ? 0 : textureInfos[id - 1].offset + textureInfos[id - 1].width * textureInfos[id - 1].height;
+
+    textureInfos.push_back(textureInfo);
+
+    for (int i = 0; i < size - 2; i += 3) {
+		glm::vec3 color(data[i], data[i + 1], data[i + 2]);
+		textures.push_back(color / 255.0f);
+	}
+
+    stbi_image_free(data);
+
+    return id;
 }
 
 bool Scene::loadHDR(const string& hdrFile) {
@@ -455,7 +493,10 @@ int Scene::loadMaterial(string materialid) {
 				absorptionDistance = atof(tokens[1].c_str());
 			} else if (strcmp(tokens[0].c_str(), "SCATTER_DISTANCE") == 0) {
 				scatterDistance = atof(tokens[1].c_str());
-			}
+            } else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
+                // load bmp
+                newMaterial.albedoTex = loadTexture(tokens[1]);
+            }
             utilityCore::safeGetline(fp_in, line);
         }
 

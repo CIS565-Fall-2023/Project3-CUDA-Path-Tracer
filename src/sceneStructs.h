@@ -42,7 +42,7 @@ struct Ray {
 struct Triangle {
     glm::vec3 position[3];
     glm::vec3 normal[3];
-    //glm::vec2 texcoord[3];
+    glm::vec2 texcoord[3];
 };
 
 // Bounding box
@@ -84,6 +84,7 @@ struct Medium {
 
 struct Material {
     glm::vec3 color;
+    glm::vec3 textureColor;
     struct {
         float exponent;
         glm::vec3 color;
@@ -97,13 +98,21 @@ struct Material {
     float emittance; // light
 
     MaterialType type;
+
     // texture maps
-    int albedoTex;
-    int normalTex;
-    int roughnessTex;
+    int albedoTex = -1;
+    //int normalTex = -1;
+    //int roughnessTex = -1;
 
     // medium
     Medium medium;
+};
+
+struct TextureInfo {
+    int width;
+    int height;
+    int channel;
+    int offset;
 };
 
 struct Camera {
@@ -157,9 +166,7 @@ struct ShadeableIntersection {
     float t;
     glm::vec3 surfaceNormal;
     glm::vec3 surfaceTangent;
-
-    float IORi = 1.0f;
-    float IORo;
+    glm::vec2 uv;
 
     int geomId;
     int materialId;

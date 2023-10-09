@@ -26,6 +26,7 @@ private:
     int createKDAccelNodes(KDNode* node, int& index);
 
     bool loadObj(const Geom& geom, const string& objFile);
+    int loadTexture(const string& textureFile);
 
     bool loadHDR(const string& hdrFile);
     
@@ -49,6 +50,10 @@ public:
     // hdr image
     HDRLoaderResult hdrResult;
     std::vector<glm::vec3> hdrImage;
+
+    // textures
+    std::vector<TextureInfo> textureInfos;
+    std::vector<glm::vec3> textures;
 
     RenderState state;
 };

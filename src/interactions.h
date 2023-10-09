@@ -30,7 +30,7 @@ __host__ __device__ glm::vec3 sampleMaterial(glm::vec3 intersect,
 		{
             specular = false;
             wi = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng, pdf));
-            return (m.color / PI);
+            return m.color / PI;
 		}
         case MaterialType::SPEC_REFL:
 		{

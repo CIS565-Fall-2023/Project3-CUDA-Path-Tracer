@@ -171,7 +171,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 }
 
 __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
-    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, bool& outside) {
+    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, glm::vec2& uv, bool& outside) {
 
     glm::vec3 ro = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -192,6 +192,9 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
             baryPosition.x * triangle.normal[0] + 
             baryPosition.y * triangle.normal[1] + 
             (1.0f - baryPosition.x - baryPosition.y) * triangle.normal[2], 0.0f)));
+
+        uv = baryPosition.x * triangle.texcoord[0] + baryPosition.y * triangle.texcoord[1] + 
+            (1.0f - baryPosition.x - baryPosition.y) * triangle.texcoord[2];
         //normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(triangle.normal[0], 0.0f)));
         tangent = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
         outside = true;
@@ -207,6 +210,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray r
     glm::vec3 intersect_point;
     glm::vec3 normal;
     glm::vec3 tangent;
+    glm::vec2 uv;
     float t_min = FLT_MAX;
     int hit_geom_index = -1;
     bool outside = true;
@@ -214,6 +218,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray r
     glm::vec3 tmp_intersect;
     glm::vec3 tmp_normal;
     glm::vec3 tmp_tangent;
+    glm::vec2 tmp_uv;
 
     // naive parse through global geoms
 
@@ -231,7 +236,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray r
         } 
         else if (geom.type == MESH)
 		{
-			t = meshIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
+			t = meshIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, tmp_uv, outside);
 		}
         // TODO: add more intersection tests here... triangle? metaball? CSG?
 
@@ -244,6 +249,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray r
             intersect_point = tmp_intersect;
             normal = tmp_normal;
             tangent = tmp_tangent;
+            uv = tmp_uv;
         }
     }
 
@@ -263,6 +269,7 @@ __host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray r
         intersection.geomId = geoms[hit_geom_index].geomId;
         intersection.surfaceNormal = normal;
         intersection.surfaceTangent = tangent;
+        intersection.uv = uv;
     }
 }
 
