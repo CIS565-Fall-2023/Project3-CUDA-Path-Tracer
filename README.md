@@ -36,8 +36,7 @@ This project is a Monte Carlo path tracer run on GPU based on CUDA. It is a rend
 ### 4. Subsurface scattering
 |Subsurface scattering|diffuse surface|
 |:-----:|:-----:|
-|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_08-47-59z.1063samp.png" width="300" height="300">|<img 
- src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/imgcornell.2023-09-29_08-58-21z.944samp.png" width="300" height="300">
+|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_08-47-59z.1063samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_08-58-21z.944samp.png" width="300" height="300">
 
 
 ### 5. defining object motion, and motion blur
