@@ -85,6 +85,7 @@ struct PathSegment {
 };
 
 class Primitive;
+class Triangle;
 
 // Use with a corresponding PathSegment to do:
 // 1) color contribution computation
@@ -96,6 +97,7 @@ struct ShadeableIntersection {
   glm::vec3 intersectionPoint;
   glm::vec2 uv;
   glm::vec2 bary;
+  const Triangle* primitive;
 };
 
 
@@ -163,6 +165,12 @@ struct Triangle{
     Texture * normalTexture;
 
     __device__ float area() const {
-        return glm::cross(p2 - p1, p3 - p1).length() * 0.5f;
+  //      printf("p1: %f %f %f, p2: %f %f %f, p3: %f %f %f, area: %f\n"
+  //          , p1.x, p1.y, p1.z
+		//	, p2.x, p2.y, p2.z
+		//	, p3.x, p3.y, p3.z
+  //          , glm::length(glm::cross(p2 - p1, p3 - p1)) * 0.5f
+		//);
+        return glm::length(glm::cross(p2 - p1, p3 - p1)) * 0.5f;
     }
 };

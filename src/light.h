@@ -31,6 +31,7 @@ __device__ LightLiSample sampleLi(const Light& light, const Triangle & tri, cons
 //		ss.intersection.intersectionPoint.x, ss.intersection.intersectionPoint.y, ss.intersection.intersectionPoint.z,
 //intersection.intersectionPoint.x, intersection.intersectionPoint.y, intersection.intersectionPoint.z
 //		);
+	//printf("ss.pdf: %f\n", ss.pdf);
 	float pdf = ss.pdf * glm::length2(ss.intersection.intersectionPoint - intersection.intersectionPoint) / glm::dot(ss.intersection.surfaceNormal, -wi);
 	//float pdf = ss.pdf / glm::dot(ss.intersection.surfaceNormal, -wi);
 	auto Le = L(light, ss.intersection.intersectionPoint, ss.intersection.surfaceNormal, ss.intersection.uv, -wi);

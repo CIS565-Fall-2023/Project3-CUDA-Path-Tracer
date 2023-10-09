@@ -43,6 +43,7 @@ __device__ bool intersectTriangle(const Triangle & tri, Ray& r, ShadeableInterse
             isect->uv = (1.0f - bary.x - bary.y) * tri.uv1 + bary.x * tri.uv2 + bary.y * tri.uv3;
             isect->surfaceNormal = glm::normalize((1.0f - bary.x - bary.y) * tri.n1 + bary.x * tri.n2 + bary.y * tri.n3);
             isect->bary = glm::vec2(bary);
+            isect->primitive = &tri;
    //         if (tri.normalTextureID != -1) {
 			//	isect->surfaceNormal = sampleTextureRGB(*tri.normalTexture, isect->uv);
 			//}

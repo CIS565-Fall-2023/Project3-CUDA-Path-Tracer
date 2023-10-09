@@ -155,7 +155,7 @@ void Scene::initLights(const std::vector<Triangle> & orderedPrims)
             light.scale = bsdfStruct.strength;
             light.nSample = 1;
 			lights.push_back(light);
-            sum_power += Math::luminance(light.color * light.scale) * 2.0f * PI;
+            sum_power += Math::luminance(light.color * light.scale) * 2.0f * orderedPrims[i].area() * PI;
         }
     }
 
