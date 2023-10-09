@@ -15,6 +15,8 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
+#include <OpenImageDenoise/oidn.hpp>
+
 
 #define ERRORCHECK 1
 
@@ -25,7 +27,9 @@
 // enable 4x Stochastic Sample Anti-Aliasing
 #define ANTIALIASING 0
 
-#define DIRECT_LIGHT 1
+#define DIRECT_LIGHT 0
+
+#define IMAGE_DENOISE 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -87,6 +91,11 @@ static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static Triangle *dev_meshes = NULL;
+#if IMAGE_DENOISE
+static glm::vec3* dev_denoised_image = NULL;
+static glm::vec3* dev_albedo = NULL;
+static glm::vec3* dev_normal = NULL;
+#endif 
 
 #if DIRECT_LIGHT
 static int * dev_light_indices = NULL;
@@ -101,6 +110,86 @@ static PathSegment* dev_first_bounce_paths = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
+
+#if IMAGE_DENOISE
+void imageDenoise() {
+	// Create an Intel(R) Open Image Denoise device
+	oidn::DeviceRef device = oidn::newDevice();
+	device.commit();
+	// check which device is being used
+	int d = oidnGetNumPhysicalDevices();
+
+	// check the devices avaiable, range from 0 to d-1, rank by performance
+	//for (int i = 0; i < d; i++) {
+	//	const char* para = "name";
+	//	const char* name = oidnGetPhysicalDeviceString(i, para);
+	//	cout << "device " << i << " type: " << name << endl;
+	//}
+
+	cout << "image denoise start" << endl;
+	int width = hst_scene->state.camera.resolution.x;
+	int height = hst_scene->state.camera.resolution.y;
+	// Create buffers for input/output images accessible by both host (CPU) and device (CPU/GPU)
+	//oidn::BufferRef colorBuf = device.newBuffer(width * height * 3 * sizeof(float));
+	//oidn::BufferRef albedoBuf = ...
+
+	// Create a filter for denoising a beauty (color) image using optional auxiliary images too
+	// This can be an expensive operation, so try no to create a new filter for every image!
+	oidn::FilterRef filter = device.newFilter("RT"); // generic ray tracing filter
+	filter.setImage("color", dev_image, oidn::Format::Float3, width, height); // beauty
+	filter.setImage("albedo", dev_albedo, oidn::Format::Float3, width, height); // auxiliary
+	filter.setImage("normal", dev_normal, oidn::Format::Float3, width, height); // auxiliary
+	filter.setImage("output", dev_denoised_image, oidn::Format::Float3, width, height); // denoised beauty
+	filter.set("hdr", true); // beauty image is HDR
+	//filter.set("cleanAux", true); // auxiliary images will be prefiltered, make sure contains as less noise as possible
+	filter.commit();
+
+	// Fill the input image buffers
+	//float* colorPtr = (float*)colorBuf.getData();
+
+	// Create a separate filter for denoising an auxiliary albedo image (in-place)
+	oidn::FilterRef albedoFilter = device.newFilter("RT"); // same filter type as for beauty
+	albedoFilter.setImage("albedo", dev_albedo, oidn::Format::Float3, width, height);
+	albedoFilter.setImage("output", dev_albedo, oidn::Format::Float3, width, height);
+	albedoFilter.commit();
+
+	//// Create a separate filter for denoising an auxiliary normal image (in-place)
+	oidn::FilterRef normalFilter = device.newFilter("RT"); // same filter type as for beauty
+	normalFilter.setImage("normal", dev_normal, oidn::Format::Float3, width, height);
+	normalFilter.setImage("output", dev_normal, oidn::Format::Float3, width, height);
+	normalFilter.commit();
+
+	// Prefilter the auxiliary images
+	albedoFilter.execute();
+	normalFilter.execute();
+
+	// Filter the beauty image
+	filter.execute();
+
+	// Check for errors
+	const char* errorMessage;
+	if (device.getError(errorMessage) != oidn::Error::None)
+		std::cout << "Error: " << errorMessage << std::endl;
+
+}
+
+
+__global__ 
+void setPrefilter(
+	ShadeableIntersection* shadeableIntersections, int num_path,
+	PathSegment* pathSegments, glm::vec3* albedo, glm::vec3* normal) {
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (index < num_path) {
+		ShadeableIntersection intersection = shadeableIntersections[index];
+		PathSegment& pathSegment = pathSegments[index];
+
+		normal[pathSegment.pixelIndex] = intersection.surfaceNormal;
+		albedo[pathSegment.pixelIndex] = pathSegment.color;
+	}
+}
+
+#endif
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -141,6 +230,17 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
+#if IMAGE_DENOISE
+	cudaMalloc(&dev_denoised_image, pixelcount * sizeof(glm::vec3));
+	cudaMemset(dev_denoised_image, 0, pixelcount * sizeof(glm::vec3));
+
+	cudaMalloc(&dev_albedo, pixelcount * sizeof(glm::vec3));
+	cudaMemset(dev_albedo, 0, pixelcount * sizeof(glm::vec3));
+
+	cudaMalloc(&dev_normal, pixelcount * sizeof(glm::vec3));
+	cudaMemset(dev_normal, 0, pixelcount * sizeof(glm::vec3));
+#endif // OIDN
+
 	// TODO: initialize any extra device memeory you need
 #if DIRECT_LIGHT
 	num_lights = 0;
@@ -178,6 +278,12 @@ void pathtraceFree() {
 	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
 	cudaFree(dev_meshes);
+#if IMAGE_DENOISE
+	cudaFree(dev_denoised_image);
+	cudaFree(dev_albedo);
+	cudaFree(dev_normal);
+#endif
+
 #if DIRECT_LIGHT
 	cudaFree(dev_light_indices);
 #endif
@@ -749,6 +855,19 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		//cout << "done shading" << endl;
 #endif
 
+#if IMAGE_DENOISE
+		if (depth == 1) {
+			setPrefilter << <numblocksPathSegmentTracing, blockSize1d >> > (
+				dev_intersections,
+				num_paths,
+				dev_paths,
+				dev_albedo,
+				dev_normal
+				);
+			checkCUDAError("setPrefilter");
+		}
+#endif
+
 		/*iterationComplete = depth == 5;*/
 		//cout << "old num_paths: " << num_paths << endl;
 		dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_paths + num_paths, is_path_terminated());
@@ -786,10 +905,17 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 #else
 
+#if IMAGE_DENOISE
+		imageDenoise();
+		sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_denoised_image);
+#else
+
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);
 	//cout << "sendImageToPBO finished" << endl;
 	// Retrieve image from GPU
+#endif
+
 #endif
 
 #if ANTIALIASING
