@@ -101,9 +101,11 @@ Comparing the two options, I initially thought partitioning would increase perfo
 
 ![](img/charts/partition_time.png)
 
-My guess is that partitioning large amounts of rays (more than 2 million for a 1920x1080 image) simply takes too much time for the potential kernel speedup to be worth it. With that in mind, I turned ray partitioning off for the remaining analyses.
+Looking at the Nsight timeline provides somewhat of an explanation:
 
-TODO: look at timeline in Nsight and answer this more concretely
+![](img/charts/partition_nsight.png)
+
+I'm not sure why there's such a large gap between calls to the CUDA kernels and calls to `thrust::partition`, but that would explain the significant performance downgrade when using partitioning. With that in mind, I disabled ray partitioning for the remaining analyses.
 
 ### Sort rays by material type
 
@@ -111,7 +113,7 @@ Another feature is the ability to sort rays by their material type. This hypothe
 
 ![](img/charts/sort_time.png)
 
-Interestingly, enabling ray partitioning in addition to sorting increased performance compared to just enabling sorting. However, the time per frame was still significantly higher than with neither feature enabled. After seeing these results, I decided to keep ray sorting off for the remaining analyses.
+Interestingly, enabling ray partitioning in addition to sorting increased performance compared to just enabling sorting. However, the time per frame was still significantly higher than with neither feature enabled. After seeing these results, I decided to keep ray sorting disabled for the remaining analyses.
 
 ### Russian roulette path termination
 
