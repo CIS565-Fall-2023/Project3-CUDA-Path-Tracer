@@ -32,7 +32,7 @@ This project is a Monte Carlo path tracer run on GPU based on CUDA. It is a rend
 ### 3. Stochastic Sampled Antialiasing
 |with Antialiasing|without Antialiasing|
 |:-----:|:-----:|
-|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-13-55z.1091samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_15-21-00z.4090samp.png" width="300" height="300">
+|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-13-55z.1091samp.png" width="500" height="500">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_15-21-00z.4090samp.png" width="500" height="500">
 
 
 ### 4. Subsurface scattering
