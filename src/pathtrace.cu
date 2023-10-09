@@ -6,6 +6,9 @@
 #include <thrust/remove.h>
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
+#include <glm/gtc/matrix_transform.hpp>
+
+
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -18,7 +21,7 @@
 
 #define ERRORCHECK 1
 #define SORTBY_MATERIAL_TYPE 0
-#define CACHE_FIRST_INTERSECTION 1
+#define CACHE_FIRST_INTERSECTION 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -75,6 +78,7 @@ static Scene* hst_scene = NULL;
 static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
+static Geom* dev_geoms_after_t = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static PathSegment* dev_paths_first = NULL;
@@ -116,8 +120,10 @@ void pathtraceInit(Scene* scene) {
 
 	// fill the path and intersections for the first bounce.
 	computeFistPathsAndIntersections();
-#endif /*CACHE_FIRST_INTERSECTION*/
+#else 
+	cudaMalloc(&dev_geoms_after_t, scene->geoms.size() * sizeof(Geom));
 
+#endif /*CACHE_FIRST_INTERSECTION*/
 	checkCUDAError("pathtraceInit");
 }
 
@@ -152,10 +158,13 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
+		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+			- cam.right * cam.pixelLength.x * ((float)(x + u01(rng) - 0.5) - (float)cam.resolution.x * 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)(y + u01(rng) - 0.5) - (float)cam.resolution.y * 0.5f)
 		);
 
 		segment.pixelIndex = index;
@@ -389,6 +398,26 @@ struct comparator {
 	}
 };
 
+__global__ void updateGeoms(float time, Geom* geom, Geom* geom_after_t, int size) {
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index >= size) return;
+	Geom currGeom = geom[index];
+	if (glm::length(currGeom.velocity) > 0.001) {
+		currGeom.translation += time * currGeom.velocity;
+
+		glm::mat4 translationMat = glm::translate(glm::mat4(), currGeom.translation);
+		glm::mat4 rotationMat = glm::rotate(glm::mat4(), currGeom.rotation.x * (float)PI / 180, glm::vec3(1, 0, 0));
+		rotationMat = rotationMat * glm::rotate(glm::mat4(), currGeom.rotation.y * (float)PI / 180, glm::vec3(0, 1, 0));
+		rotationMat = rotationMat * glm::rotate(glm::mat4(), currGeom.rotation.z * (float)PI / 180, glm::vec3(0, 0, 1));
+		glm::mat4 scaleMat = glm::scale(glm::mat4(), currGeom.scale);
+		currGeom.transform = translationMat * rotationMat * scaleMat;
+
+		currGeom.inverseTransform = glm::inverse(currGeom.transform);
+		currGeom.invTranspose = glm::inverseTranspose(currGeom.transform);
+	}
+	geom_after_t[index] = currGeom;
+}
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -446,7 +475,16 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #else
 	PathSegment* dev_path_end = dev_paths + pixelcount;
 	int num_paths = dev_path_end - dev_paths;
+	// random time
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, 0, depth);
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	float time = glm::sqrt(u01(rng));
+	//segment.ray.time = 1;
 	generateRayFromCamera <<<blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+	// TODO: update dev_geoms_after_t based on dev_geom and random generated time.
+	int numBlocks = (hst_scene->geoms.size() + blockSize1d - 1) / blockSize1d;
+	updateGeoms<<<numBlocks, blockSize1d>>>(time, dev_geoms, dev_geoms_after_t, hst_scene->geoms.size());
+
 	checkCUDAError("generate camera ray");
 #endif
 	// --- PathSegment Tracing Stage ---
@@ -464,7 +502,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			cudaMemcpy(dev_intersections, dev_intersections_first, num_paths * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
 		}
 		else {
-#endif /*CACHE_FIRST_INTERSECTION*/
 			// tracing
 			computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 				depth
@@ -476,8 +513,19 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				);
 			checkCUDAError("trace one bounce");
 			cudaDeviceSynchronize();
-#if CACHE_FIRST_INTERSECTION
 		}
+#else
+		// tracing
+		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+			depth
+			, num_paths
+			, dev_paths
+			, dev_geoms_after_t
+			, hst_scene->geoms.size()
+			, dev_intersections
+			);
+		checkCUDAError("trace one bounce");
+		cudaDeviceSynchronize();
 #endif /*CACHE_FIRST_INTERSECTION*/
 		depth++;
 

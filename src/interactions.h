@@ -103,6 +103,22 @@ void scatterRay(
     }
 
     pathSegment.remainingBounces--;
+
+    //if (m.sssDepth > 0) {
+    //    thrust::uniform_real_distribution<float> u01(0, 1);
+    //    float scatterDistance = -m.sssDepth * log(1 - u01(rng));
+    //    //glm::vec3 samplePoint = intersect + scatterDistance * pathSegment.ray.direction;
+
+    //    glm::vec3 randomDirectionInMaterial = calculateRandomDirectionInHemisphere(-pathSegment.ray.direction, rng);
+    //    glm::vec3 samplePoint = intersect + scatterDistance * randomDirectionInMaterial;
+    //    glm::vec3 newDirection = calculateRandomDirectionInHemisphere(normal, rng);
+
+    //    pathSegment.ray.origin = samplePoint + 0.001f * newDirection;
+    //    pathSegment.ray.direction = newDirection;
+    //    pathSegment.color *= m.sssAlbedo; 
+    //    return;
+    //}
+    
     if (m.hasRefractive) {
         thrust::uniform_real_distribution<float> u01(0, 1);
         float r = u01(rng); // generate a random number.

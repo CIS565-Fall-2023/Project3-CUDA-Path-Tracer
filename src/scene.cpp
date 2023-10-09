@@ -74,6 +74,8 @@ int Scene::loadGeom(string objectid) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "VEL") == 0) {
+                newGeom.velocity = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
 
             utilityCore::safeGetline(fp_in, line);
@@ -180,7 +182,12 @@ int Scene::loadMaterial(string materialid) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
-            }
+            } /*else if (strcmp(tokens[0].c_str(), "SSSALBEDO") == 0) {
+                glm::vec3 sssAlbedo(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.sssAlbedo = sssAlbedo;
+            } else if (strcmp(tokens[0].c_str(), "SSSDEPTH") == 0) {
+                newMaterial.sssDepth = atof(tokens[1].c_str());
+            }*/
         }
         materials.push_back(newMaterial);
         return 1;
