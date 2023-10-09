@@ -7,25 +7,25 @@ Han Wang
 
 Tested on: Windows 11, 11th Gen Intel(R) Core(TM) i9-11900H @ 2.50GHz 22GB, GTX 3070 Laptop GPU
 
-### Analysis
+# Analysis
 
-### Finished features:
+# Finished features:
 
-# 1. Refraction (e.g. glass/water)
-
-
-
-# 2. Physically-based depth-of-field
+### 1. Refraction (e.g. glass/water)
 
 
 
-# 3. Stochastic Sampled Antialiasing
+### 2. Physically-based depth-of-field
 
 
 
-# 4. Subsurface scattering
+### 3. Stochastic Sampled Antialiasing
 
 
 
-# 5. defining object motion, and motion blur
+### 4. Subsurface scattering
+
+
+
+### 5. defining object motion, and motion blur
 
