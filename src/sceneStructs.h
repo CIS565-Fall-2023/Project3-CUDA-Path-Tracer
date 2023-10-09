@@ -17,6 +17,7 @@ enum GeomType {
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+};
 
 struct AABB
 {
@@ -188,4 +189,45 @@ struct Intersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;
+};
+
+struct BVHNode
+{
+    // Based on PBRT: https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies
+    AABB bounds;
+    //BVHNode* left;
+    //BVHNode* right;
+
+    int leftChildIdx;
+    int rightChildIdx;
+    int splitAxis;
+    int triIdx;
+    //int nodeIdx;
+
+    void initAsLeafNode(int triIdx, const AABB& bounds)
+    {
+        this->bounds = bounds;
+        this->triIdx = triIdx;
+        this->leftChildIdx = -1;
+        this->rightChildIdx = -1;
+    }
+
+    void initInterior(int splitAxis, int leftChildIdx, int rightChildIdx, const std::vector<BVHNode>& bvhNodes)
+    {
+        this->leftChildIdx = leftChildIdx;
+        this->rightChildIdx = rightChildIdx;
+        bounds = AABB::combine(bvhNodes[leftChildIdx].bounds, bvhNodes[rightChildIdx].bounds);
+        this->splitAxis = splitAxis;
+        this->triIdx = -1;  // no triangle here
+    }
+};
+
+struct sortTriIndicesBasedOnDim
+{
+private:
+    const std::vector<Triangle>& tris;
+    int dimToSortOn;
+public:
+    sortTriIndicesBasedOnDim(const std::vector<Triangle>& tris, int dimToSortOn) : tris(tris), dimToSortOn(dimToSortOn) {}
+    bool operator()(int i, int j) const { return tris[i].centroid[dimToSortOn] < tris[j].centroid[dimToSortOn]; }
 };

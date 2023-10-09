@@ -9,7 +9,6 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 #include "sceneStructs.h"
-#include "bvh.h"
 #include "tiny_gltf.h"
 
 using namespace std;
@@ -47,6 +46,7 @@ private:
     /// <param name="endTriIdx"></param>
     /// <returns></returns>
     int constructBVH(string meshPath, unsigned int startTriIdx, unsigned int endTriIdx);
+    int buildBVHRecursively(int& totalNodes, int startOffset, int nTris, const std::vector<Triangle>& tris, std::vector<int>& triIndices, std::vector<BVHNode>& bvhNodes);
 public:
     Scene(string filename);
     ~Scene();
