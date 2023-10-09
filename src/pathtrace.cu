@@ -314,7 +314,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 		segment.constantTerm = glm::vec3(1.0f, 1.0f, 1.0f);
-		segment.prevWeight = -1.0f;
+		segment.prevPDF = 0.0f;
 	}
 }
 
@@ -422,6 +422,19 @@ __global__ void shadeBSDF(
 				if (depth == 0) {
 					pathSegment.color = bsdfStruct.emissiveFactor * bsdfStruct.strength;
 				}
+				else {
+#if MIS
+					float power_pdf = 1.0f / lights_size;
+					float distance_sqr = glm::length2(intersection.intersectionPoint - pathSegment.ray.origin);
+					float next_light_pdf = power_pdf * distance_sqr /
+						(intersection.primitive->area() *
+							abs(glm::dot(intersection.surfaceNormal, -pathSegment.ray.direction)));
+					float weight = PowerHeuristic(1, pathSegment.prevPDF, 1, next_light_pdf);
+					pathSegment.color += weight * (bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm;
+#else
+					pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm;
+#endif
+				}
 			}
 			else {
 				glm::mat3x3 o2w;
@@ -450,7 +463,7 @@ __global__ void shadeBSDF(
 				/* Uniformly pick a light, will change to selecting by importance in the future */
 				if (lights_size > 0) {
 					thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
-					int n_sample_light = 3;
+					int n_sample_light = 10;
 					for (size_t i = 0; i < n_sample_light; i++)
 					{
 						int sampled_light_index = uLight(rng);
@@ -496,6 +509,11 @@ __global__ void shadeBSDF(
 				}
 				else {
 					pathSegment.constantTerm *= (bsdf * abs(wi.z) / (pdf * threshold_rr));
+					pathSegment.ray.direction = o2w * wi;
+					pathSegment.ray.origin = intersect;
+					pathSegment.remainingBounces--;
+					pathSegment.prevPDF = pdf;
+					return;
 					Ray next_bounce_ray;
 					next_bounce_ray.direction = o2w * wi;
 					next_bounce_ray.origin = intersect;
@@ -518,9 +536,6 @@ __global__ void shadeBSDF(
 #else
 							pathSegment.color += (next_bsdfStruct.emissiveFactor * next_bsdfStruct.strength) * pathSegment.constantTerm;
 #endif
-							
-							//weight = 0.0f;
-							//pathSegment.color = glm::vec3(weight);
 						}
 						else {
 							pathSegment.ray = next_bounce_ray;

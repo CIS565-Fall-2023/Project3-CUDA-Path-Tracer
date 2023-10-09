@@ -182,3 +182,10 @@ Try to refactor camera
 ![](img/after_fixing_random_number_issue.png)
 
     **Please notice the fracture on rabbit head before fixing**
+
+10.9
+- MIS (Finally!)
+
+- Russian Roulette 
+    - Pro: Speed up by 60%
+    - Con: Lower the converge speed
