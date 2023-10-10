@@ -184,8 +184,8 @@ void blinnScatter(PathSegment & pathSegment,
     glm::vec3 wo=glm::reflect(pathSegment.ray.direction,h);
     
     glm::vec3 color = materialColor + ((float)pow(1.0f - glm::dot(h, wo), 5.0f)) * (glm::vec3(1.0f) - materialColor);
-    float bsdf=1.0f/(2.0f*(2.0f-pow(2.0f,-exponent/2.0f)));
-    float pdf=1.0f/(4.0f*glm::dot(h,wo));
+    float bsdf=(exponent+2.0f)/(2.0f*(2.0f-pow(2.0f,-exponent/2.0f)));
+    float pdf= (exponent + 1.0f) /(4.0f*glm::dot(h,wo));
     pathSegment.color *= materialColor;
         //color*bsdf/pdf;
     pathSegment.remainingBounces--;

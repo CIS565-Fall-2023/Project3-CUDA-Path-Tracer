@@ -203,7 +203,7 @@ __host__ __device__ float triIntersectionTest(Geom geom, Ray r,
     dpdu=glm::normalize(multiplyMV(geom.transform, glm::vec4(triangle.dpdu, 0.f)));
     dpdv=glm::normalize(multiplyMV(geom.transform, glm::vec4(triangle.dpdv, 0.f)));
     intersectionPoint = multiplyMV(geom.transform, glm::vec4(intersectionPoint, 1.f));
-    normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(triangle.g_norm, 0.f)));
+    normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(normal, 0.f)));
     if(outside==false){
         normal=-normal;
     }
