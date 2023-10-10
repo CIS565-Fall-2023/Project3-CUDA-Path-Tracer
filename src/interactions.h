@@ -294,4 +294,21 @@ __host__ __device__ void sample_f(PathSegment &pathSegment,
                                                     // handles PDFs on its own right now
     pathSegment.ray.direction = wi;
     pathSegment.remainingBounces--;
+    
+#if ENABLE_RUSSIAN_ROULETTE
+    if (pathSegment.remainingBounces > 0)
+    {
+        float terminationProbability = std::max(pathSegment.accum_throughput.r, std::max(pathSegment.accum_throughput.g, pathSegment.accum_throughput.b));
+        if (u01(rng) > terminationProbability)
+        {
+            // Terminate this ray
+            pathSegment.remainingBounces = 0;
+        }
+        else
+        {
+            // Ray didn't terminate, boost its contribution
+            pathSegment.accum_throughput /= terminationProbability;
+        }
+    }
+#endif
 }

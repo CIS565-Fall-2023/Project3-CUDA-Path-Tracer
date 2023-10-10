@@ -237,8 +237,13 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		thrust::uniform_real_distribution<float> u01(0, 1);
 
 		// jitter for AA
-		float xOffset = u01(rng);
-		float yOffset = u01(rng);
+		float xOffset = 0;
+		float yOffset = 0;
+
+#if !CACHE_FIRST_INTERSECTION		// anti-aliasing will only work when first bounce is not cached
+		xOffset = u01(rng);
+		yOffset = u01(rng);
+#endif
 
 		glm::vec3 dir = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x + xOffset - (float)cam.resolution.x * 0.5f)

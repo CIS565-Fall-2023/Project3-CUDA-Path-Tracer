@@ -6,6 +6,8 @@
 #include "glm/glm.hpp"
 #include "utilities.h"
 
+using namespace std;
+
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
 enum GeomType {
