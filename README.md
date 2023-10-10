@@ -44,7 +44,7 @@ In this part, I write an interesting camera effect called depth of field. It ref
 |:-----:|:-----:|
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-13-55z.1091samp.png" width="500" height="500">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_15-21-00z.4090samp.png" width="500" height="500">
 
-From the image comparison, we can see that at the edge of the sphere, there is a great difference between antialiasing and no antialiasing. The edge with antialiasing is greatly smoother than without it. The operation is also simple, we just apply a small random float number between the iterations of the path. Because we basically need average between iterations, the average step in antialiasing is already completed.
+From the image comparison, we can see that at the edge of the sphere, there is a great difference between antialiasing and no antialiasing. The edge with antialiasing is greatly smoother than without it. The operation is also simple, we just apply a small random float number between the iterations of the path. Because we basically need an average between iterations, the average step in antialiasing is already completed.
 
 
 ### 4. Subsurface scattering
@@ -52,6 +52,11 @@ From the image comparison, we can see that at the edge of the sphere, there is a
 |:-----:|:-----:|
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_08-47-59z.1063samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-09-29_08-58-21z.944samp.png" width="300" height="300">
 
+before analyzing and talking about the generated output, it would be better to see the below image by Autodesk:
+
+![Unlock FPS](img/subsurface.png)
+
+As shown in the above picture, we can see that the basic idea of subsurface scattering is to not let the ray penetrate through the sphere directly. In contrast, the ray should remain in the ball and scatter inside. Thus my implementation of subsurface scattering is just simulating this process. In the condition that the ray is inside the object, we set the probability that it will scatter inside. The first two image shows the contrast between the normal diffuse and subsurface scattering. 
 
 ### 5. defining object motion, and motion blur
 |motion blur direction 1|motion blur direction 2|
