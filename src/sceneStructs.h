@@ -10,6 +10,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    MESH_PRIM
 };
 
 struct Ray {
@@ -26,9 +27,34 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+
+    //mesh only properties
+    //mesh tri indices
+    int tri_start_index{ -1 }, tri_end_index{ -1 };
+    
+    glm::vec3 base_color{ glm::vec3(-1.f) }; //base color
+    int texture_index{ -1 }, normal_map_index{ -1 };
+};
+
+// mesh pts include pos, tex color, normal(preprocessed on load)
+struct MeshPoint {
+    glm::vec3 pos;
+    glm::vec3 normal; //normal as given from gltf data(not normal map)
+    glm::vec2 tex_uv; //uv coords(assumed 1 set per mesh)
+};
+
+struct Triangle {
+    MeshPoint points[3];
+    int mesh_index{ -1 };
+};
+
+struct ImageInfo {
+    int data_start_index;
+    int img_w, img_h;
 };
 
 struct Material {
+    //base color (used if no texture)
     glm::vec3 color;
     struct {
         float exponent;
@@ -73,4 +99,29 @@ struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;
+
+  //for mesh tex interp
+  glm::vec3 bary;
+  Geom* geom;
+  Triangle* int_tri;
+};
+
+//BVH tree node
+struct BVHNode {
+    glm::vec3 min, max;
+    int leftNode{ -1 };
+    int triIndexStart, triCount{ 0 };
+    int geomIndexStart, geomCount{ 0 };
+};
+
+//used to partition triangles in BVH construction and indexing
+struct BVHTriIndex {
+    int triIndex;
+    glm::vec3 gFrameCentroid; //compute once in BVH construction
+};
+
+//used to partition geoms in BVH construction + indexing
+struct BVHGeomIndex {
+    int geomIndex;
+    glm::vec3 gFrameCentroid; //compute once in BVH construction
 };
