@@ -82,20 +82,6 @@ __host__ __device__ glm::vec3 calcPerturbedSpecularDirection(
 }
 #endif // IMPERFECT_SPECULAR == 1
 
-// calculate reflection coefficient
-__host__ __device__ float calcFrensel(const PathSegment& pathSegment, glm::vec3 normal, const Material& m) {
-  // cosine angle between incident ray and normal
-  float cosTheta = glm::dot(pathSegment.ray.direction, -normal);
-
-  // swap index if inside
-  float ior_i = 1.0f;
-  float ior_o = m.indexOfRefraction;
-
-  // calculate reflection coefficient using Schlick's approx.
-  float r0 = powf((ior_i - ior_o) / (ior_i + ior_o), 2.0f);
-  return r0 + (1.0f - r0) * powf((1.0f - cosTheta), 5.0f);
-}
-
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -151,13 +137,15 @@ void scatterRay(
     glm::vec3 ray_out_reflect = glm::reflect(pathSegment.ray.direction, normal);
     glm::vec3 ray_out_refract = glm::refract(pathSegment.ray.direction, normal, eta);
 
-    // calculate reflection coefficient
-    float r = calcFrensel(pathSegment, normal, m);
+    // compute coefficient of reflection
+    float cosThetaI = glm::dot(pathSegment.ray.direction, -normal);
+    float R0 = powf((1.0f - m.indexOfRefraction) / (1.0f + m.indexOfRefraction), 2.0f);
+    float coefReflection =  R0 + (1.0f - R0) * powf((1.0f - cosThetaI), 5.0f);
 
     //// choose to sample Specular or Refraction
     thrust::uniform_real_distribution<float> u01(0, 1);
     float choice = u01(rng);
-    if (choice < r) {
+    if (choice < coefReflection) {
       // reflect
       pathSegment.ray.origin = intersect + ray_out_reflect * 0.001f;
       pathSegment.ray.direction = ray_out_reflect;
