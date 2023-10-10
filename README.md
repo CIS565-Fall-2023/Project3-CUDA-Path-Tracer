@@ -23,21 +23,14 @@ CUDA Path Tracer
     - [x] Sort by material
 - [x] Load gltf
 - [x] BVH
-
 - [x] Texture mapping & bump mapping
 - [x] Environment Mapping
-
 - [x] Microfacet BSDF
 - [x] Emissive BSDF (with Emissive Texture)
-
 - [x] Direct Lighting
 - [x] Multiple Importance Sampling
-
 - [x] Depth of Field
-
-- [x] Jittering
-
-- [x] Tone mapping
+- [x] Tone mapping && Gamma Correction
 
 
 ### Core features (As required by project instruction)

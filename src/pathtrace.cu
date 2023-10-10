@@ -33,6 +33,7 @@
 #if RUSSIAN_ROULETTE
 	#define RR_THRESHOLD 0.7f
 #endif
+#define USE_ENV_MAP 1
 #define USE_BVH 1
 #define TONE_MAPPING 0
 
@@ -548,6 +549,7 @@ __global__ void shadeBSDF(
 			}
 		}
 		else {
+#if USE_ENV_MAP
 			const auto & d = pathSegment.ray.direction;
 			const float phi = atan2f(d.z, d.x);
 			const float theta = acosf(d.y);
@@ -562,6 +564,7 @@ __global__ void shadeBSDF(
 			else {
 				pathSegment.color += env_map_sample * pathSegment.constantTerm;
 			}
+#endif
 			pathSegments[idx].remainingBounces = 0;
 			//printf("pathSegment.color: %f %f %f\n", pathSegment.color.x, pathSegment.color.y, pathSegment.color.z);
 
