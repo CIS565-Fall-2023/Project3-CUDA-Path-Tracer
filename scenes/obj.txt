@@ -169,5 +169,5 @@ obj obj/teapot.obj
 material 1
 TRANS       2 2 2
 ROTAT       0 -30 0
-SCALE       2.5 4 2.5
+SCALE       5 5 5
 VEL	    0 0 0

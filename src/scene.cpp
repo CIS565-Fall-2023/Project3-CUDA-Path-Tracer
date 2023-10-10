@@ -70,8 +70,9 @@ int Scene::loadGeom(string objectid) {
             else if (strcmp(tokens[0].c_str(), "gltf") == 0) {
                 cout << "Creating new gltf mesh..." << endl;
                 newGeom.type = GLTF;
-                loadMeshGltf(basePath + tokens[1], newGeom, id);
-                return 1;
+                if (!loadMeshGltf(basePath + tokens[1], newGeom, id)) {
+                    return -1;
+                }
             }
             else if (strcmp(tokens[0].c_str(), "obj") == 0) {
                 cout << "Creating new obj mesh..." << endl;
@@ -273,7 +274,7 @@ inline void printTri(Triangle& tri)
 }
 
 // glTF structure: https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_003_MinimalGltfFile.md
-void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, int& triCount, std::vector<Triangle>& tris) {
+void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::vector<Triangle>& tris) {
     for (size_t i = 0; i < mesh.primitives.size(); ++i) {
         tinygltf::Primitive& primitive = mesh.primitives[i];
 
@@ -299,6 +300,10 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, int& triCount, std:
         }
 
         // TODO: uv
+
+        // track AABB for the current geometry
+        glm::vec3 bbMin = glm::vec3(FLT_MAX);
+        glm::vec3 bbMax = glm::vec3(-FLT_MAX);
 
         // The mesh primitive describes an indexed geometry, which is indicated by the indices property.
         // By default, it is assumed to describe a set of triangles, so that three consecutive indices
@@ -340,6 +345,16 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, int& triCount, std:
                 }
 
                 // TODO: uv
+
+                tri.computeAABB();
+                tri.computeCentroid();
+                tris.push_back(tri);
+
+                bbMin = glm::min(bbMin, tri.aabb.min);
+                bbMax = glm::max(bbMax, tri.aabb.max);
+                geom.aabb.min = bbMin;
+                geom.aabb.max = bbMax;
+                geom.triangleCount++;
             }
         }
         // not using indices
@@ -362,37 +377,46 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, int& triCount, std:
                 }
 
                 // TODO: uv
+
+                tri.computeAABB();
+                tri.computeCentroid();
+                tris.push_back(tri);
+
+                bbMin = glm::min(bbMin, tri.aabb.min);
+                bbMax = glm::max(bbMax, tri.aabb.max);
+                geom.aabb.min = bbMin;
+                geom.aabb.max = bbMax;
+                geom.triangleCount++;
             }
         }
-
-        tri.computeCentroid();
-        tris.push_back(tri);
-        triCount++;
 #if DEBUG_GLTF
-        cout << "Triangle count: " << triCount << endl;
+        cout << "Triangle count: " << geom.triangleCount << endl;
         printTri(tri);
+        cout << mesh.primitives.size() << endl;
 #endif
     }
 }
 
 // recursively load node and children nodes of model
-void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, int& triCount, std::vector<Triangle>& tris) {
+void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, Geom& geom, std::vector<Triangle>& tris) {
     if ((node.mesh >= 0) && (node.mesh < model.meshes.size())) {
-        parseMesh(model, model.meshes[node.mesh], triCount, tris);
+        parseMesh(model, model.meshes[node.mesh], geom, tris);
     }
     for (size_t i = 0; i < node.children.size(); i++) {
         //assert((node.children[i] >= 0) && (node.children[i] < model.nodes.size()));
-        parseModelNodes(model, model.nodes[node.children[i]], triCount, tris);
+        parseModelNodes(model, model.nodes[node.children[i]], geom, tris);
     }
 }
-void parseModel(tinygltf::Model& model, int& triCount, std::vector<Triangle>& tris) {
+void parseModel(tinygltf::Model& model, Geom& geom, std::vector<Triangle>& tris) {
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     for (size_t i = 0; i < scene.nodes.size(); ++i) {
 #if DEBUG_GLTF
         //assert((scene.nodes[i] >= 0) && (scene.nodes[i] < model.nodes.size()));
         cout << "model node: " << scene.nodes[i] << endl;
+        cout << "model mesh size: " << model.meshes.size() << endl;
+        cout << "model mesh0 prim size: " << model.meshes[0].primitives.size() << endl;
 #endif
-        parseModelNodes(model, model.nodes[scene.nodes[i]], triCount, tris);
+        parseModelNodes(model, model.nodes[scene.nodes[i]], geom, tris);
     }
 }
 
@@ -413,7 +437,7 @@ int Scene::loadMeshGltf(string filename, Geom& geom, int objectId) {
 
     startTime = utilityCore::timeSinceEpochMillisec();
     // parse mesh structure
-    parseModel(model, geom.triangleCount, triangles);
+    parseModel(model, geom, triangles);
     endTime = utilityCore::timeSinceEpochMillisec();
     duration = (endTime - startTime);
     cout << "Parsing mesh took: " << duration << "ms" << endl;
@@ -453,7 +477,7 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
     for (size_t s = 0; s < shapes.size(); s++) {
         std::vector<Triangle> trisInMesh;
 
-        // track AABB for each triangle
+        // track AABB for the current geometry
         glm::vec3 bbMin = glm::vec3(FLT_MAX);
         glm::vec3 bbMax = glm::vec3(-FLT_MAX);
 
@@ -487,12 +511,9 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
                     if (i % 3 == 0) tri.v0.nor = vertNor;
                     if (i % 3 == 1) tri.v1.nor = vertNor;
                     if (i % 3 == 2) tri.v2.nor = vertNor;
+                    cout << "obj vert nor: " << vertNor.x << ", " << vertNor.y << ", " << vertNor.z << endl;
                 }
                 i++;
-
-                // update AABB
-                bbMin = glm::min(bbMin, vertPos);
-                bbMax = glm::max(bbMax, vertPos);
             }
             idxOffset += numVert;
 
@@ -500,6 +521,10 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
             tri.computeCentroid();
             tri.objectId = f;
             trisInMesh.push_back(tri);
+
+            // update the current geometry's AABB
+            bbMin = glm::min(bbMin, tri.aabb.min);
+            bbMax = glm::max(bbMax, tri.aabb.max);
         }
 
         // initialize new geom

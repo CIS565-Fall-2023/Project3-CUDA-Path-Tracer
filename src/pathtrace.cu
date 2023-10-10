@@ -131,10 +131,8 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections_first_bounce, 0, pixelcount * sizeof(ShadeableIntersection));
 #endif
 
-	if (hst_scene->meshCount > 0) {
-		cudaMalloc(&dev_tris, scene->triangles.size() * sizeof(Triangle));
-		cudaMemcpy(dev_tris, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-	}
+	cudaMalloc(&dev_tris, scene->triangles.size() * sizeof(Triangle));
+	cudaMemcpy(dev_tris, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
 	checkCUDAError("pathtraceInit");
 }
@@ -149,9 +147,7 @@ void pathtraceFree() {
 #if CACHE_FIRST_BOUNCE
 	cudaFree(dev_intersections_first_bounce);
 #endif
-	if (hst_scene->meshCount > 0) {
-		cudaFree(dev_tris);
-	}
+	cudaFree(dev_tris);
 	checkCUDAError("pathtraceFree");
 }
 
@@ -256,7 +252,7 @@ __global__ void computeIntersections(
 			{
 #if BB_CULLING
 				if (aabbIntersectionTest(geom.aabb, ray, t)) {
-					//t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
+					t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
 				}
 #else
 				t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
@@ -264,7 +260,13 @@ __global__ void computeIntersections(
 			}
 			else if (geom.type == GLTF)
 			{
-				//TODO, should be the same as OBJ
+#if BB_CULLING
+				if (aabbIntersectionTest(geom.aabb, ray, t)) {
+					t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
+				}
+#else
+				t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
+#endif			
 			}
 
 			// Compute the minimum t from the intersection tests to determine what
