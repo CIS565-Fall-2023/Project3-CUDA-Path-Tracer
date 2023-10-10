@@ -1,3 +1,5 @@
+BACKGROUND_COLOR 0.1 0.1 0.3
+
 // Emissive material (light)
 MATERIAL 0
 RGB         1 1 1
@@ -41,11 +43,31 @@ EMITTANCE   0
 // Specular white
 MATERIAL 4
 RGB         .98 .98 .0
-SPECEX      1
-SPECRGB     .98 .98 .0
+SPECEX      0.1
+SPECRGB     .98 .98 .98
 REFL        1.0
-REFR        0
-REFRIOR     0
+REFR        0.0
+REFRIOR     1.5
+EMITTANCE   0
+
+// Specular white
+MATERIAL 5
+RGB         .98 .98 .0
+SPECEX      0.1
+SPECRGB     .98 .98 .98
+REFL        1.0
+REFR        0.0
+REFRIOR     1.5
+EMITTANCE   0
+
+// Specular white
+MATERIAL 6
+RGB         .98 .98 .0
+SPECEX      0.1
+SPECRGB     .98 .98 .98
+REFL        1.0
+REFR        0.0
+REFRIOR     1.5
 EMITTANCE   0
 
 // Camera
@@ -110,9 +132,8 @@ SCALE       .01 10 10
 
 // Sphere
 OBJECT 6
-mesh
-./../mesh/cube_norm.obj
-material -1
+sphere
+material 4
 TRANS       0 3 0
 ROTAT       0 0 0
 SCALE       3 3 3

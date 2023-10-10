@@ -302,6 +302,7 @@ int Scene::loadGeom(string objectid) {
                             mat.nimgidx=imgIdxPixel;
                             imgIdxPixel+=img.getHeight()*img.getWidth();
                             imgIdx++;
+                            //cout<<"text opt "<<material.bump_texopt.type<<endl;
                             //cout<<dim.x<<dim.y<<endl;
                             glm::vec3* pixels = img.getPixel();
                             imgtext.insert(imgtext.end(), pixels, pixels + img.getHeight()*img.getWidth());

@@ -1,4 +1,4 @@
-BACKGROUND_COLOR 0.81 0.91 0.98
+BACKGROUND_COLOR 0.71 0.81 0.88
 
 // Emissive material (light)
 MATERIAL 0
@@ -43,9 +43,9 @@ EMITTANCE   0
 // Specular white
 MATERIAL 4
 RGB         .98 .98 .0
-SPECEX      0
+SPECEX      1
 SPECRGB     .98 .98 .0
-REFL        0
+REFL        1.0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
@@ -55,17 +55,17 @@ CAMERA
 RES         800 800
 FOVY        45
 ITERATIONS  5000
-DEPTH       4
+DEPTH       10
 FILE        cornell
-EYE         7.5 5 0.1
-LOOKAT      -18.5 5 0
+EYE         0.0 4 4.5
+LOOKAT      0 4 0
 UP          0 1 0
 
 // Sphere
 OBJECT 0
 mesh
-./../mesh/sponza/sponza2.obj
+./../mesh/cube_norm.obj
 material -1
-TRANS       0 0 0
+TRANS       0 3 0
 ROTAT       0 0 0
-SCALE       1.0 1.0 1.0
+SCALE       3 3 3
