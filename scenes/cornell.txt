@@ -1,15 +1,15 @@
 // Camera
 CAMERA
-RES         800 800
+RES         600 800
 FOVY        45
 ITERATIONS  5000
 DEPTH       8
 FILE        cornell
-EYE         0 0 8
+EYE         0 0 10
 LOOKAT      0 0 0
 UP          0 1 0
 FOCAL_LENGTH 6
-APERTURE 0.3
+APERTURE 0.0
 
 // Camera for bump mapping texture scene
 //CAMERA
@@ -25,3 +25,4 @@ APERTURE 0.3
 // Environmental Mapping
 IBL
 FILE          D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\img\\colorful_studio_4k.exr
+//FILE          D:\\AndrewChen\\CIS565\\Project3-CUDA-Path-Tracer\\img\\small_empty_room_2_4k.exr

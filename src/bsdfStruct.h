@@ -26,8 +26,11 @@ struct BSDFStruct {
     Texture * metallicRoughnessTexture;
     int metallicRoughnessTextureID = -1;
     Texture * normalTexture;
+    int emissiveTextureID = -1;
+    Texture * emissiveTexture;
     int normalTextureID = -1;
     float metallicFactor;
     float roughnessFactor;
     float ior;
+    float alpha;
 };

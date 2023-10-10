@@ -51,18 +51,38 @@ void Scene::initBSDFs() {
         //BSDF* bsdf = nullptr;
         BSDFStruct bsdfStruct;
         bsdfStruct.normalTextureID = material.normalTexture.index;
+        bool isEmissive = false;
         if (*std::max_element(material.emissiveFactor.begin(), material.emissiveFactor.end()) > DBL_EPSILON) {
             auto ext = material.extensions.find("KHR_materials_emissive_strength");
-            float strength;
+            float strength = 1.0f;
             if (ext != material.extensions.end()) {
                 auto strengthObject = ext->second.Get<tinygltf::Value::Object>().find("emissiveStrength");
                 if (strengthObject != ext->second.Get<tinygltf::Value::Object>().end()) {
-                    float strength = static_cast<float>(strengthObject->second.Get<double>());
-                    bsdfStruct.emissiveFactor = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
-                    bsdfStruct.strength = strength;
-                    bsdfStruct.bsdfType = EMISSIVE;
-                    bsdfStructs.push_back(bsdfStruct);
+                    strength = static_cast<float>(strengthObject->second.Get<double>());
+                    isEmissive = true;
                 }
+            }
+            if (material.emissiveTexture.index > -1) isEmissive = false;
+            if (isEmissive) {
+                bsdfStruct.emissiveFactor = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
+                bsdfStruct.emissiveTextureID = material.emissiveTexture.index;
+                bsdfStruct.strength = strength;
+                printf("bsdfStruct.strength: %f\n", bsdfStruct.strength);
+                bsdfStruct.bsdfType = EMISSIVE;
+                bsdfStructs.push_back(bsdfStruct);
+            }
+            else {
+                bsdfStruct.bsdfType = MICROFACET; // (OR EMISSIVE) Refactor bsdf and material in future!
+                bsdfStruct.reflectance = glm::vec3(material.pbrMetallicRoughness.baseColorFactor[0], material.pbrMetallicRoughness.baseColorFactor[1], material.pbrMetallicRoughness.baseColorFactor[2]);
+                bsdfStruct.baseColorTextureID = material.pbrMetallicRoughness.baseColorTexture.index;
+                bsdfStruct.metallicRoughnessTextureID = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+                bsdfStruct.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
+                bsdfStruct.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
+                bsdfStruct.emissiveFactor = glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]);
+                bsdfStruct.emissiveTextureID = material.emissiveTexture.index;
+                bsdfStruct.strength = strength;
+                bsdfStruct.ior = 1.5f;
+                bsdfStructs.push_back(bsdfStruct);
             }
             //bsdf = new EmissionBSDF(strength * glm::vec3(material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]));
         }

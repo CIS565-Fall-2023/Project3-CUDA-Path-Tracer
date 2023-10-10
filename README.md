@@ -3,8 +3,68 @@ CUDA Path Tracer
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
-* (TODO) YOUR NAME HERE
+* Yian Chen
 * Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+<div align="center">
+    <img src="img/emissive_robot_car_2.png" width="45%"/>
+    <img src="img/bump_mapping_after.png" width="45%"/>
+    <img src="img/result_bunny.png" width="45%"/>
+    <img src="img/robots.png" width="45%"/>
+    <img src="img/indoor.png" width="45%"/>
+</div>
+
+### Implemeted Feature 
+
+- [x] Core(as required in Project 3)
+    - [x] Diffuse & Specular
+    - [x] Jittering (Antialiasing)
+    - [x] First Bounce Cache
+    - [x] Sort by material
+- [x] Load gltf
+- [x] BVH
+
+- [x] Texture mapping & bump mapping
+- [x] Environment Mapping
+
+- [x] Microfacet BSDF
+- [x] Emissive BSDF (with Emissive Texture)
+
+- [x] Direct Lighting
+- [x] Multiple Importance Sampling
+
+- [x] Depth of Field
+
+- [x] Jittering
+
+- [x] Tone mapping
+
+
+### BVH
+On host, we can construct and traverse BVH recursively. While in this project, our code run on GPU. While recent cuda update allows recursive function execution on device, we cannot take that risk as raytracer is very performance-oriented. Recursive execution will slow down the kernel function, as it may bring dynamic stack size. 
+
+Thanks to , a novel BVH constructing and traversing algorithm is adopted in this pathtracer. 
+
+This pathtracer only implements a simple version of MTBVH. Instead of constructing 6 BVHs and traversing one of them at runtime, only 1 BVH is constructed. This implies that this pathtracer still has the potential of speeding up.
+
+- With BVH & Without BVH:
+
+
+
+### Microfact BSDF
+
+
+### Texture Mapping & Bump Mapping
+
+
+
+### Direct Lighting & MIS
+
+
+
+### Depth of Field
+
+
+
 
 ### (TODO: Your README)
 
@@ -18,15 +78,15 @@ project, and we will not be able to grade you without a good README.
 
 - [ ] Core
     - [x] G Buffer
-    - [ ] Russian Roulette
-    - [ ] Sort by material
+    - [x] Russian Roulette
+    - [x] Sort by material
 
 - [ ] More BSDF
     - [x] Diffuse
     - [x] Emissive
+    - [x] Microfacet
     - [ ] Reflective
     - [ ] Refractive
-    - [ ] Microfacet
     - [ ] Disney
 
 - [ ] BVH
@@ -48,17 +108,14 @@ project, and we will not be able to grade you without a good README.
 - [ ] Better sampler
     - [ ] Encapsulate a sampler class
         - Gotta deal with cmake issue
-    - [ ] Monte carlo sampling
-    - [ ] Importance sampling
-
-
-- [ ] Light 
-    - ~~Probably not gonna do a lot about it because gltf has a poor support over area light~~ 
-    - Might need to implement it for direct lighting to speed up the converging speed of ray tracing
+    - [x] Monte carlo sampling
+    - [x] Importance sampling
+    - [x] Direct Lighting
+    - [x] Multiple Importance Sampling
 
 - [ ] Camera
     - [x] Jitter
-    - [ ] Field of depth
+    - [x] Field of depth
     - [ ] Motion blur 
 
 

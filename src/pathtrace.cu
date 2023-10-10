@@ -30,6 +30,7 @@
 #define USE_SORT_BY_MATERIAL 0
 #define MIS 1
 #define USE_BVH 1
+#define TONE_MAPPING 0
 
 #define ERRORCHECK 1
 
@@ -69,13 +70,19 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 
 	if (x < resolution.x && y < resolution.y) {
 		int index = x + (y * resolution.x);
-		glm::vec3 pix = image[index];
-
+		glm::vec3 pixel = image[index] / float(iter);
+		glm::vec3 c;
 		glm::ivec3 color;
-		color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
-		color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
-		color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
-
+#if TONE_MAPPING
+		pixel = (pixel * (pixel * 2.51f + 0.03f)) / (pixel * (pixel * 2.43f + 0.59f) + 0.14f);
+#endif
+		// Gamma correction
+		//pixel = glm::pow(pixel, glm::vec3(1.0f / 2.2f));
+		
+		// Map to 0-255
+		color.x = glm::clamp((int)(pixel.x * 255.0), 0, 255);
+		color.y = glm::clamp((int)(pixel.y * 255.0), 0, 255);
+		color.z = glm::clamp((int)(pixel.z * 255.0), 0, 255);
 		//color.x = glm::clamp((int)pix.x, 0, 255);
 		//color.y = glm::clamp((int)pix.y, 0, 255);
 		//color.z = glm::clamp((int)pix.z, 0, 255);
@@ -99,8 +106,8 @@ static DevScene* scene;
 /* TODO: Solve the weird shiny line in the empty room! */
 //static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_empty_room.glb");
 
-//static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_direct_lighting.glb");
-static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_bunny_scaled.glb");
+//static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_mis_demo.glb");
+static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_demo.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -150,8 +157,11 @@ __global__ void initBSDFWithTextures(BSDFStruct* bsdfStructs, Texture* texture, 
 			bsdfStructs[i].metallicRoughnessTexture = &(texture[bsdfStructs[i].metallicRoughnessTextureID]);
 		if (bsdfStructs[i].normalTextureID != -1)
 			bsdfStructs[i].normalTexture = &(texture[bsdfStructs[i].normalTextureID]);
+		if (bsdfStructs[i].emissiveTextureID != -1)
+			bsdfStructs[i].emissiveTexture = &(texture[bsdfStructs[i].emissiveTextureID]);
 		printf("bsdfStructs[i].diffuseTextureID: %d\n", bsdfStructs[i].baseColorTextureID);
 		printf("bsdfStructs[i].roughnessTextureID: %d\n", bsdfStructs[i].metallicRoughnessTextureID);
+		printf("bsdfStructs[i].emissiveTextureID: %d\n", bsdfStructs[i].emissiveTextureID);
 
 	}
 }
@@ -529,19 +539,20 @@ __global__ void shadeBSDF(
 			}
 		}
 		else {
-			const auto & d = pathSegment.ray.direction;
-			const float phi = atan2f(d.z, d.x);
-			const float theta = acosf(d.y);
-			const float u = (phi + PI) / (2 * PI);
-			const float v = theta / PI;
-			const glm::vec2 uv(u, v);
-			auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
-			if (depth == 0) {
-				pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			}
-			else {
-				pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			}
+			//const auto & d = pathSegment.ray.direction;
+			//const float phi = atan2f(d.z, d.x);
+			//const float theta = acosf(d.y);
+			//const float u = (phi + PI) / (2 * PI);
+			//const float v = theta / PI;
+			//const glm::vec2 uv(u, v);
+			//const float env_map_strength = 3.0f;
+			//auto env_map_sample = sampleTextureRGB(*env_map, uv) * env_map_strength;
+			//if (depth == 0) {
+			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			//}
+			//else {
+			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			//}
 			pathSegments[idx].remainingBounces = 0;
 			//printf("pathSegment.color: %f %f %f\n", pathSegment.color.x, pathSegment.color.y, pathSegment.color.z);
 

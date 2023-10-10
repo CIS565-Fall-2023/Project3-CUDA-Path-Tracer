@@ -91,6 +91,7 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
     case MICROFACET:
         thrust::uniform_real_distribution<float> u01(0, 1);
         glm::vec3 rands(u01(rng), u01(rng), u01(rng));
+
         float alpha = glm::max(bsdfStruct.roughnessFactor * bsdfStruct.roughnessFactor, EPSILON);
         glm::vec3 wh;
         if (rands.z > (1.f / (2.f - bsdfStruct.metallicFactor))) {
@@ -127,8 +128,16 @@ __device__ glm::vec3 sample_f(BSDFStruct& bsdfStruct, const glm::vec3& wo, glm::
 }
 
 __device__ void initBSDF(BSDFStruct& bsdfStruct, const glm::vec2 & uv) {
+    bsdfStruct.alpha = 1.0f;
     if (bsdfStruct.baseColorTextureID != -1) {
-        bsdfStruct.reflectance = sampleTextureRGB(*bsdfStruct.baseColorTexture, uv);
+        if (bsdfStruct.baseColorTexture->nrChannels == 4) {
+            auto texSample = sampleTextureRGBA(*bsdfStruct.baseColorTexture, uv);
+            bsdfStruct.reflectance = glm::vec3(texSample);
+            bsdfStruct.alpha = texSample.a;
+        }
+        else {
+            bsdfStruct.reflectance = sampleTextureRGB(*bsdfStruct.baseColorTexture, uv);
+        }
     }
 
     glm::vec2 metallicRoughness;
@@ -136,6 +145,15 @@ __device__ void initBSDF(BSDFStruct& bsdfStruct, const glm::vec2 & uv) {
         metallicRoughness = sampleTextureRG(*bsdfStruct.metallicRoughnessTexture, uv);
         bsdfStruct.metallicFactor = glm::max(metallicRoughness.x, EPSILON);
         bsdfStruct.roughnessFactor = glm::max(metallicRoughness.y, EPSILON);
+    }
+
+    if (bsdfStruct.emissiveTextureID != -1) {
+        float emissiveFactor = sampleTextureRG(*bsdfStruct.emissiveTexture, uv).x;
+        if (emissiveFactor > 0.0f) {
+            bsdfStruct.emissiveFactor = bsdfStruct.reflectance;
+            bsdfStruct.bsdfType = EMISSIVE;
+            //bsdfStruct.strength *= emissiveFactor;
+        }
     }
 }
 
