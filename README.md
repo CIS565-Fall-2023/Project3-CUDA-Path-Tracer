@@ -31,27 +31,27 @@ Performance:
 
 Note: some of the features are real time adjustable by clicking on some keys. 
 
-#### First Bounce Cache (C-enabled, V-Disabled)
+### First Bounce Cache (C-enabled, V-Disabled)
 This speeds up the performance for most situations. Since after we cache the bounce, we will have one less round of calculation needed for all the depth. Usually depth =10, it gives more than 10% improvement.
 
-<img src="./img/cache.png" width="600px">
+<img src="./img/cache.png">
 
-#### Antialiasing (A-enabled, Q-Disabled)
+### Antialiasing (A-enabled, Q-Disabled)
 This feature give smooth shaded picture. This feature does not give apparently visual improvement for large resolution and samples since the ray is scattered out on diffuse material, after certain amount of sampling, it gets smooth shaded. Since for antialiasing, the first bounce is not always same, we cannot cach the first bounce anyway. In my program, once the first bounce is on, antialiasing will also be turned off.
 
 For resolution 80*80 at sample 500
 
-<img src="./img/alias.png" width="300px">
+<img src="./img/alias.png" width="300px" display="inline">
 <img src="./img/antialias.png" width="300px">
 
 alias vs antialias
 
-#### Material Sort (M-enabled, N-Disabled)
+### Material Sort (M-enabled, N-Disabled)
 This feature actually slow down the process when number of materials and geometry are relatively small. Since the time need to compute sort on large path segment is also very costy too. if we do not have large material list, this is not needed. 
 
 <img src="./img/material.png" width="600px">
 
-#### Materials & Shading (0-Phong, 1-BlinnPhong, 2-BlinnPhong with Microfacet)
+### Materials & Shading (0-Phong, 1-BlinnPhong, 2-BlinnPhong with Microfacet)
 
 * background-color/lighting
 
@@ -91,7 +91,7 @@ Second row: pure diffuse, plastic (diffuse with specular), plastic with higher s
 
 Sampling at reflected angles will cost problems at gazing angles due to reflected rays close to the surface. Then blinn phong can sample at half vector in order to get better result. For example, the plate here is all dakened in phong model.
 
-<img src="./img/blinn_0.png" width="300px">
+<img src="./img/blinn_0.png" width="300px" display="inline">
 <img src="./img/blinn_1.png" width="300px">
 
 phong vs blinn-phong
@@ -100,18 +100,18 @@ phong vs blinn-phong
 
 However, Blinn-Phong darkened the whole image, also did not give enough specular reflection as it should be for teapot. Microfacet gives some geometrical property to the surface since in real world, most plane is not perfectly flatten. Microfacet can give some variance to the surface by distributing normals. 
 
-<img src="./img/blinn_1.png" width="300px">
+<img src="./img/blinn_1.png" width="300px" display="inline">
 <img src="./img/blinn_2.png" width="300px">
 
 blinn-phong vs blinn-phong Microfacet
 
-#### Obj/Mtl file & texture loading 
+### Obj/Mtl file & texture loading 
 
 Reading files using tinyobj and stb_image, then copy over data to GPU. Texture mapping significally slow down the performance since the image array is large when image resolution is high. Normal mapping is implemented in order to give some depth of the texture for each triangle. 
 
 * normal mapping
 
-<img src="./img/texture_without_norm.png" width="300px">
+<img src="./img/texture_without_norm.png" width="300px" display="inline">
 <img src="./img/texture_with_norm.png" width="300px">
 
 texture without normal vs texture with normal
@@ -120,17 +120,23 @@ texture without normal vs texture with normal
 
 I also implemented smooth shading by interpolating the normals of vertices for each intersection on triangles. 
 
-<img src="./img/unsmooth.png" width="300px">
+<img src="./img/unsmooth.png" width="300px" display="inline">
 <img src="./img/smooth.png" width="300px">
 
 triangle rendered vs smoothed triangle
 
+* performance 
 
-#### Bounding Volume Hierarchy
+The performance of texture mapping is way lower than procedural material since for procedural material, I only need to grab a fixed color, whereas the texture mapping needs to grab element from a large array. 
 
-BVH gives huge speed up for mesh loading. My BVH is constructed top-down on CPU with sorting at longest axis each iteration and split into half. Then, traverse the tree on GPU using stack (my stack is iterable->may causing problem when huge amount of intersection on list)
+<img src="./img/Texture.png">
 
 
+### Bounding Volume Hierarchy
+
+BVH gives huge speed up for mesh loading. My BVH is constructed top-down on CPU with sorting at longest axis each iteration and split into half. Then, traverse the tree on GPU using stack (my stack is iterable->may causing problem when huge amount of intersection on list). BVH is way faster than naive looping, since we can theoritcally exclude half of data each iterations in traversal. 
+
+<img src="./img/BVH.png">
 
 ### Final
 
