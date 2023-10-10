@@ -1,5 +1,10 @@
 #pragma once
+#include <thrust/execution_policy.h>
+#include <thrust/random.h>
+#include <thrust/remove.h>
 
+#include <thrust/device_ptr.h>
+#include <thrust/partition.h>
 #include "intersections.h"
 
 // CHECKITOUT
@@ -66,6 +71,13 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
+
+__host__ __device__
+float fresnelSchlick(float cos_theta, float R0) {
+
+    return R0 + (1 - R0) * powf(1 - cos_theta, 5.f);
+
+}
 __host__ __device__
 void scatterRay(
         PathSegment & pathSegment,
@@ -73,7 +85,106 @@ void scatterRay(
         glm::vec3 normal,
         const Material &m,
         thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float random_num = u01(rng);
+
+    // sub surface scatter
+    if (m.hasReflective == 0.5f) {
+        if (pathSegment.outside == false) {
+            if (random_num < 0.5) {
+                glm::vec3 inverse_normal = -normal;
+                glm::vec3 insideDirection = calculateRandomDirectionInHemisphere(inverse_normal, rng);
+                glm::vec3 diffuseColor = pathSegment.color *exp(-(intersect-pathSegment.ray.origin) * m.specular.exponent);
+                pathSegment.color = diffuseColor;
+                pathSegment.ray.direction = insideDirection;
+                pathSegment.ray.origin = intersect + insideDirection * 0.001f;
+
+            }
+            else {
+                float move_dist = random_num * 0.01;
+                pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal,rng);
+                pathSegment.ray.origin = intersect+ pathSegment.ray.direction* 0.002f;
+                glm::vec3 diffuseColor = pathSegment.color * exp(-(intersect - pathSegment.ray.origin) * m.specular.exponent);
+                pathSegment.color = diffuseColor;
+            
+            }
+
+        }
+        else {
+            glm::vec3 inverse_normal = -normal;
+            glm::vec3 insideDirection = calculateRandomDirectionInHemisphere(normal, rng);
+            glm::vec3 new_origin = intersect + normalize(pathSegment.ray.direction) * 0.0001f + inverse_normal;
+
+            glm::vec3 diffuseColor = pathSegment.color * m.color;
+            pathSegment.color = diffuseColor;
+            pathSegment.ray.origin = new_origin + insideDirection * 0.0007f ;
+
+            pathSegment.ray.direction = insideDirection;
+        }
+    
+    }
+    else if (m.hasRefractive == 1.0f) {
+
+        //reference: https://en.wikipedia.org/wiki/Schlick%27s_approximation
+        //reference to 561hw6
+        float cosTheta = glm::dot(pathSegment.ray.direction, normal);
+        float f_E;
+
+        if (cosTheta > 0) {
+            f_E = m.indexOfRefraction;
+        }
+        else {
+            f_E = 1.0f / m.indexOfRefraction;
+        }
+        float abs_costheta = glm::abs(cosTheta);
+        float R0 = powf((1.f - f_E) / (1.f + f_E), 2.f);
+
+        //eflection coefficient F
+        float F = fresnelSchlick(abs_costheta, R0);
+        glm::vec3 Wo;
+
+        if (random_num < 0.4) {
+            Wo = glm::reflect(pathSegment.ray.direction, normal);
+            //Wo = calculateRandomDirectionInHemisphere(normal, rng);
+        }
+        else {
+            Wo = glm::refract(pathSegment.ray.direction, normal, f_E);
+            
+        }
+
+        pathSegment.color = pathSegment.color * m.specular.color;
+        pathSegment.ray.direction = Wo;
+        pathSegment.ray.origin = intersect+ Wo * 0.001f;
+
+    }
+    else if (m.hasReflective==1.0f) {
+       
+        //specular
+        if (random_num < 0.5) {
+            glm::vec3 reflectDirection = glm::normalize(glm::reflect(pathSegment.ray.direction, normal));
+            glm::vec3 reflectColor = pathSegment.color * m.color;
+
+            pathSegment.color = reflectColor * 1.0f;
+            pathSegment.ray.direction = reflectDirection;
+            pathSegment.ray.origin = intersect;
+
+        }
+        else {
+            glm::vec3 diffuseDirection = calculateRandomDirectionInHemisphere(normal, rng);
+            glm::vec3 diffuseColor = pathSegment.color * m.color;
+            pathSegment.color = diffuseColor * 1.0f;
+            pathSegment.ray.direction = diffuseDirection;
+            pathSegment.ray.origin = intersect;
+        }
+
+    }
+    else {
+        
+        glm::vec3 diffuseDirection = calculateRandomDirectionInHemisphere(normal, rng);
+        glm::vec3 diffuseColor = pathSegment.color * m.color;
+        pathSegment.color = diffuseColor * 1.0f;
+        pathSegment.ray.direction = diffuseDirection;
+        pathSegment.ray.origin = intersect;
+    }
 }

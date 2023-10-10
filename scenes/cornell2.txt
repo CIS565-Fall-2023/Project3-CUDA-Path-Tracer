@@ -12,8 +12,8 @@ EMITTANCE   5
 MATERIAL 1
 RGB         .98 .98 .98
 SPECEX      0
-SPECRGB0 0 0
-REFL             0
+SPECRGB     0 0 0
+REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
@@ -38,33 +38,12 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-
 // Specular white
 MATERIAL 4
 RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     .98 .98 .98
-REFL        0.5
-REFR        0.5
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse SELF
-MATERIAL 5
-RGB         .98 .0.761 .722
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse SELF
-MATERIAL 6
-RGB         1 .98 .608
-SPECEX      0
-SPECRGB	    0 0 0
-REFL        0
+REFL        1
 REFR        0
 REFRIOR     0
 EMITTANCE   0
@@ -117,38 +96,47 @@ SCALE       .01 10 10
 OBJECT 4
 cube
 material 2
-TRANS       -5 7.5 0
+TRANS       -5 5 0
 ROTAT       0 0 0
-SCALE       .01 5 10
-
-// Left wall2
-OBJECT 5
-cube
-material 5
-TRANS       -5 2.5 0
-ROTAT       0 0 0
-SCALE       .01 5 10
+SCALE       .01 10 10
 
 // Right wall
-OBJECT 6
+OBJECT 5
 cube
 material 3
-TRANS       5 7.5 0
+TRANS       5 5 0
 ROTAT       0 0 0
-SCALE       .01 5 10
-
-// Left wall2
-OBJECT 7
-cube
-material 6
-TRANS       5 2.5 0
-ROTAT       0 0 0
-SCALE       .01 5 10
+SCALE       .01 10 10
 
 // Sphere
+OBJECT 6
+sphere
+material 4
+TRANS       0 1 -3
+ROTAT       0 0 0
+SCALE       1 1 1
+
+OBJECT 7
+sphere
+material 4
+TRANS       0 1 -1.5
+ROTAT       0 0 0
+SCALE       1 1 1
+
+
 OBJECT 8
 sphere
 material 4
-TRANS       0 8 0
+TRANS       0 1 0
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       1 1 1
+
+
+OBJECT 9
+sphere
+material 4
+TRANS       0 1 2
+ROTAT       0 0 0
+SCALE       1 1 1
+
+
