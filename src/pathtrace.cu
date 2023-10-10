@@ -211,10 +211,9 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 				
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f);
-		segment.accumRay = glm::vec3(0.0f);
 
 		segment.dead = false;
-		segment.reflecting = false;
+		segment.spec = false;
 
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
@@ -266,13 +265,13 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 // Generating new rays is handled in your shader(s).
 // Feel free to modify the code below.
 __global__ void computeIntersections(
-	int depth
-	, int num_paths
-	, PathSegment* pathSegments
-	, Geom* geoms
-	, int geoms_size
-	, Triangle* tris
-	, ShadeableIntersection* intersections
+	const int depth,
+	const int num_paths,
+	PathSegment* pathSegments,
+	Geom* geoms,
+	const int geoms_size,
+	Triangle* tris,
+	ShadeableIntersection* intersections
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -334,7 +333,6 @@ __global__ void computeIntersections(
 			intersections[path_index].surfaceNormal = normal;
 			intersections[path_index].hitGeomIdx = hit_geom_index;
 			intersections[path_index].uv = uv;
-			intersections[path_index].outside = outside;
 		}
 	}
 }
@@ -385,6 +383,7 @@ __global__ void shadeFakeMaterial(
 
 				// apply direct lighting
 				if (material.emittance == 0 && !material.hasReflective) {
+					path.spec = false;
 					int rand;
 					if (envMap == -1) {
 						rand = int(u01(rng) * numLights) % numLights;
@@ -400,8 +399,8 @@ __global__ void shadeFakeMaterial(
 
 					glm::vec2 xi = glm::vec2(-0.5f) + glm::vec2(u01(rng), u01(rng));
 					if (rand == numLights) {
-						light.origin = intersection_point;
 						light.direction = calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng);
+						light.origin = intersection_point + 0.001f * light.direction;
 						glm::vec3 d = light.direction;
 						glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
 						uv *= glm::vec2(0.1591, -0.3183);
@@ -409,9 +408,9 @@ __global__ void shadeFakeMaterial(
 						pdf = abs(dot((light.direction), -intersection.surfaceNormal));
 
 						float4 env_color = tex2D<float4>(tex[envMap], uv.x, uv.y);
-						L.x = env_color.x / 2.2f;
-						L.y = env_color.y / 2.2f;
-						L.z = env_color.z / 2.2f;
+						L.x = env_color.x;
+						L.y = env_color.y;
+						L.z = env_color.z;
 					}
 					else {
 						Geom l = lights[rand];
@@ -449,13 +448,23 @@ __global__ void shadeFakeMaterial(
 						}
 					}
 
-					if (pdf < 0.001f || (hit_geom_index != target)) {
+					if (pdf < 0.001f) {
 						L = glm::vec3(0.0f);
 					}
-					path.accumRay += L * path.color;
+					else {
+						path.color += path.color * L;
+						float maxComponent = max(max(path.color.r, path.color.g), path.color.b);
+						if (maxComponent > 1.0f) {
+							path.color /= maxComponent;
+						}
+					}
+					
+				}
+				else {
+					path.spec = true;
 				}
 
-				scatterRay(path, intersection_point, intersection.surfaceNormal, intersection.outside, material, rng, depth);
+				scatterRay(path, intersection_point, intersection.surfaceNormal, material, rng, depth);
 				if (geoms[intersection.hitGeomIdx].textureIdx != -1) {
 					float4 c = tex2D<float4>(tex[geoms[intersection.hitGeomIdx].textureIdx], intersection.uv.x, intersection.uv.y);
 					path.color *= glm::vec3(c.x, c.y, c.z);
@@ -466,9 +475,9 @@ __global__ void shadeFakeMaterial(
 
 				// Russian Roulette
 				if (depth > 2) {
-					float maxComponent = max(max(path.accumRay.r, path.accumRay.g), path.accumRay.b);
+					float maxComponent = max(max(path.color.r, path.color.g), path.color.b);
 					if (maxComponent > u01(rng)) {
-						path.accumRay /= maxComponent;
+						path.color /= maxComponent;
 					}
 					else {
 						path.dead = true;
@@ -481,21 +490,28 @@ __global__ void shadeFakeMaterial(
 			}
 			else {
 				// sample environment map 
-				if (depth == 1 && envMap != -1) {
+				if (envMap != -1) {
 					glm::vec3 d = path.ray.direction;
 					glm::vec2 uv = glm::vec2(atan2(d.z, d.x), asin(d.y));
 					uv *= glm::vec2(0.1591, -0.3183);
 					uv += 0.5;
 
 					float4 env_color = tex2D<float4>(tex[envMap], uv.x, uv.y);
-					path.accumRay.x = env_color.x;
-					path.accumRay.y = env_color.y;
-					path.accumRay.z = env_color.z;
+					if (depth == 1) {
+						path.color.x = env_color.x;
+						path.color.y = env_color.y;
+						path.color.z = env_color.z;
+					}
+					else if (path.spec) {
+						path.color.x *= env_color.x;
+						path.color.y *= env_color.y;
+						path.color.z *= env_color.z;
+					}
+					
 				}
 				else {
 					path.color = glm::vec3(0.0f);
 				}
-				
 				path.dead = true;
 			}
 		}
@@ -505,7 +521,7 @@ __global__ void shadeFakeMaterial(
 // Add the current iteration's output to the overall image
 __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iterationPaths)
 {
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	const int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
 	if (index < nPaths)
 	{

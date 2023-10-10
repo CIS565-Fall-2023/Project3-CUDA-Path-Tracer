@@ -41,6 +41,22 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__ float dielectric(float cosThetaI, float etaI, float etaT) {
+    cosThetaI = glm::clamp(cosThetaI, -1.0f, 1.0f);
+    float sinThetaI = sqrt(max((float)0, 1 - cosThetaI * cosThetaI));
+    float sinThetaT = etaI / etaT * sinThetaI;
+
+    if (sinThetaT >= 1) {
+        return 1;
+    }
+
+    float cosThetaT = sqrt(max((float)0, 1 - sinThetaT * sinThetaT));
+
+    float Rparl = ((etaT * cosThetaI) - (etaI * cosThetaT)) / ((etaT * cosThetaI) + (etaI * cosThetaT));
+    float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) / ((etaI * cosThetaI) + (etaT * cosThetaT));
+    return (Rparl * Rparl + Rperp * Rperp) / 2;
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -71,7 +87,6 @@ void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
-        bool outside,
         const Material &m,
         thrust::default_random_engine &rng,
         const int depth) {
@@ -79,41 +94,46 @@ void scatterRay(
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
     glm::vec3 wi;
-    glm::vec3 wo = normalize(pathSegment.ray.direction);
-
-    if (depth == 1 || pathSegment.reflecting) {
-        pathSegment.accumRay += pathSegment.color * m.emittance;
-    }
+    const glm::vec3 wo = glm::normalize(pathSegment.ray.direction);
 
     if (m.emittance > 0.0f) {
         pathSegment.dead = true;
     }
+
     else {
         if (m.hasRefractive) {
-            pathSegment.reflecting = true;
-            pathSegment.color *= m.specular.color;
+            float f;
+            float cosThetaI = glm::dot(normal, wo);
 
-            if (outside)
+            if (cosThetaI < 0)
             {
                 wi = glm::refract(wo, normal, 1.0f / m.indexOfRefraction);
+                f = dielectric(-cosThetaI, 1.0f, m.indexOfRefraction);
             }
             else
             {
                 wi = glm::refract(wo, -normal, m.indexOfRefraction);
+                f = dielectric(cosThetaI, m.indexOfRefraction, 1.0f);
             }
 
+            thrust::uniform_real_distribution<float> u01(0, 1);
+            if (f > 1.0f) {
+                wi = glm::reflect(wo, normal);
+                pathSegment.color *= (m.specular.color * max(1.0f, f / abs(cosThetaI)));
+            }
+            else {
+                pathSegment.color *= (m.specular.color * max(1.0f, (1.0f - f) / abs(cosThetaI)));
+            }
         }
         else if (m.hasReflective) {
             pathSegment.color *= m.specular.color;
-            pathSegment.reflecting = true;
             wi = glm::reflect(wo, normal);
         }
         else {
-            pathSegment.reflecting = false;
             wi = calculateRandomDirectionInHemisphere(normal, rng);
         }
         
         pathSegment.ray.direction = glm::normalize(wi);
-        pathSegment.ray.origin = intersect;
+        pathSegment.ray.origin = intersect + wi * 0.0001f;
     }
 }

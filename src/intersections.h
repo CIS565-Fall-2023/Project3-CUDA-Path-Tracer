@@ -25,7 +25,7 @@ __host__ __device__ inline unsigned int utilhash(unsigned int a) {
  * Falls slightly short so that it doesn't intersect the object it's hitting.
  */
 __host__ __device__ glm::vec3 getPointOnRay(Ray r, float t) {
-    return r.origin + (t - .0001f) * glm::normalize(r.direction);
+    return r.origin + t * glm::normalize(r.direction);
 }
 
 /**
@@ -46,7 +46,7 @@ __host__ __device__ float closestPointOnCube(Geom c, glm::vec2 xi, glm::vec3 ise
     float areaZ = c.scale.x * c.scale.y;
 
     float area = areaX + areaY + areaZ;
-    if (r < areaX / area) {
+    if (r < areaX / area ) {
         // x
         glm::vec3 p1 = glm::vec3(c.scale.x * 0.5f, c.scale.y * xi.x, c.scale.z * xi.y);
         if (dist > distance(p_local, p1)) {
@@ -97,12 +97,14 @@ __host__ __device__ float closestPointOnCube(Geom c, glm::vec2 xi, glm::vec3 ise
             scaling = glm::vec2(c.scale.y, c.scale.x);
         }
     }
-    light.origin = isect_point;
     hit_point = multiplyMV(c.transform, glm::vec4(hit_point, 1.0f));
     light.direction = normalize(hit_point - isect_point);
+
+    light.origin = isect_point + 0.001f* light.direction;
+    
     dist = distance(hit_point, isect_point);
     nor = glm::normalize(multiplyMV(c.transform, glm::vec4(nor, 0.0f)));
-    float pdf = pow(dist, 2.0f) / (area);
+    float pdf = pow(dist, 2.0f) / (area * 0.3);
     return pdf;
 
     // add intersection test
@@ -194,6 +196,8 @@ __host__ __device__ float meshIntersectionTest(Geom m, Triangle* tris, glm::vec2
  */
 __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
         glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
+
+    float rx = r.direction.x, ry = r.direction.y, rz = r.direction.z;
     Ray q;
     q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
     q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -211,7 +215,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
             float tb = glm::max(t1, t2);
             glm::vec3 n;
             n[xyz] = t2 < t1 ? +1 : -1;
-            if (ta > 0 && ta > tmin) {
+            if (ta > tmin) {
                 tmin = ta;
                 tmin_n = n;
             }
@@ -284,7 +288,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
     if (!outside) {
-       normal = -normal;
+       // normal = -normal;
     }
 
     return glm::length(r.origin - intersectionPoint);

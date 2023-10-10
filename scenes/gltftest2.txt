@@ -52,10 +52,10 @@ EMITTANCE   0
 MATERIAL 5
 RGB         .98 .98 .98
 SPECEX      0
-SPECRGB     .98 .98 .98
+SPECRGB     .20 .60 .98
 REFL        1
 REFR        1
-REFRIOR     1.52
+REFRIOR     1.2
 EMITTANCE   0
 
 // Camera
@@ -63,7 +63,7 @@ CAMERA
 RES         800 800
 FOVY        45
 ITERATIONS  5000
-DEPTH       8
+DEPTH       3
 FILE        cornell
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
@@ -76,7 +76,7 @@ cube
 material 0
 TRANS       0 10.04 0
 ROTAT       0 0 0
-SCALE       3 .1 3
+SCALE       3 .12 3
 
 // Floor
 OBJECT 1
@@ -118,10 +118,20 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
+// Ceiling light
 OBJECT 6
-sphere
-material 5
-TRANS       -1 4 -1
+cube
+material 1
+TRANS       0 10.04 0
+ROTAT       0 0 0
+SCALE       3.01 .1 3.01
+
+// Sheep
+FILE 0
+sheep01.glb
+sheep01.png
+material 1
+TRANS       0 2 0
 ROTAT       0 0 0
 SCALE       3 3 3
+
