@@ -90,6 +90,16 @@ The BVH tree construction utilized a SAH based heuristic in a top down construct
 
 It seems that while my BVH implementation does show improvements compared to the naive iteration method, the difference is not as significant as the theoretical logarithmic speedup. Although I closely followed the SAH BVH based tutorial as listed in the resources, this could still be due to a variety of reasons. For example, my implemented BVH encompasses both primitive scene geometries(cubes, spheres) as well as triangles from each triangle mesh, while the one from the tutorial only considers the triangles themselves. The bounding boxes of these prims are often larger within the scenes I tested, which could make BVH tree traversal rather inefficient as it becomes difficult to eliminate larger areas(due to the nodes encompassing the scene prims bounding them) without traversing to the leaf node. This scale difference could cause imbalance in the tree, making traversal overall less efficient. The overhead associated with stack based tree traversal combined with this could have caused the overall performance to not reach expected levels. To improve this result, separating these prims and performing BVH traversal only on triangle meshes in the scene while naively iterating through the scene prims could be tested.
 
+## Bloopers
+
+![](img/huuh1.png)
+
+This happened when I tried using `thrust::remove_if` instead of the current `thrust::partition`, since apparently `remove_if` doesn't guarantee the removed items are intact.
+
+![](img/avocadoiguess.png)
+
+Bad gltf buffer casting truncated indices to within 256
+
 ## Resources
 
 #### Meshes:
