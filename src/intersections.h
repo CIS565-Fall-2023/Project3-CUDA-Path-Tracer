@@ -309,7 +309,7 @@ __host__ __device__ float bvh_intersection_test(Ray r, glm::vec3& int_pt, glm::v
         if (tri_index >= 0) {
             Triangle& tri = triangles[tri_index];
             Geom& mesh = geoms[tri.mesh_index];
-            if (false) {
+            if (mesh.normal_map_index >= 0) {
                 //bary interp uv
                 glm::vec2 mesh_uv = bary.z * tri.points[0].tex_uv + bary.x * tri.points[1].tex_uv + bary.y * tri.points[2].tex_uv;
                 //sample data for correct normal
