@@ -1,0 +1,282 @@
+# Aspose.3D Wavefront OBJ Exporter
+# Copyright 2004-2023 Aspose Pty Ltd.
+# File created: 10/07/2023 10:16:57
+
+newmtl m24vase_round
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/vase_hanging_ddn.tga.png
+
+newmtl m23vase_hanging
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/vase_hanging_ddn.tga.png
+
+newmtl m22vase
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.06972357630729675 0.06972357630729675 0.06972357630729675
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/vase_ddn.dds.tga.png
+
+newmtl m21roof
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0 0 0
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_roof_ddn.tga.png
+
+newmtl m20leaf
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_thorn_ddn.tga.png
+
+newmtl m19floor
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+//norm sponza/textures/sponza_floor_a_ddn.tga.png
+
+newmtl m18flagpole
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_flagpole_ddn.tga.png
+
+newmtl m17fabric_g
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.02500000037252903 0.02500000037252903 0.02500000037252903
+Ns 7.45098018646240232
+d 1
+Tr 0
+map_Kd sponza/textures/sponza_curtain_blue_diff.tga.png
+norm sponza/textures/sponza_curtain_ddn.tga.png
+
+newmtl m16fabric_f
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.02500000037252903 0.02500000037252903 0.02500000037252903
+Ns 7.45098018646240232
+d 1
+Tr 0
+map_Kd sponza/textures/sponza_curtain_green_diff.tga.png
+norm sponza/textures/sponza_curtain_ddn.tga.png
+
+newmtl m15fabric_e
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+map_Kd sponza/textures/sponza_fabric_green_diff.tga.png
+norm sponza/textures/sponza_fabric_ddn.tga.png
+
+newmtl m14fabric_d
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+map_Kd sponza/textures/sponza_fabric_blue_diff.tga.png
+norm sponza/textures/sponza_fabric_ddn.tga.png
+
+newmtl m13fabric_c
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.02500000037252903 0.02500000037252903 0.02500000037252903
+Ns 7.45098018646240232
+d 1
+Tr 0
+map_Kd sponza/textures/sponza_curtain_diff.tga.png
+norm sponza/textures/sponza_curtain_ddn.tga.png
+
+newmtl m12fabric_a
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+map_Kd sponza/textures/sponza_fabric_diff.tga.png
+norm sponza/textures/sponza_fabric_ddn.tga.png
+
+newmtl m11details
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_details_ddn.tga.png
+
+newmtl m10column_c
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_column_c_ddn.tga.png
+
+newmtl m9column_b
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_column_b_ddn.tga.png
+
+newmtl m8column_a
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_column_a_ddn.tga.png
+
+newmtl m7chain
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0 0 0
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/chain_texture_ddn.tga.png
+
+newmtl m6ceiling
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_ceiling_a_ddn.tga.png
+
+newmtl m5bricks
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/spnza_bricks_a_ddn.tga.png
+
+newmtl m4arch
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/sponza_arch_ddn.tga.png
+
+newmtl m3Material__57
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.25 0.25 0.25
+Ns 7.45098018646240232
+d 1
+Tr 0
+
+newmtl m2Material__47
+Ka 0 0 0
+Kd 0.73500001430511472 0.73500001430511472 0.73500001430511472
+Ke 0 0 0
+illum 2
+Ks 0 0 0
+Ns 7.45098018646240232
+d 1
+Tr 0
+
+newmtl m1Material__298
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.06975000351667404 0.06972357630729675 0.06972357630729675
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/background_ddn.tga.png
+
+newmtl m0Material__25
+Ka 0 0 0
+Kd 1 1 1
+Ke 0 0 0
+illum 2
+Ks 0.02107499912381172 0.02107021585106849 0.02107021585106849
+Ns 7.45098018646240232
+d 1
+Tr 0
+norm sponza/textures/lion_ddn.tga.png
