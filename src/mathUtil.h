@@ -16,6 +16,11 @@ namespace Math {
 		return glm::vec2(1 - su0, u.y * su0);
 	}
 
+    __device__ inline float PowerHeuristic(int nf, float fPdf, int ng, float gPdf) {
+        float f = nf * fPdf, g = ng * gPdf;
+        return (f * f) / (f * f + g * g);
+    }
+
 #pragma region BSDF
     // BSDF Inline Functions
     __device__ inline float CosTheta(const glm::vec3& w) { return w.z; }

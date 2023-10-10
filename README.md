@@ -189,3 +189,7 @@ Try to refactor camera
 - Russian Roulette 
     - Pro: Speed up by 60%
     - Con: Lower the converge speed
+
+
+- Depth of field
+    - Add a realtime slider to adjust

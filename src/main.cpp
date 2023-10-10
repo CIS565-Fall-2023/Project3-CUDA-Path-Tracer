@@ -190,6 +190,11 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	middleMousePressed = (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
 }
 
+void setCameraChanged(bool val)
+{
+	camchanged = val;
+}
+
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (xpos == lastX || ypos == lastY) return; // otherwise, clicking back into window causes re-start
 	if (leftMousePressed) {

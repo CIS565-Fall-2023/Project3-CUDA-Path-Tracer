@@ -8,6 +8,8 @@ FILE        cornell
 EYE         0 0 8
 LOOKAT      0 0 0
 UP          0 1 0
+FOCAL_LENGTH 6
+APERTURE 0.3
 
 // Camera for bump mapping texture scene
 //CAMERA

@@ -49,13 +49,17 @@ int SceneConfig::loadCamera() {
         if (strcmp(tokens[0].c_str(), "RES") == 0) {
             camera.resolution.x = atoi(tokens[1].c_str());
             camera.resolution.y = atoi(tokens[2].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FOVY") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "FOVY") == 0) {
             fovy = atof(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "ITERATIONS") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "ITERATIONS") == 0) {
             state.iterations = atoi(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "DEPTH") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "DEPTH") == 0) {
             state.traceDepth = atoi(tokens[1].c_str());
-        } else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
+        }
+        else if (strcmp(tokens[0].c_str(), "FILE") == 0) {
             state.imageName = tokens[1];
         }
     }
@@ -70,6 +74,13 @@ int SceneConfig::loadCamera() {
             camera.lookAt = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
         } else if (strcmp(tokens[0].c_str(), "UP") == 0) {
             camera.up = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }else if (strcmp(tokens[0].c_str(), "FOCAL_LENGTH") == 0) {
+            camera.focalDistance = atof(tokens[1].c_str());
+            printf("camera.focalDistance: %f\n", camera.focalDistance);
+        }else if (strcmp(tokens[0].c_str(), "APERTURE") == 0) {
+            camera.aperture = atof(tokens[1].c_str());
+
+            printf("camera.aperture: %f\n", camera.aperture);
         }
 
         utilityCore::safeGetline(fp_in, line);

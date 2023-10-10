@@ -289,7 +289,7 @@ void pathtraceFreeAfterMainLoop() {
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
+__global__ void generateRayFromCamera(const Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -298,7 +298,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		int index = x + (y * cam.resolution.x);
 		PathSegment& segment = pathSegments[index];
 
-		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(0.0f, 0.0f, 0.0f);
 
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, 0);
@@ -306,10 +305,31 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		glm::vec2 jitter(u01(rng) - 0.5f, u01(rng) - 0.5f);
 		//glm::vec2 jitter(u01(rng), u01(rng));
 		// TODO: implement antialiasing by jittering the ray
-		segment.ray.direction = glm::normalize(cam.view
+		//glm::vec2 pixelCoord = glm::vec2(x, y) + jitter;
+		//segment.ray.direction = glm::normalize(cam.view
+		//	+ cam.right * cam.pixelLength.x * ((float)x + jitter[0] - (float)cam.resolution.x * 0.5f)
+		//	+ cam.up * cam.pixelLength.y * ((float)y + jitter[1] - (float)cam.resolution.y * 0.5f)
+		//);
+		glm::vec3 pixelWorldCoord = cam.position + cam.view
 			- cam.right * cam.pixelLength.x * ((float)x + jitter[0] - (float)cam.resolution.x * 0.5f)
-			- cam.up * cam.pixelLength.y * ((float)y + jitter[1] - (float)cam.resolution.y * 0.5f)
-		);
+			- cam.up * cam.pixelLength.y * ((float)y + jitter[1] - (float)cam.resolution.y * 0.5f);
+		auto rayDir = glm::normalize(pixelWorldCoord - cam.position);
+		if (cam.aperture > 0.0f) {
+			float lensU = u01(rng);
+			float lensV = u01(rng);
+			float lensRadius = cam.aperture;
+			float focalDistance = cam.focalDistance;
+			glm::vec3 focalPoint = cam.position + rayDir * focalDistance;
+			glm::vec3 lensPoint = cam.position + cam.right * lensRadius * (lensU - 0.5f) + cam.up * lensRadius * (lensV - 0.5f);
+			//printf("lensPoint: %f, %f, %f\n", lensPoint.x, lensPoint.y, lensPoint.z);
+			segment.ray.origin = lensPoint;
+			segment.ray.direction = glm::normalize(focalPoint - lensPoint);
+			//segment.ray.direction = glm::normalize(pixelWorldCoord - cam.position);
+		}
+		else {
+			segment.ray.origin = cam.position;
+			segment.ray.direction = rayDir;
+		}
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
@@ -362,11 +382,6 @@ __global__ void intersect(
 #endif // SORT_BY_MATERIAL
 
 	}
-}
-
-__device__ inline float PowerHeuristic(int nf, float fPdf, int ng, float gPdf) {
-	float f = nf * fPdf, g = ng * gPdf;
-	return (f * f) / (f * f + g * g);
 }
 
 // LOOK: "fake" shader demonstrating what you might do with the info in
@@ -425,11 +440,10 @@ __global__ void shadeBSDF(
 				else {
 #if MIS
 					float power_pdf = 1.0f / lights_size;
-					float distance_sqr = glm::length2(intersection.intersectionPoint - pathSegment.ray.origin);
+					float distance_sqr = intersection.t * intersection.t;
 					float next_light_pdf = power_pdf * distance_sqr /
-						(intersection.primitive->area() *
-							abs(glm::dot(intersection.surfaceNormal, -pathSegment.ray.direction)));
-					float weight = PowerHeuristic(1, pathSegment.prevPDF, 1, next_light_pdf);
+						(intersection.primitive->area() * abs(glm::dot(intersection.surfaceNormal, -pathSegment.ray.direction)));
+					float weight = Math::PowerHeuristic(1, pathSegment.prevPDF, 1, next_light_pdf);
 					pathSegment.color += weight * (bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm;
 #else
 					pathSegment.color += (bsdfStruct.emissiveFactor * bsdfStruct.strength) * pathSegment.constantTerm;
@@ -454,16 +468,15 @@ __global__ void shadeBSDF(
 					//return;
 #pragma endregion
 				}
-				//return;
 				glm::vec3 intersect = pathSegment.ray.at(intersection.t);
 				float pdf;
 				glm::vec3 wo = w2o * -pathSegment.ray.direction;
 
 #if  MIS
-				/* Uniformly pick a light, will change to selecting by importance in the future */
 				if (lights_size > 0) {
+					/* Uniformly pick a light, will change to selecting by importance in the future */
 					thrust::uniform_int_distribution<int> uLight(0, lights_size - 1);
-					int n_sample_light = 10;
+					int n_sample_light = 3;
 					for (size_t i = 0; i < n_sample_light; i++)
 					{
 						int sampled_light_index = uLight(rng);
@@ -481,8 +494,7 @@ __global__ void shadeBSDF(
 								light_ray.direction = ls.wi;
 								light_ray.origin = intersect;
 								light_ray.min_t = EPSILON;
-								float distance = glm::length(ls.intersectPoint - intersect);
-								light_ray.max_t = distance - 1e-4f; // Do occulusion test by setting max_t
+								light_ray.max_t = ls.distance - 1e-4f; // Do occulusion test by setting max_t
 								ShadeableIntersection light_ray_intersection{ -1.0f }; // set t = -1
 								if (!intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, light_ray, light_ray_intersection)) {
 									/* Determine whether delta */
@@ -491,7 +503,7 @@ __global__ void shadeBSDF(
 										// To do this we need to sample by power not uniformlly
 										//float power_pdf = Math::luminance(Li) * triangles[light.primIndex].area() * TWO_PI * inverse_sum_power; 
 										light_pdf = power_pdf * ls.pdf;
-										float weight = PowerHeuristic(1, light_pdf, 1, scattering_pdf);
+										float weight = Math::PowerHeuristic(1, light_pdf, 1, scattering_pdf);
 										pathSegment.color += f_direct_light * ls.L * pathSegment.constantTerm * abs(light_wi.z) * weight / (light_pdf * n_sample_light * threshold_rr);
 									}
 								}
@@ -513,57 +525,10 @@ __global__ void shadeBSDF(
 					pathSegment.ray.origin = intersect;
 					pathSegment.remainingBounces--;
 					pathSegment.prevPDF = pdf;
-					return;
-					Ray next_bounce_ray;
-					next_bounce_ray.direction = o2w * wi;
-					next_bounce_ray.origin = intersect;
-					next_bounce_ray.min_t = EPSILON;
-					next_bounce_ray.max_t = FLT_MAX; // Do occulusion test by setting max_t
-					ShadeableIntersection next_bounce_intersection{ -1.0f }; // set t = -1
-					bool hasIntersection = intersectCore(bvhNodes, bvhNodes_size, triangles, triangles_size, next_bounce_ray, next_bounce_intersection);
-					if (hasIntersection) {
-						auto next_bsdfStruct = bsdfStructs[next_bounce_intersection.materialId];
-						if (next_bsdfStruct.bsdfType == EMISSIVE) {
-							pathSegment.remainingBounces = 0;
-#if MIS
-							float power_pdf = 1.0f / lights_size;
-							float distance_sqr = glm::length2(next_bounce_intersection.intersectionPoint - intersect);
-							float next_light_pdf =  power_pdf * distance_sqr / 
-								(next_bounce_intersection.primitive->area() * 
-									abs(glm::dot(next_bounce_intersection.surfaceNormal, -next_bounce_ray.direction)));
-							float weight = PowerHeuristic(1, pdf, 1, next_light_pdf);
-							pathSegment.color += weight * (next_bsdfStruct.emissiveFactor * next_bsdfStruct.strength) * pathSegment.constantTerm;
-#else
-							pathSegment.color += (next_bsdfStruct.emissiveFactor * next_bsdfStruct.strength) * pathSegment.constantTerm;
-#endif
-						}
-						else {
-							pathSegment.ray = next_bounce_ray;
-							pathSegment.remainingBounces--;
-						}
-					}
-					else {
-						const auto& d = next_bounce_ray.direction;
-						const float phi = atan2f(d.z, d.x);
-						const float theta = acosf(d.y);
-						const float u = (phi + PI) / (2 * PI);
-						const float v = theta / PI;
-						const glm::vec2 uv(u, v);
-						auto env_map_sample = sampleTextureRGB(*env_map, uv) * 3.0f;
-						if (depth == 0) {
-							pathSegment.color += env_map_sample * pathSegment.constantTerm;
-						}
-						else {
-							pathSegment.color += env_map_sample * pathSegment.constantTerm;
-						}
-						pathSegment.remainingBounces = 0;
-						// Move env map stuff here...
-					}
 				}
 			}
 		}
 		else {
-
 			const auto & d = pathSegment.ray.direction;
 			const float phi = atan2f(d.z, d.x);
 			const float theta = acosf(d.y);

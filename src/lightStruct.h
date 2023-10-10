@@ -29,6 +29,7 @@ struct Light {
 struct LightLiSample {
 	glm::vec3 L;
 	glm::vec3 wi;
-	float pdf;
 	glm::vec3 intersectPoint;
+	float pdf;
+	float distance;
 };
