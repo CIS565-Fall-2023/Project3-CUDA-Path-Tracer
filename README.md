@@ -129,7 +129,7 @@ triangle rendered vs smoothed triangle
 
 The performance of texture mapping is way lower than procedural material since for procedural material, I only need to grab a fixed color, whereas the texture mapping needs to grab element from a large array. 
 
-<img src="./img/Texture.png">
+<img src="./img/texture.png">
 
 
 ### Bounding Volume Hierarchy
