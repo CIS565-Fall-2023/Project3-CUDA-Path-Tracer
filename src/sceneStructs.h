@@ -11,6 +11,7 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    MESH
 };
 
 struct Ray {
@@ -18,8 +19,21 @@ struct Ray {
     glm::vec3 direction;
 };
 
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 nor;
+    glm::vec2 uv;
+};
+
+struct Triangle {
+    Vertex v1;
+    Vertex v2;
+    Vertex v3;    
+};
+
 struct Geom {
     enum GeomType type;
+    int geomId;
     int materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
@@ -27,6 +41,22 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+    int startTriIdx;
+    int endTriIdx;
+    bool hasUVs = false;
+    bool hasNormals = false;
+};
+
+struct AABB {
+    glm::vec3 minPos;
+    glm::vec3 maxPos;
+    glm::vec3 centroid;
+    int triIdx;
+    Geom geom;
+    AABB() : minPos(), maxPos(), centroid(), geom(), triIdx(-1) {}
+    AABB(glm::vec3 minP, glm::vec3 maxP) : minPos(minP), maxPos(maxP), centroid(), geom(), triIdx(-1) {}
+    AABB(glm::vec3 minP, glm::vec3 maxP, glm::vec3 c, Geom g, int id) : minPos(minP), maxPos(maxP), centroid(c), geom(g), triIdx(id) {}
+    AABB(glm::vec3 minP, glm::vec3 maxP, glm::vec3 c, Geom g) : AABB(minP, maxP, c, g, -1) {}
 };
 
 struct Material {

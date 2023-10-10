@@ -91,10 +91,20 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		int index = x + (y * resolution.x);
 		glm::vec3 pix = image[index];
 
+		//pix = pix/(pix + glm::vec3(1.f));
+		//pix = glm::pow(pix, glm::vec3(1.f/2.2f));
+
+		pix /= iter;
+#if REINHARD_GAMMA
+		pix /= (pix + glm::vec3(1.0f));
+		pix = glm::pow(pix, glm::vec3(1.f/2.2f));
+#endif
+
 		glm::ivec3 color;
-		color.x = glm::clamp((int)(pix.x / iter * 255.0), 0, 255);
-		color.y = glm::clamp((int)(pix.y / iter * 255.0), 0, 255);
-		color.z = glm::clamp((int)(pix.z / iter * 255.0), 0, 255);
+		color.x = glm::clamp((int)(pix.x * 255.0), 0, 255);
+		color.y = glm::clamp((int)(pix.y * 255.0), 0, 255);
+		color.z = glm::clamp((int)(pix.z * 255.0), 0, 255);
+
 
 		// Each thread writes one pixel location in the texture (textel)
 		pbo[index].w = 0;
@@ -109,9 +119,13 @@ static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
+static Triangle* dev_tris = NULL;
 static PathSegment* dev_paths = NULL;
 #if FIRST_BOUNCE_CACHED
 static ShadeableIntersection* dev_intersections_cached = NULL;
+#endif
+#if USE_BVH
+static LBVHNode* dev_lbvh_nodes = NULL;
 #endif
 static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
@@ -139,6 +153,9 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_tris, scene->meshTris.size() * sizeof(Triangle));
+	cudaMemcpy(dev_tris, scene->meshTris.data(), scene->meshTris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
@@ -147,7 +164,16 @@ void pathtraceInit(Scene* scene) {
 	cudaMemset(dev_intersections_cached, 0, pixelcount * sizeof(ShadeableIntersection));
 #endif
 
-	// TODO: initialize any extra device memeory you need
+#if USE_BVH
+	buildBVH(scene->root, scene->boundingBoxes);
+	int nodes = 0;
+	nofOfNodesInBVH(scene->root, nodes);
+	std::vector<LBVHNode> flattenedBVH(nodes, LBVHNode());
+	int offset = 0;
+	flattenBVH(flattenedBVH, scene->root, offset);
+	cudaMalloc(&dev_lbvh_nodes, flattenedBVH.size() * sizeof(LBVHNode));
+	cudaMemcpy(dev_lbvh_nodes, flattenedBVH.data(), flattenedBVH.size() * sizeof(LBVHNode), cudaMemcpyHostToDevice);
+#endif
 
 	checkCUDAError("pathtraceInit");
 }
@@ -157,9 +183,13 @@ void pathtraceFree() {
 	cudaFree(dev_paths);
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
+	cudaFree(dev_tris);
 	cudaFree(dev_intersections);
 #if FIRST_BOUNCE_CACHED
 	cudaFree(dev_intersections_cached);
+#endif
+#if USE_BVH
+	cudaFree(dev_lbvh_nodes);
 #endif
 	checkCUDAError("pathtraceFree");
 }
@@ -209,9 +239,9 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		//How I got this t-value?
 		//Eq 1: cam.pos + t * ray.dir = pointOnFilm
-		//Eq 2: (pointOnFilm - focalLength * view).(z-axis) = 0. This is assuming focal pplane to be an XY plane so a dot of its normal with a vector on it will be zero
+		//Eq 2: (pointOnFilm - (cam.pos + focalLength * view)).(view) = 0. Ray-plane intersection: dot product of a vector on the plane with its normal = 0
 		//Solve for t. PBRT equation (presumably) assumes view vector to align with the z axis and the lens to be at the origin
-		float t = cam.focalLength * glm::dot(cam.view, cam.view)/glm::dot(segment.ray.direction, cam.view);// (cam.focalLength * cam.view.z - cam.position.z) / segment.ray.direction.z;
+		float t = cam.focalLength * glm::dot(cam.view, cam.view)/glm::dot(segment.ray.direction, cam.view);
 		glm::vec3 pointOnFilm = getPointOnRay(segment.ray, t);
 
 		segment.ray.origin += glm::vec3(pointOnLens.x, pointOnLens.y, 0);
@@ -223,15 +253,15 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-// TODO:
-// computeIntersections handles generating ray intersections ONLY.
-// Generating new rays is handled in your shader(s).
-// Feel free to modify the code below.
 __global__ void computeIntersections(
 	int depth
 	, int num_paths
 	, PathSegment* pathSegments
 	, Geom* geoms
+	, Triangle* tris
+#if USE_BVH
+	, LBVHNode* lbvh
+#endif
 	, int geoms_size
 	, ShadeableIntersection* intersections
 )
@@ -252,8 +282,108 @@ __global__ void computeIntersections(
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
 
-		// naive parse through global geoms
+#if USE_BVH
+		//BVH traversal
+#if 0
+		int currNodeIdx = 0, visitOffset = 0;
+		int stack[64] = { 0 };
+		while (true) {
+			LBVHNode* currNode = &lbvh[currNodeIdx];
+			if (doesRayIntersectAABB(pathSegment.ray, currNode->boundingBox, tris, currNode->isLeaf, t, tmp_intersect, tmp_normal)) {
+				if (currNode->isLeaf) {
 
+					Geom geom = currNode->boundingBox.geom;
+
+					if (geom.type == CUBE)
+					{
+						t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+					}
+					else if (geom.type == SPHERE)
+					{
+						t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+					}
+					else if (geom.type == MESH)
+					{
+						t = rayTriangleIntersection(geom, pathSegment.ray, tris, currNode->boundingBox.triIdx, tmp_intersect, tmp_normal);
+						//t = meshGltfIntersectionTest(geom, pathSegment.ray, tris, tmp_intersect, tmp_normal);
+					}
+
+					if (t < t_min) {
+						t_min = t;
+						hit_geom_index = currNode->boundingBox.geom.geomId;
+						intersect_point = tmp_intersect;
+						normal = tmp_normal;
+					}
+					if (visitOffset == 0) break;
+					currNodeIdx = stack[--visitOffset];
+				}
+				else {
+					/*stack[visitOffset++] = currNode->secondChildOffset;
+					currNodeIdx += 1;*/
+					stack[visitOffset++] = currNodeIdx + 1;
+					currNodeIdx = currNode->secondChildOffset;
+				}
+			}
+			else {
+				if (visitOffset == 0) break;
+				currNodeIdx = stack[--visitOffset];
+			}
+		}
+#endif
+
+#if 1
+		int top = 0;
+		int stack[64] = { 0 };
+		while (top >= 0 && top < 64) {
+			int currNodeIdx = stack[top];
+			top--;
+
+			LBVHNode* currNode = &lbvh[currNodeIdx];
+			//if (doesRayIntersectAABB(pathSegment.ray, currNode->boundingBox)) {
+				if (currNode->isLeaf) {
+					
+					Geom geom = currNode->boundingBox.geom;
+					
+					if (geom.type == CUBE)
+					{
+						t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+					}
+					else if (geom.type == SPHERE)
+					{
+						t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+					}
+					else if (geom.type == MESH)
+					{
+						t = rayTriangleIntersection(geom, pathSegment.ray, tris, currNode->boundingBox.triIdx, tmp_intersect, tmp_normal);
+					}
+
+					// Compute the minimum t from the intersection tests to determine what
+					// scene geometry object was hit first.
+					if (t > 0.0f && t_min > t)
+					{
+						t_min = t;
+						hit_geom_index = currNode->boundingBox.geom.geomId;
+						intersect_point = tmp_intersect;
+						normal = tmp_normal;
+					}
+				}
+				else {
+					if (doesRayIntersectAABB(pathSegment.ray, lbvh[currNodeIdx + 1].boundingBox)) {
+						top++;
+						stack[top] = currNodeIdx + 1; //left child
+					}
+
+					if (currNode->secondChildOffset != -1 && doesRayIntersectAABB(pathSegment.ray, lbvh[currNode->secondChildOffset].boundingBox)) {
+						top++;
+						stack[top] = currNode->secondChildOffset; //right child
+					}
+				}
+			//}
+		}
+#endif
+		
+#else
+		// naive parse through global geoms
 		for (int i = 0; i < geoms_size; i++)
 		{
 			Geom& geom = geoms[i];
@@ -266,7 +396,10 @@ __global__ void computeIntersections(
 			{
 				t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			}
-			// TODO: add more intersection tests here... triangle? metaball? CSG?
+			else if (geom.type == MESH)
+			{
+				t = meshGltfIntersectionTest(geom, pathSegment.ray, tris, tmp_intersect, tmp_normal);
+			}
 
 			// Compute the minimum t from the intersection tests to determine what
 			// scene geometry object was hit first.
@@ -278,6 +411,7 @@ __global__ void computeIntersections(
 				normal = tmp_normal;
 			}
 		}
+#endif
 
 		if (hit_geom_index == -1)
 		{
@@ -343,7 +477,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
 
 	if (index < nPaths)
 	{
-		PathSegment iterationPath = iterationPaths[index];
+		PathSegment iterationPath = iterationPaths[index];		
 		image[iterationPath.pixelIndex] += iterationPath.color;
 	}
 }
@@ -423,6 +557,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, num_paths
 				, dev_paths
 				, dev_geoms
+				, dev_tris
 				, hst_scene->geoms.size()
 				, dev_intersections
 				);
@@ -441,6 +576,10 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, num_paths
 				, dev_paths
 				, dev_geoms
+				, dev_tris
+#if USE_BVH
+				, dev_lbvh_nodes
+#endif
 				, hst_scene->geoms.size()
 				, dev_intersections
 				);

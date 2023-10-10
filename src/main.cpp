@@ -91,8 +91,12 @@ void saveImage() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
-			glm::vec3 pix = renderState->image[index];
-			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
+			glm::vec3 pix = renderState->image[index] / samples;
+#if REINHARD_GAMMA
+			pix /= (pix + glm::vec3(1.0f));
+			pix = glm::pow(pix, glm::vec3(1.f / 2.2f));
+#endif
+			img.setPixel(width - 1 - x, y, glm::vec3(pix) );
 		}
 	}
 
@@ -130,7 +134,7 @@ void runCuda() {
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
 	// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not use this buffer
 
-	if (iteration == 0) {
+	if (iteration == 0) {		
 		pathtraceFree();
 		pathtraceInit(scene);
 	}

@@ -97,7 +97,6 @@ __host__ __device__ void lte_transmissive(PathSegment& pathSegment,
 
     if (glm::length(pathSegment.ray.direction) == 0) { //Total Internal Reflection
         lte_specular(pathSegment, normal, m);
-        pathSegment.accumCol = glm::vec3(0.f);
     }
     else {
         pathSegment.accumCol *= m.specular.color;
@@ -140,5 +139,5 @@ void scatterRay(
     else {
         lte_diffuse(pathSegment, normal, m, rng);        
     }
-    pathSegment.ray.origin = intersect + 0.01f * pathSegment.ray.direction;
+    pathSegment.ray.origin = intersect +0.01f * pathSegment.ray.direction;
 }

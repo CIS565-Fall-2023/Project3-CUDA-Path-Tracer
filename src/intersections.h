@@ -49,7 +49,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
         glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
     Ray q;
     q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
-    q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
+    q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));    
 
     float tmin = -1e38f;
     float tmax = 1e38f;
@@ -141,4 +141,105 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     }
 
     return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__ glm::vec3 barycentric(glm::vec3 p, glm::vec3 t1, glm::vec3 t2, glm::vec3 t3) {
+    glm::vec3 edge1 = t2 - t1;
+    glm::vec3 edge2 = t3 - t2;
+    float S = glm::length(glm::cross(edge1, edge2));
+
+    edge1 = p - t2;
+    edge2 = p - t3;
+    float S1 = glm::length(glm::cross(edge1, edge2));
+
+    edge1 = p - t1;
+    edge2 = p - t3;
+    float S2 = glm::length(glm::cross(edge1, edge2));
+
+    edge1 = p - t1;
+    edge2 = p - t2;
+    float S3 = glm::length(glm::cross(edge1, edge2));
+
+    return glm::vec3(S1 / S, S2 / S, S3 / S);
+}
+
+__host__ __device__ float rayTriangleIntersection(Geom geom, Ray r, Triangle* tris, int triIdx, glm::vec3& intersectionPoint, glm::vec3& normal) {
+    
+    glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+    glm::vec3 baryIntersection;
+    if (glm::intersectRayTriangle(ro, rd, tris[triIdx].v1.pos, tris[triIdx].v2.pos, tris[triIdx].v3.pos, baryIntersection)) {        
+        glm::vec3 objspaceIntersection = ro + baryIntersection.z * rd;
+        glm::vec3 objspaceNormal;
+        if (geom.hasNormals) {
+            glm::vec3 barycentricWeights = barycentric(objspaceIntersection, tris[triIdx].v1.pos, tris[triIdx].v2.pos, tris[triIdx].v3.pos);
+            objspaceNormal = barycentricWeights.x * tris[triIdx].v1.nor + barycentricWeights.y * tris[triIdx].v2.nor + barycentricWeights.z * tris[triIdx].v3.nor;
+        }
+        else {
+            objspaceNormal = glm::normalize(glm::cross(tris[triIdx].v2.pos - tris[triIdx].v1.pos, tris[triIdx].v3.pos - tris[triIdx].v1.pos));
+        }
+        intersectionPoint = multiplyMV(geom.transform, glm::vec4(objspaceIntersection, 1.f));
+        normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objspaceNormal, 0.f)));
+        return glm::length(r.origin - intersectionPoint);
+    }
+    else {
+        return -1.f;
+    }
+}
+
+__host__ __device__ float meshGltfIntersectionTest(Geom meshGltf, Ray r, Triangle* tris, glm::vec3& intersectionPoint, glm::vec3& normal) {
+
+    glm::vec3 ro = multiplyMV(meshGltf.inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 rd = glm::normalize(multiplyMV(meshGltf.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+
+    glm::vec3 objspaceIntersection;
+    glm::vec3 objspaceNormal;
+    bool didRayIntersectMesh = false;
+    float t = std::numeric_limits<float>::max();
+    for (int i = meshGltf.startTriIdx; i <= meshGltf.endTriIdx; i++) {
+        glm::vec3 baryIntersection;      
+        if (glm::intersectRayTriangle(ro, rd, tris[i].v1.pos, tris[i].v2.pos, tris[i].v3.pos, baryIntersection)) {
+            didRayIntersectMesh = true;
+
+            float t_val = baryIntersection.z;
+            if (t_val < t) {
+                t = t_val;                
+                objspaceNormal = glm::normalize(glm::cross(tris[i].v2.pos - tris[i].v1.pos, tris[i].v3.pos - tris[i].v1.pos));
+            }
+        }
+    }
+    if (!didRayIntersectMesh) {
+        return -1.f;
+    }
+    objspaceIntersection = ro + t * rd;
+    intersectionPoint = multiplyMV(meshGltf.transform, glm::vec4(objspaceIntersection, 1.f));
+    normal = glm::normalize(multiplyMV(meshGltf.invTranspose, glm::vec4(objspaceNormal, 0.f)));
+    return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__ bool doesRayIntersectAABB(Ray r, AABB aabb)
+{    
+    glm::vec3 invDir = 1.f / r.direction;
+    glm::vec3 near = (aabb.minPos - r.origin) * invDir;
+    glm::vec3 far = (aabb.maxPos - r.origin) * invDir;
+    glm::vec3 tmin = min(near, far);
+    glm::vec3 tmax = max(near, far);
+    float t0 = max(max(tmin.x, tmin.y), tmin.z);
+    float t1 = min(min(tmax.x, tmax.y), tmax.z);
+    if (t0 > t1) return false;
+    if (t0 > 0.0 // ray came from outside, entering the box
+        ||
+        t1 > 0.0)// ray originated inside, now exiting the box
+    {
+        return true;
+    }
+    return false;
 }
