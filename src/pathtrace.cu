@@ -22,7 +22,7 @@
 #define SORT_MATERIAL 1
 #define STREAM_COMPACTION 1
 
-#define DEPTH_OF_FIELD 0
+#define DEPTH_OF_FIELD 1
 #define ANTIALIASING 0
 #define DIRECT_LIGHTING 1
 #define MOTION_BLUR 0
@@ -224,12 +224,12 @@ __host__ __device__ glm::vec2 concentricSampleDisk(const glm::vec2& u)
 	if (std::abs(uOffset.x) > std::abs(uOffset.y)) 
 	{
 		r = uOffset.x;
-		theta = PI / 4 * (uOffset.y / uOffset.x);
+		theta = PI / 4.f * (uOffset.y / uOffset.x);
 	}
 	else 
 	{
 		r = uOffset.y;
-		theta = PI / 2 - PI / 4 * (uOffset.x / uOffset.y);
+		theta = PI / 2.f - PI / 4.f * (uOffset.x / uOffset.y);
 	}
 	return r * glm::vec2(std::cos(theta), std::sin(theta));
 }
@@ -280,12 +280,12 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 #if DEPTH_OF_FIELD
 		if (cam.lensRadius > 0.0) 
 		{
-			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(glm::vec2(u01(rng)));
-			float ft = cam.focalDistance / -segment.ray.direction.z;
-			glm::vec3 pFoucs = ft * segment.ray.direction;
+			glm::vec2 pLens = cam.lensRadius * concentricSampleDisk(glm::vec2(u01(rng), u01(rng)));
+			float ft = glm::abs(cam.focalDistance / segment.ray.direction.z);
+			glm::vec3 pFoucs = segment.ray.origin + ft * segment.ray.direction;
 
-			segment.ray.origin += glm::vec3(pLens.x, pLens.y, 0.0f);
-			segment.ray.direction = glm::normalize(pFoucs - glm::vec3(pLens.x, pLens.y, 0.0f));
+			segment.ray.origin += cam.right * pLens.x + cam.up * pLens.y;
+			segment.ray.direction = glm::normalize(pFoucs - segment.ray.origin);
 		}
 #endif
 		segment.pixelIndex = index;

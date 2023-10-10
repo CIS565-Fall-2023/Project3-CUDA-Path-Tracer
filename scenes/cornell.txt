@@ -65,11 +65,11 @@ FOVY        45
 ITERATIONS  5000
 DEPTH       8
 FILE        cornell
+FOCAL_DIST  10
+LENS_RADIUS 5
 EYE         0.0 5 7.5
 LOOKAT      0 5 0
 UP          0 1 0
-FOCAL       5	
-LENSE       2
 
 // Texture
 TEXTURE 0
@@ -123,10 +123,10 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// OBJ 1
-GLTF_FILE ../scenes/sphere.gltf
-material 4
-TRANS       0 0 0
+// OBJECT
+OBJECT 6
+sphere
+material 3
+TRANS       -1 4 -1
 ROTAT       0 0 0
 SCALE       3 3 3
-TEXTURE 0
