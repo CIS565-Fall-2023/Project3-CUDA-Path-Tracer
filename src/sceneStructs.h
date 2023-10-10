@@ -50,12 +50,13 @@ struct Triangle {
     glm::mat4 transform;
 };
 
-static const int OCTREE_MAX_DEPTH = 1;
-static const int OCTREE_MAX_PRIMITIVES = 10;
+static const int OCTREE_MAX_DEPTH = 4;
+static const int OCTREE_NUM_PRIMITIVES = 3;
 static const float OCTREE_MIN_BOX_SIZE = 0.5f;
 struct OctreeNode {
     int children[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     bool isLeaf = true;
+
 };
 
 struct Octree {

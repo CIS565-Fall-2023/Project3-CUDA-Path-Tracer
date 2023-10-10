@@ -26,7 +26,7 @@ private:
     int addDefaultCamera(glm::mat4& transform);
     Octree buildOctree(const Mesh& mesh);
     template <typename Iterator>
-    int buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Iterator begin, Iterator end);
+    int buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth,  Iterator begin, Iterator end);
     Geom getAxisAlignedBoundingBox(const Geom& meshBoundingVolume);
 public:
     Scene(string filename);

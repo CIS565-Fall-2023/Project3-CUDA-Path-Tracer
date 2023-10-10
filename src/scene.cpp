@@ -317,7 +317,7 @@ Octree Scene::buildOctree(const Mesh& mesh) {
         centroid = glm::vec3(mesh.transform * glm::vec4(centroid, 1.0f));
         triangle.centroid = centroid;
         triangle.transform = mesh.transform;
-        tree.triangles.push_back(triangle);
+        triangles.push_back(triangle);
     }
     tree.transform = mesh.transform;
     tree.inverseTransform = mesh.inverseTransform;
@@ -335,7 +335,7 @@ Octree Scene::buildOctree(const Mesh& mesh) {
     // boundingBox.inverseTransform = glm::inverse(boundingBox.transform);
     // boundingBox.invTranspose = glm::inverseTranspose(boundingBox.transform);
 
-    tree.root = buildOctreeImpl(tree, mesh.boundingVolume, 0, tree.triangles.begin(), tree.triangles.end());
+    tree.root = buildOctreeImpl(tree, mesh.boundingVolume, 0, triangles.begin(), triangles.end());
     tree.dataStarts.push_back(tree.triangles.size());
     return tree;
 }
@@ -403,10 +403,12 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
     tree.nodes.emplace_back();
     tree.boundingBoxes.emplace_back(boundingBox);
     tree.dataStarts.emplace_back();
-    tree.dataStarts[newNodeId] = begin - tree.triangles.begin();
-
-    if (begin + 3 == end) {
-        std::cout << "   ===> only one triangle" << newNodeId << std::endl;
+    tree.dataStarts[newNodeId] = tree.triangles.size();
+    for (Iterator it = begin; it != end; ++it) {
+        tree.triangles.push_back(*it);
+    }
+    
+    if (begin + OCTREE_NUM_PRIMITIVES == end) {
         return newNodeId;
     }
     glm::vec3 center = boundingBox.translation;
@@ -482,33 +484,51 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
         }
     }
 
-    // // -x -y -z
-    int child_idx = buildOctreeImpl(tree, childBoundingBoxes[0], depth + 1, begin, split_y_lower_z_lower);
-    std::cout << "    node: " << newNodeId << " child: " << child_idx << std::endl;
-    tree.nodes[newNodeId].children[0] = child_idx;
+    std::vector<Triangle> childTriangles[8];
+    for (Iterator it = begin; it != end; ++it) {
+        Triangle& triangle = *it;
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 3; j++) {
+                glm::vec3 transformedVertex = glm::vec3(childBoundingBoxes[i].transform * glm::vec4(triangle.vertices[j], 1.0f));
+                if (glm::abs(transformedVertex.x) <= 0.5f && glm::abs(transformedVertex.y) <= 0.5f && glm::abs(transformedVertex.z) <= 0.5f) {
+                    childTriangles[i].push_back(triangle);
+                }
+            }
+        }
+    }
 
-    // -x -y +z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[1], depth + 1, split_y_lower_z_lower, split_y_lower);
-    tree.nodes[newNodeId].children[1] = child_idx;
-    // -x +y -z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[2], depth + 1, split_y_lower, split_y_lower_z_upper);
-    tree.nodes[newNodeId].children[2] = child_idx;
-    // +x -y -z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[3], depth + 1, split_y_lower_z_upper, split_x);
-    tree.nodes[newNodeId].children[3] = child_idx;
+    for (int i = 0; i < 8; i++) {
+        int child_idx = buildOctreeImpl(tree, childBoundingBoxes[i], depth + 1, childTriangles[i].begin(), childTriangles[i].end());
+        tree.nodes[newNodeId].children[i] = child_idx;
+    }
 
-    // +x -y -z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[4], depth + 1, split_x, split_y_upper_z_lower);
-    tree.nodes[newNodeId].children[4] = child_idx;
-    // +x -y +z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[5], depth + 1, split_y_upper_z_lower, split_y_upper);
-    tree.nodes[newNodeId].children[5] = child_idx;
-    // +x +y -z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[6], depth + 1, split_y_upper, split_y_upper_z_upper);
-    tree.nodes[newNodeId].children[6] = child_idx;
-    // +x +y +z
-    child_idx = buildOctreeImpl(tree, childBoundingBoxes[7], depth + 1, split_y_upper_z_upper, end);
-    tree.nodes[newNodeId].children[7] = child_idx;
+    // // // -x -y -z
+    // int child_idx = buildOctreeImpl(tree, childBoundingBoxes[0], depth + 1, begin, split_y_lower_z_lower);
+    // std::cout << "    node: " << newNodeId << " child: " << child_idx << std::endl;
+    // tree.nodes[newNodeId].children[0] = child_idx;
+
+    // // -x -y +z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[1], depth + 1, split_y_lower_z_lower, split_y_lower);
+    // tree.nodes[newNodeId].children[1] = child_idx;
+    // // -x +y -z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[2], depth + 1, split_y_lower, split_y_lower_z_upper);
+    // tree.nodes[newNodeId].children[2] = child_idx;
+    // // +x -y -z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[3], depth + 1, split_y_lower_z_upper, split_x);
+    // tree.nodes[newNodeId].children[3] = child_idx;
+
+    // // +x -y -z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[4], depth + 1, split_x, split_y_upper_z_lower);
+    // tree.nodes[newNodeId].children[4] = child_idx;
+    // // +x -y +z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[5], depth + 1, split_y_upper_z_lower, split_y_upper);
+    // tree.nodes[newNodeId].children[5] = child_idx;
+    // // +x +y -z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[6], depth + 1, split_y_upper, split_y_upper_z_upper);
+    // tree.nodes[newNodeId].children[6] = child_idx;
+    // // +x +y +z
+    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[7], depth + 1, split_y_upper_z_upper, end);
+    // tree.nodes[newNodeId].children[7] = child_idx;
 
     for (int i = 0; i < 8; i++) {
         if (tree.nodes[newNodeId].children[i] != -1) {
