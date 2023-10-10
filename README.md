@@ -5,7 +5,9 @@ CUDA Path Tracer
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
 * Yian Chen
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+  * [LinkedIn](https://www.linkedin.com/in/yian-chen-33a31a1a8/), [personal website](https://sydianandrewchen.github.io/) etc.
+* Tested on: Windows 10, AMD Ryzen 5800 HS with Radeon Graphics CPU @ 3.20GHz 16GB, NVIDIA GeForce RTX3060 Laptop 8GB
+
 <div align="center">
     <img src="img/emissive_robot_car_2.png" width="45%"/>
     <img src="img/result_bunny.png" width="45%"/>
