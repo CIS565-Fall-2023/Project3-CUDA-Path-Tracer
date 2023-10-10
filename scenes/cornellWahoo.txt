@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   5
+EMITTANCE   8
 
 // Diffuse white
 MATERIAL 1
@@ -74,7 +74,7 @@ UP          0 1 0
 OBJECT 0
 cube
 material 0
-TRANS       0 10 0
+TRANS       0 10 3
 ROTAT       0 0 0
 SCALE       3 .3 3
 
@@ -147,6 +147,6 @@ OBJECT 9
 mesh
 material 5
 MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\wahoo.obj
-TRANS       0 2 1.5
+TRANS       0 2 0
 ROTAT       0 0 0
 SCALE       1 1 1

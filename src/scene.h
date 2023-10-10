@@ -8,10 +8,11 @@
 #include "utilities.h"
 #include "sceneStructs.h"
 
+#define STREAM_COMPACTION
 // #define MATERIAL_SORT
-// #define CACHE_FIRST_BOUNCE
+#define CACHE_FIRST_BOUNCE
 // #define JITTER_RAY
-#define DEPTH_OF_FIELD
+// #define DEPTH_OF_FIELD
 // #define DEBUG_OUTPUT
 #define USING_BVH
 

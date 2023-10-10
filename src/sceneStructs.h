@@ -7,7 +7,7 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 #define BBOX_TRI_NUM 4
-#define BVH_GPU_STACK_SIZE 64
+#define BVH_GPU_STACK_SIZE 128
 #define BLOCK_SIZE_1D 64
 #define JITTER_RATIO 1e-2f
 #define DOF_LENS_RADIUS 0.35f

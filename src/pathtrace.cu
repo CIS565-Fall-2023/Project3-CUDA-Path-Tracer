@@ -785,7 +785,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			dev_intersections, dev_paths, dev_materials
 		);
 		
-		
+#ifdef STREAM_COMPACTION
 		markPathSegment << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_bools, dev_nbools, dev_paths);
 		int lastBool;
 		int scanSum;
@@ -813,6 +813,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 
 		num_paths = scanSum;
+#endif
+
 		iterationComplete = num_paths <= 0 || depth >= traceDepth;
 	
 		if (guiData != NULL){ guiData->TracedDepth = depth; }

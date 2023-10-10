@@ -307,11 +307,13 @@ void Scene::buildTree()
 
     cout << "global, min = "; printVec(min);
     cout << ", max = "; printVec(max); cout << endl;
+
     splitTree(0, tris.size(), 0, 0);
 
     // printTree();
 
     cout << "bbox num = " << bvh.size() << endl;
+    cout << "tris num = " << tris.size() << endl;
     // checkTree();
 
 }

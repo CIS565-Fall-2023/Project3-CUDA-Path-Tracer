@@ -3,11 +3,28 @@ CUDA Path Tracer
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Tianyi Xiao
+  * [LinkedIn](https://www.linkedin.com/in/tianyi-xiao-20268524a/), [personal website](https://jackxty.github.io/), [Github](https://github.com/JackXTY).
+* Tested on: Windows 11, i9-12900H @ 2.50GHz 16GB, Nvidia Geforce RTX 3070 Ti 8032MB (Personal Laptop)
 
-### (TODO: Your README)
+### Final Render Results
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+
+### Stream Compction
+
+### Material Sort
+
+### First Bounce Cache
+
+### BVH Tree
+
+### Render Features
+
+**Obj Load**
+
+**Refraction**
+
+**Jitter Ray**
+
+**Depth Of Field**
 
