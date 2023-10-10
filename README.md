@@ -58,7 +58,7 @@ before analyzing and talking about the generated output, it would be better to s
 
 As shown in the above picture, we can see that the basic idea of subsurface scattering is to not let the ray penetrate through the sphere directly. In contrast, the ray should remain in the ball and scatter inside. Thus my implementation of subsurface scattering is just simulating this process. In the condition that the ray is inside the object, we set the probability that it will scatter inside. The first two image shows the contrast between the normal diffuse and subsurface scattering. 
 
-### 5. defining object motion, and motion blur
+### 5. Defining object motion, and motion blur
 |motion blur direction 1|motion blur direction 2|
 |:-----:|:-----:|
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-34-10z.547samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_15-00-34z.637samp.png" width="300" height="300">
