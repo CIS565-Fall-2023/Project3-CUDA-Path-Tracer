@@ -204,36 +204,75 @@ __host__ __device__ bool aabbIntersectionTest(AABB& box, Ray& r, float& t) {
 __host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
     const Triangle* tris, glm::vec3& intersectionPoint, glm::vec3& normal) {
 
+    //float tMin = FLT_MAX;
+    //Triangle closest;
+    //glm::vec3 barycenter, baryMin;
+    //
+    //// check for intersection with every triangle
+    //for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; i++) {
+    //   
+    //    bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
+    //        tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, barycenter);
+    //    if (!intersect) continue;
+
+    //    float t = barycenter.z;
+    //    if (t < tMin && t > 0.f) {
+    //        tMin = t;
+    //        baryMin = barycenter;
+    //        closest = tris[i];
+    //    }
+    //}
+
+    //// find intersection point and normal
+    //float u = baryMin.x;
+    //float v = baryMin.y;
+    //float w = 1.f - u - v;
+
+    //intersectionPoint = u * closest.v0.pos
+    //    + v * closest.v1.pos
+    //    + w * closest.v2.pos;
+    //normal = u * closest.v0.nor
+    //    + v * closest.v1.nor
+    //    + w * closest.v2.nor;
+
+    //return tMin;
+
     float tMin = FLT_MAX;
-    Triangle closest;
-    glm::vec3 barycenter, baryMin;
-    
-    // If aabb is intersected, check for intersection with every triangle
-    for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; i++) {
-       
+    glm::vec3 barycenter, objSpaceIsect;
+    bool hasIntersection = false;
+
+    // do intersection test with every triangle
+    for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; ++i)
+    {
+        Triangle tri = tris[i];
         bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
-            tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, barycenter);
+            tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
         if (!intersect) continue;
 
-        float t = barycenter.z;
-        if (t < tMin && t > 0.f) {
+        // find intersection point and normal
+        float u = barycenter.x;
+        float v = barycenter.y;
+        float w = 1.f - u - v;
+        objSpaceIsect = w * tri.v0.pos
+            + u * tri.v1.pos
+            + v * tri.v2.pos;
+
+        float t = glm::length(r.origin - objSpaceIsect);
+
+        glm::vec3 intersectionNormal = glm::normalize(
+            glm::cross(tri.v1.pos - tri.v0.pos, 
+                       tri.v2.pos - tri.v0.pos));
+
+        if (t < tMin) {
             tMin = t;
-            baryMin = barycenter;
-            closest = tris[i];
+            intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objSpaceIsect, 1.f));
+            normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(intersectionNormal, 0.f)));;
+            hasIntersection = true;
         }
     }
 
-    // find intersection point and normal
-    float u = baryMin.x;
-    float v = baryMin.y;
-    float w = 1.f - u - v;
-
-    intersectionPoint = u * closest.v0.pos
-        + v * closest.v1.pos
-        + w * closest.v2.pos;
-    normal = u * closest.v0.nor
-        + v * closest.v1.nor
-        + w * closest.v2.nor;
-
-    return tMin;
+    if (hasIntersection) {
+        return tMin;
+    }
+    return -1.f;
 }

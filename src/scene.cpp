@@ -11,7 +11,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
-#define DEBUG_GLTF 1
+#define DEBUG_MESH 1
 
 Scene::Scene(string filename) {
     basePath = filename.substr(0, filename.rfind('/') + 1);
@@ -54,6 +54,7 @@ int Scene::loadGeom(string objectid) {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
+        string meshPath;
 
         //load object type
         utilityCore::safeGetline(fp_in, line);
@@ -68,18 +69,15 @@ int Scene::loadGeom(string objectid) {
                 newGeom.type = CUBE;
             }
             else if (strcmp(tokens[0].c_str(), "gltf") == 0) {
-                cout << "Creating new gltf mesh..." << endl;
                 newGeom.type = GLTF;
-                if (!loadMeshGltf(basePath + tokens[1], newGeom, id)) {
-                    return -1;
-                }
+                meshPath = basePath + tokens[1];
+                // save actual loader for later, i.e. after we load transformations,
+                // so we can incorporate that into vertex info computation
             }
             else if (strcmp(tokens[0].c_str(), "obj") == 0) {
-                cout << "Creating new obj mesh..." << endl;
-                newGeom.type = OBJ;                
-                if (!loadMeshObj(basePath + tokens[1], newGeom)) {
-                    return -1;
-                }
+                newGeom.type = OBJ; 
+                meshPath = basePath + tokens[1];
+                // save actual loader for later
             }
         }
 
@@ -114,6 +112,20 @@ int Scene::loadGeom(string objectid) {
                 newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+        // actual loader of gltf and obj mesh
+        if (newGeom.type == GLTF) {
+            cout << "Creating new gltf mesh..." << endl;
+            if (!loadMeshGltf(meshPath, newGeom, id)) {
+                return -1;
+            }
+        }
+        else if (newGeom.type == OBJ) {
+            cout << "Creating new obj mesh..." << endl;
+            if (!loadMeshObj(meshPath, newGeom)) {
+                return -1;
+            }
+        }
 
         geoms.push_back(newGeom);
         return 1;
@@ -333,15 +345,27 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::ve
                     vertIdx2 = indexData32[i + 2];
                 }
 
+                // raw data from buffer
                 tri.v0.pos = glm::vec3(posData[vertIdx0 * 3], posData[vertIdx0 * 3 + 1], posData[vertIdx0 * 3 + 2]);
                 tri.v1.pos = glm::vec3(posData[vertIdx1 * 3], posData[vertIdx1 * 3 + 1], posData[vertIdx1 * 3 + 2]);
                 tri.v2.pos = glm::vec3(posData[vertIdx2 * 3], posData[vertIdx2 * 3 + 1], posData[vertIdx2 * 3 + 2]);
+                
+                // update transformation
+                tri.v0.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v0.pos, 1.f));
+                tri.v1.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v1.pos, 1.f));
+                tri.v2.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v2.pos, 1.f));
 
                 // vertex normals
                 if (norData) {
+                    // raw data from buffer
                     tri.v0.nor = glm::vec3(norData[vertIdx0 * 3], norData[vertIdx0 * 3 + 1], norData[vertIdx0 * 3 + 2]);
                     tri.v1.nor = glm::vec3(norData[vertIdx1 * 3], norData[vertIdx1 * 3 + 1], norData[vertIdx1 * 3 + 2]);
                     tri.v2.nor = glm::vec3(norData[vertIdx2 * 3], norData[vertIdx2 * 3 + 1], norData[vertIdx2 * 3 + 2]);
+
+                    // update transformation
+                    tri.v0.nor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(tri.v0.nor, 0.f));
+                    tri.v1.nor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(tri.v1.nor, 0.f));
+                    tri.v2.nor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(tri.v2.nor, 0.f));
                 }
 
                 // TODO: uv
@@ -389,10 +413,9 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::ve
                 geom.triangleCount++;
             }
         }
-#if DEBUG_GLTF
+#if DEBUG_MESH
         cout << "Triangle count: " << geom.triangleCount << endl;
         printTri(tri);
-        cout << mesh.primitives.size() << endl;
 #endif
     }
 }
@@ -410,7 +433,7 @@ void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, Geom& geom, s
 void parseModel(tinygltf::Model& model, Geom& geom, std::vector<Triangle>& tris) {
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     for (size_t i = 0; i < scene.nodes.size(); ++i) {
-#if DEBUG_GLTF
+#if DEBUG_MESH
         //assert((scene.nodes[i] >= 0) && (scene.nodes[i] < model.nodes.size()));
         cout << "model node: " << scene.nodes[i] << endl;
         cout << "model mesh size: " << model.meshes.size() << endl;
@@ -425,24 +448,29 @@ int Scene::loadMeshGltf(string filename, Geom& geom, int objectId) {
     tinygltf::Model model;
     meshCount = 0;
     
-    auto startTime = utilityCore::timeSinceEpochMillisec();
+    //auto startTime = utilityCore::timeSinceEpochMillisec();
+    
     // read model file
     if (!loadModel(model, filename.c_str())) return -1;
-    auto endTime = utilityCore::timeSinceEpochMillisec();
-    auto duration = (endTime - startTime);
-    cout << "Reading mesh file took: " << duration << "ms" << endl;
+    //auto endTime = utilityCore::timeSinceEpochMillisec();
+    //auto duration = (endTime - startTime);
+    //cout << "Reading mesh file took: " << duration << "ms" << endl;
 
     geom.startTriIdx = triangles.size();
     geom.triangleCount = 0;
 
-    startTime = utilityCore::timeSinceEpochMillisec();
+    //startTime = utilityCore::timeSinceEpochMillisec();
+    
     // parse mesh structure
     parseModel(model, geom, triangles);
-    endTime = utilityCore::timeSinceEpochMillisec();
-    duration = (endTime - startTime);
-    cout << "Parsing mesh took: " << duration << "ms" << endl;
+    //endTime = utilityCore::timeSinceEpochMillisec();
+    //duration = (endTime - startTime);
+    //cout << "Parsing mesh took: " << duration << "ms" << endl;
 
     meshCount++;
+#if DEBUG_MESH
+    cout << "Curr mesh count: " << meshCount<< endl;
+#endif
     return 1;
 }
 
@@ -468,7 +496,6 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
 
     const tinyobj::attrib_t& attrib = reader.GetAttrib();
     const std::vector<tinyobj::shape_t>& shapes = reader.GetShapes();
-    const std::vector<tinyobj::material_t>& materials= reader.GetMaterials();
 
     meshCount = 0;
     geom.startTriIdx = triangles.size();
@@ -491,27 +518,32 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
             for (size_t v = 0; v < numVert; v++) {
                 tinyobj::index_t idx = shapes[s].mesh.indices[idxOffset + v];
 
-                // get vertex positions
+                // get vert pos raw data
                 glm::vec3 vertPos = glm::vec3(
-                    attrib.vertices[size_t(idx.vertex_index) * 3],
-                    attrib.vertices[size_t(idx.vertex_index) * 3 + 1],
-                    attrib.vertices[size_t(idx.vertex_index) * 3 + 2]
+                    attrib.vertices[idx.vertex_index * 3],
+                    attrib.vertices[idx.vertex_index * 3 + 1],
+                    attrib.vertices[idx.vertex_index * 3 + 2]
                 );
+                // update transformation
+                vertPos = utilityCore::multiplyMV(geom.transform, glm::vec4(vertPos, 1.f));
+
                 if (i%3 == 0) tri.v0.pos = vertPos;
                 if (i%3 == 1) tri.v1.pos = vertPos;
                 if (i%3 == 2) tri.v2.pos = vertPos;
 
-                // get vertex normals
                 if (idx.normal_index >= 0) {
+                    // get vert normal raw data
                     glm::vec3 vertNor = glm::vec3(
-                        attrib.normals[size_t(idx.normal_index) * 3],
-                        attrib.normals[size_t(idx.normal_index) * 3 + 1],
-                        attrib.normals[size_t(idx.normal_index) * 3 + 2]
+                        attrib.normals[idx.normal_index * 3],
+                        attrib.normals[idx.normal_index * 3 + 1],
+                        attrib.normals[idx.normal_index * 3 + 2]
                     );
+                    // update transformation
+                    vertNor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(vertNor, 0.f));
+
                     if (i % 3 == 0) tri.v0.nor = vertNor;
                     if (i % 3 == 1) tri.v1.nor = vertNor;
                     if (i % 3 == 2) tri.v2.nor = vertNor;
-                    cout << "obj vert nor: " << vertNor.x << ", " << vertNor.y << ", " << vertNor.z << endl;
                 }
                 i++;
             }
@@ -536,6 +568,11 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
         // update scene attributes
         triangles.insert(triangles.end(), trisInMesh.begin(), trisInMesh.end());
         meshCount++;
+
+#if DEBUG_MESH
+        cout << "Triangle count: " << trisInMesh.size() << endl;
+        printTri(triangles[0]);
+#endif
     }
     return 1;
 }

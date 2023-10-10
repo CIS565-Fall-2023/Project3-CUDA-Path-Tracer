@@ -165,9 +165,9 @@ VEL	    0 0 0
 
 // Mesh
 OBJECT 6
-gltf gltf/monkey.gltf
+gltf gltf/teapot.gltf
 material 1
-TRANS       2 2 2
-ROTAT       0 -30 0
-SCALE       4 4 4
+TRANS       0 2 0
+ROTAT       0 0 0
+SCALE       1 1 1
 VEL	    0 0 0

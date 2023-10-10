@@ -130,7 +130,6 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_intersections_first_bounce, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections_first_bounce, 0, pixelcount * sizeof(ShadeableIntersection));
 #endif
-
 	cudaMalloc(&dev_tris, scene->triangles.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 

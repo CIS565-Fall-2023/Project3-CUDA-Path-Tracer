@@ -44,6 +44,7 @@ namespace utilityCore {
     extern glm::vec3 clampRGB(glm::vec3 color);
     extern bool epsilonCheck(float a, float b);
     extern std::vector<std::string> tokenizeString(std::string str);
+    extern glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v);
     extern glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
     extern std::string convertIntToString(int number);
     extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413

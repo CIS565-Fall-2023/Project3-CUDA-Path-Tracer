@@ -79,6 +79,10 @@ std::vector<std::string> utilityCore::tokenizeString(std::string str) {
     return results;
 }
 
+glm::vec3 utilityCore::multiplyMV(glm::mat4 m, glm::vec4 v) {
+    return glm::vec3(m * v);
+}
+
 std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
     t.clear();
 
