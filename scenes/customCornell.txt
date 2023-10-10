@@ -68,8 +68,8 @@ FILE        cornell
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
-APERTURE  	0.5
-FOCALLENGTH 11.5
+// APERTURE  	0.5
+// FOCALLENGTH 11.5
 
 // Ceiling light
 OBJECT 0
@@ -121,16 +121,8 @@ SCALE       .01 10 10
 
 // Sphere
 OBJECT 6
-sphere
-material 4
-TRANS       -1 4 -1
-ROTAT       0 0 0
-SCALE       3 3 3
-
-// Sphere
-OBJECT 7
-gltf ../scenes/gltf/Cube/Cube.gltf
+gltf ../scenes/gltf/Suzanne/Suzanne.gltf
 material 5
-TRANS       -2 3 -3.5
+TRANS       -1 3 -2.5
 ROTAT       0 0 0
 SCALE       2 2 2
