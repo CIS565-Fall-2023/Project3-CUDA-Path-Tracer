@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   10
+EMITTANCE   15
 SIGMAA      0 0 0
 SIGMAS      0 0 0 
 
@@ -81,6 +81,7 @@ REFRIOR     0
 EMITTANCE   0  
 SIGMAA      0.74 1.14 1.66
 SIGMAS      2.44 1.66 1.23
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      SDEPTH    0.5
 
 // Camera
 CAMERA
@@ -142,10 +143,48 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
+
+
 // Ball 1
 OBJECT 6
+sphere
+material 1
+TRANS       -4 5 -4
+ROTAT       0 0 0
+SCALE       2.8 2.8 2.8
+
+// Ball 2
+OBJECT 7
+sphere
+material 4
+TRANS       -2 5 -2
+ROTAT       0 0 0
+SCALE       2.8 2.8 2.8
+//VEL         -1 1 -1
+
+// Ball 3
+OBJECT 8
 sphere
 material 6
 TRANS       0 5 0
 ROTAT       0 0 0
-SCALE       4 4 4
+SCALE       2.8 2.8 2.8
+//VEL         -1 -1 1
+
+// Ball 4
+OBJECT 9
+sphere
+material 2
+TRANS       2 5 2
+ROTAT       0 0 0
+SCALE       2.8 2.8 2.8
+//VEL         0 2 0
+
+// Ball 5
+OBJECT 10
+sphere
+material 5
+TRANS       4 5 4
+ROTAT       0 0 0
+SCALE       2.8 2.8 2.8
+
