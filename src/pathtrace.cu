@@ -123,6 +123,13 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		int index = x + (y * resolution.x);
 		glm::vec3 pix = image[index];
 
+#if ENABLE_HDR_GAMMA_CORRECTION
+		// Apply the Reinhard operator and gamma correction
+		// before outputting color.
+		pix = (pix / (pix + glm::vec3(1.0f)));						// Reinhard operator
+		pix = glm::pow(pix, glm::vec3(1.0 / GAMMA));                 // Gamma correction
+#endif
+
 		glm::ivec3 color;
 		color.x = glm::clamp((int)(pix.x* 255.0), 0, 255);
 		color.y = glm::clamp((int)(pix.y * 255.0), 0, 255);

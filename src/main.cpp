@@ -92,6 +92,14 @@ void saveImage() {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
 			glm::vec3 pix = renderState->image[index];
+
+#if ENABLE_HDR_GAMMA_CORRECTION
+			// Apply the Reinhard operator and gamma correction
+			// before outputting color.
+			pix = (pix / (pix + glm::vec3(1.0f)));						// Reinhard operator
+			pix = glm::pow(pix, glm::vec3(1.0 / GAMMA));                 // Gamma correction
+#endif
+
 			img.setPixel(width - 1 - x, y, glm::vec3(pix));
 		}
 	}

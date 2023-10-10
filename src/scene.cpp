@@ -41,9 +41,6 @@ void traverseGPUStyle(const Geom& mesh, const std::vector<BVHNode>& bvhNodes, co
     while (true)
     {
         curNode = bvhNodes[curNodeIdx];
-        //cout << "-------- node: " << curNodeIdx << endl;
-        //cout << "aabb: " << "[ (" << curNode.bounds.min.x << "," << curNode.bounds.min.y << "," << curNode.bounds.min.z << ") , ("
-        //    << curNode.bounds.max.x << "," << curNode.bounds.max.y << "," << curNode.bounds.max.z << ") ]" << endl;
         // It does! Is this a leaf node?
         if (curNode.triIdx > -1)
         {
@@ -51,6 +48,9 @@ void traverseGPUStyle(const Geom& mesh, const std::vector<BVHNode>& bvhNodes, co
             
             assert(curNode.triIdx == (tris[curNode.triIdx].triIdx));
             
+            //cout << "aabb: " << "[ (" << curNode.bounds.min.x << "," << curNode.bounds.min.y << "," << curNode.bounds.min.z << ") , ("
+            //    << curNode.bounds.max.x << "," << curNode.bounds.max.y << "," << curNode.bounds.max.z << ") ]" << endl;
+
             if (stackPtr == 0)
             {
                 // Finished traversing through BVH
@@ -60,7 +60,7 @@ void traverseGPUStyle(const Geom& mesh, const std::vector<BVHNode>& bvhNodes, co
         }
         else
         {
-            cout << "splitAxis: " << curNode.splitAxis << endl;
+            //cout << "splitAxis: " << curNode.splitAxis << endl;
             //cout << "left: " << bvhNodes[curNodeIdx].leftChildIdx << ", right: " << bvhNodes[curNodeIdx].rightChildIdx << endl;
 
             // Not a leaf node, advance to next left child and add right child to stack
@@ -144,6 +144,11 @@ int Scene::loadGeom(string objectid) {
                     // verify that traverse and gpu style traverse are both working fine
                     //traverse(meshGroup.startBvhNodeIdx, bvhNodes);
                     //traverseGPUStyle(newGeom, bvhNodes, tris);
+
+                    // Print overall mesh aabb
+                    //cout << "aabb: " << "[ (" << newGeom.aabb.min.x << "," << newGeom.aabb.min.y << "," << newGeom.aabb.min.z << ") , ("
+                    //    << newGeom.aabb.max.x << "," << newGeom.aabb.max.y << "," << newGeom.aabb.max.z << ") ]" << endl;
+
 #endif
                 }
             }
@@ -382,6 +387,10 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     tri.v2.pos = gltfMesh.positions[gltfMesh.indices[i+2]];
 #if DEBUG
                     tri.computeAabbAndCentroid(tris.size());
+
+                    //cout << "aabb: " << "[ (" << tri.aabb.min.x << "," << tri.aabb.min.y << "," << tri.aabb.min.z << ") , ("
+                    //     << tri.aabb.max.x << "," << tri.aabb.max.y << "," << tri.aabb.max.z << ") ]" << endl;
+
 #else
                     tri.computeAabbAndCentroid();
 #endif
