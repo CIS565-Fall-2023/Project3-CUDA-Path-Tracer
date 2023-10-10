@@ -117,8 +117,8 @@ texture without normal vs texture with normal
 
 I also implemented smooth shading by interpolating the normals of vertices for each intersection on triangles. 
 
-<img src="./img/texture_without_norm.png" width="300px">
-<img src="./img/texture_with_norm.png" width="300px">
+<img src="./img/unsmooth.png" width="300px">
+<img src="./img/smooth.png" width="300px">
 
 triangle rendered vs smoothed triangle
 
