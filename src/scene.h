@@ -48,10 +48,12 @@ public:
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     std::vector<Triangle> meshTris;
+    std::vector<Texture> albedoTex;
+    std::vector<glm::vec3> textures;
     RenderState state;
 #if USE_BVH
     BVHNode* root;
-    std::vector<AABB> boundingBoxes;
+    std::vector<AABB> boundingBoxes;   
     void computeAABB(Geom geom);
 #endif
 };

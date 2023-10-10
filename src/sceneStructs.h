@@ -43,6 +43,8 @@ struct Geom {
     glm::mat4 invTranspose;
     int startTriIdx;
     int endTriIdx;
+    int albedoTexId;
+    bool hasAlbedoMap = false;
     bool hasUVs = false;
     bool hasNormals = false;
 };
@@ -57,6 +59,15 @@ struct AABB {
     AABB(glm::vec3 minP, glm::vec3 maxP) : minPos(minP), maxPos(maxP), centroid(), geom(), triIdx(-1) {}
     AABB(glm::vec3 minP, glm::vec3 maxP, glm::vec3 c, Geom g, int id) : minPos(minP), maxPos(maxP), centroid(c), geom(g), triIdx(id) {}
     AABB(glm::vec3 minP, glm::vec3 maxP, glm::vec3 c, Geom g) : AABB(minP, maxP, c, g, -1) {}
+};
+
+struct Texture {
+    int id;
+    int width;
+    int height;
+    int numChannels;
+    int startIdx;
+    int endIdx;
 };
 
 struct Material {
@@ -108,5 +119,8 @@ struct PathSegment {
 struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
+  bool hasUV = false;
+  int texId = -1;
+  glm::vec2 uv;
   int materialId;
 };

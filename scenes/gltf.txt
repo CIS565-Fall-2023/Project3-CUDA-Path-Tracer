@@ -119,18 +119,18 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Box
-//OBJECT 6
-//mesh_gltf   Avocado.gltf
-//material 5
-//TRANS       -1 2 -1
-//ROTAT       -35 180 0
-//SCALE       80 80 80
-
-// Box
+// Avocado
 OBJECT 6
-mesh_gltf   Suzanne.gltf
-material 4
-TRANS       0 4 -1
-ROTAT       0 0 0
-SCALE       2 2 2
+mesh_gltf   Avocado.gltf
+material 5
+TRANS       -1 2 -1
+ROTAT       -35 180 0
+SCALE       80 80 80
+
+// Suzanne
+//OBJECT 6
+//mesh_gltf   Suzanne.gltf
+//material 5
+//TRANS       0 4 -1
+//ROTAT       0 0 0
+//SCALE       2 2 2

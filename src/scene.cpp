@@ -219,17 +219,33 @@ int Scene::loadMeshGltf(const string filename, Geom& gltfMesh) {
     bool success = loader.LoadASCIIFromFile(&model, &err, &warn, inputFilename.c_str());
     for (const auto& mesh : model.meshes) {               
         gltfMesh.startTriIdx = meshTris.size();
-        for (const auto& prim : mesh.primitives) {            
+        for (const auto& prim : mesh.primitives) {
+            
             int posAccessorIndex = prim.attributes.at("POSITION");
             tinygltf::Accessor& posAccessor = model.accessors[posAccessorIndex];
             tinygltf::BufferView& posBufferView = model.bufferViews[posAccessor.bufferView];
             tinygltf::Buffer& positionBuffer = model.buffers[posBufferView.buffer];
             float* positions = reinterpret_cast<float*>(&(positionBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset]));
-
-            int width, height, numChannels;
-            unsigned char* hostTextureData = stbi_load("../assets/Avocado_baseColor.png", &width, &height, &numChannels, 0);
-
             
+            if (prim.material >= 0) {
+                int index = model.materials[prim.material].pbrMetallicRoughness.baseColorTexture.index;
+                tinygltf::Texture& texture = model.textures[index];
+                std::string albedoMapPath = "../assets/" + model.images[texture.source].uri;
+                Texture tex;
+                tex.id = albedoTex.size();
+                tex.startIdx = textures.size();
+                gltfMesh.hasAlbedoMap = true;
+                gltfMesh.albedoTexId = tex.id;
+                float* albedoTexture = stbi_loadf(albedoMapPath.c_str(), &tex.width, &tex.height, &tex.numChannels, 0);
+                for (int i = 0; i < tex.width * tex.height; i++) {
+                    glm::vec3 col = glm::vec3(albedoTexture[3 * i], albedoTexture[3 * i + 1], albedoTexture[3 * i + 2]);
+                    textures.push_back(col);
+                }
+                tex.endIdx = textures.size() - 1;
+                albedoTex.push_back(tex);
+                stbi_image_free(albedoTexture);
+            }
+
             if (prim.indices >= 0) {
                 tinygltf::Accessor& indexAccessor = model.accessors[prim.indices];
                 tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
@@ -247,6 +263,7 @@ int Scene::loadMeshGltf(const string filename, Geom& gltfMesh) {
                     t.v2.pos = glm::vec3(positions[indices[i + 1] * 3], positions[indices[i + 1] * 3 + 1], positions[indices[i + 1] * 3 + 2]);
                     t.v3.pos = glm::vec3(positions[indices[i + 2] * 3], positions[indices[i + 2] * 3 + 1], positions[indices[i + 2] * 3 + 2]);
 
+                                        
                     //albedo
                     auto albedoIt = prim.attributes.find("TEXCOORD_0");
                     if (albedoIt != prim.attributes.end()) {

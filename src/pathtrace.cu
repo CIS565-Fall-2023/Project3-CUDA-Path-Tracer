@@ -120,6 +120,8 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static Triangle* dev_tris = NULL;
+static Texture* dev_albedo_textures = NULL;
+static glm::vec3* dev_textures = NULL;
 static PathSegment* dev_paths = NULL;
 #if FIRST_BOUNCE_CACHED
 static ShadeableIntersection* dev_intersections_cached = NULL;
@@ -156,6 +158,12 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_tris, scene->meshTris.size() * sizeof(Triangle));
 	cudaMemcpy(dev_tris, scene->meshTris.data(), scene->meshTris.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_albedo_textures, scene->albedoTex.size() * sizeof(Texture));
+	cudaMemcpy(dev_albedo_textures, scene->albedoTex.data(), scene->albedoTex.size() * sizeof(Texture), cudaMemcpyHostToDevice);
+
+	cudaMalloc(&dev_textures, scene->textures.size() * sizeof(glm::vec3));
+	cudaMemcpy(dev_textures, scene->textures.data(), scene->textures.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
@@ -184,6 +192,8 @@ void pathtraceFree() {
 	cudaFree(dev_geoms);
 	cudaFree(dev_materials);
 	cudaFree(dev_tris);
+	cudaFree(dev_albedo_textures);
+	cudaFree(dev_textures);
 	cudaFree(dev_intersections);
 #if FIRST_BOUNCE_CACHED
 	cudaFree(dev_intersections_cached);
@@ -275,12 +285,14 @@ __global__ void computeIntersections(
 		float t;
 		glm::vec3 intersect_point;
 		glm::vec3 normal;
+		glm::vec2 uv;
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
 		bool outside = true;
 
 		glm::vec3 tmp_intersect;
 		glm::vec3 tmp_normal;
+		glm::vec2 tmp_uv;
 
 #if USE_BVH
 		//BVH traversal
@@ -354,7 +366,7 @@ __global__ void computeIntersections(
 					}
 					else if (geom.type == MESH)
 					{
-						t = rayTriangleIntersection(geom, pathSegment.ray, tris, currNode->boundingBox.triIdx, tmp_intersect, tmp_normal);
+						t = rayTriangleIntersection(geom, pathSegment.ray, tris, currNode->boundingBox.triIdx, tmp_intersect, tmp_normal, tmp_uv);
 					}
 
 					// Compute the minimum t from the intersection tests to determine what
@@ -364,7 +376,8 @@ __global__ void computeIntersections(
 						t_min = t;
 						hit_geom_index = currNode->boundingBox.geom.geomId;
 						intersect_point = tmp_intersect;
-						normal = tmp_normal;
+						normal = tmp_normal;						
+						uv = tmp_uv;
 					}
 				}
 				else {
@@ -424,6 +437,9 @@ __global__ void computeIntersections(
 			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
 			intersections[path_index].surfaceNormal = normal;
+			intersections[path_index].hasUV = geoms[hit_geom_index].hasAlbedoMap;
+			intersections[path_index].uv = uv;
+			intersections[path_index].texId = geoms[hit_geom_index].albedoTexId;
 		}
 	}
 }
@@ -435,6 +451,8 @@ __global__ void kernShadeAllMaterials(
 	, ShadeableIntersection* shadeableIntersections
 	, PathSegment* pathSegments
 	, Material* materials
+	, Texture* albedoTexMetadata
+	, glm::vec3* textureCols
 )
 {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -447,9 +465,15 @@ __global__ void kernShadeAllMaterials(
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
-			Material material = materials[intersection.materialId];
-			glm::vec3 materialColor = material.color;
+			Material material = materials[intersection.materialId];			
 
+			if (intersection.hasUV) {
+				int X = glm::min(albedoTexMetadata[intersection.texId].width * intersection.uv.x, albedoTexMetadata[intersection.texId].width - 1.0f);
+				int Y = glm::min(albedoTexMetadata[intersection.texId].height * (intersection.uv.y), albedoTexMetadata[intersection.texId].height - 1.0f);
+				int idx = albedoTexMetadata[intersection.texId].width * Y + X + albedoTexMetadata[intersection.texId].startIdx;
+				material.color = textureCols[idx];
+			}
+			glm::vec3 materialColor = material.color;
 			// If the material indicates that the object was a light, "light" the ray
 			if (material.emittance > 0.0f) {
 				pathSegments[idx].color = (materialColor * material.emittance) * pathSegments[idx].accumCol;
@@ -606,7 +630,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			num_paths,
 			dev_intersections,
 			dev_paths,
-			dev_materials
+			dev_materials,
+			dev_albedo_textures,
+			dev_textures
 			);
 
 		cudaDeviceSynchronize();

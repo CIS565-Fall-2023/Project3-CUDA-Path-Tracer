@@ -163,7 +163,7 @@ __host__ __device__ glm::vec3 barycentric(glm::vec3 p, glm::vec3 t1, glm::vec3 t
     return glm::vec3(S1 / S, S2 / S, S3 / S);
 }
 
-__host__ __device__ float rayTriangleIntersection(Geom geom, Ray r, Triangle* tris, int triIdx, glm::vec3& intersectionPoint, glm::vec3& normal) {
+__host__ __device__ float rayTriangleIntersection(Geom geom, Ray r, Triangle* tris, int triIdx, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv) {
     
     glm::vec3 ro = multiplyMV(geom.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(geom.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -175,12 +175,15 @@ __host__ __device__ float rayTriangleIntersection(Geom geom, Ray r, Triangle* tr
     if (glm::intersectRayTriangle(ro, rd, tris[triIdx].v1.pos, tris[triIdx].v2.pos, tris[triIdx].v3.pos, baryIntersection)) {        
         glm::vec3 objspaceIntersection = ro + baryIntersection.z * rd;
         glm::vec3 objspaceNormal;
-        if (geom.hasNormals) {
-            glm::vec3 barycentricWeights = barycentric(objspaceIntersection, tris[triIdx].v1.pos, tris[triIdx].v2.pos, tris[triIdx].v3.pos);
+        glm::vec3 barycentricWeights = barycentric(objspaceIntersection, tris[triIdx].v1.pos, tris[triIdx].v2.pos, tris[triIdx].v3.pos);
+        if (geom.hasNormals) {            
             objspaceNormal = barycentricWeights.x * tris[triIdx].v1.nor + barycentricWeights.y * tris[triIdx].v2.nor + barycentricWeights.z * tris[triIdx].v3.nor;
         }
         else {
             objspaceNormal = glm::normalize(glm::cross(tris[triIdx].v2.pos - tris[triIdx].v1.pos, tris[triIdx].v3.pos - tris[triIdx].v1.pos));
+        }
+        if (geom.hasAlbedoMap) {
+            uv = barycentricWeights.x * tris[triIdx].v1.uv + barycentricWeights.y * tris[triIdx].v2.uv + barycentricWeights.z * tris[triIdx].v3.uv;
         }
         intersectionPoint = multiplyMV(geom.transform, glm::vec4(objspaceIntersection, 1.f));
         normal = glm::normalize(multiplyMV(geom.invTranspose, glm::vec4(objspaceNormal, 0.f)));
