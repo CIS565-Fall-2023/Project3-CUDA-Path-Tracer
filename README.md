@@ -22,7 +22,7 @@ CUDA Path Tracer
     - [x] First Bounce Cache
     - [x] Sort by material
 - [x] Load gltf
-- [x] BVH
+- [x] BVH && SAH
 - [x] Texture mapping & bump mapping
 - [x] Environment Mapping
 - [x] Microfacet BSDF
