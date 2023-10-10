@@ -69,3 +69,7 @@ The implementation if based on PBRT[6.2.3]. We introduce two additional camera p
 
 ### Stochastic Sampled Antialiasing
 
+#### Without AA
+![](img/noanti.png)
+#### With AA
+![](img/anti.png)
