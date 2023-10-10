@@ -186,6 +186,7 @@ void Scene::initConfig( SceneConfig& conf)
 {
     config.env_map  = conf.env_map;
     config.state = conf.state;
+    has_env_map = conf.has_env_map;
 }
 
 void Scene::initEnvironmentalMap()
