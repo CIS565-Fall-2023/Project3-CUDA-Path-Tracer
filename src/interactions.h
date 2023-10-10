@@ -41,20 +41,6 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
-
-__host__ __device__ float calcFrensel(const PathSegment& pathSegment, glm::vec3 normal, const Material& m) {
-    // cosine angle between incident ray and normal
-    float cosTheta = glm::dot(pathSegment.ray.direction, -normal);
-
-    // swap index if inside
-    float ior_i = 1.0f;
-    float ior_o = m.indexOfRefraction;
-
-    // calculate reflection coefficient using Schlick's approx.
-    float r0 = powf((ior_i - ior_o) / (ior_i + ior_o), 2.0f);
-    return r0 + (1.0f - r0) * powf((1.0f - cosTheta), 5.0f);
-}
-
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -104,20 +90,6 @@ void scatterRay(
 
     pathSegment.remainingBounces--;
 
-    //if (m.sssDepth > 0) {
-    //    thrust::uniform_real_distribution<float> u01(0, 1);
-    //    float scatterDistance = -m.sssDepth * log(1 - u01(rng));
-    //    //glm::vec3 samplePoint = intersect + scatterDistance * pathSegment.ray.direction;
-
-    //    glm::vec3 randomDirectionInMaterial = calculateRandomDirectionInHemisphere(-pathSegment.ray.direction, rng);
-    //    glm::vec3 samplePoint = intersect + scatterDistance * randomDirectionInMaterial;
-    //    glm::vec3 newDirection = calculateRandomDirectionInHemisphere(normal, rng);
-
-    //    pathSegment.ray.origin = samplePoint + 0.001f * newDirection;
-    //    pathSegment.ray.direction = newDirection;
-    //    pathSegment.color *= m.sssAlbedo; 
-    //    return;
-    //}
     thrust::uniform_real_distribution<float> u01(0, 1);
     float random_num = u01(rng);
 
