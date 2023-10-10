@@ -11,6 +11,7 @@ CUDA Path Tracer
 ![](img/output.png)
 * A shading kernel with BSDF evaluation for diffuse and specular-reflective surfaces
 * Path continuation/termination using Stream Compaction
+* Sorting intersections and pathSegments by material types
 * Refraction with Frensel effects using Snell's law
 * Stochastic Sampled Antialiasing
 * Direct lighting by taking a final ray directly to a random point on an emissive object acting as a light source
