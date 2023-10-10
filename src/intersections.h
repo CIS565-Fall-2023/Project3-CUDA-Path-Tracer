@@ -250,13 +250,14 @@ __host__ __device__ void updateTriIsectNormals(const Geom& mesh, glm::vec3 rayOr
     normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(localNor, 0.0f)));
 }
 
+// Iterative stack-based traversal method from PBRT
 __host__ __device__ float intersectBvh(Geom mesh, Ray r, Ray rLocal, 
     glm::vec3& intersectionPoint, glm::vec3& normal, Triangle* tris, BVHNode* bvhNodes)
 {
     int curNodeIdx = mesh.startBvhNodeIdx;
 
     bool hit = false;
-    glm::vec3 oneOverDir = glm::vec3(1.0f) / r.direction;
+    glm::vec3 oneOverDir = glm::vec3(1.0f) / rLocal.direction;
 
     int nodeStack[64];
     int stackPtr = 0;
