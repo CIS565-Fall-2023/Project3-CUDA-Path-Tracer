@@ -29,6 +29,10 @@
 #define USE_FIRST_BOUNCE_CACHE 0
 #define USE_SORT_BY_MATERIAL 0
 #define MIS 1
+#define RUSSIAN_ROULETTE 0
+#if RUSSIAN_ROULETTE
+	#define RR_THRESHOLD 0.7f
+#endif
 #define USE_BVH 1
 #define TONE_MAPPING 0
 
@@ -107,7 +111,7 @@ static DevScene* scene;
 //static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_empty_room.glb");
 
 //static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_mis_demo.glb");
-static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_demo.glb");
+static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_robot.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
@@ -432,12 +436,13 @@ __global__ void shadeBSDF(
 		if (intersection.t > 0.0f) { // if the intersection exists...
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 			thrust::uniform_real_distribution<float> u01(0, 1);
-			const float threshold_rr = 0.7f;
+#if RUSSIAN_ROULETTE
 			float prob_rr = u01(rng);
-			if (prob_rr > threshold_rr) {
+			if (prob_rr > RR_THRESHOLD) {
 				pathSegment.remainingBounces = 0;
 				return;
 			}
+#endif
 			const glm::vec3 rands(u01(rng), u01(rng), u01(rng));
 			BSDFStruct bsdfStruct = bsdfStructs[intersection.materialId];
 			initBSDF(bsdfStruct, intersection.uv);
@@ -514,7 +519,7 @@ __global__ void shadeBSDF(
 										//float power_pdf = Math::luminance(Li) * triangles[light.primIndex].area() * TWO_PI * inverse_sum_power; 
 										light_pdf = power_pdf * ls.pdf;
 										float weight = Math::PowerHeuristic(1, light_pdf, 1, scattering_pdf);
-										pathSegment.color += f_direct_light * ls.L * pathSegment.constantTerm * abs(light_wi.z) * weight / (light_pdf * n_sample_light * threshold_rr);
+										pathSegment.color += weight * f_direct_light * ls.L * pathSegment.constantTerm * abs(light_wi.z) / (light_pdf * n_sample_light);
 									}
 								}
 
@@ -530,7 +535,11 @@ __global__ void shadeBSDF(
 					pathSegment.remainingBounces = 0;
 				}
 				else {
-					pathSegment.constantTerm *= (bsdf * abs(wi.z) / (pdf * threshold_rr));
+					pathSegment.constantTerm *= (bsdf * abs(wi.z) / (pdf 
+#if RUSSIAN_ROULETTE
+						* RR_THRESHOLD
+#endif	
+						));
 					pathSegment.ray.direction = o2w * wi;
 					pathSegment.ray.origin = intersect;
 					pathSegment.remainingBounces--;
@@ -539,20 +548,20 @@ __global__ void shadeBSDF(
 			}
 		}
 		else {
-			//const auto & d = pathSegment.ray.direction;
-			//const float phi = atan2f(d.z, d.x);
-			//const float theta = acosf(d.y);
-			//const float u = (phi + PI) / (2 * PI);
-			//const float v = theta / PI;
-			//const glm::vec2 uv(u, v);
-			//const float env_map_strength = 3.0f;
-			//auto env_map_sample = sampleTextureRGB(*env_map, uv) * env_map_strength;
-			//if (depth == 0) {
-			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			//}
-			//else {
-			//	pathSegment.color += env_map_sample * pathSegment.constantTerm;
-			//}
+			const auto & d = pathSegment.ray.direction;
+			const float phi = atan2f(d.z, d.x);
+			const float theta = acosf(d.y);
+			const float u = (phi + PI) / (2 * PI);
+			const float v = theta / PI;
+			const glm::vec2 uv(u, v);
+			const float env_map_strength = 3.0f;
+			auto env_map_sample = sampleTextureRGB(*env_map, uv) * env_map_strength;
+			if (depth == 0) {
+				pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			}
+			else {
+				pathSegment.color += env_map_sample * pathSegment.constantTerm;
+			}
 			pathSegments[idx].remainingBounces = 0;
 			//printf("pathSegment.color: %f %f %f\n", pathSegment.color.x, pathSegment.color.y, pathSegment.color.z);
 

@@ -1,6 +1,6 @@
 // Camera
 CAMERA
-RES         600 800
+RES         800 800
 FOVY        45
 ITERATIONS  5000
 DEPTH       8

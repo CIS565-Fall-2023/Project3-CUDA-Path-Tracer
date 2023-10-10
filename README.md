@@ -1,5 +1,6 @@
 CUDA Path Tracer
 ================
+[pbrt]: https://pbrt.org/
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
@@ -7,8 +8,8 @@ CUDA Path Tracer
 * Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
 <div align="center">
     <img src="img/emissive_robot_car_2.png" width="45%"/>
-    <img src="img/bump_mapping_after.png" width="45%"/>
     <img src="img/result_bunny.png" width="45%"/>
+    <img src="img/bump_mapping_after.png" width="45%"/>
     <img src="img/robots.png" width="45%"/>
     <img src="img/indoor.png" width="45%"/>
 </div>
@@ -39,37 +40,134 @@ CUDA Path Tracer
 - [x] Tone mapping
 
 
+### Core features (As required by project instruction)
+- Diffuse & Specular
+
+![Diffuse & Specular Demo]()
+
+- Jittering
+<table>
+    <tr>
+        <th>Before jittering</th>
+        <th>After jittering</th>
+    </tr>
+    <tr>
+        <th><img src="./img/sampler_indep.jpg"/></th>
+        <th><img src="./img/sampler_sobol.jpg"/></th>
+    </tr>
+</table>
+
+- 
+
+
 ### BVH
 On host, we can construct and traverse BVH recursively. While in this project, our code run on GPU. While recent cuda update allows recursive function execution on device, we cannot take that risk as raytracer is very performance-oriented. Recursive execution will slow down the kernel function, as it may bring dynamic stack size. 
 
 Thanks to , a novel BVH constructing and traversing algorithm is adopted in this pathtracer. 
 
-This pathtracer only implements a simple version of MTBVH. Instead of constructing 6 BVHs and traversing one of them at runtime, only 1 BVH is constructed. This implies that this pathtracer still has the potential of speeding up.
+This pathtracer only implements a simple version of MTBVH. Instead of constructing 6 BVHs and traversing one of them at runtime, only 1 BVH is constructed. *It implies that this pathtracer still has the potential of speeding up*.
 
 - With BVH & Without BVH:
-
-
-
-### Microfact BSDF
 
 
 ### Texture Mapping & Bump Mapping
 
 
+<table>
+    <tr>
+        <th>Before bump mapping</th>
+        <th>After bump mapping</th>
+    </tr>
+    <tr>
+        <th><img src="img/bump_mapping_before.png"/></th>
+        <th><img src="img/bump_mapping_after.png"/></th>
+    </tr>
+</table>
+
+### Microfact BSDF
+
+To use various material, bsdfs that are more complicated than diffuse/specular are required. Here, we will first implement the classic microfacet BSDF to extend the capability of material in this pathtracer.
+
+This pathtracer uses the Microfacet implementation basd on [pbrt].
+
+Metallness = 1. Roughness 0 to 1 from left to right.
+
+> Please note that the sphere used here is not an actual sphere but an icosphere. 
+
+![Microfacet Demo](img/microfacet.png)
+
+With texture mapping implemented, we can use `metallicRoughness` texture now. Luckily, `gltf` has a good support over metallic workflow.
+
+![Metallic Workflow Demo](img/metallic_workflow.png)
+
+### Environment Mapping
+
 
 ### Direct Lighting & MIS
+
+> To stress the speed up of convergence in MIS, Russian-Roulette is disabled in this part's rendering.
+
+> The tiny dark stripe is visible in some rendering result. This is because by default we do not allow double-sided lighting in this pathtracer.
+
+> By default, number of light sample is set to 3.
+
+<table>
+    <tr>
+        <th>Only sample bsdf 500spp</th>
+        <th>Only sample light 500spp</th>
+        <th>MIS 500spp</th>
+    </tr>
+    <tr>
+        <th><img src="img/mis_bsdf_500spp.png"/></th>
+        <th><img src="img/mis_light_500spp.png"/></th>
+        <th><img src="img/mis_mis_500spp.png"/></th>
+    </tr>
+</table>
+
+<table>
+    <tr>
+        <th>Without MIS 256spp</th>
+        <th>With MIS 256spp</th>
+    </tr>
+    <tr>
+        <th><img src="img/mis_without_mis_bunny_256spp.png"/></th>
+        <th><img src="img/mis_with_mis_bunny_256spp.png"/></th>
+    </tr>
+    <tr>
+        <th>Without MIS 5k spp</th>
+        <th>With MIS 5k spp</th>
+    </tr>
+        <th><img src="img/mis_without_mis_bunny_5000spp.png"/></th>
+        <th><img src="img/mis_with_mis_bunny_5000spp.png"/></th>
+    </tr>
+</table>
+
 
 
 
 ### Depth of Field
 
+<table>
+    <tr>
+        <th>Depth of Field (Aperture=0.3)</th>
+    </tr>
+    <tr>
+        <th><img src="img/depth_of_field.png"/></th>
+    </tr>
+</table>
+
+### Future (If possible)
+
+- [ ] Adaptive Sampling
+- [ ] ReSTIR
+- [ ] Refractive
+- [ ] True B**S**DF (Add some subsurface scattering if possible?)
+- [ ] Volume Rendering ~~(Ready for NeRF)~~
+
+---
 
 
-
-### (TODO: Your README)
-
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+### History
 
 - [x] Load mesh within arbitrary scene
     - [x] Triangle
