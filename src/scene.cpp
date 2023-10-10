@@ -306,8 +306,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                     //cout << "(" << gltfMesh.positions[pCount].x << "," << gltfMesh.positions[pCount].y << "," << gltfMesh.positions[pCount].z << ")" << endl;
                     pCount++;
 
-                    gltfMesh.aabb.min = glm::min(gltfMesh.aabb.min, pos);
-                    gltfMesh.aabb.max = glm::max(gltfMesh.aabb.max, pos);
+                    gltfMesh.aabb.include(pos);
                 }
             }
             else
@@ -316,8 +315,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 return 0;
             }
 
-            aabb.min = glm::min(aabb.min, gltfMesh.aabb.min);
-            aabb.max = glm::max(aabb.max, gltfMesh.aabb.max);
+            aabb = AABB::combine(aabb, gltfMesh.aabb);
 
             it = prim.attributes.find("NORMAL");
             if (it != prim.attributes.end())
@@ -378,6 +376,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 Triangle tri;
                 for (int i = 0; i < idxAccessor.count; i += 3)
                 {
+                    tri.reset();
                     tri.v0.pos = gltfMesh.positions[gltfMesh.indices[i]];
                     tri.v1.pos = gltfMesh.positions[gltfMesh.indices[i+1]];
                     tri.v2.pos = gltfMesh.positions[gltfMesh.indices[i+2]];
@@ -416,6 +415,7 @@ int Scene::parseGltfNodeHelper(const tinygltf::Model& model, const tinygltf::Nod
                 Triangle tri;
                 for (int i = 0; i < gltfMesh.positions.size(); i += 3)
                 {
+                    tri.reset();
                     tri.v0.pos = gltfMesh.positions[i * 3];
                     tri.v1.pos = gltfMesh.positions[i * 3 + 1];
                     tri.v2.pos = gltfMesh.positions[i * 3 + 2];
@@ -599,9 +599,10 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
     {
         aabb = AABB::combine(aabb, tris[triIndices[i]].aabb);
     }
+    //cout << "all nodes aabb: " << "[ (" << aabb.min.x << "," << aabb.min.y << "," << aabb.min.z << ") , ("
+    //<< aabb.max.x << "," << aabb.max.y << "," << aabb.max.z << ") ]" << endl;
 
     // Init new node
-    //uPtr<BVHNode> uNode = mkU<BVHNode>();
     int nodeIndex = totalNodes;
     totalNodes++;
     bvhNodes.push_back(BVHNode());
@@ -616,15 +617,18 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
     else
     {
         // General case
-        int splitAxis = aabb.getLongestSplitAxis();
-
-        // Compute centroid bounds
+        // Compute all centroid bounds
         AABB centroidAABB;
         for (int i = startOffset; i < startOffset + nTris; i++)
         {
             centroidAABB.include(tris[triIndices[i]].centroid);
         }
+
+        //cout << "aabb: " << "[ (" << centroidAABB.min.x << "," << centroidAABB.min.y << "," << centroidAABB.min.z << ") , ("
+        //    << centroidAABB.max.x << "," << centroidAABB.max.y << "," << centroidAABB.max.z << ") ]" << endl;
+
         int dimToSortOn = centroidAABB.getLongestSplitAxis();
+        //cout << "based on aabb split axis is " << dimToSortOn << endl;
 
         // Sort along longest axis
 
@@ -643,7 +647,10 @@ int Scene::buildBVHRecursively(int& totalNodes, int startOffset, int nTris, cons
         int rightChildIdx = buildBVHRecursively(totalNodes, mid, nTris - half, tris, triIndices, bvhNodes);
 
         //cout << "node, " << nodeIndex << " left, " << leftChildIdx << " right: " << rightChildIdx << endl;
-        bvhNodes[nodeIndex].initInterior(splitAxis, leftChildIdx, rightChildIdx, bvhNodes);
+        bvhNodes[nodeIndex].initInterior(dimToSortOn, leftChildIdx, rightChildIdx, bvhNodes);
+
+        //cout << "CHILD aabb: " << "[ (" << bvhNodes[nodeIndex].bounds.min.x << "," << bvhNodes[nodeIndex].bounds.min.y << "," << bvhNodes[nodeIndex].bounds.min.z << ") , ("
+        //    << bvhNodes[nodeIndex].bounds.max.x << "," << bvhNodes[nodeIndex].bounds.max.y << "," << bvhNodes[nodeIndex].bounds.max.z << ") ]" << endl;
     }
 
     return nodeIndex;

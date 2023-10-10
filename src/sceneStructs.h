@@ -22,7 +22,7 @@ struct Ray {
 struct AABB
 {
     glm::vec3 min{ glm::vec3(FLT_MAX) };
-    glm::vec3 max{ glm::vec3(FLT_MIN) };
+    glm::vec3 max{ glm::vec3(-FLT_MAX) };
 
     static AABB combine(const AABB& bounds1, const AABB& bounds2)
     {
@@ -30,6 +30,12 @@ struct AABB
         unionBounds.min = glm::min(bounds1.min, bounds2.min);
         unionBounds.max = glm::max(bounds1.max, bounds2.max);
         return unionBounds;
+    }
+
+    void reset()
+    {
+        min = glm::vec3(FLT_MAX);
+        max = glm::vec3(-FLT_MAX);
     }
 
     /// <summary>
@@ -80,10 +86,6 @@ struct Triangle
     int triIdx{ -1 };
 #endif
     glm::vec3 centroid;
-    union {
-        int a;
-        int b;
-    };
 
 #if DEBUG
     void computeAabbAndCentroid(int idx)
@@ -91,12 +93,27 @@ struct Triangle
     void computeAabbAndCentroid()
 #endif
     {
-        aabb.min = glm::min(glm::min(glm::min(aabb.min, v2.pos), v1.pos), v0.pos);
-        aabb.max = glm::max(glm::max(glm::max(aabb.max, v2.pos), v1.pos), v0.pos);
+        //cout << ">>>>> tri pos <<<<<<" << endl;
+        //cout << "(" << v0.pos.x << "," << v0.pos.y << "," << v0.pos.z << "), "
+        // << "(" << v1.pos.x << "," << v1.pos.y << "," << v1.pos.z << "), "
+        // << "(" << v2.pos.x << "," << v2.pos.y << "," << v2.pos.z << ")" << endl;
+
+        aabb.include(v0.pos);
+        aabb.include(v1.pos);
+        aabb.include(v2.pos);
+        //cout << "aabb: " << "[ (" << aabb.min.x << "," << aabb.min.y << "," << aabb.min.z << ") , ("
+        //    << aabb.max.x << "," << aabb.max.y << "," << aabb.max.z << ") ]" << endl;
+
         centroid = (v0.pos + v1.pos + v2.pos) * 0.333333f;
 #if DEBUG
         triIdx = idx;
 #endif
+    }
+
+    void reset()
+    {
+        aabb.reset();
+        hasNormals = false;
     }
 };
 
