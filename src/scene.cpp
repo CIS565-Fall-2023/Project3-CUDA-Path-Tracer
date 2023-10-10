@@ -240,8 +240,8 @@ SceneMeshGroup Scene::loadGltfMesh(string path)
         meshGroup.endMeshIdx = meshes.size() - 1;
         meshGroup.valid = true;
 
-        loadedMeshGroups.emplace(path, meshGroup);
         meshGroup.startBvhNodeIdx = constructBVH(path, meshGroup.startTriIdx, meshGroup.endTriIdx + 1);
+        loadedMeshGroups.emplace(path, meshGroup);
     }
 
     return meshGroup;
