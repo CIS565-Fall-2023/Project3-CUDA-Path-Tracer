@@ -63,15 +63,21 @@ As shown in the above picture, we can see that the basic idea of subsurface scat
 |:-----:|:-----:|
 |<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_14-34-10z.547samp.png" width="300" height="300">|<img src="https://github.com/Ibm510000/Project3-CUDA-Path-Tracer/blob/main/img/cornell.2023-10-09_15-00-34z.637samp.png" width="300" height="300">
 
+I realize this motion blurs by using the basic path tracer's "iter and average" mechanism. What I'm doing is moving the object's position during each iteration. After doing so, we need to update the transform matrix and inverse transform matrix and transpose the inverse transform matrix. I defined a movement vector at the top of the .cu file, but it is also easy to develop other animation curves by using different move curves.
+
+In the above-displayed image, I used a sin curve to describe the movement of the object, thus the images show a more clear shadow in the both ending of the movement track.
+  
+
+
 
 # Analysis
 
 ### Stream Compaction
+Based on my test, I have the following graph:
+# Average run-time used per iteration (MS) lower is better
+![Unlock FPS](img/compact.png)
 
-
-### Material Sorting
-
-
+It's easy to see that after using stream compaction, the performance largely improved because the unused and invalid data was terminated early. With the compact, the data size needs to be reduced. There are more detailed benefits, please view my previous project Stream Compaction.
 
 
 ### Open Space & close space
