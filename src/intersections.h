@@ -208,3 +208,99 @@ __host__ __device__ float meshIntersectionTest(
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+
+__host__ __device__ float octreeIntersectionTest(
+    OctreeDev octree, Ray r, 
+    glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside
+) {
+    glm::mat4 const inverseTransform = octree.inverseTransform;
+    glm::vec3 const ro = multiplyMV(inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 const rd = glm::normalize(multiplyMV(inverseTransform, glm::vec4(r.direction, 0.0f)));
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+
+    float t = -1;
+    int stack[8*8*8];
+    int stackSize = 0;
+    stack[stackSize] = octree.root;
+    stackSize++;
+    while (stackSize > 0) {
+        int nodeIndex = stack[stackSize-1];
+        stackSize--;
+        OctreeNode node = octree.nodes[nodeIndex];
+        Geom boundingBox = octree.boundingBoxes[nodeIndex];
+
+        glm::vec3 tmp_intersect;
+        glm::vec3 tmp_normal;
+
+        float box_intersect = boxIntersectionTest(boundingBox, r, tmp_intersect, tmp_normal, outside);
+
+        if (box_intersect > 0) {
+
+            if (node.isLeaf) {
+                for (int i = octree.dataStarts[nodeIndex]; i < octree.dataStarts[nodeIndex + 1]; i++) {
+                    
+                    glm::vec3 const vert0 = glm::vec3(
+                        octree.triangles[i].vertices[0].x,
+                        octree.triangles[i].vertices[0].y,
+                        octree.triangles[i].vertices[0].z
+                    );
+                    glm::vec3 const vert1 = glm::vec3(
+                        octree.triangles[i].vertices[1].x,
+                        octree.triangles[i].vertices[1].y,
+                        octree.triangles[i].vertices[1].z
+                    );
+                    glm::vec3 const vert2 = glm::vec3(
+                        octree.triangles[i].vertices[2].x,
+                        octree.triangles[i].vertices[2].y,
+                        octree.triangles[i].vertices[2].z
+                    );
+
+                    glm::vec3 barycentric;
+                    if (glm::intersectRayTriangle(ro, rd, vert0, vert1, vert2, barycentric)) {
+                        glm::vec3 intersection = vert0 + 
+                            barycentric.x * (vert1 - vert0) + 
+                            barycentric.y * (vert2 - vert0);
+
+                        float current_t = glm::length(intersection - rt.origin);
+                        if (t < 0 || current_t < t) {
+                            t = current_t;
+                            intersectionPoint = intersection;
+                            normal = glm::normalize(glm::cross(vert1 - vert0, vert2 - vert0));
+                        }
+                    }
+
+                }
+            }
+            else {
+                for (int i = 0; i < 8; i++) {
+                    if (node.children[i] != -1) {
+                        stack[stackSize] = node.children[i];
+                        stackSize++;
+                    }
+                }
+            }
+
+        }
+    }
+
+    if (t < 0) {
+        return -1;
+    }
+
+
+    glm::mat4 transform = octree.transform;
+    glm::mat4 invTranspose = octree.invTranspose;
+
+    intersectionPoint = multiplyMV(transform, glm::vec4(intersectionPoint, 1.f));
+    normal = glm::normalize(multiplyMV(invTranspose, glm::vec4(normal, 0.f)));
+    outside = glm::dot(normal, rt.direction) < 0;
+    if (!outside) {
+        normal = -normal;
+    }
+    return glm::length(r.origin - intersectionPoint);
+
+
+}

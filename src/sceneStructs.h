@@ -47,6 +47,7 @@ struct Mesh {
 struct Triangle {
     glm::vec3 vertices[3];
     glm::vec3 centroid;
+    glm::mat4 transform;
 };
 
 static const int OCTREE_MAX_DEPTH = 1;
@@ -54,23 +55,32 @@ static const int OCTREE_MAX_PRIMITIVES = 10;
 static const float OCTREE_MIN_BOX_SIZE = 0.5f;
 struct OctreeNode {
     int children[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    bool isLeaf = true;
 };
 
 struct Octree {
     int root;
+    int materialid;
     std::vector<OctreeNode> nodes;
     std::vector<Triangle> triangles;
     std::vector<Geom> boundingBoxes;
     std::vector<int> dataStarts;
+    glm::mat4 transform;
+    glm::mat4 inverseTransform;
+    glm::mat4 invTranspose;
 };
 
 struct OctreeDev {
     int root;
+    int materialid;
     OctreeNode* nodes;
     Triangle* triangles;
     Geom* boundingBoxes;
     int* dataStarts;
     int numNodes;
+    glm::mat4 transform;
+    glm::mat4 inverseTransform;
+    glm::mat4 invTranspose;
 };
 
 struct Material {

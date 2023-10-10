@@ -88,7 +88,7 @@ static ShadeableIntersection* dev_intersections_gbuffer = NULL;
 static thrust::device_vector<int> index_array;
 static Mesh* dev_meshes = NULL;
 static OctreeDev* dev_octrees = NULL;
-static int mesh_size = 0;
+static int meshSize = 0;
 static int numTrees = 0;
 static int nStreams = 4;
 
@@ -123,11 +123,23 @@ void pathtraceInit(Scene* scene) {
 	index_array.resize(pixelcount);
 	thrust::sequence(thrust::device, index_array.begin(), index_array.end());
 
-	mesh_size = scene->meshes.size();
-	cudaMallocManaged(&dev_meshes, mesh_size * sizeof(Mesh));
-	cudaMemcpy(dev_meshes, scene->meshes.data(), mesh_size * sizeof(Mesh), cudaMemcpyHostToDevice);
-	for (int i = 0; i < mesh_size; i++)
+	meshSize = scene->meshes.size();
+	cudaMallocManaged(&dev_meshes, meshSize * sizeof(Mesh));
+	cudaMemcpy(dev_meshes, scene->meshes.data(), meshSize * sizeof(Mesh), cudaMemcpyHostToDevice);
+	for (int i = 0; i < meshSize; i++)
 	{
+		Mesh& mesh = dev_meshes[i];
+		mesh.materialid = scene->meshes[i].materialid;
+		mesh.numVertices = scene->meshes[i].numVertices;
+		mesh.numIndices = scene->meshes[i].numIndices;
+		mesh.boundingVolume = scene->meshes[i].boundingVolume;
+		mesh.translation = scene->meshes[i].translation;
+		mesh.rotation = scene->meshes[i].rotation;
+		mesh.scale = scene->meshes[i].scale;
+		mesh.transform = scene->meshes[i].transform;
+		mesh.inverseTransform = scene->meshes[i].inverseTransform;
+		mesh.invTranspose = scene->meshes[i].invTranspose;
+
 		float* dev_vertices;
 		unsigned short* dev_indices;
 		cudaMalloc(&dev_vertices, scene->meshes[i].numVertices * sizeof(float) * 3);
@@ -135,29 +147,39 @@ void pathtraceInit(Scene* scene) {
 
 		cudaMemcpy(dev_vertices, scene->meshes[i].vertices, scene->meshes[i].numVertices * sizeof(float) * 3, cudaMemcpyHostToDevice);
 		cudaMemcpy(dev_indices, scene->meshes[i].indices, scene->meshes[i].numIndices * sizeof(unsigned short), cudaMemcpyHostToDevice);
+
 		dev_meshes[i].vertices = dev_vertices;
 		dev_meshes[i].indices = dev_indices;
 	}
 
 	numTrees = scene->octrees.size();
 	cudaMallocManaged(&dev_octrees, numTrees * sizeof(OctreeDev));
+	cudaMemcpy(dev_octrees, scene->octrees.data(), numTrees * sizeof(OctreeDev), cudaMemcpyHostToDevice);
 	
 	for (int i = 0; i < numTrees; i++) {
 		OctreeDev& octree = dev_octrees[i];
 		octree.root = scene->octrees[i].root;
+		octree.materialid = scene->octrees[i].materialid;
 		octree.numNodes = scene->octrees[i].nodes.size();
+		octree.transform = scene->octrees[i].transform;
+		octree.inverseTransform = scene->octrees[i].inverseTransform;
+		octree.invTranspose = scene->octrees[i].invTranspose;
+
 		OctreeNode* dev_nodes;
 		Triangle* dev_triangles;
 		Geom* dev_bounds;
 		int* dev_dataStarts;
+
 		cudaMalloc(&dev_nodes, octree.numNodes * sizeof(OctreeNode));
 		cudaMalloc(&dev_triangles, scene->octrees[i].triangles.size() * sizeof(Triangle));
 		cudaMalloc(&dev_bounds, scene->octrees[i].boundingBoxes.size() * sizeof(Geom));
 		cudaMalloc(&dev_dataStarts, scene->octrees[i].dataStarts.size() * sizeof(int));
+
 		cudaMemcpy(dev_nodes, scene->octrees[i].nodes.data(), octree.numNodes * sizeof(OctreeNode), cudaMemcpyHostToDevice);
 		cudaMemcpy(dev_triangles, scene->octrees[i].triangles.data(), scene->octrees[i].triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 		cudaMemcpy(dev_bounds, scene->octrees[i].boundingBoxes.data(), scene->octrees[i].boundingBoxes.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 		cudaMemcpy(dev_dataStarts, scene->octrees[i].dataStarts.data(), scene->octrees[i].dataStarts.size() * sizeof(int), cudaMemcpyHostToDevice);
+
 		dev_octrees[i].nodes = dev_nodes;
 		dev_octrees[i].triangles = dev_triangles;
 		dev_octrees[i].boundingBoxes = dev_bounds;
@@ -180,7 +202,7 @@ void pathtraceFree() {
 	checkCUDAError("pathtraceFree");
 	cudaFree(dev_intersections_gbuffer);
 	checkCUDAError("pathtraceFree");
-	for (int i = 0; i < mesh_size; i++)
+	for (int i = 0; i < meshSize; i++)
 	{
 		cudaFree(dev_meshes[i].vertices);
 		cudaFree(dev_meshes[i].indices);
@@ -237,8 +259,10 @@ __global__ void computeIntersections(
 	, PathSegment* pathSegments
 	, Geom* geoms
 	, Mesh* meshes
+	, OctreeDev* octrees
 	, int geoms_size
 	, int meshes_size
+	, int num_trees
 	, ShadeableIntersection* intersections
 )
 {
@@ -254,6 +278,7 @@ __global__ void computeIntersections(
 		float t_min = FLT_MAX;
 		int hit_geom_index = -1;
 		int hit_mesh_index = -1;
+		int hit_tree_index = -1;
 		bool outside = true;
 
 		glm::vec3 tmp_intersect;
@@ -285,45 +310,61 @@ __global__ void computeIntersections(
 				normal = tmp_normal;
 			}
 		}
+		// for (int i = 0; i < meshes_size; i++)
+		// {
+		// 	Mesh& mesh = meshes[i];
 
-		for (int i = 0; i < meshes_size; i++)
+		// 	t = boxIntersectionTest(mesh.boundingVolume, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+		// 	if (t <= 0.0f)
+		// 	{
+		// 		continue;
+		// 	}
+		// 	t = meshIntersectionTest(mesh, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+		// 	// if (t > 0.0f && t_min > t)
+		// 	// {
+		// 	// 	t_min = t;
+		// 	// 	hit_mesh_index = i;
+		// 	// 	hit_geom_index = -1;
+		// 	// 	hit_tree_index = -1;
+		// 	// 	intersect_point = tmp_intersect;
+		// 	// 	normal = tmp_normal;
+		// 	// }
+		// }
+		for (int i = 0; i < num_trees; i++)
 		{
-			Mesh& mesh = meshes[i];
-			
-			t = boxIntersectionTest(mesh.boundingVolume, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-			if (t <= 0.0f)
-			{
-				continue;
-			}
-			t = meshIntersectionTest(mesh, pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			OctreeDev& octree = octrees[i];
+			//t = boxIntersectionTest(octree.boundingBoxes[3], pathSegment.ray, tmp_intersect, tmp_normal, outside);
+			t = octreeIntersectionTest(octree, pathSegment.ray, tmp_intersect, tmp_normal, outside);
 			if (t > 0.0f && t_min > t)
 			{
 				t_min = t;
-				hit_mesh_index = i;
+				hit_mesh_index = -1;
+				hit_geom_index = -1;
+				hit_tree_index = i;
 				intersect_point = tmp_intersect;
 				normal = tmp_normal;
 			}
 		}
 
-		if (hit_geom_index == -1 && hit_mesh_index == -1)
+		if (hit_geom_index == -1 && hit_mesh_index == -1 && hit_tree_index == -1)
 		{
 			intersections[path_index].t = -1.0f;
+			return;
 		}
-		else if (hit_mesh_index != -1)
+		intersections[path_index].t = t_min;
+		intersections[path_index].surfaceNormal = normal;
+		intersections[path_index].intersectPoint = intersect_point;
+		if (hit_mesh_index != -1)
 		{
-			//The ray hits something
-			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = meshes[hit_mesh_index].materialid;
-			intersections[path_index].surfaceNormal = normal;
-			intersections[path_index].intersectPoint = intersect_point;
 		}
-		else if (hit_geom_index != -1)
+		if (hit_geom_index != -1)
 		{
-			//The ray hits something
-			intersections[path_index].t = t_min;
 			intersections[path_index].materialId = geoms[hit_geom_index].materialid;
-			intersections[path_index].surfaceNormal = normal;
-			intersections[path_index].intersectPoint = intersect_point;
+		}
+		if (hit_tree_index != -1)
+		{
+			intersections[path_index].materialId = octrees[hit_tree_index].materialid;
 		}
 	}
 }
@@ -494,17 +535,21 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 						, dev_paths
 						, dev_geoms
 						, dev_meshes
+						, dev_octrees
 						, hst_scene->geoms.size()
 						, hst_scene->meshes.size()
+						, hst_scene->octrees.size()
 						, dev_intersections
 						);
-			//cudaDeviceSynchronize();
+			checkCUDAError("trace one bounce");
+			cudaDeviceSynchronize();
+
 			if (!hasGBuffer && useGBuffer) {
 				cudaMemcpy(dev_intersections_gbuffer, dev_intersections, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
 				
 				hasGBuffer = true;
-			}
-			
+				checkCUDAError("cudaMemcpy");
+			}			
 		}
 		else {
 			cudaMemcpy(dev_intersections, dev_intersections_gbuffer, pixelcount * sizeof(ShadeableIntersection), cudaMemcpyDeviceToDevice);
@@ -516,6 +561,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		if (sortByMaterial)
 		{
+			std::cout << "sortByMaterial" << std::endl;
 			thrust::device_ptr<PathSegment> dev_paths_ptr(dev_paths);
 			thrust::device_ptr<ShadeableIntersection> dev_intersections_ptr(dev_intersections);
 
