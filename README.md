@@ -49,7 +49,7 @@ alias vs antialias
 ### Material Sort (M-enabled, N-Disabled)
 This feature actually slow down the process when number of materials and geometry are relatively small. Since the time need to compute sort on large path segment is also very costy too. if we do not have large material list, this is not needed. 
 
-<img src="./img/material.png" width="600px">
+<img src="./img/sort.png" width="600px">
 
 ### Materials & Shading (0-Phong, 1-BlinnPhong, 2-BlinnPhong with Microfacet)
 
