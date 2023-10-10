@@ -13,11 +13,11 @@ Visual:
 * Anti-aliasing - :two: points
 * Mirror - :zero: points
 * Refraction - :two: points (glass with specular component)
-* Plastic Material :?: points (mixture of diffuse, refraction, specular, material)
-* Phong / Blinn-Phong with cosine lobine importance sampling - :?: points 
-* Microfacet shading with Blinn-Phong - :?: points 
+* Plastic Material :question: points (mixture of diffuse, refraction, specular, material)
+* Phong / Blinn-Phong with cosine lobine importance sampling - :question: points 
+* Microfacet shading with Blinn-Phong - :question: points 
 * Texture/Normal Mapping with mesh loading - :six: points
-* Smooth Shading :?: points 
+* Smooth Shading :question: points 
 
 Mesh: 
 * Obj/Mtl file loading - :two: points
