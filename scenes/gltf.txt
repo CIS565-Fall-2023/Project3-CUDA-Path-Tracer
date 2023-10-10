@@ -130,7 +130,7 @@ SCALE       80 80 80
 // Suzanne
 OBJECT 7
 mesh_gltf   Suzanne.gltf
-material 4
+material 5
 TRANS       2 4 -1
 ROTAT       0 0 -20
 SCALE       2 2 2
