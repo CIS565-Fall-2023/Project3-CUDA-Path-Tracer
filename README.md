@@ -32,7 +32,9 @@ Performance:
 Note: some of the features are real time adjustable by clicking on some keys. 
 
 #### First Bounce Cache (C-enabled, V-Disabled)
-This speeds up the performance for most situations. 
+This speeds up the performance for most situations. Since after we cache the bounce, we will have one less round of calculation needed for all the depth. Usually depth =10, it gives more than 10% improvement.
+
+<img src="./img/cache.png" width="600px">
 
 #### Antialiasing (A-enabled, Q-Disabled)
 This feature give smooth shaded picture. This feature does not give apparently visual improvement for large resolution and samples since the ray is scattered out on diffuse material, after certain amount of sampling, it gets smooth shaded. Since for antialiasing, the first bounce is not always same, we cannot cach the first bounce anyway. In my program, once the first bounce is on, antialiasing will also be turned off.
@@ -45,8 +47,9 @@ For resolution 80*80 at sample 500
 alias vs antialias
 
 #### Material Sort (M-enabled, N-Disabled)
-This feature actually slow down the process when number of materials and geometry are relatively small.
+This feature actually slow down the process when number of materials and geometry are relatively small. Since the time need to compute sort on large path segment is also very costy too. if we do not have large material list, this is not needed. 
 
+<img src="./img/material.png" width="600px">
 
 #### Materials & Shading (0-Phong, 1-BlinnPhong, 2-BlinnPhong with Microfacet)
 
@@ -122,10 +125,13 @@ I also implemented smooth shading by interpolating the normals of vertices for e
 
 triangle rendered vs smoothed triangle
 
-All together->sponza
-
-![sponza](./img/sponza.png)
 
 #### Bounding Volume Hierarchy
 
 BVH gives huge speed up for mesh loading. My BVH is constructed top-down on CPU with sorting at longest axis each iteration and split into half. Then, traverse the tree on GPU using stack (my stack is iterable->may causing problem when huge amount of intersection on list)
+
+
+
+### Final
+
+![sponza](./img/sponza.png)
