@@ -51,6 +51,16 @@ Without direct light
 
 #### ObJ Mesh loading with bounding volume intersection culling
 
+![](./img/gear1.png)
+
+![](./img/vase.png)
+
+![](./img/vase1.png)
 #### Open Image AI denoiser
+
+![](./img/OIMD.png)
+The above two pictures are basically the same scene and you can easily find the outcome applied with open image AI denoiser is much clearear than the one without denoiser.
+
+Here i use first hit intersection to act as the albedo and normal filter of the pixel.
 
 #### Performance Analysis
