@@ -46,10 +46,10 @@ In the future, implementing an MIS sampling would further improve the performanc
 | ----------------------- | ------------------- |
 | ![](img/dl.png)         |   ![](img/full.png) |
 
-Same scene at same number of iterations:
+Same scene at 30 iterations:
 | Naive Integrator        | Full lighting Integrator|
 | ----------------------- | ----------------------- |
-| ![](img/bunny.png) | ![](img/cow.png)     |
+| ![](img/dl_off.png) | ![](img/dl_on.png)     |
 
 
 ### Obj Mesh Loading (with bounding box or BVH)
