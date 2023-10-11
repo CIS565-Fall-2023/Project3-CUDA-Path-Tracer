@@ -111,6 +111,3 @@ std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
     }
 }
 
-constexpr float utilityCore::gamma(int n) {
-    return (n * EPSILON) / (1 - n * EPSILON);
-}

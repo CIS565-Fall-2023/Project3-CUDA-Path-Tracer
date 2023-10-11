@@ -258,6 +258,9 @@ int Scene::loadMaterial(string materialid) {
         else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
             newMaterial.emittance = atof(tokens[1].c_str());
         }
+        else if (strcmp(tokens[0].c_str(), "ROUGHNESS") == 0) {
+            newMaterial.roughness = atof(tokens[1].c_str());
+        }
     }
     materials.push_back(newMaterial);
     return 1;
@@ -308,23 +311,21 @@ int Scene::loadObj(const string& objFilePath, int inputMaterialId,
 
     tinyobj::attrib_t attrib = objLoader.attrib;
 
-    // Build an unordered map for materials based on their names
-    std::unordered_map<std::string, tinyobj::material_t> materialMap;
-    for (const auto& material : objLoader.materials) {
-        materialMap[material.name] = material;
-    }
-
     for (const auto& shape : objLoader.shapes) {
         int currentMaterialId = inputMaterialId;
 
-        if (inputMaterialId == -1 && materialMap.find(shape.name) != materialMap.end()) {
-            tinyobj::material_t material = materialMap[shape.name];
-            currentMaterialId = addObjMaterial(material);
+        if (inputMaterialId == -1) {
+            if (shape.mesh.material_ids[0] != -1) {
+                tinyobj::material_t mat = objLoader.materials[shape.mesh.material_ids[0]];
+                currentMaterialId = addObjMaterial(mat);
+            }
         }
-        
+            
+
         if (currentMaterialId != -1) {
             cout << "Loading Obj Shape: " << shape.name << endl;
             cout << "Connecting Obj Shape: " << shape.name << " to Material ID: " << currentMaterialId << endl;
+            cout << "" << endl;
 
             size_t index_offset = 0;
             for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {

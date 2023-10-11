@@ -12,7 +12,7 @@
 #define PI                3.1415926535897932384626422832795028841971f
 #define TWO_PI            6.2831853071795864769252867665590057683943f
 #define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
-#define OFFSET            0.001f
+#define OFFSET            0.0001f
 
 const static constexpr float EPSILON = std::numeric_limits<float>::epsilon() * 0.5;
 
@@ -33,6 +33,6 @@ namespace utilityCore {
     extern glm::mat4 buildTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
     extern std::string convertIntToString(int number);
     extern std::istream& safeGetline(std::istream& is, std::string& t); //Thanks to http://stackoverflow.com/a/6089413
-    extern constexpr float gamma(int n);
+    // extern constexpr float gamma(int n);
 }
 

@@ -26,7 +26,7 @@
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
-#define CACHE_FIRST_BOUNCE 0
+#define CACHE_FIRST_BOUNCE 1
 #define SORT_RAY_BY_MATERIAL 1
 #define USE_DOF 0
 
@@ -329,7 +329,7 @@ __global__ void computeIntersectionsBVH(
 		glm::vec3 invDir = 1.0f / pathSegment.ray.direction;
 		int dirIsNeg[3] = { invDir.x < 0.f, invDir.y < 0.f, invDir.z < 0.f };
 		int currentNodeIdx = 0, toVisitOffset = 0;
-		int nodesToVisit[64];
+		int nodesToVisit[128];
 
 		// bfs
 		while (true) {
@@ -604,10 +604,6 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 	finalGather << <numBlocksPixels, blockSize1d >> > (pixelcount, dev_image, dev_paths);
-
-	/*if (iter % 10 == 0) {
-		denoise(pixelcount, cam);
-	}*/
 
 	// Send results to OpenGL buffer for rendering
 	sendImageToPBO << <blocksPerGrid2d, blockSize2d >> > (pbo, cam.resolution, iter, dev_image);

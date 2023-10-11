@@ -56,33 +56,33 @@ __host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersec
     glm::vec3 incomingDir = pathSegment.ray.direction;
     glm::vec3 n = normal;
 
-    float cosT = glm::dot(n, -incomingDir);
-    float n1, n2;
+    float cosTheta = glm::dot(n, -incomingDir);
+    float eta1, eta2;
     bool insideObject = false;
-    if (cosT < 0.0) {
+    if (cosTheta < 0.0) {
         n = glm::normalize(-n);
-        n1 = m.indexOfRefraction;
-        n2 = 1.0;
+        eta1 = m.indexOfRefraction;
+        eta2 = 1.0;
         insideObject = true;
     }
     else {
-        n1 = 1.0;
-        n2 = m.indexOfRefraction;
+        eta1 = 1.0;
+        eta2 = m.indexOfRefraction;
     }
 
     // Sheen influence - affecting the reflection at grazing angles
-    if (m.sheen > 0.0f && cosT < 0.2f) {
-        float sheenAmount = m.sheen * (1.0f - cosT) / 0.2f;
+    if (m.sheen > 0.0f && cosTheta < 0.2f) {
+        float sheenAmount = m.sheen * (1.0f - cosTheta) / 0.2f;
         pathSegment.color = glm::mix(pathSegment.color, glm::vec3(1.0f), sheenAmount);
     }
 
     if (insideObject) {
         // Apply absorption
         float distance = glm::length(intersect - pathSegment.ray.origin);
-        pathSegment.color *= 0.f;// glm::exp(-m.transmittance * distance);
+        pathSegment.color *= glm::exp(-m.transmittance * distance);
     }
 
-    float fresnel = schlickFresnel(cosT, 1.0, m.indexOfRefraction);
+    float fresnel = schlickFresnel(cosTheta, 1.0, m.indexOfRefraction);
     fresnel = glm::mix(fresnel, m.metallic, m.metallic);                         // Consider metallic property
     glm::vec3 randomDir = calculateRandomDirectionInHemisphere(n, rng);
     
@@ -94,7 +94,7 @@ __host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersec
             pathSegment.color *= m.specular.color;
         }
         else {
-            glm::vec3 perfectRefraction = glm::refract(incomingDir, n, n1 / n2);
+            glm::vec3 perfectRefraction = glm::refract(incomingDir, n, eta1 / eta2);
             pathSegment.ray.direction = glm::normalize(glm::mix(perfectRefraction, randomDir, m.roughness * m.roughness));
             pathSegment.color *= m.diffuse;
         }

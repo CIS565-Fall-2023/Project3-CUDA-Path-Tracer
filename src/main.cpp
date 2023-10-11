@@ -64,6 +64,7 @@ int main(int argc, char** argv) {
 		}
 		printf("Geom Start Index: %d\n", node.geomIndex);
 		printf("Geom End Index: %d\n", node.geomIndex + node.geomCount);
+		printf("Geom Axis: %d\n", node.axis);
 
 		cout << "" << endl;
 	}

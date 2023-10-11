@@ -172,8 +172,12 @@ __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
     return -1; 
 }
 
+__host__ __device__ float gamma(int n) {
+    return (n * EPSILON) / (1 - n * EPSILON);
+}
+
  __host__ __device__ bool intersectBVHNode(const Ray& ray, const LinearBVHNode& node, 
-     const int dirIsNeg[3], glm::vec3& invDir) {
+    const int dirIsNeg[3], glm::vec3& invDir) {
 
     const Bound& bounds = node.bounds;
 
@@ -182,8 +186,8 @@ __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
     float tyMin = (bounds[dirIsNeg[1]].y - ray.origin.y) * invDir.y;
     float tyMax = (bounds[1 - dirIsNeg[1]].y - ray.origin.y) * invDir.y;
 
-    tMax *= 1 + 2 * utilityCore::gamma(3);
-    tyMax *= 1 + 2 * utilityCore::gamma(3);
+    tMax *= 1 + 2 * gamma(3);
+    tyMax *= 1 + 2 * gamma(3);
     if (tMin > tyMax || tyMin > tMax) {
         return false;
     }
@@ -194,7 +198,7 @@ __host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
     float tzMin = (bounds[dirIsNeg[2]].z - ray.origin.z) * invDir.z;
     float tzMax = (bounds[1 - dirIsNeg[2]].z - ray.origin.z) * invDir.z;
 
-    tzMax *= 1 + 2 * utilityCore::gamma(3);
+    tzMax *= 1 + 2 * gamma(3);
     if (tMin > tzMax || tzMin > tMax) {
         return false;
     }
