@@ -9,11 +9,11 @@ CUDA Path Tracer
 * Tested on: Windows 10, AMD Ryzen 5800 HS with Radeon Graphics CPU @ 3.20GHz 16GB, NVIDIA GeForce RTX3060 Laptop 8GB
 
 <div align="center">
-    <img src="img/emissive_robot_car_2.png" width="45%"/>
-    <img src="img/result_bunny.png" width="45%"/>
-    <img src="img/bump_mapping_after.png" width="45%"/>
-    <img src="img/robots.png" width="45%"/>
-    <img src="img/indoor.png" width="45%"/>
+    <img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/emissive_robot_car_2.png?raw=true" width="45%"/>
+    <img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/result_bunny.png?raw=true" width="45%"/>
+    <img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/bump_mapping_after.png?raw=true" width="45%"/>
+    <img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/robots.png?raw=true" width="45%"/>
+    <img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/indoor.png?raw=true" width="45%"/>
 </div>
 
 ### Implemeted Feature 
@@ -38,7 +38,7 @@ CUDA Path Tracer
 ### Core features (As required by project instruction)
 - Diffuse & Specular
 
-![Diffuse & Specular Demo](img/basic_pathtracer.png)
+![Diffuse & Specular Demo](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/basic_pathtracer.png?raw=true)
 
 - Jittering
 <table>
@@ -47,15 +47,21 @@ CUDA Path Tracer
         <th>After jittering</th>
     </tr>
     <tr>
-        <th><img src="./img/without_jittering.png"/></th>
-        <th><img src="./img/with_jittering.png"/></th>
+        <th><img src="./https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/without_jittering.png?raw=true"/></th>
+        <th><img src="./https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/with_jittering.png?raw=true"/></th>
     </tr>
 </table>
 
+### `gltf` Load & A Better Workflow (?)
+
+In this pathtracer, supported scene format is `gltf` for its high expressive capability of 3D scenes. Please view [this page](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) for more details about gltf. 
+
+Eventually, during development, most scenes used for testing is directly exported from Blender. This enables a much higher flexibility for testing. 
+![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/blender_ref.png?raw=true)
 ### BVH
 On host, we can construct and traverse BVH recursively. While in this project, our code run on GPU. While recent cuda update allows recursive function execution on device, we cannot take that risk as raytracer is very performance-oriented. Recursive execution will slow down the kernel function, as it may bring dynamic stack size. 
 
-Thanks to , a novel BVH constructing and traversing algorithm is adopted in this pathtracer. 
+Thanks to [this paper](https://arxiv.org/pdf/1505.06022.pdf), a novel BVH constructing and traversing algorithm called MTBVH is adopted in this pathtracer. 
 
 This pathtracer only implements a simple version of MTBVH. Instead of constructing 6 BVHs and traversing one of them at runtime, only 1 BVH is constructed. *It implies that this pathtracer still has the potential of speeding up*.
 
@@ -64,6 +70,8 @@ This pathtracer only implements a simple version of MTBVH. Instead of constructi
 
 ### Texture Mapping & Bump Mapping
 
+To enhance the details of mesh surfaces and gemometries, texture mapping is a must. *Here we have not implemented mipmap on GPU, though it should not be that difficult to do so*.
+
 
 <table>
     <tr>
@@ -71,8 +79,8 @@ This pathtracer only implements a simple version of MTBVH. Instead of constructi
         <th>After bump mapping</th>
     </tr>
     <tr>
-        <th><img src="img/bump_mapping_before.png"/></th>
-        <th><img src="img/bump_mapping_after.png"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/bump_mapping_before.png?raw=true"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/bump_mapping_after.png?raw=true"/></th>
     </tr>
 </table>
 
@@ -86,11 +94,11 @@ Metallness = 1. Roughness 0 to 1 from left to right.
 
 > Please note that the sphere used here is not an actual sphere but an icosphere. 
 
-![Microfacet Demo](img/microfacet.png)
+![Microfacet Demo](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/microfacet.png?raw=true)
 
 With texture mapping implemented, we can use `metallicRoughness` texture now. Luckily, `gltf` has a good support over metallic workflow.
 
-![Metallic Workflow Demo](img/metallic_workflow.png)
+![Metallic Workflow Demo](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/metallic_workflow.png?raw=true)
 
 ### Environment Mapping
 
@@ -110,9 +118,9 @@ With texture mapping implemented, we can use `metallicRoughness` texture now. Lu
         <th>MIS 500spp</th>
     </tr>
     <tr>
-        <th><img src="img/mis_bsdf_500spp.png"/></th>
-        <th><img src="img/mis_light_500spp.png"/></th>
-        <th><img src="img/mis_mis_500spp.png"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_bsdf_500spp.png?raw=true"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_light_500spp.png?raw=true"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_mis_500spp.png?raw=true"/></th>
     </tr>
 </table>
 
@@ -122,15 +130,15 @@ With texture mapping implemented, we can use `metallicRoughness` texture now. Lu
         <th>With MIS 256spp</th>
     </tr>
     <tr>
-        <th><img src="img/mis_without_mis_bunny_256spp.png"/></th>
-        <th><img src="img/mis_with_mis_bunny_256spp.png"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_without_mis_bunny_256spp.png?raw=true"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_with_mis_bunny_256spp.png?raw=true"/></th>
     </tr>
     <tr>
         <th>Without MIS 5k spp</th>
         <th>With MIS 5k spp</th>
     </tr>
-        <th><img src="img/mis_without_mis_bunny_5000spp.png"/></th>
-        <th><img src="img/mis_with_mis_bunny_5000spp.png"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_without_mis_bunny_5000spp.png?raw=true"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/mis_with_mis_bunny_5000spp.png?raw=true"/></th>
     </tr>
 </table>
 
@@ -144,13 +152,24 @@ With texture mapping implemented, we can use `metallicRoughness` texture now. Lu
         <th>Depth of Field (Aperture=0.3)</th>
     </tr>
     <tr>
-        <th><img src="img/depth_of_field.png"/></th>
+        <th><img src="https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/depth_of_field.png?raw=true" class="responsive"/></th>
     </tr>
 </table>
 
 ### Future (If possible)
 
+#### Cuda Side
+- [ ] More cuda optimization
+    - [ ] Bank conflict
+    - [ ] Loop unroll
+        - [ ] Light sample loop (if multiple light rays) 
+    - [ ] Higher parallelism (Use streams?)
+- [ ] Tile-based raytracing
+    - [ ] Potentially, it should increase the rendering speed, as it will maximize locallity within one pixel/tile. No more realtime camera movement though.
+
+#### Render Side
 - [ ] Adaptive Sampling
+- [ ] Mipmap
 - [ ] ReSTIR
 - [ ] Refractive
 - [ ] True B**S**DF (Add some subsurface scattering if possible?)
@@ -225,13 +244,13 @@ With texture mapping implemented, we can use `metallicRoughness` texture now. Lu
     - ~~Primitive assemble phase~~(This will not work, see `README` of this commit)
     - Use tinygltf
         Remember to check [data type]((https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#accessor-data-types)) before using accessor
-    ![Alt text](img/accessor_data_types.png)
+    ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/accessor_data_types.png?raw=true)
     - Done with loading a scene with node tree!
-            ![blender_reference](img/blender_reference.png)
-            ![rendered](img/first_scene.png)
+            ![blender_reference](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/blender_reference.png?raw=true)
+            ![rendered](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/first_scene.png?raw=true)
         > Can't tell how excited I am! Now my raytracer is open to most of the scenes!
         - Scene with parenting relationship
-            ![with_parenting](img/scene_with_parenting.png)
+            ![with_parenting](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/scene_with_parenting.png?raw=true)
 
 09.23-09.26
 > Waste too much time on OOP. Eventually used C-style coding.
@@ -241,7 +260,7 @@ Finally, finish gltf loading and basic bsdf.
 
 - A brief trial
     - Note that this difference might be due to different bsdf we are using right now. For convenience, we are using the most naive Diffuse BSDF, while Blender use a standard BSDF by default.
-![Alt text](img/first_trial_glb_scene.png)
+![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/first_trial_glb_scene.png?raw=true)
 
 
 09.27
@@ -250,16 +269,16 @@ Naive BVH (probably done...)
 Scene with 1k faces
 - One bounce, normal shading
     - Without BVH: FPS 10.9
-    ![Alt text](img/normal_shading_without_bvh.png)
+    ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/normal_shading_without_bvh.png?raw=true)
 
     - With BVH: FPS 53.4
-    ![Alt text](img/normal_shading_with_bvh.png)
+    ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/normal_shading_with_bvh.png?raw=true)
     - 5 times faster
 - Multiple bounces
     - Without BVH: FPS 7.6
-        ![Alt text](img/multiple_bounces_without_bvh.png)
+        ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/multiple_bounces_without_bvh.png?raw=true)
     - With BVH: FPS 22.8
-        ![Alt text](img/multiple_bounces_with_bvh.png)
+        ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/multiple_bounces_with_bvh.png?raw=true)
 
 
 09.28
@@ -268,20 +287,20 @@ Scene with 1k faces
 
 - Texture sampling
     - Try billboarding
-    ![Alt text](img/billboarding.png)
+    ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/billboarding.png?raw=true)
 
 09.29
 
 - Texture mapping
     - Texture mapping test(only baseColor shading)
-    ![Alt text](img/texture_mapping_test.png)
+    ![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/texture_mapping_test.png?raw=true)
     - Bump mapping
         - Normals in world coordinate
-    ![](img/bump_mapping_world_coord.png)
+    ![](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/bump_mapping_world_coord.png?raw=true)
         - Before bump mapping
-    ![](img/bump_mapping_before_annotated.png)
+    ![](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/bump_mapping_before_annotated.png?raw=true)
         - After bump mapping
-    ![](img/bump_mapping_after_annotated.png)
+    ![](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/bump_mapping_after_annotated.png?raw=true)
     It might be a little difficult to notice the difference before and after bump mapping. **Please observe the logo on the box, more details are added.**
 
 
@@ -324,9 +343,9 @@ Try to refactor camera
 
 - Fix random number issue(Maybe try to generate a better random number array in future?)
     - Before
-![](img/before_fixing_random_number_issue.png)
+![Alt text](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/before_fixing_random_number_issue.png?raw=true)
     - After
-![](img/after_fixing_random_number_issue.png)
+![](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/after_fixing_random_number_issue.png?raw=true)
 
     **Please notice the fracture on rabbit head before fixing**
 
