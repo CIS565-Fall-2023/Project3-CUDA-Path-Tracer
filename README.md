@@ -244,13 +244,8 @@ Another part where users can change settings is in [`bvh.h`](https://github.com/
 Here, we can determine whether BVH will use a naive split or a surface area heuristic function. 
 
 ### Other Result
-
-
-
-#### Run Video
-
-
-#### Depth of Field Video
+- [Run Video](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/realtime.mp4)
+- [Depth of Field Video](https://github.com/SydianAndrewChen/Project3-CUDA-Path-Tracer/blob/main/img/realtime_depth_of_field.mp4)
 
 
 
