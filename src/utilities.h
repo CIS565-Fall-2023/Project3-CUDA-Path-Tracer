@@ -35,6 +35,9 @@
 #ifdef BVH
 #define BVH_SAH             0	            // Use surface area heuristics to split plane, default is midpoint split
 #endif
+#define DOF                 0               // Camera lens effect: depth of field
+#define LENS_RADIUS         0.4f            // TODO: move to scene.txt
+#define FOCAL_DIST          6.0f            // TODO: move to scene.txt
 
 
 class GuiDataContainer

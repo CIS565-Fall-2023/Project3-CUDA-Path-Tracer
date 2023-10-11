@@ -280,3 +280,40 @@ void scatterRay(
         intersect + OFFSET * pathSegment.ray.direction;
     pathSegment.remainingBounces--;
 }
+
+// reference from CIS5610
+__host__ __device__
+glm::vec3 concentricSampleDisk(const glm::vec2& sampler) {
+    float x = sampler.x;
+    float y = sampler.y;
+    float phi, r;
+    float a = 2 * x - 1.f;
+    float b = 2 * y - 1.f;
+
+    if (a > -b) {
+        if (a > b) {
+            r = a;
+            phi = (PI / 4) * (b / a);
+        }
+        else {
+            r = b;
+            phi = (PI / 4) * (2 - (a / b));
+        }
+    }
+    else {
+        if (a < b) {
+            r = -a;
+            phi = (PI / 4) * (4 + (b / a));
+        }
+        else {
+            r = -b;
+            if (b < 0 || b > 0) {
+                phi = (PI / 4) * (6 - (a / b));
+            }
+            else {
+                phi = 0;
+            }
+        }
+    }
+    return glm::vec3(cosf(phi) * r, sinf(phi) * r, 0);
+}

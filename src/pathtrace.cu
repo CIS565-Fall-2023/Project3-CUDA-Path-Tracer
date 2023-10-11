@@ -187,9 +187,9 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		segment.throughput = glm::vec3(1.0f);
 
 		// Implement antialiasing by jittering the ray
-#if AA
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, segment.remainingBounces);
 		thrust::uniform_real_distribution<float> u01(0, 1);
+#if AA
 		float jitterX = u01(rng);
 		float jitterY = u01(rng);
 
@@ -203,6 +203,28 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 		);
 #endif 
+
+#if DOF
+		// Sample point on lens
+		glm::vec3 point = concentricSampleDisk(glm::vec2(u01(rng), u01(rng))) * LENS_RADIUS;
+
+		glm::vec3 ref = cam.position + (cam.view * FOCAL_DIST);
+
+		float aspectRatio = ((float)cam.resolution.x / cam.resolution.y);
+		float angle = glm::radians(cam.fov.y);
+		glm::vec3 V = cam.up * FOCAL_DIST * tan(angle);
+		glm::vec3 H = cam.right * FOCAL_DIST * aspectRatio * tan(angle);
+
+		float ndcX = 1.f - ((float)x / cam.resolution.x) * 2.f;
+		float ndcY = 1.f - ((float)y / cam.resolution.y) * 2.f;
+
+		// Compute point on plane of focus
+		glm::vec3 pFocus = ref + ndcX * H + ndcY * V;
+
+		// Update ray for effect of lens
+		segment.ray.origin = cam.position + (cam.up * point.y) + (cam.right * point.x);
+		segment.ray.direction = glm::normalize(pFocus - segment.ray.origin);
+#endif
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;

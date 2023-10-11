@@ -115,7 +115,7 @@ cube
 material 0
 TRANS       0 10 0
 ROTAT       0 0 0
-SCALE       3 .3 3
+SCALE       4 .3 4
 VEL	    0 0 0
 
 // Floor
@@ -167,7 +167,7 @@ VEL	    0 0 0
 OBJECT 6
 gltf gltf/duck_2decimals.glb
 material 1
-TRANS       0 2 0
+TRANS       0 2 2
 ROTAT       0 0 0
-SCALE       .05 .05 .05
+SCALE       .01 .01 .01
 VEL	    0 0 0
