@@ -20,7 +20,6 @@ CUDA Path Tracer
 ## Table of Contents
 
 - [CUDA Path Tracer](#cuda-path-tracer)
-- [CUDA-Path-Tracer](#cuda-path-tracer-1)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [What is Path Tracing?](#what-is-path-tracing)
