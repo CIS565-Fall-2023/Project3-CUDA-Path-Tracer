@@ -43,3 +43,15 @@ void image::saveHDR(const std::string &baseFilename) {
     stbi_write_hdr(filename.c_str(), xSize, ySize, 3, (const float *) pixels);
     std::cout << "Saved " + filename + "." << std::endl;
 }
+
+float gammaCorrectionSingleChannel(float input)
+{
+    return input <= 0.0031308f ? 12.92f * input : 1.055f * pow(input, 1 / 2.4f) - 0.055f;
+}
+
+void gammaCorrection(glm::vec3& input)
+{
+    input.x = gammaCorrectionSingleChannel(input.x);
+    input.y = gammaCorrectionSingleChannel(input.y);
+    input.z = gammaCorrectionSingleChannel(input.z);
+}

@@ -9,11 +9,19 @@ GLuint positionLocation = 0;
 GLuint texcoordsLocation = 1;
 GLuint pbo;
 GLuint displayImage;
+extern uint64_t sysTime;
+extern uint64_t delta_t;
+
+#define CAM_SPEED 0.1f;
 
 GLFWwindow* window;
 GuiDataContainer* imguiData = NULL;
 ImGuiIO* io = nullptr;
 bool mouseOverImGuiWinow = false;
+
+extern RenderState* renderState;
+extern float zoom, theta, phi;
+extern bool camchanged;
 
 std::string currentTimeString() {
 	time_t now;
@@ -110,6 +118,11 @@ void cleanupCuda() {
 
 void initCuda() {
 	cudaGLSetGLDevice(0);
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("CUDA error: %s\n", cudaGetErrorString(err));
+		exit(-1);
+	}
 
 	// Clean up on program exit
 	atexit(cleanupCuda);
@@ -219,6 +232,26 @@ void RenderImGui()
 	//ImGui::Text("counter = %d", counter);
 	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::Text("Num triangles: %d", scene->triangles.size());
+	ImGui::Text("Num bvh nodes: %d", scene->bvhTreeSize);
+	ImGui::End();
+
+	ImGui::Begin("Camera Settings");
+	if (ImGui::SliderFloat("Theta", &theta, 0.0f, PI))
+		camchanged = true;
+	if(ImGui::SliderFloat("Phi", &phi, 0.0f, TWO_PI))
+		camchanged = true;
+	if(ImGui::SliderFloat("Pos x", &renderState->camera.position.x, -10.0f, 10.0f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Pos y", &renderState->camera.position.y, -10.0f, 10.0f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Pos z", &renderState->camera.position.z, -10.0f, 10.0f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Lens Radius", &renderState->camera.lensRadius, 0.0f, 0.15f))
+		camchanged = true;
+	if (ImGui::SliderFloat("Focal Length", &renderState->camera.focalLength, 0.1f, 20.0f))
+		camchanged = true;
+
 	ImGui::End();
 
 
@@ -236,8 +269,32 @@ void mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		
 		glfwPollEvents();
-
+		uint64_t currTime = time(nullptr);
+		delta_t = currTime - sysTime;
+		sysTime = currTime;
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position += renderState->camera.view * CAM_SPEED;
+		}
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position -= renderState->camera.view * CAM_SPEED;
+		}
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position -= renderState->camera.right * CAM_SPEED;
+		}
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		{
+			camchanged = true;
+			renderState->camera.position += renderState->camera.right * CAM_SPEED;
+		}
+			
 		runCuda();
+		
 
 		string title = "CIS565 Path Tracer | " + utilityCore::convertIntToString(iteration) + " Iterations";
 		glfwSetWindowTitle(window, title.c_str());

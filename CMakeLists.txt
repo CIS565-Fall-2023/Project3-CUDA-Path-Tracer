@@ -73,6 +73,7 @@ set(headers
     src/sceneStructs.h
     src/preview.h
     src/utilities.h
+    src/bvh.h
     src/ImGui/imconfig.h
 	
 	src/ImGui/imgui.h
@@ -95,7 +96,8 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
-	
+    src/bvh.cpp
+	src/mikktspace/mikktspace.c
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
       src/ImGui/imgui_draw.cpp 
@@ -114,8 +116,11 @@ source_group(Sources FILES ${sources})
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
+link_directories(${PROJECT_SOURCE_DIR}/external/lib)
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
+
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction
+    OpenImageDenoise
     )

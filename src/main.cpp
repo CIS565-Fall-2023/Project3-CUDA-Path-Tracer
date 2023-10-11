@@ -1,7 +1,9 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
-
+#include <chrono>
+#include <stb_image.h>
+#include <OpenImageDenoise/oidn.h>
 static std::string startTimeString;
 
 // For camera controls
@@ -10,8 +12,10 @@ static bool rightMousePressed = false;
 static bool middleMousePressed = false;
 static double lastX;
 static double lastY;
+uint64_t sysTime;
+uint64_t delta_t;
 
-static bool camchanged = true;
+bool camchanged = true;
 static float dtheta = 0, dphi = 0;
 static glm::vec3 cammove;
 
@@ -27,6 +31,8 @@ int iteration;
 int width;
 int height;
 
+OIDNDevice device;
+
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
@@ -41,12 +47,17 @@ int main(int argc, char** argv) {
 
 	const char* sceneFile = argv[1];
 
+
 	// Load scene file
 	scene = new Scene(sceneFile);
+	scene->buildBVH();
+	scene->buildStacklessBVH();
+
+	scene->CreateLights();
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
-
+	sysTime = time(nullptr);
 	// Set up camera stuff from loaded path tracer settings
 	iteration = 0;
 	renderState = &scene->state;
@@ -65,21 +76,26 @@ int main(int argc, char** argv) {
 	// so, (0 0 1) is forward, (0 1 0) is up
 	glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
 	glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
-	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
+	phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, 1)));
 	theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
 	ogLookAt = cam.lookAt;
 	zoom = glm::length(cam.position - ogLookAt);
 
 	// Initialize CUDA and GL components
 	init();
+	stbi_set_flip_vertically_on_load(1);
+	scene->LoadAllTextures();
 
 	// Initialize ImGui Data
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
 
+	device = oidnNewDevice(OIDN_DEVICE_TYPE_DEFAULT); // CPU or GPU if available
+	oidnCommitDevice(device);
 	// GLFW main loop
 	mainLoop();
 
+	oidnReleaseDevice(device);
 	return 0;
 }
 
@@ -87,18 +103,68 @@ void saveImage() {
 	float samples = iteration;
 	// output image file
 	image img(width, height);
+#if DENOISE
+	DrawGbuffer(16);
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
+			int index = x + (y * width);
+			renderState->image[index] /= samples;
+		}
+	}
+	samples = 1;
+	OIDNBuffer colorBuf = oidnNewBuffer(device, width * height * 3 * sizeof(float));
+	OIDNBuffer albedoBuf = oidnNewBuffer(device, width * height * 3 * sizeof(float));
+	OIDNBuffer normalBuf = oidnNewBuffer(device, width * height * 3 * sizeof(float));
+	OIDNFilter filter = oidnNewFilter(device, "RT");
+
+	oidnSetFilterImage(filter, "color", colorBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // beauty
+	oidnSetFilterImage(filter, "albedo", albedoBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // auxiliary
+	oidnSetFilterImage(filter, "normal", normalBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // auxiliary
+	oidnSetFilterImage(filter, "output", colorBuf,
+		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // denoised beauty
+	oidnSetFilterBool(filter, "hdr", true); // beauty image is HDR
+	oidnCommitFilter(filter);
+
+	float* colorPtr = (float*)oidnGetBufferData(colorBuf);
+	float* albedoPtr = (float*)oidnGetBufferData(albedoBuf);
+	float* normalPtr = (float*)oidnGetBufferData(normalBuf);
+	memcpy(colorPtr, renderState->image.data(), width * height * 3 * sizeof(float));
+	memcpy(albedoPtr, renderState->albedo.data(), width * height * 3 * sizeof(float));
+	memcpy(normalPtr, renderState->normal.data(), width * height * 3 * sizeof(float));
+
+	oidnExecuteFilter(filter);
+	const char* errorMessage;
+	if (oidnGetDeviceError(device, &errorMessage) != OIDN_ERROR_NONE)
+		printf("Error: %s\n", errorMessage);
+
+	memcpy(renderState->image.data(), colorPtr, width * height * 3 * sizeof(float));
+	oidnReleaseBuffer(colorBuf);
+	oidnReleaseBuffer(albedoBuf);
+	oidnReleaseBuffer(normalBuf);
+	oidnReleaseFilter(filter);
+#endif
 
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int index = x + (y * width);
 			glm::vec3 pix = renderState->image[index];
+#if TONEMAPPING
+			img.setPixel(width - 1 - x, y, util_postprocess_gamma(util_postprocess_ACESFilm(pix / samples)));
+#else
 			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
+#endif
 		}
 	}
 
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
 	ss << filename << "." << startTimeString << "." << samples << "samp";
+#if DENOISE
+	ss << "_denoised";
+#endif
 	filename = ss.str();
 
 	// CHECKITOUT
@@ -110,20 +176,17 @@ void runCuda() {
 	if (camchanged) {
 		iteration = 0;
 		Camera& cam = renderState->camera;
-		cameraPosition.x = zoom * sin(phi) * sin(theta);
-		cameraPosition.y = zoom * cos(theta);
-		cameraPosition.z = zoom * cos(phi) * sin(theta);
+		cam.view.x = sin(phi) * sin(theta);
+		cam.view.y = cos(theta);
+		cam.view.z = cos(phi) * sin(theta);
 
-		cam.view = -glm::normalize(cameraPosition);
 		glm::vec3 v = cam.view;
 		glm::vec3 u = glm::vec3(0, 1, 0);//glm::normalize(cam.up);
 		glm::vec3 r = glm::cross(v, u);
 		cam.up = glm::cross(r, v);
 		cam.right = r;
 
-		cam.position = cameraPosition;
-		cameraPosition += cam.lookAt;
-		cam.position = cameraPosition;
+		//cam.position = cameraPosition;
 		camchanged = false;
 	}
 
@@ -131,7 +194,7 @@ void runCuda() {
 	// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not use this buffer
 
 	if (iteration == 0) {
-		pathtraceFree();
+		pathtraceFree(scene);
 		pathtraceInit(scene);
 	}
 
@@ -149,7 +212,7 @@ void runCuda() {
 	}
 	else {
 		saveImage();
-		pathtraceFree();
+		pathtraceFree(scene);
 		cudaDeviceReset();
 		exit(EXIT_SUCCESS);
 	}
@@ -162,7 +225,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
-		case GLFW_KEY_S:
+		case GLFW_KEY_Q:
 			saveImage();
 			break;
 		case GLFW_KEY_SPACE:
@@ -172,6 +235,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			cam.lookAt = ogLookAt;
 			break;
 		}
+		
 	}
 }
 
@@ -190,7 +254,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (leftMousePressed) {
 		// compute new camera parameters
 		phi -= (xpos - lastX) / width;
-		theta -= (ypos - lastY) / height;
+		theta += (ypos - lastY) / height;
 		theta = std::fmax(0.001f, std::fmin(theta, PI));
 		camchanged = true;
 	}
