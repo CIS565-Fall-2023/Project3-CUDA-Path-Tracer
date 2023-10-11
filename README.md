@@ -6,6 +6,8 @@ CUDA Path Tracer
 * Tong Hu
 * Tested on: Windows 11, Ryzen 7 1700X @ 3.4GHz 16GB, RTX 2060 6GB (Personal Desktop)
 
+![](/img/preface.png)
+
 # Visual Improvement
 ## Different surfaces material
 
