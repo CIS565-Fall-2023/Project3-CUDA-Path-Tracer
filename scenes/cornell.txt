@@ -124,8 +124,8 @@ ROTAT       0 0 0
 SCALE       .01 10 10
 
 // OBJ 1
-GLTF_FILE ../scenes/BrainStem.gltf
-material 1
-TRANS       0 9 0
-ROTAT       90 0 0
-SCALE       5 5 5
+OBJ_FILE ../scenes/bunny.obj
+material 4
+TRANS       0 3 0
+ROTAT       0 0 0
+SCALE       3 3 3
