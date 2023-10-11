@@ -9,7 +9,7 @@ CUDA Path Tracer
 
 # Overview
 
-![Showcase Picture]()
+![Showcase Picture](./img/showcase.png)
 
 A CUDA-based path tracer based on Monte Carlo sampling.
 
@@ -105,6 +105,64 @@ From the testing result under different maximum bounce limit, it seems that the 
 
 The path tracer also supports ideal refraction, combined with Frensel's effect, which is emulated by Schlick's approximation.
 
+![refraction](./img/refraction.png)
 
+This implementation only accounts for ideal reflections and refraction, so images refracted within spheres are sharp and not blurred.
+
+## 6. Imperfect Specular Surfaces with MIS
+
+To achieve a good mixture of diffusion and specular shading, MIS weights are used to lower the variance and promote convergence. To account for imperfect specular shading, rays leaving the surface are sampled in a lobe centering around the ideal reflect direction. The results resembles a good Phong shading result.
+
+![Imperfect Specular](./img/imperfect_specular.png)
+
+The use of MIS weights, which are computed by PDFs for both sampling techniques, lowers the variance and appearance of fireflies drastically. On the contrary, if a 50/50 chance of refraction/reflection chance is chosen, the variance will be so high that the final image will be full of fireflies.
+
+## 7. Stochastic Antialiasing
+
+To achieve smoother edges, antialiasing is accomplished by jittering primary rays within the range of a single pixel. Since randomization is introduced, primary ray caching is no longer feasible.
+
+Here is a side-by-side comparison of edges:
+
+With Antialiasing (5000 iters, 8 depth)   |  Without Antialiasing (5000 iters, 8 depth)
+:-------------------------:|:-------------------------:
+![w/ Antialiasing](./img/w_antialiasing.png)  |  ![w/o Antialiasing](./img/wo_antialiasing.png)
+
+## 8. Motion Blur
+
+In the scene file, a `VELOC` `vec3` tag can be added to each object to specify the velocity vector of its movement.
+
+To achieve a sense of movement, a time is randomly chosen from 0 to a specified shutter time, and objects will be updated to their respective position at that specific time, achieving a sampling at that time.
+
+To further show the acceleration of the object, time is sampled more often at the end of the shutter time, so the object is more solid at the end position of its movement.
+
+![Motion Blur](./img/motion_blue.png)
+
+The sphere is specified a velocity of `[4, 0, 0]`, therefore moving to the right. It is obvious that the sphere is more solid on the right, which is the endpoint of its movement.
+
+## 9. Physically-Based Depth-of-Field
+
+Rather than using a traditional pin-hole camera, the origin of primary rays are instead generated within a small aperture space. The aperture diameter as well as the focal distance can then be specified.
+
+Focal distance is used to control the focal point and which objects should be sharp and clear:
+
+Focal Length 12.38    |  Focal Length 8.08
+:-------------------------:|:-------------------------:
+![Focus Left](./img/focal_left.png)  |  ![Focus Right](./img/focal_right.png)
+
+Aperture diameter is used to control the blur degree. Larger aperture means more blur at the same distance from the focal plain:
+
+Aperture Diameter 1.0    |  Aperture Diameter 5.0
+:-------------------------:|:-------------------------:
+![Aperture Diameter 1.0](./img/aperture_1.png)  |  ![Aperture Diameter 5.0](./img/aperture_5.png)
+
+## 10. Alternative Camera Types
+
+Fish-eye camera and Panorama camera are also available for this path tracer, by blending primary rays in a spherical or cylindrical coordination.
+
+Fish Eye Camera    |  Panorama Camera
+:-------------------------:|:-------------------------:
+![Fish Eye](./img/fisheye.png)  |  ![Panorama](./img/panorama.png)
 
 # Reference
+
+1. [GPU Gems 3: Importance-based Sampling](https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling)
