@@ -36,14 +36,14 @@ In the future, implementing an MIS sampling would further improve the performanc
 Same scene at same number of iterations:
 | Naive Integrator        | Full lighting Integrator|
 | ----------------------- | ----------------------- |
-| ![bunny](img/bunny.png) | ![cow](img/cow.png)     |
+| ![](img/bunny.png) | ![](img/cow.png)     |
 
 
-### Obj Mesh Loading & BVH
+### Obj Mesh Loading (with bounding box or BVH)
 I use the tinyObj for parsing and loading the obj format meshes. After meshed are loaded, a list containing all the triangles in the scene is transported to GPU for intersection computing.
-To accelerate the intersection process, I added a BVH structure. It is constructed on CPU, and then a list of BVH nodes and a list of index of triangles used by BVH nodes are transported to GPU. As expected, it improves some of the intersection performance. 
+To accelerate the intersection process, I added a BVH structure. It is constructed on CPU, and then a list of BVH nodes and a list of index of triangles used by BVH nodes are transported to GPU. As expected, it improves some of the intersection performance. If BVH is turned off, the meshes will still be culled by bounding boxes.
 This test was under VS Debug mode and thus it was quite slow. (I just realized I should use VS Release mode, but exceptions occured when transfering to Release mode and still working on fixing it...)
-<img width="600" alt="1" src="img/bvh_test.png">
+<img width="400" alt="1" src="img/bvh_test.png">
 <img width="300" alt="1" src="img/bvh.png">
 |                                  | Without BVH             |With BVH                 |
 | -----------------------          | ----------------------- | ----------------------- |
@@ -63,10 +63,19 @@ Images below show the 1st iteration of the wahoo scene. Actually the improvement
 
 #### Stream Compaction II: the performance effect on open and closed scenes
 Open
+
 <img width="600" alt="1" src="img/1.png">
+
 Closed
+
 <img width="600" alt="2" src="img/2.png">
+
 | Open scene              | Closed scene        |
 | ----------------------- | ------------------- |
 | ![](img/dl.png)         |   ![](img/full.png) |
 | Improvement: ?%         |   Improvement: ?%   |
+
+## Reference
+* [PBRT book] (https://www.pbr-book.org/3ed-2018/contents)
+* CIS 461 Homeworks
+* https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
