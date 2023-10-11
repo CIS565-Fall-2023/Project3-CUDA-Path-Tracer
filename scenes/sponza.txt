@@ -10,7 +10,7 @@ EMITTANCE   3
 CAMERA
 RES         1000 1000
 FOVY        45
-ITERATIONS  10000
+ITERATIONS  100
 DEPTH       8
 FILE        sponza
 EYE         0.0 5 10.5
@@ -22,14 +22,14 @@ OBJECT 0
 model fnormal ../scenes/models/sponza/sponza.obj
 material -1
 TRANS       0 0 10
-ROTAT       0 0 0
+ROTAT       0 90 0
 SCALE       1.0 1.0 1.0
 
 OBJECT 1
 geometry cube
 material 0
 TRANS       0 50 0
-ROTAT       0 0 0
+ROTAT       0 90 0
 SCALE       100 1 100
 
 

@@ -1,6 +1,6 @@
 // Camera
 CAMERA
-RES         1920 1080
+RES         2560 1440
 FOVY        30
 ITERATIONS  1000
 DEPTH       8
