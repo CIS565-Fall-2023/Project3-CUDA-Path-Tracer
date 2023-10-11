@@ -70,6 +70,14 @@ Because there is indirect illumination (global illumination) support in this pat
 |:-:|
 |Fireflies|
 
+### 2. Anti-aliasing with subpixel ray jittering
+
+When rays are generated, instead of shooting them directly through the center of each pixel, the rays are offset by a slight amount. This jittering helps reduce aliasing. The effect can be seen in the below comparison, where the left image has aliased edges on the sphere, but the right one does not.
+
+|<img src="img/cornellWithoutAA.png" width=400>|<img src="img/cornellWithAA.png" width=400>|
+|:-:|:-:|
+|Without anti-aliasing|With anti-aliasing|
+
 ## Performance Analysis
 
 ## References
