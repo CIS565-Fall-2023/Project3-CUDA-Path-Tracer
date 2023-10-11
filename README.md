@@ -70,19 +70,24 @@ These two main update (and also many trivial modificatoin together) make my BVH 
 This project also support some render features.
 
 **Obj Load**
+
 ![](/img/manyObj.png)
 
 **Microfacet**
+
 ![](/img/microfacet.png)
 
 **Refraction**
+
 ![](/img/refraction_0.png)
 
 **Jitter Ray**
+
 jitter ratio is 1e-3
 ![](/img/jitterRay_1e_3_8d.png)
 jitter ratio is 1e-2, the result is more blur
 ![](/img/jitterRay_1e_2_8d.png)
 
 **Depth Of Field**
+
 ![](/img/Depth_Of_Field.png)
