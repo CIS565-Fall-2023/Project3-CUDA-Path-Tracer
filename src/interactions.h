@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include <thrust/random.h>
 
 // CHECKITOUT
 /**
@@ -66,14 +67,92 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
+ __device__
 void scatterRay(
         PathSegment & pathSegment,
         glm::vec3 intersect,
         glm::vec3 normal,
+        glm::vec2 uv,
         const Material &m,
-        thrust::default_random_engine &rng) {
+        thrust::default_random_engine &rng,
+        cudaTextureObject_t* texObjects,
+        Texture* textures,
+        int texId) {
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+    thrust::uniform_real_distribution<float> u01(0, 1);
+
+    glm::vec3 texColor;
+
+    if (texId != -1) 
+    {
+
+        cudaTextureObject_t texObject = texObjects[texId];
+
+        float u = uv[0];
+        float v = uv[1];
+
+        float4 finalcol = tex2D<float4>(texObject, u, v);
+        texColor = glm::vec3(finalcol.x, finalcol.y, finalcol.z);
+
+    }
+    else 
+    {
+        texColor = m.color;
+    }
+
+    // Pure Diffuse
+    if (!m.hasReflective && !m.hasRefractive) 
+    {
+        glm::vec3 direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
+        pathSegment.ray.origin = intersect + EPSILON * normal;
+        pathSegment.ray.direction = direction;
+        pathSegment.color *= texColor;
+    }
+    // Reflective
+    else if (m.hasReflective && !m.hasRefractive) 
+    {
+        glm::vec3 direction = glm::reflect(pathSegment.ray.direction, normal);
+        pathSegment.ray.origin = intersect + EPSILON * normal;
+        pathSegment.ray.direction = glm::normalize(direction);
+        pathSegment.color *= texColor;
+    }
+    // Refraction and Reflection
+    else if(m.hasReflective && m.hasRefractive)
+    {
+        glm::vec3 rayDir = pathSegment.ray.direction;
+        float cosTheta = glm::dot(normal, -rayDir);
+        float n1 = 1.0f;
+        float n2 = 1.0f;
+
+        if (cosTheta >= 0.f) 
+        {
+            n2 = m.indexOfRefraction;
+        }
+        else 
+        {
+            normal = glm::normalize(-normal);
+            n1 = m.indexOfRefraction;
+        }
+
+        float R0 = pow((n1 - n2) / (n1 + n2), 2);
+        float R = R0 + (1.f - R0) * pow((1 - cosTheta), 5);
+
+        thrust::uniform_real_distribution<float> u01(0, 1);
+        if (u01(rng) >= R) // Refraction
+        {
+            glm::vec3 direction = glm::normalize(glm::refract(rayDir, normal, n1 / n2));
+            pathSegment.ray.direction = direction;
+            pathSegment.ray.origin = intersect + EPSILON * pathSegment.ray.direction;
+            pathSegment.color *= texColor;
+        }
+        else // Reflection 
+        {
+            glm::vec3 direction = glm::reflect(rayDir, normal);
+            pathSegment.ray.origin = intersect + EPSILON * normal;
+            pathSegment.ray.direction = glm::normalize(direction);
+            pathSegment.color *= texColor;
+        }
+    }
 }

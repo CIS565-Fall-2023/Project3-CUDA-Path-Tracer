@@ -48,17 +48,72 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
+// Specular and refraction white
+MATERIAL 5
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        1
+REFRIOR     1.5
+EMITTANCE   0
+
+// Diffuse white
+MATERIAL 6
+RGB         .43 .98 .82
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   3
+
+// Diffuse white
+MATERIAL 7
+RGB         .75 .43 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   3
+
+// Specular white
+MATERIAL 8
+RGB         .75 .43 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Specular white
+MATERIAL 9
+RGB         .43 .98 .82
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
 // Camera
 CAMERA
-RES         800 800
+RES         1200 900
 FOVY        45
 ITERATIONS  5000
 DEPTH       8
 FILE        cornell
-EYE         0.0 5 10.5
+FOCAL_DIST  10
+LENS_RADIUS 5
+EYE         0.0 5 7.5
 LOOKAT      0 5 0
 UP          0 1 0
 
+// Texture
+TEXTURE 0
+PATH ../scenes/e.jpeg
 
 // Ceiling light
 OBJECT 0
@@ -74,7 +129,7 @@ cube
 material 1
 TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       10 .01 10
+SCALE       20 .01 10
 
 // Ceiling
 OBJECT 2
@@ -82,7 +137,7 @@ cube
 material 1
 TRANS       0 10 0
 ROTAT       0 0 90
-SCALE       .01 10 10
+SCALE       .01 20 10
 
 // Back wall
 OBJECT 3
@@ -90,28 +145,78 @@ cube
 material 1
 TRANS       0 5 -5
 ROTAT       0 90 0
-SCALE       .01 10 10
+SCALE       .01 20 20
 
 // Left wall
 OBJECT 4
 cube
-material 2
-TRANS       -5 5 0
+material 8
+TRANS       -10 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
 // Right wall
 OBJECT 5
 cube
-material 3
-TRANS       5 5 0
+material 9
+TRANS       10 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
-OBJECT 6
+// OBJ 1
+OBJ_FILE ../scenes/append.obj
+material 1
+TRANS       3 4 3
+ROTAT       0 0 0
+SCALE       0.00012 0.00012 0.00012
+
+// Ceiling light
+OBJECT 7
+cube
+material 6
+TRANS       5 10 0
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Ceiling light
+OBJECT 8
+cube
+material 7
+TRANS       -5 10 0
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Ceiling light
+OBJECT 9
 sphere
 material 4
-TRANS       -1 4 -1
+TRANS       -5 7 0
 ROTAT       0 0 0
 SCALE       3 3 3
+
+// OBJ 1
+OBJ_FILE ../scenes/bunny.obj
+material 4
+TRANS       5 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
+
+// OBJ 1
+OBJ_FILE ../scenes/bunny.obj
+material 4
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
+
+// OBJ 1
+OBJ_FILE ../scenes/bunny.obj
+material 4
+TRANS       -5 0 0
+ROTAT       0 0 0
+SCALE       1 1 1
+
+GLTF_FILE ../scenes/BrainStem.gltf
+material 3
+TRANS       0 9 -2
+ROTAT       90 0 0
+SCALE       5 5 5
