@@ -6,6 +6,19 @@ CUDA Path Tracer
 * Janet Wang [website](https://xchennnw.github.io/en.github.io/)
 * Tested on: Windows 11, i7-12700H @ 2.30GHz 16GB, Nvidia Geforce RTX 3060 Ti  8054MB
 
+Sample scene
+
+<img width="600" alt="1" src="img/4.png">
+
+
+Open Scene
+
+<img width="600" alt="1" src="img/1.png">
+
+Closed scene
+
+<img width="600" alt="2" src="img/2.png">
+
 
 ## Features
 * Materials (Diffuse, Perfect Specular, Refraction, Glass, Plastic)
@@ -57,23 +70,7 @@ Images below show the 1st iteration of the wahoo scene. Actually the improvement
 | ![](img/no_stra.png)        | ![](img/stra.png)                 |
 
 
-## Performance Analysis
 
-#### Stream Compaction I: the termination of rays within a single iteration
-
-#### Stream Compaction II: the performance effect on open and closed scenes
-Open
-
-<img width="600" alt="1" src="img/1.png">
-
-Closed
-
-<img width="600" alt="2" src="img/2.png">
-
-| Open scene              | Closed scene        |
-| ----------------------- | ------------------- |
-| ![](img/dl.png)         |   ![](img/full.png) |
-| Improvement: ?%         |   Improvement: ?%   |
 
 ## Reference
 * [PBRT book] (https://www.pbr-book.org/3ed-2018/contents)
