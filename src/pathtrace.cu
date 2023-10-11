@@ -20,11 +20,11 @@
 
 #define CACHE_FIRST_BOUNCE 1
 #define SORT_MATERIAL 1
-#define STREAM_COMPACTION 1
+#define STREAM_COMPACTION 0
 
 #define DEPTH_OF_FIELD 0
 #define ANTIALIASING 0
-#define DIRECT_LIGHTING 1
+#define DIRECT_LIGHTING 0
 #define MOTION_BLUR 0
 #define MOTION_VELO glm::vec3(2.5, 0.5, 0.3)
 #define BVH 1
@@ -701,7 +701,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		num_paths = new_path_end - dev_paths;
 		if (num_paths <= 0) iterationComplete = true;
 #else
-		iterationComplete = true; // TODO: should be based off stream compaction results.
+		if(depth >= traceDepth)
+			iterationComplete = true; // TODO: should be based off stream compaction results.
 #endif
 
 		num_paths = dev_path_end - dev_paths;

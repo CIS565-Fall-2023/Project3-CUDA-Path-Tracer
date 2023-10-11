@@ -42,7 +42,7 @@ In this project, I completed the following features:
 
 * BVH tree
 
-## Analysis
+## Features and Renders
 
 ### BSDF
 
@@ -100,3 +100,37 @@ I implemented mesh loading for both .obj and .gltf files. The performance analys
 
 ![](img/gltfsphere.png)
 ![](img/gltfpeople.png)
+
+### Texture Mapping
+
+I did this part just for testing on my random drawing.
+
+![](img/t1.png)
+
+## Performance Analysis
+
+These are the macros defined for toggleable performance related features:
+```
+#define CACHE_FIRST_BOUNCE 1
+#define SORT_MATERIAL 1
+#define STREAM_COMPACTION 1
+#define BOUNDING_BOX 1
+#define BVH 1
+```
+### Cache First Bounce
+
+This techinique increases fps on different max depth slightly(by 1 ~ 5). However, in pathtracer if we need to do antialiasing, this techinique will break the result since intersection in each frame might not always be the same.
+
+![](img/cache.png)
+
+### Sort Material
+
+I use ```thrust::sort_by_key``` to sort rays by material. However, this acceleration doesn't actually accelerate the performance and it actually slow down the performance. I'm assuming sorting in this way will cost more than the benefit. Maybe attempting the extra credit on it will have a more efficient result.
+
+![](img/sort.png)
+
+### Stream Compaction
+
+Stream compaction removes terminated rays to improve the performance. I implemented this using ```thrust::stable_partition```. I observed a significant performance improvement by using stream compaction both on closed and open scene, and on both shading kernel and compute intersection kernel.
+
+![](img/stream.png)

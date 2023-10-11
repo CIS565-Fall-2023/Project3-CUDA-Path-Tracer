@@ -73,7 +73,7 @@ UP          0 1 0
 
 // Texture
 TEXTURE 0
-PATH ../scenes/grid.png
+PATH ../scenes/e.jpeg
 
 // Ceiling light
 OBJECT 0
@@ -123,9 +123,26 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
+// Ceiling light
+OBJECT 6
+cube
+material 0
+TRANS       5 5 0
+ROTAT       90 0 90
+SCALE       3 .3 3
+
+// Ceiling light
+OBJECT 7
+cube
+material 0
+TRANS       0 0 0
+ROTAT       0 0 90
+SCALE       3 .3 3
+
 // OBJ 1
-OBJ_FILE ../scenes/bunny.obj
-material 4
-TRANS       0 3 0
+GLTF_FILE ../scenes/sphere.gltf
+material 1
+TRANS       0 5 0
 ROTAT       0 0 0
-SCALE       3 3 3
+SCALE       4 4 4
+TEXTURE 0
