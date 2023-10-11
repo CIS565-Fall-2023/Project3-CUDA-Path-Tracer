@@ -93,4 +93,18 @@ To understand the outcome of this optimization, we measure average time to gener
 
 Without material sorting, it takes about 3.0ms per frame. And with sorting, the time comes to 7.7ms. It is obvious that for this specific scene, sorting materials actually has negative impact on performance. Even though sorting materials indeed enhance memory coarsening, the sorting overhead dwarfs the benefit of memory coarsening, especially when the number of materials is low.
 
+## 4. Primary Ray & First Interaction Caching
+
+In situations where there is no randomization in the generation of first ray and the objects are static, primary rays are always the same, as well as their first intersections with the scene. Therefore, we can cache the primary rays at the beginning of the first iteration, in the `pathtraceInit()` method. When the camera moves, the init function will be called again, and the cache will be updated.
+
+![Primary Ray Caching](./img/caching.svg)
+
+From the testing result under different maximum bounce limit, it seems that the performance difference is a constant factor, and does not increase with the bounce limit. This is expected because the only computation eliminated is the first bounce of each iteration, and subsequent bounces are the same. On my GPU, the performance gain of caching is on average 0.28ms.
+
+## 5. Refraction
+
+The path tracer also supports ideal refraction, combined with Frensel's effect, which is emulated by Schlick's approximation.
+
+
+
 # Reference

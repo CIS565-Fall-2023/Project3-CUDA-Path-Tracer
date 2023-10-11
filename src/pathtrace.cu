@@ -22,7 +22,7 @@
 #include "device_launch_parameters.h"
 
 // toggle material sorting
-#define CONTIGUOUS_MATERIAL 1
+#define CONTIGUOUS_MATERIAL 0
 
 // toggle first bounce intersections
 // not available when CACHE is ON or FISHEYE is ON
