@@ -3,6 +3,9 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include "tiny_obj_loader.h"
+#include <deque>
+#include <unordered_set>
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -22,7 +25,8 @@ Scene::Scene(string filename) {
                 loadMaterial(tokens[1]);
                 cout << " " << endl;
             } else if (strcmp(tokens[0].c_str(), "OBJECT") == 0) {
-                loadGeom(tokens[1]);
+                int loadObjRes = loadGeom(tokens[1]);
+                objCount += loadObjRes;
                 cout << " " << endl;
             } else if (strcmp(tokens[0].c_str(), "CAMERA") == 0) {
                 loadCamera();
@@ -30,17 +34,25 @@ Scene::Scene(string filename) {
             }
         }
     }
+
+#ifdef USING_BVH
+    buildTree();
+#endif
 }
 
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
-    if (id != geoms.size()) {
+    if (id != objCount) {
         cout << "ERROR: OBJECT ID does not match expected number of geoms" << endl;
         return -1;
     } else {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
+        int triIdx = 0;
+        newGeom.scale = glm::vec3(1.0f);
+        string meshPath;
+        Triangle singleTri;
 
         //load object type
         utilityCore::safeGetline(fp_in, line);
@@ -51,6 +63,12 @@ int Scene::loadGeom(string objectid) {
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
+            } else if (strcmp(line.c_str(), "triangle") == 0) {
+                cout << "Creating new triangle..." << endl;
+                newGeom.type = TRIANGLE;
+            } else if (strcmp(line.c_str(), "mesh") == 0) {
+                cout << "Creating new mesh..." << endl;
+                newGeom.type = MESH;
             }
         }
 
@@ -62,7 +80,7 @@ int Scene::loadGeom(string objectid) {
             cout << "Connecting Geom " << objectid << " to Material " << newGeom.materialid << "..." << endl;
         }
 
-        //load transformations
+        //load transformations & vertices
         utilityCore::safeGetline(fp_in, line);
         while (!line.empty() && fp_in.good()) {
             vector<string> tokens = utilityCore::tokenizeString(line);
@@ -74,17 +92,92 @@ int Scene::loadGeom(string objectid) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "VERTEX") == 0 && newGeom.type == TRIANGLE && triIdx < 3) {
+                singleTri.pos[triIdx] = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                triIdx++;
+            } else if (strcmp(tokens[0].c_str(), "MESH_PATH") == 0 && newGeom.type == MESH) {
+                meshPath = tokens[1];
             }
 
             utilityCore::safeGetline(fp_in, line);
         }
 
         newGeom.transform = utilityCore::buildTransformationMatrix(
-                newGeom.translation, newGeom.rotation, newGeom.scale);
+            newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
 
-        geoms.push_back(newGeom);
+        // load triangle
+        if (newGeom.type == TRIANGLE) {
+            if (triIdx < 3) {
+                std::cout << "ERROR: triangle lose point!!!" << std::endl;
+            }
+            for (int i = 0; i < 3; i++) {
+                glm::vec4 newPos = newGeom.transform * glm::vec4(singleTri.pos[i][0], singleTri.pos[i][1], singleTri.pos[i][2], 1.0f);
+                singleTri.pos[i] = glm::vec3(newPos.x, newPos.y, newPos.z);
+            }
+            singleTri.materialid = newGeom.materialid;
+#ifdef USING_BVH
+            singleTri.set();
+#endif
+            tris.push_back(singleTri);
+        }
+        // load mesh
+        else if (newGeom.type == MESH) {
+            if (meshPath.empty()) {
+                std::cout << "ERROR: mesh has no path!!!" << std::endl;
+                return 0;
+            }
+            std::vector<tinyobj::shape_t> shapes; std::vector<tinyobj::material_t> materials;
+            std::string errors = tinyobj::LoadObj(shapes, materials, meshPath.c_str());
+            std::cout << errors << std::endl;
+            if (errors.size() == 0)
+            {
+                //Read the information from the vector of shape_ts
+                for (unsigned int i = 0; i < shapes.size(); i++)
+                {
+                    std::vector<float>& positions = shapes[i].mesh.positions;
+                    std::vector<float>& normals = shapes[i].mesh.normals;
+                    std::vector<float>& uvs = shapes[i].mesh.texcoords;
+                    std::vector<unsigned int>& indices = shapes[i].mesh.indices;
+                    for (unsigned int j = 0; j < indices.size(); j += 3)
+                    {
+                        Triangle t;
+                        t.pos[0] = glm::vec3(positions[indices[j] * 3], positions[indices[j] * 3 + 1], positions[indices[j] * 3 + 2]);
+                        t.pos[1] = glm::vec3(positions[indices[j + 1] * 3], positions[indices[j + 1] * 3 + 1], positions[indices[j + 1] * 3 + 2]);
+                        t.pos[2] = glm::vec3(positions[indices[j + 2] * 3], positions[indices[j + 2] * 3 + 1], positions[indices[j + 2] * 3 + 2]);
+                        //if (normals.size() > 0)
+                        //{
+                        //    t.nor[0] = glm::vec3 (normals[indices[j] * 3], normals[indices[j] * 3 + 1], normals[indices[j] * 3 + 2]);
+                        //    t.nor[1] = glm::vec3 (normals[indices[j + 1] * 3], normals[indices[j + 1] * 3 + 1], normals[indices[j + 1] * 3 + 2]);
+                        //    t.nor[2] = glm::vec3(normals[indices[j + 2] * 3], normals[indices[j + 2] * 3 + 1], normals[indices[j + 2] * 3 + 2]);
+                        //}
+                        if (uvs.size() > 0)
+                        {
+                            t.uv[0] = glm::vec2(uvs[indices[j] * 2], uvs[indices[j] * 2 + 1]);
+                            t.uv[1] = glm::vec2 (uvs[indices[j + 1] * 2], uvs[indices[j + 1] * 2 + 1]);
+                            t.uv[2] = glm::vec2 (uvs[indices[j + 2] * 2], uvs[indices[j + 2] * 2 + 1]);
+                        }
+                        for (int k = 0; k < 3; k++) {
+                            glm::vec4 newPos = newGeom.transform * glm::vec4(t.pos[k][0], t.pos[k][1], t.pos[k][2], 1.0f);
+                            t.pos[k] = glm::vec3(newPos.x, newPos.y, newPos.z);
+                        }
+                        t.materialid = newGeom.materialid;
+#ifdef USING_BVH
+                        t.set();
+#endif
+                        tris.push_back(t);
+                    }
+                    std::cout << "shape " << i << " has " << indices.size() << " triangles" << std::endl;
+                }
+                
+            }
+        }
+        else { // load other objects
+            geoms.push_back(newGeom);
+        }
+
+
         return 1;
     }
 }
@@ -185,4 +278,154 @@ int Scene::loadMaterial(string materialid) {
         materials.push_back(newMaterial);
         return 1;
     }
+}
+
+/*
+* Funtions to build a bvh tree
+*/
+
+inline void printVec(glm::vec3 v) {
+    cout << "(" << v.x << ", " << v.y << ", " << v.z << ")";
+}
+
+void Scene::buildTree()
+{
+    cout << "buildTree" << endl;
+
+    if (tris.size() == 0) { return; }
+
+    //std::vector<int> triIds;
+    //for (int ti = 0; ti < tris.size(); ti++) { triIds.push_back(ti); }
+
+    glm::vec3 min = tris[0].min;
+    glm::vec3 max = tris[0].max;
+    for (int ti = 1; ti < tris.size(); ti++) {
+        min = glm::min(min, tris[ti].min);
+        max = glm::max(max, tris[ti].max);
+    }
+    bvh.emplace_back(min, max);
+
+    cout << "global, min = "; printVec(min);
+    cout << ", max = "; printVec(max); cout << endl;
+
+    splitTree(0, tris.size(), 0, 0);
+
+    // printTree();
+
+    cout << "bbox num = " << bvh.size() << endl;
+    cout << "tris num = " << tris.size() << endl;
+    // checkTree();
+
+}
+
+
+void Scene::splitTree(int leftEnd, int rightEnd, int bboxId, int axis)
+{    
+    if (rightEnd - leftEnd <= BBOX_TRI_NUM) {
+        bvh[bboxId].beginTriId = leftEnd;
+        bvh[bboxId].triNum = rightEnd - leftEnd;
+        return;
+    }
+
+    if (axis == 0) {
+        sort(tris.begin() + leftEnd, tris.begin() + rightEnd, [](const Triangle& a, const Triangle& b) {return a.min[0] + a.max[0] < b.min[0] + b.max[0]; });
+    }
+    else if (axis == 1) {
+        sort(tris.begin() + leftEnd, tris.begin() + rightEnd, [](const Triangle& a, const Triangle& b) {return a.min[1] + a.max[1] < b.min[1] + b.max[1]; });
+    }
+    else {
+        sort(tris.begin() + leftEnd, tris.begin() + rightEnd, [](const Triangle& a, const Triangle& b) {return a.min[2] + a.max[2] < b.min[2] + b.max[2]; });
+    }
+    
+
+    glm::vec3 lmin, lmax, rmin, rmax;
+
+    int mid = (leftEnd + rightEnd + 1) / 2;
+    // float midsum = bvh[bboxId].max[axis] + bvh[bboxId].min[axis];
+    int ti = leftEnd + 1;
+    lmin = tris[leftEnd].min;
+    lmax = tris[leftEnd].max;
+    while (ti < mid) {
+        lmin = glm::min(lmin, tris[ti].min);
+        lmax = glm::max(lmax, tris[ti].max);
+        ti++;
+    }
+    rmin = tris[mid].min;
+    rmax = tris[mid].max;
+    ti = mid + 1;
+    while (ti < rightEnd) {
+        rmin = glm::min(rmin, tris[ti].min);
+        rmax = glm::max(rmax, tris[ti].max);
+        ti++;
+    }
+    
+    bvh.emplace_back(lmin, lmax);
+    bvh.emplace_back(rmin, rmax);
+    bvh[bboxId].leftId = bvh.size() - 2;
+    bvh[bboxId].rightId = bvh.size() - 1;
+    splitTree(leftEnd, mid, bvh[bboxId].leftId, (axis + 1) % 3);
+    splitTree(mid, rightEnd, bvh[bboxId].rightId, (axis + 1) % 3);
+}
+
+void Scene::printTree() {
+    if (bvh.empty()) {
+        cout << "BVH Tree Is Empty!!!" << endl;
+        return;
+    }
+    std::deque<int> bids;
+    bids.push_back(0);
+    while (!bids.empty()) {
+        int bi = bids.front();
+        bids.pop_front();
+        cout << "box[" << bi << "]:"; printVec(bvh[bi].min); printVec(bvh[bi].max);
+        cout << endl;
+        if (bvh[bi].beginTriId >= 0) {
+            cout << "triIds: " << bvh[bi].beginTriId << " to " << bvh[bi].beginTriId + bvh[bi].triNum << endl;
+        }
+        else {
+            cout << "box[" << bi << "] -> box[" << bvh[bi].leftId << "] bbox[" << bvh[bi].rightId << "]" << endl;
+            bids.push_back(bvh[bi].leftId);
+            bids.push_back(bvh[bi].rightId);
+        }
+        
+    }
+}
+
+inline bool bigger(glm::vec3 v0, glm::vec3 v1) {
+    return v0.x > 1e-5 + v1.x && v0.y > 1e-5 + v1.y && v0.z > 1e-5 + v1.z;
+}
+
+bool Scene::checkTree() {
+    if (bvh.empty()) {
+        return true;
+    }
+    int maxi = 0;
+    unordered_set<int> tri_set;
+    deque<int> bids;
+    bids.push_back(0);
+    while (!bids.empty()) {
+        int bi = bids.front();
+        bids.pop_front();
+        if (bvh[bi].beginTriId >= 0) {
+            for (int ti = bvh[bi].beginTriId; ti < bvh[bi].beginTriId + bvh[bi].triNum; ti++) {
+                tri_set.insert(ti);
+                maxi = max(maxi, ti);
+            }
+        }
+        else {
+            bids.push_back(bvh[bi].leftId);
+            bids.push_back(bvh[bi].rightId);
+            if (bigger(bvh[bi].min, bvh[bvh[bi].leftId].min)|| bigger(bvh[bvh[bi].leftId].max, bvh[bi].max))
+            {
+                cout << "WRONG bbox from " << bi << " to " << bvh[bi].leftId << " !!!!!!!!!!!!!" << endl;
+            }
+            if (bigger(bvh[bi].min, bvh[bvh[bi].rightId].min) || bigger(bvh[bvh[bi].rightId].max, bvh[bi].max))
+            {
+                cout << "WRONG bbox from " << bi << " to " << bvh[bi].rightId << " !!!!!!!!!!!!!" << endl;
+            }
+        }
+    }
+
+    cout << "tris num = " << tris.size() << ", check num = " << tri_set.size() << ", maxi = " << maxi << endl;
+    return tris.size() == tri_set.size();
 }

@@ -1,0 +1,152 @@
+// Emissive material (light)
+MATERIAL 0
+RGB         1 1 1
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   8
+
+// Diffuse white
+MATERIAL 1
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse red
+MATERIAL 2
+RGB         .85 .35 .35
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse green
+MATERIAL 3
+RGB         .35 .85 .35
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Specular white
+MATERIAL 4
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        1
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse blue
+MATERIAL 5
+RGB         .35 .35 .85
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Camera
+CAMERA
+RES         800 800
+FOVY        45
+ITERATIONS  5000
+DEPTH       8
+FILE        cornell
+EYE         0.0 5 10.5
+LOOKAT      0 5 0
+UP          0 1 0
+
+
+// Ceiling light
+OBJECT 0
+cube
+material 0
+TRANS       0 10 3
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Left wall
+OBJECT 1
+cube
+material 2
+TRANS       -5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Right wall
+OBJECT 2
+cube
+material 3
+TRANS       5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Floor-0
+OBJECT 3
+triangle
+material 1
+VERTEX 5 0 -5
+VERTEX -5 0 5
+VERTEX 5 0 5
+
+// Floor-1
+OBJECT 4
+triangle
+material 1
+VERTEX -5 0 -5
+VERTEX -5 0 5
+VERTEX 5 0 -5
+
+// Ceiling-0
+OBJECT 5
+triangle
+material 1
+VERTEX 5 10 -5
+VERTEX 5 10 5
+VERTEX -5 10 5
+
+// Ceiling-1
+OBJECT 6
+triangle
+material 1
+VERTEX -5 10 -5
+VERTEX 5 10 -5
+VERTEX -5 10 5
+
+// Back wall-0
+OBJECT 7
+triangle
+material 4
+VERTEX -5 0 -5
+VERTEX 5 10 -5
+VERTEX -5 10 -5
+
+// Back wall-1
+OBJECT 8
+triangle
+material 4
+VERTEX 5 10 -5
+VERTEX -5 0 -5
+VERTEX 5 0 -5
+
+// Mesh
+OBJECT 9
+mesh
+material 5
+MESH_PATH D:\CIS565\Project3-CUDA-Path-Tracer\scenes\obj\wahoo.obj
+TRANS       0 2 0
+ROTAT       0 0 0
+SCALE       1 1 1

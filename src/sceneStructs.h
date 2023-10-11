@@ -6,15 +6,62 @@
 #include "glm/glm.hpp"
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
+#define BBOX_TRI_NUM 4
+#define BVH_GPU_STACK_SIZE 128
+#define BLOCK_SIZE_1D 64
+#define JITTER_RATIO 1e-2f
+#define DOF_LENS_RADIUS 0.35f
+#define DOF_FOCAL_DISTANCE 10.0f
 
 enum GeomType {
     SPHERE,
     CUBE,
+    TRIANGLE,
+    MESH
 };
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+};
+
+struct Triangle {
+    int materialid;
+    glm::vec3 pos[3];
+    glm::vec2 uv[3];
+
+    glm::vec3 min;
+    glm::vec3 max;
+
+    void set(){
+        min = glm::vec3(
+            glm::min(glm::min(pos[0].x, pos[1].x), pos[2].x),
+            glm::min(glm::min(pos[0].y, pos[1].y), pos[2].y),
+            glm::min(glm::min(pos[0].z, pos[1].z), pos[2].z)
+        );
+        max = glm::vec3(
+            glm::max(glm::max(pos[0].x, pos[1].x), pos[2].x),
+            glm::max(glm::max(pos[0].y, pos[1].y), pos[2].y),
+            glm::max(glm::max(pos[0].z, pos[1].z), pos[2].z)
+        );
+    }
+};
+
+struct BoundingBox {
+    glm::vec3 min;
+    glm::vec3 max;
+    int leftId;
+    int rightId;
+    int beginTriId;
+    int triNum;
+
+    BoundingBox() : min(), max(), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
+
+    BoundingBox(glm::vec3 minPos, glm::vec3 maxPos) :
+        min(minPos), max(maxPos), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
+
+    BoundingBox(const Triangle& tri, int tai = -1) :
+        min(tri.min), max(tri.max), leftId(-1), rightId(-1), beginTriId(-1), triNum(0) {}
 };
 
 struct Geom {
@@ -64,6 +111,7 @@ struct PathSegment {
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    bool refractionBefore;
 };
 
 // Use with a corresponding PathSegment to do:

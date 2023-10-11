@@ -35,6 +35,32 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+__host__ __device__ float boundingboxIntersectionTest(Ray& r,
+    glm::vec3& minv, glm::vec3& maxv) {
+
+    float min_t = EPSILON;
+    float max_t = 1000.f;
+
+    for (int a = 0; a < 3; a++) {
+        float o = r.origin[a];
+        float invD = 1.0f / r.direction[a];
+
+        float t0 = (minv[a] - o) * invD;
+        float t1 = (maxv[a] - o) * invD;
+
+        if (invD < 0) {
+            float tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+
+        min_t = fmax(t0, min_t);
+        max_t = fmin(t1, max_t);
+    }
+
+    return max_t >= min_t && max_t > 0.0f;
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,
@@ -141,4 +167,42 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     }
 
     return glm::length(r.origin - intersectionPoint);
+}
+
+// inspired by glm::intersectRayTriangle
+/**
+ * Test intersection between a ray and a triangle. 
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @param outside            Output param for whether the ray came from outside.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
+__host__ __device__ float triangleIntersectionTest(Triangle tri, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+
+    outside = true;
+    glm::vec3 v01 = tri.pos[1] - tri.pos[0];
+    glm::vec3 v02 = tri.pos[2] - tri.pos[0];
+    glm::vec3 dx02 = glm::cross(r.direction, v02);
+
+    float d0 = glm::dot(v01, dx02);
+    if (d0 < 0.000001f){ return -1.0f; }
+
+    float d = 1.0f / d0;
+    glm::vec3 v0o = r.origin - tri.pos[0];
+    float b1 = d * glm::dot(v0o, dx02);
+    if (b1 < 0.0f || b1 > 1.0f) { return -1.0f; }
+
+    glm::vec3 v0ox01 = glm::cross(v0o, v01);
+    float b2 = d * glm::dot(r.direction, v0ox01);
+    if (b2 < 0.0f || b2 + b1 > 1.0f) { return -1.0f; }
+
+    float t = d * glm::dot(v02, v0ox01);
+    if (t < 0.0f) { return -1.0f;}
+
+    intersectionPoint = t * r.direction + r.origin;
+    normal = normalize(glm::cross(v01, v02));
+
+    return t;
 }

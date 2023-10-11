@@ -8,6 +8,14 @@
 #include "utilities.h"
 #include "sceneStructs.h"
 
+#define STREAM_COMPACTION
+// #define MATERIAL_SORT
+#define CACHE_FIRST_BOUNCE
+// #define JITTER_RAY
+// #define DEPTH_OF_FIELD
+// #define DEBUG_OUTPUT
+#define USING_BVH
+
 using namespace std;
 
 class Scene {
@@ -16,11 +24,19 @@ private:
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
     int loadCamera();
+    void buildTree();
+    void splitTree(int left, int right, int bbox, int axis);
+    void printTree();
+    bool checkTree();
 public:
     Scene(string filename);
     ~Scene();
 
     std::vector<Geom> geoms;
     std::vector<Material> materials;
+    std::vector<Triangle> tris;
+    std::vector<BoundingBox> bvh;
+
     RenderState state;
+    int objCount = 0;
 };
