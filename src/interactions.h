@@ -145,25 +145,17 @@ void scatterRay(
     //// choose to sample Specular or Refraction
     thrust::uniform_real_distribution<float> u01(0, 1);
     float choice = u01(rng);
-    if (choice < coefReflection) {
-      // reflect
-      pathSegment.ray.origin = intersect + ray_out_reflect * 0.001f;
+    if (choice < coefReflection || glm::length(ray_out_refract) < 0.001f) {
+      // reflect or TIR
+      pathSegment.ray.origin = intersect + normal * 0.001f;
       pathSegment.ray.direction = ray_out_reflect;
       pathSegment.color *= m.specular.color;
     }
     else {
       // refract
-      if (glm::length(ray_out_refract) < 0.001f) {
-        // handle total internal reflection (TIR), use reflection
-        pathSegment.ray.direction = ray_out_reflect;
-        pathSegment.ray.origin = intersect + ray_out_reflect * 0.001f;
-        pathSegment.color *= m.specular.color;
-      } else {
-        // not TIR
-        pathSegment.ray.origin = intersect + pathSegment.ray.direction * 0.001f;
-        pathSegment.ray.direction = ray_out_refract;
-        pathSegment.color *= m.color;
-      }
+      pathSegment.ray.direction = ray_out_refract;
+      pathSegment.ray.origin = intersect + (-normal) * 0.001f;
+      pathSegment.color *= m.color;
     }
     return;
   }
