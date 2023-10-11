@@ -194,14 +194,14 @@ void scatterRay(
     if (choice < weight_diffuse) {
       // diffuse branch taken
       pathSegment.ray.direction = ray_out_diffusive;
-      pathSegment.ray.origin = intersect + ray_out_diffusive * 0.001f;
+      pathSegment.ray.origin = intersect + normal * 0.001f;
       // for lambertian diffusion, BSDF & PDF are aligned (no need to compute)
       pathSegment.color *= color_diffuse;
     }
     else {
       // specular branch taken
       pathSegment.ray.direction = ray_out_specular;
-      pathSegment.ray.origin = intersect + ray_out_specular * 0.001f;
+      pathSegment.ray.origin = intersect + normal * 0.001f;
       pathSegment.color *= color_specular;
     }
 #else
@@ -221,7 +221,7 @@ void scatterRay(
   // update pathSegment
   pathSegment.ray.direction = ray_out;
   // prevent shadow acne by lifting origin off the surface for a bit
-  pathSegment.ray.origin = intersect + ray_out * 0.001f;
+  pathSegment.ray.origin = intersect + normal * 0.001f;
   // PDF is aligned with BSDF, no need to calculate PDF/BSDF
   pathSegment.color *= m.color;
 }
