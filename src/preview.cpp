@@ -210,7 +210,12 @@ void RenderImGui()
 	//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 	//ImGui::Checkbox("Another Window", &show_another_window);
 
-	//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+	if (ImGui::SliderFloat("Depth of Field", &scene_config->state.camera.focalDistance, 3.0f, 10.0f)) {
+		setCameraChanged(true);
+	}
+	if (ImGui::SliderFloat("Aperture", &scene_config->state.camera.aperture, 0.1f, 1.0f)) {
+		setCameraChanged(true);
+	}
 	//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
 	//if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
@@ -256,6 +261,7 @@ void mainLoop() {
 		RenderImGui();
 
 		glfwSwapBuffers(window);
+		//system("pause");
 	}
 
 	ImGui_ImplOpenGL3_Shutdown();

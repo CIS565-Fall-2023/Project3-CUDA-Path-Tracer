@@ -18,6 +18,7 @@
 #include "image.h"
 #include "pathtrace.h"
 #include "utilities.h"
+#include "config.h"
 #include "scene.h"
 
 using namespace std;
@@ -26,7 +27,7 @@ using namespace std;
 //----------PATH TRACER----------
 //-------------------------------
 
-extern Scene* scene;
+extern SceneConfig* scene_config;
 extern int iteration;
 
 extern int width;
@@ -36,3 +37,4 @@ void runCuda();
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos);
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+void setCameraChanged(bool val);

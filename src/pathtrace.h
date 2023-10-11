@@ -1,9 +1,11 @@
 #pragma once
 
 #include <vector>
-#include "scene.h"
+#include "config.h"
 
 void InitDataContainer(GuiDataContainer* guiData);
-void pathtraceInit(Scene *scene);
+void pathtraceInit(SceneConfig *hst_scene);
 void pathtraceFree();
 void pathtrace(uchar4 *pbo, int frame, int iteration);
+void pathtraceInitBeforeMainLoop(SceneConfig* config);
+void pathtraceFreeAfterMainLoop();

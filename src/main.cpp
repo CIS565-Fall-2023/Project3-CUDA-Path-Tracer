@@ -19,7 +19,7 @@ float zoom, theta, phi;
 glm::vec3 cameraPosition;
 glm::vec3 ogLookAt; // for recentering the camera
 
-Scene* scene;
+SceneConfig* scene_config;
 GuiDataContainer* guiData;
 RenderState* renderState;
 int iteration;
@@ -41,15 +41,15 @@ int main(int argc, char** argv) {
 
 	const char* sceneFile = argv[1];
 
-	// Load scene file
-	scene = new Scene(sceneFile);
+	// Load hst_scene file
+	scene_config = new SceneConfig(sceneFile);
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
 
 	// Set up camera stuff from loaded path tracer settings
 	iteration = 0;
-	renderState = &scene->state;
+	renderState = &scene_config->state;
 	Camera& cam = renderState->camera;
 	width = cam.resolution.x;
 	height = cam.resolution.y;
@@ -77,8 +77,12 @@ int main(int argc, char** argv) {
 	InitImguiData(guiData);
 	InitDataContainer(guiData);
 
+	pathtraceInitBeforeMainLoop(scene_config);
+
 	// GLFW main loop
 	mainLoop();
+
+	pathtraceFreeAfterMainLoop();
 
 	return 0;
 }
@@ -132,14 +136,15 @@ void runCuda() {
 
 	if (iteration == 0) {
 		pathtraceFree();
-		pathtraceInit(scene);
+		pathtraceInit(scene_config);
+		
 	}
 
 	if (iteration < renderState->iterations) {
 		uchar4* pbo_dptr = NULL;
 		iteration++;
 		cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
-
+		
 		// execute the kernel
 		int frame = 0;
 		pathtrace(pbo_dptr, frame, iteration);
@@ -167,7 +172,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			break;
 		case GLFW_KEY_SPACE:
 			camchanged = true;
-			renderState = &scene->state;
+			renderState = &scene_config->state;
 			Camera& cam = renderState->camera;
 			cam.lookAt = ogLookAt;
 			break;
@@ -185,6 +190,11 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	middleMousePressed = (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
 }
 
+void setCameraChanged(bool val)
+{
+	camchanged = val;
+}
+
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	if (xpos == lastX || ypos == lastY) return; // otherwise, clicking back into window causes re-start
 	if (leftMousePressed) {
@@ -200,7 +210,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 		camchanged = true;
 	}
 	else if (middleMousePressed) {
-		renderState = &scene->state;
+		renderState = &scene_config->state;
 		Camera& cam = renderState->camera;
 		glm::vec3 forward = cam.view;
 		forward.y = 0.0f;

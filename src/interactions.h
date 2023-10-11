@@ -2,6 +2,58 @@
 
 #include "intersections.h"
 
+__host__ __device__
+void make_coord_space(glm::mat3x3& o2w, glm::vec3 n) {
+    glm::vec3 z = glm::vec3(n.x, n.y, n.z);
+    glm::vec3 h = z;
+    if (fabs(h.x) <= fabs(h.y) && fabs(h.x) <= fabs(h.z))
+        h.x = 1.0;
+    else if (fabs(h.y) <= fabs(h.x) && fabs(h.y) <= fabs(h.z))
+        h.y = 1.0;
+    else
+        h.z = 1.0;
+
+    z = glm::normalize(z);
+    glm::vec3 y = cross(h, z);
+    y = glm::normalize(y);
+    glm::vec3 x = cross(z, y);
+    x = glm::normalize(x);
+
+    o2w[0] = x;
+    o2w[1] = y;
+    o2w[2] = z;
+}
+
+__host__ __device__ glm::vec2 concentricSampleDisk(const glm::vec2& u) {
+    glm::vec2 uOffset = 2.f * u - glm::vec2(1, 1);
+    float theta, r;
+    r = glm::sqrt(u[0]);
+    theta = TWO_PI * u[1];
+    return r * glm::vec2(cos(theta), sin(theta));
+}
+
+__host__ __device__
+glm::vec3 hemiSphereRandomSample(const glm::vec2 & u, float* pdf) {
+    glm::vec2 d(concentricSampleDisk(u));
+    float z = sqrt(glm::max(0.0f, 1.0f - d.x * d.x - d.y * d.y));
+    *pdf = INV_PI * z;
+    return glm::vec3(d.x, d.y, z);
+}
+
+
+//__host__ __device__
+//glm::vec3 hemiSphereRandomSample(thrust::default_random_engine& rng, float * pdf) {
+//    thrust::uniform_real_distribution<float> u01(0, 1);
+//
+//    float Xi1 = u01(rng);
+//    float Xi2 = u01(rng);
+//
+//    float r = sqrt(Xi1);
+//    float phi = 2. * PI * Xi2;
+//    *pdf = sqrt(1 - r) * INV_PI;
+//    return glm::vec3(r * cos(phi), r * sin(phi), sqrt(1 - Xi1));
+//}
+
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
@@ -76,4 +128,27 @@ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+    if (pathSegment.remainingBounces == 0) return;
+    float cosineTerm = glm::dot(-pathSegment.ray.direction, normal);
+    thrust::uniform_real_distribution<float> diffuse_or_specular(0, 1);
+    glm::vec3 wo;
+    float prob = diffuse_or_specular(rng);
+    const float splitThreshold = 0.5f;
+    float NdotL = glm::dot(-pathSegment.ray.direction, normal);
+    float distance = glm::distance(pathSegment.ray.origin, intersect);
+    float distance2 = distance * distance;
+    if (m.hasReflective || m.hasRefractive) {
+        pathSegment.color *= m.specular.color;
+        pathSegment.ray.direction = glm::normalize(glm::reflect(pathSegment.ray.direction, normal));
+        //pathSegment.ray.direction = glm::normalize(imperfectReflection(glm::normalize(glm::reflect(pathSegment.ray.direction, normal)), rng, m.shininess));
+        pathSegment.remainingBounces--;
+        pathSegment.ray.origin = intersect + 0.0001f * normal;
+    }
+
+    else {
+        pathSegment.color *= m.color;
+        pathSegment.ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
+        pathSegment.remainingBounces--;
+        pathSegment.ray.origin = intersect + 0.0001f * normal;
+    }
 }
