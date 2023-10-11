@@ -20,6 +20,15 @@ private:
     int loadMeshGltf(string filename, Geom& geom, int objectId);
     int loadMeshObj(string filename, Geom& geom);
 
+    void buildBVH();
+    void updateNodeBounds(int nodeIdx);
+    void subdivide(int nodeIdx);
+
+    void updateBounds(const int idx);
+    void chooseSplit(BVHNode* node, float& split, int& axis);
+    void addChildren(BVHNode* node);
+    void generateBVH();
+
 public:
     Scene(string filename);
     ~Scene();
@@ -27,6 +36,10 @@ public:
     std::vector<Geom> geoms;
     std::vector<Material> materials;
     std::vector<Triangle> triangles;
-    RenderState state;
+    std::vector<int> triIndices;
+    std::vector<BVHNode> bvhNodes;
+    std::vector<AABB> geomAABBs;
+    int nodesUsed = 1;
     int meshCount;
+    RenderState state;
 };

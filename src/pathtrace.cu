@@ -99,6 +99,8 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static ShadeableIntersection* dev_intersections_first_bounce = NULL;
 static Triangle* dev_tris = NULL;
+static BVHNode* dev_bvhNodes = NULL;
+static int* dev_bvhTriIndices = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -130,8 +132,17 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_intersections_first_bounce, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections_first_bounce, 0, pixelcount * sizeof(ShadeableIntersection));
 #endif
-	cudaMalloc(&dev_tris, scene->triangles.size() * sizeof(Triangle));
-	cudaMemcpy(dev_tris, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+	//if (scene->meshCount > 0) {
+		cudaMalloc(&dev_tris, scene->triangles.size() * sizeof(Triangle));
+		cudaMemcpy(dev_tris, scene->triangles.data(), scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
+#if BVH
+		cudaMalloc(&dev_bvhNodes, scene->bvhNodes.size() * sizeof(BVHNode));
+		cudaMemcpy(dev_bvhNodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
+		cudaMalloc(&dev_bvhTriIndices, scene->triangles.size() * sizeof(int));
+		cudaMemcpy(dev_bvhTriIndices, scene->triIndices.data(), scene->triangles.size() * sizeof(int), cudaMemcpyHostToDevice);
+#endif
+	//}
 
 	checkCUDAError("pathtraceInit");
 }
@@ -147,6 +158,10 @@ void pathtraceFree() {
 	cudaFree(dev_intersections_first_bounce);
 #endif
 	cudaFree(dev_tris);
+#if BVH
+	cudaFree(dev_bvhNodes);
+	cudaFree(dev_bvhTriIndices);
+#endif
 	checkCUDAError("pathtraceFree");
 }
 
@@ -207,6 +222,8 @@ __global__ void computeIntersections(
 	, ShadeableIntersection* intersections
 	, int iter
 	, Triangle* tris
+	, BVHNode* bvhNodes
+	, int* trisIndices
 )
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -247,25 +264,18 @@ __global__ void computeIntersections(
 			{
 				t = sphereIntersectionTest(geom, ray, tmp_intersect, tmp_normal, outside);
 			}
-			else if (geom.type == OBJ)
+			else if ((geom.type == OBJ) || (geom.type = GLTF))
 			{
-#if BB_CULLING
+#if BVH
+				//t = bvhIntersectionTest(geom, ray, tris, bvhNodes, trisIndices, tmp_intersect, tmp_normal);
+				t = bvhIntersectionTest2(bvhNodes, tris, ray, geom.triangleCount, tmp_intersect, tmp_normal);
+#elif BB_CULLING
 				if (aabbIntersectionTest(geom.aabb, ray, t)) {
 					t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
 				}
 #else
 				t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
 #endif
-			}
-			else if (geom.type == GLTF)
-			{
-#if BB_CULLING
-				if (aabbIntersectionTest(geom.aabb, ray, t)) {
-					t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
-				}
-#else
-				t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
-#endif			
 			}
 
 			// Compute the minimum t from the intersection tests to determine what
@@ -508,6 +518,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_intersections
 				, iter
 				, dev_tris
+				, dev_bvhNodes
+				, dev_bvhTriIndices
 				);
 			checkCUDAError("trace first bounce");
 			cudaDeviceSynchronize();
@@ -532,6 +544,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 					, dev_intersections
 					, iter
 					, dev_tris
+					, dev_bvhNodes
+					, dev_bvhTriIndices
 					);
 				checkCUDAError("trace non-first bounce");
 				cudaDeviceSynchronize();
@@ -547,6 +561,8 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 			, dev_intersections
 			, iter
 			, dev_tris
+			, dev_bvhNodes
+			, dev_bvhTriIndices
 			);
 		checkCUDAError("trace one bounce");
 		cudaDeviceSynchronize();

@@ -12,6 +12,7 @@
 #include "tiny_obj_loader.h"
 
 #define DEBUG_MESH 1
+#define DEBUG_BVH  1
 
 Scene::Scene(string filename) {
     basePath = filename.substr(0, filename.rfind('/') + 1);
@@ -42,6 +43,22 @@ Scene::Scene(string filename) {
             }
         }
     }
+
+#if BVH
+    if (meshCount > 0) {
+        cout << "Building BVH..." << endl;
+        auto startTime = utilityCore::timeSinceEpochMillisec();
+
+        //buildBVH();
+        generateBVH();
+
+        auto endTime = utilityCore::timeSinceEpochMillisec();
+        auto duration = (endTime - startTime);
+        cout << "Complete BVH of node size: " << bvhNodes.size() 
+            << " using " << duration << "ms" << endl;
+    }
+
+#endif
 }
 
 int Scene::loadGeom(string objectid) {
@@ -285,8 +302,16 @@ inline void printTri(Triangle& tri)
     printf("v2 nor: %f %f %f\n", tri.v2.nor.x, tri.v2.nor.y, tri.v2.nor.z);
 }
 
+inline void printTriAABB(Triangle& tri)
+{
+    printf("AABB.min: (%f, %f, %f)\n", tri.aabb.min.x, tri.aabb.min.y, tri.aabb.min.z);
+    printf("AABB.max: (%f, %f, %f)\n", tri.aabb.max.x, tri.aabb.max.y, tri.aabb.max.z);
+}
+
 // glTF structure: https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_003_MinimalGltfFile.md
-void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::vector<Triangle>& tris) {
+void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
+    std::vector<Triangle>& tris, std::vector<int>& triIndices,
+    std::vector<Geom>* geoms) {
     for (size_t i = 0; i < mesh.primitives.size(); ++i) {
         tinygltf::Primitive& primitive = mesh.primitives[i];
 
@@ -370,15 +395,20 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::ve
 
                 // TODO: uv
 
+                //tri.objectId = geoms->size();
                 tri.computeAABB();
                 tri.computeCentroid();
                 tris.push_back(tri);
+                triIndices.push_back(tris.size() - 1);
 
                 bbMin = glm::min(bbMin, tri.aabb.min);
                 bbMax = glm::max(bbMax, tri.aabb.max);
                 geom.aabb.min = bbMin;
                 geom.aabb.max = bbMax;
                 geom.triangleCount++;
+#if DEBUG_BVH
+                printTriAABB(tri);
+#endif
             }
         }
         // not using indices
@@ -402,15 +432,21 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::ve
 
                 // TODO: uv
 
+                //tri.objectId = geoms->size();
                 tri.computeAABB();
                 tri.computeCentroid();
                 tris.push_back(tri);
+                triIndices.push_back(tris.size() - 1);
 
                 bbMin = glm::min(bbMin, tri.aabb.min);
                 bbMax = glm::max(bbMax, tri.aabb.max);
                 geom.aabb.min = bbMin;
                 geom.aabb.max = bbMax;
                 geom.triangleCount++;
+#if DEBUG_BVH
+                printTriAABB(tri);
+
+#endif
             }
         }
 #if DEBUG_MESH
@@ -421,16 +457,20 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom, std::ve
 }
 
 // recursively load node and children nodes of model
-void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, Geom& geom, std::vector<Triangle>& tris) {
+void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, Geom& geom,
+    std::vector<Triangle>& tris, std::vector<int>& triIndices,
+    std::vector<Geom>* geoms) {
     if ((node.mesh >= 0) && (node.mesh < model.meshes.size())) {
-        parseMesh(model, model.meshes[node.mesh], geom, tris);
+        parseMesh(model, model.meshes[node.mesh], geom, tris, triIndices, geoms);
     }
     for (size_t i = 0; i < node.children.size(); i++) {
         //assert((node.children[i] >= 0) && (node.children[i] < model.nodes.size()));
-        parseModelNodes(model, model.nodes[node.children[i]], geom, tris);
+        parseModelNodes(model, model.nodes[node.children[i]], geom, tris, triIndices, geoms);
     }
 }
-void parseModel(tinygltf::Model& model, Geom& geom, std::vector<Triangle>& tris) {
+void parseModel(tinygltf::Model& model, Geom& geom, 
+    std::vector<Triangle>& tris, std::vector<int>& triIndices,
+    std::vector<Geom>* geoms) {
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     for (size_t i = 0; i < scene.nodes.size(); ++i) {
 #if DEBUG_MESH
@@ -439,7 +479,7 @@ void parseModel(tinygltf::Model& model, Geom& geom, std::vector<Triangle>& tris)
         cout << "model mesh size: " << model.meshes.size() << endl;
         cout << "model mesh0 prim size: " << model.meshes[0].primitives.size() << endl;
 #endif
-        parseModelNodes(model, model.nodes[scene.nodes[i]], geom, tris);
+        parseModelNodes(model, model.nodes[scene.nodes[i]], geom, tris, triIndices, geoms);
     }
 }
 
@@ -462,14 +502,14 @@ int Scene::loadMeshGltf(string filename, Geom& geom, int objectId) {
     //startTime = utilityCore::timeSinceEpochMillisec();
     
     // parse mesh structure
-    parseModel(model, geom, triangles);
+    parseModel(model, geom, triangles, triIndices, &geoms);
     //endTime = utilityCore::timeSinceEpochMillisec();
     //duration = (endTime - startTime);
     //cout << "Parsing mesh took: " << duration << "ms" << endl;
 
     meshCount++;
 #if DEBUG_MESH
-    cout << "Curr mesh count: " << meshCount<< endl;
+    cout << "Current mesh count: " << meshCount<< endl;
 #endif
     return 1;
 }
@@ -505,6 +545,7 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
         std::vector<Triangle> trisInMesh;
 
         // track AABB for the current geometry
+        geomAABBs.resize(shapes.size());
         glm::vec3 bbMin = glm::vec3(FLT_MAX);
         glm::vec3 bbMax = glm::vec3(-FLT_MAX);
 
@@ -520,9 +561,9 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
 
                 // get vert pos raw data
                 glm::vec3 vertPos = glm::vec3(
-                    attrib.vertices[idx.vertex_index * 3],
-                    attrib.vertices[idx.vertex_index * 3 + 1],
-                    attrib.vertices[idx.vertex_index * 3 + 2]
+                    attrib.vertices[size_t(idx.vertex_index * 3)],
+                    attrib.vertices[size_t(idx.vertex_index * 3 + 1)],
+                    attrib.vertices[size_t(idx.vertex_index * 3 + 2)]
                 );
                 // update transformation
                 vertPos = utilityCore::multiplyMV(geom.transform, glm::vec4(vertPos, 1.f));
@@ -534,9 +575,9 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
                 if (idx.normal_index >= 0) {
                     // get vert normal raw data
                     glm::vec3 vertNor = glm::vec3(
-                        attrib.normals[idx.normal_index * 3],
-                        attrib.normals[idx.normal_index * 3 + 1],
-                        attrib.normals[idx.normal_index * 3 + 2]
+                        attrib.normals[size_t(idx.normal_index * 3)],
+                        attrib.normals[size_t(idx.normal_index * 3 + 1)],
+                        attrib.normals[size_t(idx.normal_index * 3 + 2)]
                     );
                     // update transformation
                     vertNor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(vertNor, 0.f));
@@ -553,15 +594,20 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
             tri.computeCentroid();
             tri.objectId = f;
             trisInMesh.push_back(tri);
+            triIndices.push_back(trisInMesh.size() - 1);
+#if DEBUG_BVH
+            //cout << "Triangle object ID: " << tri.objectId << endl;
+#endif
 
             // update the current geometry's AABB
             bbMin = glm::min(bbMin, tri.aabb.min);
             bbMax = glm::max(bbMax, tri.aabb.max);
         }
+        geomAABBs[s].min = bbMin;
+        geomAABBs[s].max = bbMax;
 
         // initialize new geom
-        geom.aabb.min = bbMin;
-        geom.aabb.max = bbMax;
+        geom.aabb = geomAABBs[s];
         geom.startTriIdx = triangles.size();
         geom.triangleCount = trisInMesh.size();
         
@@ -575,4 +621,254 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
 #endif
     }
     return 1;
+}
+
+// Tutorial: stack based BVH
+// https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+// https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+void Scene::buildBVH() {
+    bvhNodes.resize(2 * triangles.size() - 1);
+
+    // assign all triangles to root node
+    BVHNode root;
+    root.leftChild = 0;
+    root.firstTriIdx = 0;
+    root.triCount = triangles.size();
+    bvhNodes.push_back(root);
+
+    // update each node's AABB
+    updateNodeBounds(0); // root idx = 0
+    
+    // subdivide recursively
+    subdivide(0);
+}
+
+void Scene::updateNodeBounds(int nodeIdx) {
+    BVHNode& node = bvhNodes[nodeIdx];
+    node.aabb.min = glm::vec3(1e30f);
+    node.aabb.max = glm::vec3(-1e30f);
+    
+    int startTriIdx = node.firstTriIdx;
+    for (int i = 0; i < node.triCount; i++) {
+        int leafTriIdx = triIndices[size_t(startTriIdx + i)];
+        Triangle& leafTri = triangles[leafTriIdx];
+        node.aabb.min = glm::min(node.aabb.min, leafTri.aabb.min);
+        node.aabb.max = glm::max(node.aabb.max, leafTri.aabb.max);
+    }
+}
+
+void Scene::subdivide(int nodeIdx) {
+    
+    // terminate recursion
+    BVHNode& node = bvhNodes[nodeIdx];
+    if (node.triCount <= 2) return; // 2 triangles quite often form a quad in real-world scenes. If this quad is axis-aligned, there is no way we can split it (with an axis-aligned plane) into two non-empty halves. For this reason, we typically terminate when we have 2 or less primitives in a leaf. Even this is not completely safe.
+
+    // determine split axis and position
+    // for now, implement mid-point split along its longest axis
+    glm::vec3 extent = node.aabb.max - node.aabb.min;
+    int axis = 0;
+    if (extent.y > extent.x) {
+        axis = 1;
+    }
+    if (extent.z > extent[axis]) {
+        axis = 2;
+    }
+    float splitPos = node.aabb.min[axis] + extent[axis] * 0.5f;
+    
+    // in-place partition
+    int i = node.firstTriIdx;
+    int j = i + node.triCount - 1;
+    while (i <= j) {
+        if (triangles[triIndices[i]].centroid[axis] < splitPos)
+            i++;
+        else
+            swap(triIndices[i], triIndices[j--]);
+    }
+
+    // stop split if one of the sides is empty
+    int leftCount = i - node.firstTriIdx;
+    if (leftCount == 0 || leftCount == node.triCount) return;
+    
+    // create child nodes
+    int leftChildIdx = nodesUsed++;
+    int rightChildIdx = nodesUsed++;
+
+    int tmpTriCount = node.triCount;
+    node.leftChild = leftChildIdx;
+    node.triCount = 0; // we rely on the triCount to identify leaves and interior nodes.
+
+    BVHNode leftChild;
+    BVHNode rightChild;
+    leftChild.firstTriIdx = node.firstTriIdx;
+    leftChild.triCount = leftCount;
+    rightChild.firstTriIdx = i;
+    rightChild.triCount = tmpTriCount - leftCount;
+    bvhNodes.push_back(leftChild);
+    bvhNodes.push_back(rightChild);
+
+    updateNodeBounds(leftChildIdx);
+    updateNodeBounds(rightChildIdx);
+    
+    // recurse
+    subdivide(leftChildIdx);
+    subdivide(rightChildIdx);
+}
+
+/// BASIC BVH FUNCTIONS ///
+int maxExtent(glm::vec3 extent) {
+    if (extent.x > extent.y && extent.x > extent.z) {
+        return 0;
+    }
+    else if (extent.y > extent.z) {
+        return 1;
+    }
+    else {
+        return 2;
+    }
+}
+
+AABB Union(AABB aabb, glm::vec3 p) {
+    glm::vec3 umin = glm::min(aabb.min, p);
+    glm::vec3 umax = glm::max(aabb.max, p);
+    return AABB{ umin, umax };
+}
+
+AABB Union(AABB left, AABB right) {
+    glm::vec3 umin = glm::min(left.min, right.min);
+    glm::vec3 umax = glm::max(left.max, right.max);
+    return AABB{ umin, umax };
+}
+
+// Counter to keep track of the current available node in the tree
+int idx = 1;
+
+// Finds the new bounds of the aabb
+void Scene::updateBounds(const int idx)
+{
+    BVHNode& node = bvhNodes[idx];
+    for (int i = node.firstTriIdx; i < node.firstTriIdx + node.triCount; ++i)
+    {
+        node.aabb = Union(node.aabb, triangles[i].aabb);
+    }
+}
+
+// SAH cost = num_triangles_left * left_box_area + num_triangles_right * right_box_area
+// Determines bounding boxes that result from splitting at this position and how many
+// triangles to place in each box. Once these are determined, we can calculate SAH cost
+//float evalSAH(Scene* scene, BVHNode* node, float queryPos, int axis)
+//{
+//    AABB leftChild = { glm::vec3{INFINITY, INFINITY, INFINITY}, glm::vec3{-INFINITY, -INFINITY, -INFINITY} };
+//    AABB rightChild = { glm::vec3{INFINITY, INFINITY, INFINITY}, glm::vec3{-INFINITY, -INFINITY, -INFINITY} };
+//    int leftCount = 0;
+//    int rightCount = 0;
+//
+//    for (int i = node->firstTri; i < node->firstTri + node->numTris; ++i) {
+//        glm::vec3 centroid = scene->triangles[i].centroid;
+//        if (centroid[axis] < queryPos) {
+//            leftCount++;
+//            leftChild = Union(leftChild, scene->triangles[i].aabb);
+//        }
+//        else {
+//            rightCount++;
+//            rightChild = Union(rightChild, scene->triangles[i].aabb);
+//        }
+//    }
+//    // Calculate cost
+//    float cost = leftCount * leftChild.surfaceArea() + rightCount * rightChild.surfaceArea();
+//
+//    return cost;
+//}
+//
+//void calculateSAHSplit(Scene* scene, BVHNode* node, float& split, int& axis)
+//{
+//    // To find the optimal cost, we must calculate the cost of splitting along each
+//    // axis for each triangle contained within this node
+//    float optimalCost = INFINITY;
+//    for (int i = 0; i < 3; ++i) {
+//        for (int j = node->firstTri; j < node->firstTri + node->numTris; ++j) {
+//            float centroidPos = scene->triangles[j].centroid[i];
+//            float cost = evalSAH(scene, node, centroidPos, i);
+//            if (cost < optimalCost) {
+//                optimalCost = cost;
+//                split = centroidPos;
+//                axis = i;
+//            }
+//        }
+//    }
+//}
+
+void Scene::chooseSplit(BVHNode* node, float& split, int& axis)
+{
+
+#if BVH_SAH
+    //calculateSAHSplit(node, split, axis);
+
+#else
+    // Find bounding box of centroids 
+    AABB centroidAABB = { glm::vec3{FLT_MAX}, glm::vec3{-FLT_MAX} };
+    for (int i = node->firstTriIdx; i < node->firstTriIdx + node->triCount; ++i)
+        centroidAABB = Union(centroidAABB, triangles[i].centroid);
+    axis = maxExtent(centroidAABB.max - centroidAABB.min);
+    split = (centroidAABB.min[axis] + centroidAABB.max[axis]) * 0.5f;
+#endif
+
+}
+
+void Scene::addChildren(BVHNode* node)
+{
+    if (!node->isLeaf()) return;
+
+    // Choose split axis and position
+    float split = 0.f;
+    int axis = 0;
+    chooseSplit(node, split, axis);
+
+    // Partition primitives (in-place sorting)
+    int start = node->firstTriIdx;
+    int end = node->firstTriIdx + node->triCount - 1;
+    while (start <= end) {
+        if (triangles[start].centroid[axis] < split) {
+            start++;
+        }
+        else {
+            std::swap(triangles[start], triangles[end]);
+            end--;
+        }
+    }
+
+    // Make sure there is no empty side on partition
+    int count = start - node->firstTriIdx;
+    if (count == 0 || count == node->triCount) return;
+
+    // Set children nodes
+    int leftChildIdx = idx++;
+    int rightChildIdx = idx++;
+    bvhNodes[leftChildIdx].firstTriIdx = node->firstTriIdx;
+    bvhNodes[leftChildIdx].triCount = start - node->firstTriIdx;
+    bvhNodes[rightChildIdx].firstTriIdx = start;
+    bvhNodes[rightChildIdx].triCount = node->triCount - bvhNodes[leftChildIdx].triCount;
+    node->leftChild = leftChildIdx;
+    node->triCount = 0;
+
+    updateBounds(leftChildIdx);
+    updateBounds(rightChildIdx);
+
+    addChildren(&bvhNodes[leftChildIdx]);
+    addChildren(&bvhNodes[rightChildIdx]);
+}
+
+void Scene::generateBVH()
+{
+    // Resize BVH
+    bvhNodes.resize(2 * triangles.size() - 1);
+
+    // Initialize root node
+    BVHNode* root = &bvhNodes[0];
+    //root->aabb.min = geomAABBs[0].min;
+    //root->aabb.max = geomAABBs[0].max;
+    root->firstTriIdx = 0;
+    root->triCount = triangles.size();
+
+    // Construct hierarchy
+    addChildren(root);
 }

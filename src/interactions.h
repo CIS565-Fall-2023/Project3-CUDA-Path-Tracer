@@ -134,7 +134,7 @@ float fresnelDielectricEval(const Material& m, float cosThetaI) {
     float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) /
         ((etaI * cosThetaI) + (etaT * cosThetaT));
 
-    return (Rparl * Rparl + Rperp * Rperp) / 2.f; // coefficient
+    return (Rparl * Rparl + Rperp * Rperp) * 0.5f; // coefficient
 }
 
 __host__ __device__

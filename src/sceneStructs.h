@@ -17,12 +17,14 @@ enum GeomType {
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+    int intersectionCount = 0;
 };
 
 struct AABB {
     glm::vec3 min;
     glm::vec3 max;
 
+    // for surface area heuristic (SAH) later
     float surfaceArea() {
         glm::vec3 e = min - max;
         return 2.f * (e.x * e.y + e.x * e.z + e.y * e.z);
@@ -41,7 +43,7 @@ struct Triangle
     Vertex v0;
     Vertex v1;
     Vertex v2;
-    glm::vec3 centroid;
+    glm::vec3 centroid; // need for BVH subdivision
     AABB aabb;
 
     void computeAABB() {
@@ -67,6 +69,17 @@ struct Geom {
     int startTriIdx;
     int triangleCount;
     AABB aabb;
+};
+
+struct BVHNode {
+    AABB aabb;
+    int leftChild; // BVHNode* left, * right; rightChild based off leftChild
+    int firstTriIdx; // std::vector<Triangle*> triangles;
+    int triCount;
+
+    bool isLeaf() {
+        return triCount > 0;
+    }
 };
 
 struct Material {

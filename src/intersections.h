@@ -153,7 +153,7 @@ __host__ __device__ void swap(float& a, float& b) {
 }
 
 // reference: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
-__host__ __device__ bool aabbIntersectionTest(AABB& box, Ray& r, float& t) {
+__host__ __device__ bool aabbIntersectionTest(AABB box, Ray& r, float& t) {
     float tmin = (box.min.x - r.origin.x) / r.direction.x;
     float tmax = (box.max.x - r.origin.x) / r.direction.x;
 
@@ -204,47 +204,15 @@ __host__ __device__ bool aabbIntersectionTest(AABB& box, Ray& r, float& t) {
 __host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
     const Triangle* tris, glm::vec3& intersectionPoint, glm::vec3& normal) {
 
-    //float tMin = FLT_MAX;
-    //Triangle closest;
-    //glm::vec3 barycenter, baryMin;
-    //
-    //// check for intersection with every triangle
-    //for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; i++) {
-    //   
-    //    bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
-    //        tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, barycenter);
-    //    if (!intersect) continue;
-
-    //    float t = barycenter.z;
-    //    if (t < tMin && t > 0.f) {
-    //        tMin = t;
-    //        baryMin = barycenter;
-    //        closest = tris[i];
-    //    }
-    //}
-
-    //// find intersection point and normal
-    //float u = baryMin.x;
-    //float v = baryMin.y;
-    //float w = 1.f - u - v;
-
-    //intersectionPoint = u * closest.v0.pos
-    //    + v * closest.v1.pos
-    //    + w * closest.v2.pos;
-    //normal = u * closest.v0.nor
-    //    + v * closest.v1.nor
-    //    + w * closest.v2.nor;
-
-    //return tMin;
-
-    float tMin = FLT_MAX;
+    Triangle tri;
     glm::vec3 barycenter, objSpaceIsect;
+    float tMin = FLT_MAX;
     bool hasIntersection = false;
 
     // do intersection test with every triangle
-    for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; ++i)
-    {
-        Triangle tri = tris[i];
+    for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; ++i) {
+        
+        tri = tris[i];
         bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
             tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
         if (!intersect) continue;
@@ -275,4 +243,210 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
         return tMin;
     }
     return -1.f;
+}
+
+// Helper function for bvhIntersection test
+// @return  FLT_MIN denotes a 'miss', while any other value is a hit at the reported distance
+__host__ __device__ float bvhAABBIntersectionTest(const Ray& r, const BVHNode& node) {
+    float tx1 = (node.aabb.min.x - r.origin.x) * r.direction.x, tx2 = (node.aabb.max.x - r.origin.x) * r.direction.x;
+    float tmin = glm::min(tx1, tx2), tmax = glm::max(tx1, tx2);
+    float ty1 = (node.aabb.min.y - r.origin.y) * r.direction.y, ty2 = (node.aabb.max.y - r.origin.y) * r.direction.y;
+    tmin = glm::max(tmin, glm::min(ty1, ty2)), tmax = glm::min(tmax, glm::max(ty1, ty2));
+    float tz1 = (node.aabb.min.z - r.origin.z) * r.direction.z, tz2 = (node.aabb.max.z - r.origin.z) * r.direction.z;
+    tmin = glm::max(tmin, glm::min(tz1, tz2)), tmax = glm::min(tmax, glm::max(tz1, tz2));
+    if (tmax >= tmin && tmax > 0) {
+        return tmin;
+    }
+    return 1e30f;
+}
+
+/**
+ * Test intersection between a ray and a BVH structure.
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ * 
+ * reference:
+ * https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+ */
+__host__ __device__ float bvhIntersectionTest(Geom mesh, Ray& r,
+    const Triangle* tris, const BVHNode* bvhNodes, const int* triIndices,
+    glm::vec3& intersectionPoint, glm::vec3& normal) {
+    
+    BVHNode node = bvhNodes[0]; // start with root
+    BVHNode stack[32];
+    int stackPtr = 0;
+
+    Triangle tri;
+    glm::vec3 barycenter, objSpaceIsect;
+    float tMin = FLT_MAX;
+    bool hasIntersection = false;
+
+    // An infinite loop is used, whenever two child nodes require a visit, 
+    // one of them is pushed on a small stack. 
+    // The loop completes when we try to pop from an empty stack.
+    while (true) {
+        if (node.isLeaf()) {
+            for (int i = 0; i < node.triCount; i++) {
+                
+                /* triangle intersection test---------------------- start*/
+                tri = tris[triIndices[node.firstTriIdx + i]];
+                bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
+                    tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
+                if (!intersect) continue;
+
+                // find intersection point and normal
+                float u = barycenter.x;
+                float v = barycenter.y;
+                float w = 1.f - u - v;
+                objSpaceIsect = w * tri.v0.pos
+                    + u * tri.v1.pos
+                    + v * tri.v2.pos;
+                
+                float t = glm::length(r.origin - objSpaceIsect);
+
+                glm::vec3 intersectionNormal = glm::normalize(
+                    glm::cross(tri.v1.pos - tri.v0.pos,
+                               tri.v2.pos - tri.v0.pos));
+
+                if (t < tMin) {
+                    tMin = t;
+                    intersectionPoint = /*objSpaceIsect; */multiplyMV(mesh.transform, glm::vec4(objSpaceIsect, 1.f));
+                    normal = /*intersectionNormal; */glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(intersectionNormal, 0.f)));;
+                    hasIntersection = true;
+                }
+                /* triangle intersection test------------------------- end*/
+
+            }
+            if (stackPtr == 0) { // base case: last node in tree
+                if (hasIntersection) return tMin;
+                break;
+            }
+            else {
+                node = stack[--stackPtr];
+            }
+            continue;
+        }
+
+        BVHNode leftChild = bvhNodes[node.leftChild];
+        BVHNode rightChild = bvhNodes[node.leftChild + 1];
+        float dist1 = bvhAABBIntersectionTest(r, leftChild);
+        float dist2 = bvhAABBIntersectionTest(r, rightChild);
+        if (dist1 > dist2) {
+            swap(dist1, dist2);
+            BVHNode temp = leftChild;
+            leftChild = rightChild;
+            rightChild = temp;
+        }
+        if (dist1 == 1e30f) {
+            if (stackPtr == 0) {
+                if (hasIntersection) return tMin;
+                break;
+            }
+            else {
+                node = stack[--stackPtr];
+            }
+        }
+        else {
+            node = leftChild;
+            if (dist2 != 1e30f) {
+                stack[stackPtr++] = rightChild;
+            }
+        }
+    }
+
+    return -1.f;
+}
+
+__host__ __device__ bool isNodeLeaf(const BVHNode* node) {
+    return (node->triCount > 0);
+}
+
+__host__ __device__ float triangleIntersectionTest(Triangle tri, Ray& r,
+    glm::vec3& barycenter) {
+
+    bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
+        tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
+    if (!intersect) return -1.f;
+    r.intersectionCount++;
+
+    return barycenter.z;
+}
+
+__host__ __device__ void bvhIntersectTriangles(const Triangle* tris, Ray& r, int start, int numTris,
+    Triangle& min_tri, glm::vec3& min_barycenter, float& min_t) {
+
+    for (int i = start; i < start + numTris; ++i) {
+        glm::vec3 barycenter;
+        float t = triangleIntersectionTest(tris[i], r, barycenter);
+        if (t < min_t && t > 0.f)
+        {
+            min_t = t;
+            min_barycenter = barycenter;
+            min_tri = tris[i];
+        }
+    }
+}
+
+__host__ __device__ float bvhIntersectionTest2(const BVHNode* nodes, const Triangle* tris, Ray& r, int triangleCount,
+    glm::vec3& intersectionPoint, glm::vec3& normal) {
+
+    float stack[32];
+    int stackPtr = -1;
+
+    Triangle min_tri;
+    glm::vec3 min_barycenter;
+    float min_t = INFINITY;
+
+    // Push root node
+    stack[++stackPtr] = 0;
+    int currNodeIdx = stack[stackPtr];
+    while (stackPtr >= 0)
+    {
+        // Check intersection with left and right children
+        int leftChild = nodes[currNodeIdx].leftChild;
+        int rightChild = nodes[currNodeIdx].leftChild + 1;
+        const BVHNode* left = &nodes[leftChild];
+        const BVHNode* right = &nodes[rightChild];
+
+        float t;
+        bool intersectLeft = aabbIntersectionTest(left->aabb, r, t);
+        bool intersectRight = aabbIntersectionTest(right->aabb, r, t);
+
+        // If intersection found, and they are leaf nodes, check for triangle intersections
+        if (intersectLeft && isNodeLeaf(left)) {
+            bvhIntersectTriangles(tris, r, left->firstTriIdx, left->triCount, min_tri, min_barycenter, min_t);
+            //if (r.intersectionCount >= triangleCount) return -1.f;
+        }
+        if (intersectRight && isNodeLeaf(right)) {
+            bvhIntersectTriangles(tris, r, right->firstTriIdx, right->triCount, min_tri, min_barycenter, min_t);
+            //if (r.intersectionCount >= triangleCount) return -1.f;
+        }
+
+        // If internal nodes, keep traversing
+        bool traverseLeftSubtree = (intersectLeft && !isNodeLeaf(left));
+        bool traverseRightSubtree = (intersectRight && !isNodeLeaf(right));
+
+        if (!traverseLeftSubtree && !traverseRightSubtree) {
+            // Pop node from stack
+            currNodeIdx = stack[stackPtr--];
+        }
+        else {
+            currNodeIdx = (traverseLeftSubtree) ? leftChild : rightChild;
+            if (traverseLeftSubtree && traverseRightSubtree) {
+                // Push right child onto stack
+                stack[++stackPtr] = rightChild;
+            }
+        }
+    }
+
+    // Find intersection point and normal
+    float u = min_barycenter.x;
+    float v = min_barycenter.y;
+    float w = 1.f - u - v;
+    intersectionPoint = w * min_tri.v0.pos + u * min_tri.v1.pos + v * min_tri.v2.pos;
+    normal = u * min_tri.v0.nor + v * min_tri.v1.nor + w * min_tri.v2.nor;
+
+    return min_t;
 }

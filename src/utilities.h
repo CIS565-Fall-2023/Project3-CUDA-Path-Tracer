@@ -20,6 +20,7 @@
 #define EPSILON           0.0001f
 #define OFFSET            0.01f
 
+// Toggles
 #define SORT_MAT            0				// Sort by material (Keep same material contiguous in memory)
 #define COMPACT             1				// Stream compaction
 #define AA		            1				// Anti-aliasing
@@ -27,9 +28,11 @@
 #define CACHE_FIRST_BOUNCE  1	            // Cache first bounce of rays, ONLY if AA is disabled
 #endif
 #define MOTION              0               // Real-time moving objects
-#define MOTION_BLUR	MOTION ? 0 : 0          // Hard-coded motion blur
+#define MOTION_BLUR	MOTION  0               // Hard-coded motion blur
 #define TIMER               0               // Gpu timer for performance analysis
-#define BB_CULLING          1               // Test ray against mesh AABB
+#define BB_CULLING          0               // Test ray against mesh AABB
+#define BVH                 1               // Use Bounding Volumn Hierarchy to speed up mesh loading
+
 
 class GuiDataContainer
 {
