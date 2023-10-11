@@ -356,12 +356,11 @@ Sponza scene with 100 spp:
 
 ## References
 
-[Ray tracing in one weekend]: https://raytracing.github.io/
-[PBRT]: https://pbr-book.org/
-[Efficient Stack-less BVH Traversal for Ray Tracing]: https://www.researchgate.net/publication/255969699_Efficient_Stack-less_BVH_Traversal_for_Ray_Tracing
-[Implementing a Photorealistic Rendering System using GLSL]: https://arxiv.org/abs/1505.06022
-[Ray Tracing Gems II]: https://www.realtimerendering.com/raytracinggems/rtg2/index.html
-[McGuire Computer Graphics Archive]: https://casual-effects.com/data/
-[Multiple Importance Sampling]: https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf
-[Sampling the GGX Distribution of Visible Normals]: https://jcgt.org/published/0007/04/01/paper.pdf#page=11&amp;zoom=100,139,815
-
+- Ray tracing in one weekend: https://raytracing.github.io/
+- PBRT: https://pbr-book.org/
+- Efficient Stack-less BVH Traversal for Ray Tracing: https://www.researchgate.net/publication/255969699_Efficient_Stack-less_BVH_Traversal_for_Ray_Tracing
+- Implementing a Photorealistic Rendering System using GLSL: https://arxiv.org/abs/1505.06022
+- Ray Tracing Gems II: https://www.realtimerendering.com/raytracinggems/rtg2/index.html
+- McGuire Computer Graphics Archive: https://casual-effects.com/data/ 
+- Multiple Importance Sampling: https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf 
+- Sampling the GGX Distribution of Visible Normals: https://jcgt.org/published/0007/04/01/paper.pdf#page=11&amp;zoom=100,139,815 
