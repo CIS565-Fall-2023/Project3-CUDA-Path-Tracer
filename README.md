@@ -24,19 +24,19 @@ L_O(p,\omega_o) = L_E(p,\omega_o) + \int_{s} f(p,\omega_o,\omega_i)  L_i(p,\omeg
 
 ### 1. Bidrectional Scattering Distribution Function Computation
 
-**Lambertian Diffuse BRDF, Perfect Specular BRDF, Perfect Refraction BTDF**
+**Quick note on terminology**
+
+- BSDF = Bidirectional **Scattering** Distribution Function
+- BRDF = Bidirectional **Reflection** Distribution Function
+- BTDF = Bidirectional **Transmission** Distribution Function
+
+<ins>**Lambertian Diffuse BRDF, Perfect Specular BRDF, Perfect Refraction BTDF**</ins>
 
 This path tracer supports lambertian diffuse and perfectly specular (reflective), and perfectly transmissive (refractive) materials.
 
 |<img src="img/cornell_diffuse.png" width=400>|<img src="img/cornell_specular.png" width=400>|<img src="img/cornell_refract_only.png" width=400>|
 |:-:|:-:|:-:|
 |Lambertian Diffuse|Perfect Specular|Perfect Refraction|
-
-**Note on terminology**
-
-BSDF = Bidirectional **Scattering** Distribution Function 
-BRDF = Bidirectional **Reflection** Distribution Function
-BTDF = Bidirectional **Transmission** Distribution Function
 
 In **diffuse BRDF**, light is reflected in all directions, with in the hemisphere with a probability distribution function (PDF) based on cosine weighted hemisphere sampling, i.e., there is a higher probability of light bouncing in a direction that is more aligned with the surface normal. The PDF accounts for any bias that results from the cosine weighting.
 
@@ -46,11 +46,29 @@ In **refraction (specular BTDF)**, light is refracted in exactly one direction b
 
 The Index of Refraction (IOR) value of the material can be specified in the `<sceneName>.txt` file under the `MATERIAL` (for example, in the case of glass, this would be `IOR 1.55`). The path tracer assumes that the main transport medium is air, and hard-codes that IOR to 1.
 
-**Glass and Plastic Materials**
+<ins>**Glass and Plastic Materials**</ins>
 
-Additionally, there is support for imperfect specular and refractive materials. 
+Additionally, there is support for imperfect specular and refractive materials, using **fresnel computation**. If a material has either  both reflective and refractive (glass) properties, or both reflective and diffuse (plastic) properties, then the ray either performs reflective BSDF calculation, or diffuse/refractive BSDF computation with an equal weight given to both. Specular reflection is only applied to areas on the geometry where the surface normal is not aligned to the view direction (fresnel), and diffuse and refractive BSDFs are applied to the other directions. Since both reflection and diffuse/refraction are only computed half the times, their contributions are boosted twice to account for bias.
 
+|<img src="img/cornell_glass_fresnel.png" width=400>|<img src="img/cornell_plastic.png" width=400>|
+|:-:|:-:|
+|Glass|Perfect Specular|
 
+**Caustics**
+
+Caustics are a direct result of light refracting through surfaces, as seen above in the glass example image. It becomes more apparent with a more complex shape like an icosphere.
+
+|<img src="img/caustics.png" width=500>|
+|:-:|
+|Caustics from refraction through glass|
+
+**Fireflies**
+
+Because there is indirect illumination (global illumination) support in this path tracer, some scenes may result in *fireflies*, which are very brightly coloured dots on surfaces where the colours of the dots does not match the material of that surface. This happens because light that bounces off surfaces that have very bright caustics effects will carry illumination from those surfaces. This effect can be seen in this below example, where a sphere is close enough to a box behind it to cause a region of very bright yellow caustics. Any light ray bouncing off of this region carries high luminance with it and deposits that in the form of fireflies.
+
+|<img src="img/fireflies.png" width=500>|
+|:-:|
+|Fireflies|
 
 ## Performance Analysis
 
