@@ -7,6 +7,8 @@ CUDA Path Tracer
 * [Personal website](https://xinyuniu6.wixsite.com/my-site-1)
 * Tested on: Windows 11, i9-13980HX @ 2.20GHz 16GB, RTX 4070 16185MB (Personal)
 
+![](img/immg.png)
+
 ## Introduction
 
 This project focuses on implementing a CUDA-based path tracer capable of rendering globally-illuminated images very quickly. 
@@ -140,3 +142,10 @@ Stream compaction removes terminated rays to improve the performance. I implemen
 My implementation includes calculating bounding box for each triangle and build a BVH tree that each node has a bounding box that is calculated from the triangles in it. For a BVH tree, deeper child nodes have smaller volumes so we reduce the times of intersection checks by ignoring subtrees that are not intersected in the parent node. I observed significant performance improvement by using BVH.
 
 ![](img/bvh.png)
+
+## Third Party References
+
+* PBRT
+* tiny_obj
+* thin_gltf
+* GLTF models from [Knronos Group](https://github.com/KhronosGroup/glTF-Sample-Models)
