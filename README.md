@@ -33,12 +33,23 @@ I cache the first bounce intersection for each path. This is because the first b
 ![](./img/refraction.png)
 
 #### Anti-aliasing
+![](./img/withantiliasing.png)
 
-#### depth of field
+With 4x anti-aliasing, the image is much smoother than the one without anti-aliasing. The image without anti-aliasing is shown below.
 
-#### direct light
+![](./img/withoutantiliasing.png)
+#### Depth of field
+![](./img/depthoffield.png)
 
-#### Obj Mesh loading with boundin volume intersection culling
+#### Direct light
+
+With direct light, the image is brighter than the one without direct light. The image without direct light is shown below.``
+![](./img/withdirectlight.png)
+
+Without direct light
+![](./img/withoutdirectlight.png)
+
+#### ObJ Mesh loading with bounding volume intersection culling
 
 #### Open Image AI denoiser
 
