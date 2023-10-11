@@ -14,7 +14,8 @@ CUDA Path Tracer
 * Stratified sampling for random number sequences
 
 ### Materials
-<img width="600" alt="3" src="img/1.png">
+<img width="600" alt="3" src="img/3.png">
+
 | Diffuse             | Perfect Specular    | Pure refraction   |    Plastic        |        Glass      |
 | ------------------- | ------------------- | ----------------- | ----------------- |------------------ |
 | ![](img/diff.png)   | ![](img/spec.png)   | ![](img/refr.png) | ![](img/plas.png) | ![](img/glass.png)|
@@ -64,7 +65,7 @@ Images below show the 1st iteration of the wahoo scene. Actually the improvement
 Open
 <img width="600" alt="1" src="img/1.png">
 Closed
-<img width="600" alt="2" src="img/1.png">
+<img width="600" alt="2" src="img/2.png">
 | Open scene              | Closed scene        |
 | ----------------------- | ------------------- |
 | ![](img/dl.png)         |   ![](img/full.png) |
