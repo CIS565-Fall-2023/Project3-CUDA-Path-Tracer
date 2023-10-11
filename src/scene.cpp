@@ -3,9 +3,14 @@
 #include <cstring>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
-
+#include <stack>
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
+#include <stb_image.h>
+
+glm::vec3 multiplyMV(glm::mat4 m, glm::vec3 v) {
+    return glm::vec3(m * glm::vec4(v, 1.0f));
+}
 
 Scene::Scene(string filename) {
     cout << "Reading scene from " << filename << " ..." << endl;
@@ -35,7 +40,26 @@ Scene::Scene(string filename) {
                 loadCamera();
                 cout << " " << endl;
             }
+            else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0)
+            {
+                loadTexture(tokens[1]);
+                cout << " " << endl;
+            }
+            else if (strcmp(tokens[0].c_str(), "OBJECTMESH") == 0) {
+                loadObj(tokens[1].c_str());
+                cout << tokens[1] << endl;
+            }
         }
+    }
+
+    if (triangles.size() > 0) {
+        int level;
+        root_node = buildBVH(0, triangles.size(), level, 0);
+
+        reformatBVHToGPU();
+
+        std::cout << "level: " << level << std::endl;
+        std::cout << "num nodes: " << num_nodes << std::endl;
     }
 }
 
@@ -61,16 +85,7 @@ int Scene::loadGeom(string objectid) {
                 cout << "Creating new cube..." << endl;
                 newGeom.type = CUBE;
             }
-            else if (strcmp(line.c_str(), "objmesh") == 0)
-            {
-                cout << "Creating new obj mesh..." << endl;
-                newGeom.type = OBJMESH;
-                utilityCore::safeGetline(fp_in, line);
-                if (!line.empty() && fp_in.good()) {
-                    const char* filename = line.c_str();
-                    loadObj(newGeom, filename);
-                }
-            }
+            
         }
 
         //link material
@@ -96,6 +111,16 @@ int Scene::loadGeom(string objectid) {
             else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
+            else if (strcmp(tokens[0].c_str(), "TEXTURE") == 0) {
+                newGeom.textureId = atoi(tokens[1].c_str());
+            }
+            else if (strcmp(tokens[0].c_str(), "BUMP") == 0) {
+                const char* bumpPath = tokens[1].c_str();
+                int bumpTextureId = loadTexture(bumpPath);
+                if (bumpTextureId != -1) {
+                    newGeom.bumpTextureId = bumpTextureId;
+                }
+            }
 
             utilityCore::safeGetline(fp_in, line);
         }
@@ -104,6 +129,8 @@ int Scene::loadGeom(string objectid) {
             newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+
 
         if (newGeom.materialid < lightMaterialNum)
         {
@@ -239,7 +266,7 @@ int Scene::loadMaterial(string materialid) {
 }
 
 // Reference: https://github.com/tinyobjloader/tinyobjloader
-int Scene::loadObj(Geom& geo, const char* inputfile) {
+int Scene::loadObj(const char* inputfile) {
     tinyobj::ObjReader reader;
     tinyobj::ObjReaderConfig reader_config;
 
@@ -257,6 +284,40 @@ int Scene::loadObj(Geom& geo, const char* inputfile) {
     tinyobj::attrib_t attrib = reader.GetAttrib();
     std::vector<tinyobj::shape_t> shapes = reader.GetShapes();
 
+    for (size_t i = 0; i < shapes.size(); i += 1) {
+        printf("%s\n", shapes[i].name.c_str());
+    }
+
+    cout << inputfile << endl;
+    Geom geo;
+    geo.type = OBJMESH;
+    string line;
+    utilityCore::safeGetline(fp_in, line);
+    while (!line.empty() && fp_in.good()) {
+        vector<string> tokens = utilityCore::tokenizeString(line);
+
+        //load tranformations
+        if (strcmp(tokens[0].c_str(), "TRANS") == 0) {
+            geo.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "ROTAT") == 0) {
+            geo.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
+            geo.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+        }
+        else if (strcmp(tokens[0].c_str(), "MATERIAL") == 0) {
+            geo.materialid = atoi(tokens[1].c_str());
+        }
+
+        utilityCore::safeGetline(fp_in, line);
+    }
+
+    geo.transform = utilityCore::buildTransformationMatrix(
+        geo.translation, geo.rotation, geo.scale);
+    geo.inverseTransform = glm::inverse(geo.transform);
+    geo.invTranspose = glm::inverseTranspose(geo.transform);
+   
     geo.triangleIdStart = triangles.size();
 
     float maxX = -FLT_MAX, maxY = -FLT_MAX, maxZ = -FLT_MAX;
@@ -264,62 +325,68 @@ int Scene::loadObj(Geom& geo, const char* inputfile) {
 
     // Loop over shapes
     for (const auto& shape : shapes) {
-        Triangle face;     // current face to be loaded
-
-        size_t idx = 0;
-
         // Loop over faces
-        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); ++f) {
-            size_t num_v = size_t(shape.mesh.num_face_vertices[f]);
+        for (size_t i = 0; i < shape.mesh.indices.size(); i += 3) {
+            Triangle tri;
+            tri.mat_ID = geo.materialid;
+            glm::vec3 pos = glm::vec3(0.0f);
+            glm::vec3 nor = glm::vec3(0.0f);
+            glm::vec2 uv = glm::vec2(0.0f);
 
-            // Loop over vertices
-            for (size_t v = 0; v < num_v; ++v) {
+            for (size_t k = 0; k < 3; ++k) {
 
-                tinyobj::index_t v_idx = shape.mesh.indices[idx + v];
-                tinyobj::real_t vx = attrib.vertices[3 * size_t(v_idx.vertex_index) + 0];
-                tinyobj::real_t vy = attrib.vertices[3 * size_t(v_idx.vertex_index) + 1];
-                tinyobj::real_t vz = attrib.vertices[3 * size_t(v_idx.vertex_index) + 2];
+                if (shape.mesh.indices[i + k].vertex_index != -1) {
+                    pos = glm::vec3(attrib.vertices[3 * shape.mesh.indices[i + k].vertex_index + 0],
+                        attrib.vertices[3 * shape.mesh.indices[i + k].vertex_index + 1],
+                        attrib.vertices[3 * shape.mesh.indices[i + k].vertex_index + 2]);
+                }
 
-                glm::vec3 vert(vx, vy, vz);
-
-                // Update the bounding box
-                maxX = std::max(vx, maxX);
-                maxY = std::max(vy, maxY);
-                maxZ = std::max(vz, maxZ);
-
-                minX = std::min(vx, minX);
-                minY = std::min(vy, minY);
-                minZ = std::min(vz, minZ);
-
-                glm::vec3 norm;
-                if (v_idx.normal_index >= 0) {
-                    norm = glm::vec3(
-                        attrib.normals[3 * size_t(v_idx.normal_index) + 0],
-                        attrib.normals[3 * size_t(v_idx.normal_index) + 1],
-                        attrib.normals[3 * size_t(v_idx.normal_index) + 2]
+                if (shape.mesh.indices[i + k].texcoord_index != -1) {
+                    uv = glm::vec2(
+                        attrib.texcoords[2 * shape.mesh.indices[i + k].texcoord_index + 0],
+                        1.0f - attrib.texcoords[2 * shape.mesh.indices[i + k].texcoord_index + 1]
                     );
                 }
 
-                glm::vec2 texture;
-                if (v_idx.texcoord_index >= 0) {
-                    texture = glm::vec2(
-                        attrib.texcoords[2 * size_t(v_idx.texcoord_index) + 0],
-                        attrib.texcoords[2 * size_t(v_idx.texcoord_index) + 1]
+                if (shape.mesh.indices[i + k].normal_index != -1) {
+                    nor = glm::vec3(
+                        attrib.normals[3 * shape.mesh.indices[i + k].normal_index + 0],
+                        attrib.normals[3 * shape.mesh.indices[i + k].normal_index + 1],
+                        attrib.normals[3 * shape.mesh.indices[i + k].normal_index + 2]
                     );
                 }
 
-                if (v < 3) {
-                    face.vertices[v] = vert;
-                    face.normals[v] = norm;
-                    face.uvs[v] = texture;
-                }
-                else {
-                    std::cout << "Quad face detected" << reader.Warning();
-                }
+                tri.vertices[k] = pos;
+                tri.normals[k] = nor;
+                tri.uvs[k] = uv;
             }
 
-            idx += num_v;
-            triangles.push_back(face);
+            tri.vertices[0] = multiplyMV(geo.transform, tri.vertices[0]);
+            tri.vertices[1] = multiplyMV(geo.transform, tri.vertices[1]);
+            tri.vertices[2] = multiplyMV(geo.transform, tri.vertices[2]);
+            tri.normals[0] = glm::normalize(multiplyMV(geo.invTranspose, tri.normals[0]));
+            tri.normals[1] = glm::normalize(multiplyMV(geo.invTranspose, tri.normals[1]));
+            tri.normals[2] = glm::normalize(multiplyMV(geo.invTranspose, tri.normals[2]));
+
+            tri.plane_normal = glm::normalize(glm::cross(tri.vertices[1] - tri.vertices[0], tri.vertices[2] - tri.vertices[1]));
+            tri.S = glm::length(glm::cross(tri.vertices[1] - tri.vertices[0], tri.vertices[2] - tri.vertices[1]));
+
+            TriBounds newTriBounds;
+
+            newTriBounds.tri_ID = num_tris;
+
+            newTriBounds.AABB_max = glm::vec3(maxX, maxY, maxZ);
+            newTriBounds.AABB_min = glm::vec3(minX, minY, minZ);
+
+            float midX = (tri.vertices[0].x + tri.vertices[1].x + tri.vertices[2].x) / 3.0;
+            float midY = (tri.vertices[0].y + tri.vertices[1].y + tri.vertices[2].y) / 3.0;
+            float midZ = (tri.vertices[0].z + tri.vertices[1].z + tri.vertices[2].z) / 3.0;
+            newTriBounds.AABB_centroid = glm::vec3(midX, midY, midZ);
+
+            tri_bounds.push_back(newTriBounds);
+
+            num_tris++;
+            triangles.push_back(tri);
         }
     }
 
@@ -330,4 +397,225 @@ int Scene::loadObj(Geom& geo, const char* inputfile) {
     return 1;
 }
 
+float noise(float x)
+{
+    float r = (sin(x * 127.1) * 43758.5453);
+    return r - (long)r;
+}
 
+int Scene::loadTexture(string textureID)
+{
+    int id = atoi(textureID.c_str());
+    std::cout << "Loading texture file: " << id << " starting index: " << textureColors.size() << endl;
+
+    Texture texture;
+    texture.id = id;
+    texture.idx = textureColors.size();
+    int width, height, channels;
+
+    string line;
+    utilityCore::safeGetline(fp_in, line);
+    vector<string> tokens = utilityCore::tokenizeString(line);
+
+    if (strcmp(tokens[0].c_str(), "PATH") == 0) {
+        const char* filepath = tokens[1].c_str();
+        unsigned char* img = stbi_load(filepath, &width, &height, &channels, 0);
+        if (img != nullptr && width > 0 && height > 0)
+        {
+            texture.width = width;
+            texture.height = height;
+            texture.channel = channels;
+
+            for (int i = 0; i < width * height; ++i)
+            {
+                glm::vec3 col = glm::vec3(img[3 * i + 0], img[3 * i + 1], img[3 * i + 2]) / 255.f;
+                textureColors.emplace_back(col);
+            }
+        }
+        stbi_image_free(img);
+        textures.push_back(texture);
+        return 1;
+    }
+    else if (strcmp(tokens[0].c_str(), "PROCEDURAL") == 0)
+    {
+        texture.width = 1000;
+        texture.height = 1;
+        texture.channel = 3;
+        for (float i = 0.f; i < 1000.f; ++i)
+        {
+            glm::vec3 col = glm::vec3(noise(i), noise(i * 2.f), noise(i * 3.f));
+            textureColors.emplace_back(col);
+        }
+        textures.push_back(texture);
+        return 1;
+    }
+    else if (strcmp(tokens[0].c_str(), "BUMP_PATH") == 0) {
+        const char* bumpPath = tokens[1].c_str();
+        unsigned char* bumpImg = stbi_load(bumpPath, &width, &height, &channels, 0);
+        if (bumpImg && width > 0 && height > 0) {
+            texture.width = width;
+            texture.height = height;
+            texture.channel = channels;
+            texture.bumpMap = new float[width * height];
+            for (int i = 0; i < width * height; ++i) {
+                texture.bumpMap[i] = bumpImg[i * channels] / 255.f;
+            }
+        }
+        stbi_image_free(bumpImg);
+        textures.push_back(texture);
+        return 1;
+    }
+
+    std::cout << "Texture path does not exist" << endl;
+    return -1;
+
+}
+
+BVHNode* Scene::buildBVH(int start_index, int end_index, int& level, int count) {
+    BVHNode* new_node = new BVHNode();
+    num_nodes++;
+    int num_tris_in_node = end_index - start_index;
+
+    glm::vec3 max_bounds(-FLT_MAX);
+    glm::vec3 min_bounds(FLT_MAX);
+
+    for (int i = start_index; i < end_index; ++i) {
+        max_bounds = glm::max(max_bounds, tri_bounds[i].AABB_max);
+        min_bounds = glm::min(min_bounds, tri_bounds[i].AABB_min);
+    }
+
+    // Dynamic termination: Depth
+    const int MAX_DEPTH = 18;
+    if (count > MAX_DEPTH) {
+        for (int i = start_index; i < end_index; ++i) {
+            mesh_tris_sorted.push_back(triangles[tri_bounds[i].tri_ID]);
+        }
+        new_node->tri_index = start_index;
+        new_node->AABB_max = max_bounds;
+        new_node->AABB_min = min_bounds;
+        return new_node;
+    }
+
+    int mid_point = (start_index + end_index) / 2;
+    //const int MIN_TRIANGLES = 4;
+    //if (mid_point - start_index < MIN_TRIANGLES || end_index - mid_point < MIN_TRIANGLES) {
+    //    for (int i = start_index; i < end_index; ++i) {
+    //        mesh_tris_sorted.push_back(triangles[tri_bounds[i].tri_ID]);
+    //    }
+    //    new_node->tri_index = start_index;  // Assuming contiguous triangles
+    //    new_node->AABB_max = max_bounds;
+    //    new_node->AABB_min = min_bounds;
+    //    return new_node;
+    //}
+    // leaf node
+    /*if (num_tris_in_node <= 1) {
+        mesh_tris_sorted.push_back(triangles[tri_bounds[start_index].tri_ID]);
+        new_node->tri_index = mesh_tris_sorted.size() - 1;
+        new_node->AABB_max = max_bounds;
+        new_node->AABB_min = min_bounds;
+        return new_node;
+    }
+    else {*/
+    {
+        glm::vec3 centroid_max(-FLT_MAX);
+        glm::vec3 centroid_min(FLT_MAX);
+        for (int i = start_index; i < end_index; ++i) {
+            centroid_max = glm::max(centroid_max, tri_bounds[i].AABB_centroid);
+            centroid_min = glm::min(centroid_min, tri_bounds[i].AABB_centroid);
+        }
+        glm::vec3 centroid_extent = centroid_max - centroid_min;
+
+        int dimension_to_split = 0;
+        if (centroid_extent.x >= centroid_extent.y && centroid_extent.x >= centroid_extent.z) {
+            dimension_to_split = 0;
+        }
+        else if (centroid_extent.y >= centroid_extent.x && centroid_extent.y >= centroid_extent.z) {
+            dimension_to_split = 1;
+        }
+        else {
+            dimension_to_split = 2;
+        }
+
+        float centroid_midpoint = (centroid_min[dimension_to_split] + centroid_max[dimension_to_split]) / 2;
+
+        if (centroid_min[dimension_to_split] == centroid_max[dimension_to_split]) {
+            mesh_tris_sorted.push_back(triangles[tri_bounds[start_index].tri_ID]);
+            new_node->tri_index = mesh_tris_sorted.size() - 1;
+            new_node->AABB_max = max_bounds;
+            new_node->AABB_min = min_bounds;
+            return new_node;
+        }
+
+        TriBounds* pointer_to_partition_point = std::partition(&tri_bounds[start_index], &tri_bounds[end_index],
+            [dimension_to_split, centroid_midpoint](const TriBounds& triangle_AABB) {
+                return triangle_AABB.AABB_centroid[dimension_to_split] < centroid_midpoint;
+            });
+
+        mid_point = pointer_to_partition_point - &tri_bounds[0];
+
+        if (level < count) { level = count; }
+
+        new_node->child_nodes[0] = buildBVH(start_index, mid_point, level, count+1);
+        new_node->child_nodes[1] = buildBVH(mid_point, end_index, level, count + 1);
+        
+        
+
+        new_node->split_axis = dimension_to_split;
+        new_node->tri_index = -1;
+
+        new_node->AABB_max.x = glm::max(new_node->child_nodes[0]->AABB_max.x, new_node->child_nodes[1]->AABB_max.x);
+        new_node->AABB_max.y = glm::max(new_node->child_nodes[0]->AABB_max.y, new_node->child_nodes[1]->AABB_max.y);
+        new_node->AABB_max.z = glm::max(new_node->child_nodes[0]->AABB_max.z, new_node->child_nodes[1]->AABB_max.z);
+
+        new_node->AABB_min.x = glm::min(new_node->child_nodes[0]->AABB_min.x, new_node->child_nodes[1]->AABB_min.x);
+        new_node->AABB_min.y = glm::min(new_node->child_nodes[0]->AABB_min.y, new_node->child_nodes[1]->AABB_min.y);
+        new_node->AABB_min.z = glm::min(new_node->child_nodes[0]->AABB_min.z, new_node->child_nodes[1]->AABB_min.z);
+        return new_node;
+    }
+}
+
+
+void Scene::reformatBVHToGPU() {
+    BVHNode* cur_node;
+    std::stack<BVHNode*> nodes_to_process;
+    std::stack<int> index_to_parent;
+    std::stack<bool> second_child_query;
+    int cur_node_index = 0;
+    int parent_index = 0;
+    bool is_second_child = false;
+    nodes_to_process.push(root_node);
+    index_to_parent.push(-1);
+    second_child_query.push(false);
+    while (!nodes_to_process.empty()) {
+        BVHNode_GPU new_gpu_node;
+
+        cur_node = nodes_to_process.top();
+        nodes_to_process.pop();
+        parent_index = index_to_parent.top();
+        index_to_parent.pop();
+        is_second_child = second_child_query.top();
+        second_child_query.pop();
+
+        if (is_second_child && parent_index != -1) {
+            bvh_nodes_gpu[parent_index].offset_to_second_child = bvh_nodes_gpu.size();
+        }
+        new_gpu_node.AABB_min = cur_node->AABB_min;
+        new_gpu_node.AABB_max = cur_node->AABB_max;
+        if (cur_node->tri_index != -1) {
+            // leaf node
+            new_gpu_node.tri_index = cur_node->tri_index;
+        }
+        else {
+            // intermediate node
+            new_gpu_node.axis = cur_node->split_axis;
+            new_gpu_node.tri_index = -1;
+            nodes_to_process.push(cur_node->child_nodes[1]);
+            index_to_parent.push(bvh_nodes_gpu.size());
+            second_child_query.push(true);
+            nodes_to_process.push(cur_node->child_nodes[0]);
+            index_to_parent.push(-1);
+            second_child_query.push(false);
+        }
+        bvh_nodes_gpu.push_back(new_gpu_node);
+    }
+}

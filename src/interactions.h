@@ -315,7 +315,6 @@ void scatterRay(
 
     pathSegment.ray.origin = newOrigin;
     pathSegment.ray.direction = newDir;
-    pathSegment.ray.direction_inv = glm::vec3(1.0f / newDir.x, 1.0f / newDir.y, 1.0f / newDir.z);
     pathSegment.remainingBounces--;
     return;
 }
