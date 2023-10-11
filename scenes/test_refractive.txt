@@ -45,7 +45,7 @@ SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
 REFR        1
-REFRIOR     1.5
+REFRIOR     2
 EMITTANCE   0
 
 // Diffuse yellow
@@ -91,7 +91,7 @@ SCALE       3 .3 3
 // Floor
 OBJECT 1
 cube
-material 6
+material 1
 TRANS       0 0 0
 ROTAT       0 0 0
 SCALE       10 .01 10
@@ -132,6 +132,6 @@ SCALE       .01 10 10
 OBJECT 6
 sphere
 material 4
-TRANS       -2 3 -2
+TRANS       -1 4 -1
 ROTAT       0 0 0
 SCALE       3 3 3
