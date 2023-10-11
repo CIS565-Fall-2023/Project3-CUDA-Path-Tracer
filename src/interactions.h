@@ -1,6 +1,7 @@
 #pragma once
 
 #include "intersections.h"
+#include "utilities.h"
 
 // CHECKITOUT
 /**
@@ -41,39 +42,73 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
-/**
- * Scatter a ray with some probabilities according to the material properties.
- * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
- * A perfect specular surface scatters in the reflected ray direction.
- * In order to apply multiple effects to one surface, probabilistically choose
- * between them.
- *
- * The visual effect you want is to straight-up add the diffuse and specular
- * components. You can do this in a few ways. This logic also applies to
- * combining other types of materias (such as refractive).
- *
- * - Always take an even (50/50) split between a each effect (a diffuse bounce
- *   and a specular bounce), but divide the resulting color of either branch
- *   by its probability (0.5), to counteract the chance (0.5) of the branch
- *   being taken.
- *   - This way is inefficient, but serves as a good starting point - it
- *     converges slowly, especially for pure-diffuse or pure-specular.
- * - Pick the split based on the intensity of each material color, and divide
- *   branch result by that branch's probability (whatever probability you use).
- *
- * This method applies its changes to the Ray parameter `ray` in place.
- * It also modifies the color `color` of the ray in place.
- *
- * You may need to change the parameter list for your purposes!
- */
+// The Fresnel equations describe the amount of light reflected from a surface;
 __host__ __device__
-void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        const Material &m,
-        thrust::default_random_engine &rng) {
-    // TODO: implement this.
-    // A basic implementation of pure-diffuse shading will just call the
-    // calculateRandomDirectionInHemisphere defined above.
+float schlickFresnel(float cosTheta, float eta1, float eta2) {
+    float r0 = glm::pow((eta1 - eta2) / (eta1 + eta2), 2.0f);
+    return r0 + (1.0f - r0) * glm::pow(1.0f - cosTheta, 5.0f);
+}
+
+__host__ __device__ void scatterRay(PathSegment& pathSegment, glm::vec3 intersect,
+    glm::vec3 normal, const Material& m, thrust::default_random_engine& rng) {
+
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    glm::vec3 incomingDir = pathSegment.ray.direction;
+    glm::vec3 n = normal;
+
+    float cosTheta = glm::dot(n, -incomingDir);
+    float eta1, eta2;
+    bool insideObject = false;
+    if (cosTheta < 0.0) {
+        n = glm::normalize(-n);
+        eta1 = m.indexOfRefraction;
+        eta2 = 1.0;
+        insideObject = true;
+    }
+    else {
+        eta1 = 1.0;
+        eta2 = m.indexOfRefraction;
+    }
+
+    // Sheen influence - affecting the reflection at grazing angles
+    if (m.sheen > 0.0f && cosTheta < 0.2f) {
+        float sheenAmount = m.sheen * (1.0f - cosTheta) / 0.2f;
+        pathSegment.color = glm::mix(pathSegment.color, glm::vec3(1.0f), sheenAmount);
+    }
+
+    if (insideObject) {
+        // Apply absorption
+        float distance = glm::length(intersect - pathSegment.ray.origin);
+        pathSegment.color *= glm::exp(-m.transmittance * distance);
+    }
+
+    float fresnel = schlickFresnel(cosTheta, 1.0, m.indexOfRefraction);
+    fresnel = glm::mix(fresnel, m.metallic, m.metallic);                         // Consider metallic property
+    glm::vec3 randomDir = calculateRandomDirectionInHemisphere(n, rng);
+    
+    if (m.hasRefractive && m.hasReflective) {
+        thrust::uniform_real_distribution<float> u01(0, 1);
+        if (u01(rng) < fresnel) {
+            glm::vec3 perfectReflectDir = glm::reflect(incomingDir, n);
+            pathSegment.ray.direction = glm::normalize(glm::mix(perfectReflectDir, randomDir, m.roughness * m.roughness));
+            pathSegment.color *= m.specular.color;
+        }
+        else {
+            glm::vec3 perfectRefraction = glm::refract(incomingDir, n, eta1 / eta2);
+            pathSegment.ray.direction = glm::normalize(glm::mix(perfectRefraction, randomDir, m.roughness * m.roughness));
+            pathSegment.color *= m.diffuse;
+        }
+    }
+    else if (m.hasReflective) {
+        glm::vec3 perfectReflectDir = glm::reflect(incomingDir, n);
+        pathSegment.ray.direction = glm::normalize(glm::mix(perfectReflectDir, randomDir, m.roughness * m.roughness));
+        pathSegment.color *= m.specular.color;
+    }
+    else {
+        pathSegment.ray.direction = glm::normalize(randomDir);
+        pathSegment.color *= m.diffuse * (1.0f - m.metallic);
+    }
+
+    pathSegment.ray.origin = intersect + OFFSET * pathSegment.ray.direction;
+    pathSegment.remainingBounces--;
 }

@@ -1,0 +1,145 @@
+// Emissive material (light)
+MATERIAL 0
+RGB         0.9 0.92 0.95
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   50
+
+// Diffuse white
+MATERIAL 1
+RGB         0.98 0.98 0.98
+SPECEX      0
+SPECRGB     0 0 0 
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse brown
+MATERIAL 2
+RGB         0.65 0.32 0.18
+SPECEX      0
+SPECRGB     0 0 0 
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+MATERIAL 3
+RGB         0.90 0.65 0.18
+SPECEX      0
+SPECRGB     0 0 0 
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+MATERIAL 4
+RGB         0.12 0.2 0.98
+SPECEX      0
+SPECRGB     0 0 0 
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+MATERIAL 5
+RGB         0.98 0.98 0.98
+SPECEX      0
+SPECRGB     0.98 0.98 0.98
+REFL        1
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+ROUGHNESS   0.9
+
+// Surveillance-style Camera
+CAMERA
+RES         1000 1000
+FOVY        60
+ITERATIONS  20
+DEPTH       20
+FILE        bmw
+EYE         0.0 4 8.5
+LOOKAT      0 4 0
+UP          0 1 0
+APERTURE    0.6
+FOCALDISTANCE 30
+
+// Ceiling light
+OBJECT 0
+cube
+material 0
+TRANS       0 20 0
+ROTAT       0 0 0
+SCALE       10 1 10
+
+// Floor
+OBJECT 1
+cube
+material 5
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       20 .01 20
+
+// Ceiling
+OBJECT 2
+cube
+material 5
+TRANS       0 20 0
+ROTAT       0 0 90
+SCALE       .01 20 20
+
+// Back wall
+OBJECT 3
+cube
+material 2
+TRANS       0 10 -10
+ROTAT       0 90 0
+SCALE       .01 20 20
+
+// Left wall
+OBJECT 4
+cube
+material 3
+TRANS       -10 10 0
+ROTAT       0 0 0
+SCALE       .01 20 20
+
+// Right wall
+OBJECT 5
+cube
+material 4
+TRANS       10 10 0
+ROTAT       0 0 0
+SCALE       .01 20 20
+
+
+// Front wall
+OBJECT 6
+cube
+material 4
+TRANS       0 10 10
+ROTAT       0 90 0
+SCALE       .01 20 20
+
+OBJECT 7
+cube 
+material    10 5 5
+TRANS       -4 4 2
+ROTAT       0 0 0
+SCALE       5 2 5
+
+OBJECT 8
+sportsCar
+material -1
+TRANS       0 0 0
+ROTAT       0 45 0
+SCALE       3 3 3
+
+
+
+

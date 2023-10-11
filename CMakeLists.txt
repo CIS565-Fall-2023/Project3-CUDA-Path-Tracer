@@ -21,6 +21,21 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 ########################################
+# OIDN Setup
+########################################
+
+# Assuming OIDN root directory is in 'oidn-2.0.1.x64.windows' relative to your project root
+set(OIDN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/oidn-2.0.1.x64.windows")
+
+# Include OIDN headers
+include_directories(${OIDN_ROOT}/include)
+
+# Link against OIDN libraries
+link_directories(${OIDN_ROOT}/lib)
+
+########################################
+
+########################################
 # CUDA Setup
 ########################################
 find_package(CUDA 10 REQUIRED)
@@ -71,6 +86,8 @@ set(headers
     src/pathtrace.h
     src/scene.h
     src/sceneStructs.h
+    src/bound.h
+    src/geom.h
     src/preview.h
     src/utilities.h
     src/ImGui/imconfig.h
@@ -84,6 +101,8 @@ set(headers
      src/ImGui/imstb_rectpack.h 
      src/ImGui/imstb_textedit.h 
      src/ImGui/imstb_truetype.h 
+     src/Mesh/objLoader.h
+     src/Mesh/tiny_obj_loader.h
     )
 
 set(sources
@@ -95,6 +114,8 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/bound.cpp
+    src/geom.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
@@ -103,6 +124,8 @@ set(sources
      src/ImGui/imgui_impl_opengl3.cpp 
      src/ImGui/imgui_tables.cpp 
      src/ImGui/imgui_widgets.cpp 
+     src/Mesh/objLoader.cpp
+     src/Mesh/tiny_obj_loader.cc
     )
 
 list(SORT headers)
@@ -113,9 +136,19 @@ source_group(Sources FILES ${sources})
 
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
+#add_subdirectory(src/Mesh)
 
+# Include OIDN in the target_link_libraries
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
+    OpenImageDenoise
     #stream_compaction  # TODO: uncomment if using your stream compaction
-    )
+)
+
+# Copy OIDN DLLs to the output directory
+file(GLOB OIDN_DLLS "${OIDN_ROOT}/bin/*.dll")
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   ${OIDN_DLLS}
+                   $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>)

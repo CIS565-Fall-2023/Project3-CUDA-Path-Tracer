@@ -1,9 +1,10 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+#include <filesystem>
 
 static std::string startTimeString;
-
+ 
 // For camera controls
 static bool leftMousePressed = false;
 static bool rightMousePressed = false;
@@ -41,9 +42,34 @@ int main(int argc, char** argv) {
 
 	const char* sceneFile = argv[1];
 
+	printf("Scene File: %s\n", sceneFile);
+
 	// Load scene file
 	scene = new Scene(sceneFile);
+#if USE_BVH
+	scene->buildBVH();
+#if DEBUG_BVH
+	cout << "Constructing BVH..." << endl;
+	scene->buildBVH();
+	cout << "BVH constructed. Number of nodes is: " << scene->bvh.size() << endl;
 
+	printf("Check the flattened node:\n");
+	for (const auto& node : scene->bvh) {
+		auto minBounds = node.bounds.pMin;
+		auto maxBounds = node.bounds.pMax;
+		printf("Min Bounds: (%f, %f, %f)\n", minBounds[0], minBounds[1], minBounds[2]);
+		printf("Max Bounds: (%f, %f, %f)\n", maxBounds[0], maxBounds[1], maxBounds[2]);
+		if (node.geomCount == 0) {
+			printf("Right Child Index: %d\n", node.rightChildOffset);
+		}
+		printf("Geom Start Index: %d\n", node.geomIndex);
+		printf("Geom End Index: %d\n", node.geomIndex + node.geomCount);
+		printf("Geom Axis: %d\n", node.axis);
+
+		cout << "" << endl;
+	}
+#endif
+#endif
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
 
@@ -98,12 +124,15 @@ void saveImage() {
 
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
+	ss << "../img/";
 	ss << filename << "." << startTimeString << "." << samples << "samp";
 	filename = ss.str();
+	cout << "Image is saved at " << filename << endl;
+	cout << "" << endl;
 
 	// CHECKITOUT
 	img.savePNG(filename);
-	//img.saveHDR(filename);  // Save a Radiance HDR file
+	// img.saveHDR(filename);  // Save a Radiance HDR file
 }
 
 void runCuda() {

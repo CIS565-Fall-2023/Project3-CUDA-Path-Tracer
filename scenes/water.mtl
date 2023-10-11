@@ -1,0 +1,11 @@
+# Water for the Cornell Box as seen in Henrik Jensen's 
+# "Realistic Image Synthesis Using Photon Mapping" (Page 109 Fig. 9.14) in OBJ format.
+
+newmtl water
+    Ka 0.01 0.01 0.01     # Ambient color
+    Kd 0.2 0.6 0.9        # Light blue for diffuse color (though it won't play a significant role in a highly reflective/transmissive material)
+    Ks 0.8 0.8 0.8        # Increased specularity for stronger reflections
+    Tf 0.7 0.8 0.9        # Slightly blue-tinted transmission for the water's characteristic color
+    Ns 250                # Increased for a sharper reflection
+    Ni 1.33               # Index of refraction for water
+    illum 7               # Model with reflection and transparency (refraction)

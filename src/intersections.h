@@ -6,6 +6,7 @@
 #include "sceneStructs.h"
 #include "utilities.h"
 
+
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -103,6 +104,7 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
         glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
     float radius = .5;
 
+    // transform the ray from worldspace to the object space
     glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
     glm::vec3 rd = glm::normalize(multiplyMV(sphere.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
@@ -141,4 +143,69 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     }
 
     return glm::length(r.origin - intersectionPoint);
+}
+
+
+__host__ __device__ float triangleIntersectionTest(Geom triangle, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside) {
+
+    glm::vec3 v0 = triangle.v0;
+    glm::vec3 v1 = triangle.v1;
+    glm::vec3 v2 = triangle.v2;
+
+    glm::vec3 barycentricCoords;
+    if (glm::intersectRayTriangle(r.origin, r.direction, v0, v1, v2, barycentricCoords)) {
+        float t = barycentricCoords.z; 
+        intersectionPoint = getPointOnRay(r, t);
+
+        // Compute the triangle's normal
+        glm::vec3 e1 = v1 - v0;
+        glm::vec3 e2 = v2 - v0;
+        normal = glm::normalize(glm::cross(e1, e2));
+
+        // For Möller–Trumbore, the ray is always outside the triangle
+        outside = true;
+
+        return glm::length(r.origin - intersectionPoint);
+    }
+
+    return -1; 
+}
+
+__host__ __device__ float gamma(int n) {
+    return (n * EPSILON) / (1 - n * EPSILON);
+}
+
+ __host__ __device__ bool intersectBVHNode(const Ray& ray, const LinearBVHNode& node, 
+    const int dirIsNeg[3], glm::vec3& invDir) {
+
+    const Bound& bounds = node.bounds;
+
+    float tMin = (bounds[dirIsNeg[0]].x - ray.origin.x) * invDir.x;
+    float tMax = (bounds[1 - dirIsNeg[0]].x - ray.origin.x) * invDir.x;
+    float tyMin = (bounds[dirIsNeg[1]].y - ray.origin.y) * invDir.y;
+    float tyMax = (bounds[1 - dirIsNeg[1]].y - ray.origin.y) * invDir.y;
+
+    tMax *= 1 + 2 * gamma(3);
+    tyMax *= 1 + 2 * gamma(3);
+    if (tMin > tyMax || tyMin > tMax) {
+        return false;
+    }
+        
+    if (tyMin > tMin) tMin = tyMin;
+    if (tyMax < tMax) tMax = tyMax;
+
+    float tzMin = (bounds[dirIsNeg[2]].z - ray.origin.z) * invDir.z;
+    float tzMax = (bounds[1 - dirIsNeg[2]].z - ray.origin.z) * invDir.z;
+
+    tzMax *= 1 + 2 * gamma(3);
+    if (tMin > tzMax || tzMin > tMax) {
+        return false;
+    }
+    if (tzMin > tMin)
+        tMin = tzMin;
+    if (tzMax < tMax)
+        tMax = tzMax;
+
+    return (tMin < ray.tMax) && (tMax > 0);
 }
