@@ -32,7 +32,7 @@ EMITTANCE   0
 CAMERA
 RES         800 800
 FOVY        45
-ITERATIONS  5000
+ITERATIONS  2000
 DEPTH       3
 FILE        cornell
 EYE         0.0 5 10.5
@@ -43,17 +43,35 @@ UP          0 1 0
 OBJECT 0
 sphere
 material 2
-TRANS       0 -28 0
+TRANS       0 -48 0
 ROTAT       0 0 0
-SCALE       60 60 60
+SCALE       100 100 100
 
 // Sheep
 FILE 0
 sheep01.glb
 sheep01.png
 material 1
-TRANS       0 2 0
-ROTAT       0 0 0
+TRANS       0 1.8 0
+ROTAT       0 15 0
+SCALE       3 3 3
+
+// Sheep
+FILE 1
+sheep01.glb
+sheep01.png
+material 1
+TRANS       5 1.5 -3
+ROTAT       0 -25 0
+SCALE       3 3 3
+
+// Sheep
+FILE 2
+sheep01.glb
+sheep01.png
+material 1
+TRANS       -4 1.5 4
+ROTAT       0 60 0
 SCALE       3 3 3
 
 // map
