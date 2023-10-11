@@ -8,7 +8,12 @@ CUDA Path Tracer
 * Tested on: Windows 10, 12th Gen Intel(R) Core(TM) i7-12700 @ 2.10 GHz, 16GB, NVIDIA GeForce RTX 3060 Ti (Personal Computer)
 
 # CUDA-Path-Tracer
+<div align="center">
+
 ![Path Tracer Example](./img/example.png)
+
+</div>
+
 
 ---
 
@@ -67,8 +72,11 @@ Imagine you're in a dark room and you switch on a light bulb. The light from the
 
 Path tracing is like a detective for light. It figures out how light travels and interacts in a scene to create a picture. It's a way to draw pictures on a computer that look very close to real life. But, because it tries to be so accurate, it can take a lot of time and computer power to create just one image. So, while it's great for making super realistic pictures, it might be a bit slow for things like video games that need fast action. You can also check out this [video](https://www.youtube.com/watch?v=pW0twrqfJ8o) released by NVIDIA Game Developer for a more detailed explanation of path tracing.
 
+<div align="center">
+
 ![Path Tracing](img/path_tracing_example.png)(Image Credit: [Path Tracing](https://callistaenterprise.se/blogg/teknik/2022/01/05/go-opencl-pathtracer/))
 
+</div>
 
 ---
 
@@ -100,8 +108,13 @@ Our path tracing project integrates core features designed to achieve lifelike r
 
 **Overview:**
 
+<div align='center'>
+
 ![BSDF Illustration](./img/bsdf.png)(Image Credit: [Wikipedia](https://en.wikipedia.org/wiki/Bidirectional_scattering_distribution_function))
- 
+
+</div>
+
+
 The BSDF (Bidirectional Scattering Distribution Function) evaluates how light interacts with surfaces. Different materials have unique reflection and refraction characteristics, and BSDF is integral to capturing these nuances.
 
 * **Incident Light Beam**: Represents incoming light, usually from a primary source such as the sun.
@@ -165,21 +178,21 @@ Beyond our foundational capabilities, our path tracing project incorporates a se
 **Overview:**  
 This feature accurately depicts the behavior of light as it refracts through transparent objects and reflects off rough surfaces.
 
-* **Fresnel Equations:** A pivotal aspect of this simulation is the use of the Fresnel equations. These equations determine the proportion of light that's reflected \( R \) versus refracted \( T \). Given by:
+* **Fresnel Equations:** A pivotal aspect of this simulation is the use of the Fresnel equations. These equations determine the proportion of light that's reflected $ R $ versus refracted $ T $. Given by:
   
-  \[ R(\theta) = R_0 + (1 - R_0)(1 - \cos(\theta))^5 \]
+  $$ R(\theta) = R_0 + (1 - R_0)(1 - \cos(\theta))^5 $$
   
-  Where \( R_0 \) is the reflectance at normal incidence and \( \theta \) is the angle of incidence. The refraction ratio \( T \) is then:
+  Where $ R_0 $ is the reflectance at normal incidence and $ \theta $ is the angle of incidence. The refraction ratio $ T $ is then:
 
-  \[ T = 1 - R \]
+  $$ T = 1 - R $$
 
-  This computed \( R \) subsequently informs the probabilistic decision between reflection and refraction, allowing for a realistic mix of both.
+  This computed $ R $ subsequently informs the probabilistic decision between reflection and refraction, allowing for a realistic mix of both.
 
-* **Roughness:** Another enhancement is the material-specific 'roughness' parameter. The roughness value, denoted as \( \alpha \), gauges the dispersion of the reflected ray. The reflection direction \( \mathbf{r} \) is perturbed based on \( \alpha \) using a microfacet model:
+* **Roughness:** Another enhancement is the material-specific 'roughness' parameter. The roughness value, denoted as $ \alpha $, gauges the dispersion of the reflected ray. The reflection direction $ \mathbf{r} $ is perturbed based on $\alpha $using a microfacet model:
 
-  \[ \mathbf{r} = \mathbf{r_0} \times (1 - \alpha^2) + \alpha^2 \times \text{random\_direction()} \]
+  $$ \mathbf{r} = \mathbf{r_0} \times (1 - \alpha^2) + \alpha^2 \times \text{random\_direction()} $$
 
-  Here, \( \mathbf{r_0} \) is the perfect reflection direction. A higher \( \alpha \) induces greater perturbations, leading to "imperfect" or diffused reflections.
+  Here, $ \mathbf{r_0} $ is the perfect reflection direction. A higher $ \alpha $ induces greater perturbations, leading to "imperfect" or diffused reflections.
 
 **Visual Demonstrations:**  
 The first graph delineates the triad of light behaviors: diffuse, reflection, and refraction.
@@ -201,9 +214,9 @@ Our path tracer emulates DoF through a technique akin to the "thin-lens" approxi
 
 1. **Lens Sampling:** For each camera ray, a random point on a lens (or aperture) of a given radius is sampled. This random sampling within the aperture circle can be represented mathematically as:
 
-   \[ (u, v) = \text{radius} \times (\sqrt{\text{random1()}}, 2\pi \times \text{random2()}) \]
+   $$ (u, v) = \text{radius} \times (\sqrt{\text{random1()}}, 2\pi \times \text{random2()}) $$
 
-   Where \( (u, v) \) are the offsets within the lens circle, and `random1()` and `random2()` yield uniform random numbers between 0 and 1.
+   Where $( (u, v) $ are the offsets within the lens circle, and `random1()` and `random2()` yield uniform random numbers between 0 and 1.
 
 2. **Focal Point Calculation:** The focal distance determines the point in the scene where the rays converge, hence appearing sharp. Rays diverging from this focal point progressively blur, creating the DoF effect. Given a focal distance \( f \), and using the above offsets, the ray's direction is slightly perturbed to intersect the focal plane at the desired point.
 
@@ -212,7 +225,7 @@ Our path tracer emulates DoF through a technique akin to the "thin-lens" approxi
 **Visual Demonstration:**  
 The image below showcases the application of DoF, accentuating the foreground object while rendering the background with a soft, defocused blur. The image on the left is rendered without DoF, while the image on the right is rendered with DoF. As the image shows, when the DoF is applied, the camera focuses on one object and other objects are blurred.
 
-<div style="display: flex; justify-content: space-between;">
+<div style="display: flex; justify-content: space-between;" align="center">
   <img src="./img/cornellBox_1500sample.png" alt="Cornell Without DOF" width="45%">
   <img src="./img/cornllBox_1500sample_dof.png" alt="Cornell Without DOF" width="45%">
 </div>
@@ -223,7 +236,7 @@ The image below showcases the application of DoF, accentuating the foreground ob
 **Overview:**  
 Stratified sampling is a variance-reduction technique that aims to diminish noise in rendered images. By dividing the pixel into uniform grids and sampling each cell individually, we ensure that the samples are more evenly distributed, thereby reducing clustering and gaps between samples. In our implementation, the grid's dimension is determined by taking the square root of the number of samples per pixel, and then a random sample within each grid cell is taken. 
 
- \[ \mathbf{dim} = \sqrt{\mathbf{pixelcount}} \]
+ $$ \mathbf{dim} = \sqrt{\mathbf{pixelcount}} $$
 
 **Visual Demonstration:**  
 The comparison below illustrates the efficacy of stratified sampling. While both images are rendered with similar sample counts, the one on the right—benefitting from stratified sampling—displays notably reduced noise. Pay particular attention to the regions circled in red; the improved clarity around object edges in the stratified image is evident.
