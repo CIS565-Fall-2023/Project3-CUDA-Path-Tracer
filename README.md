@@ -143,6 +143,11 @@ My implementation includes calculating bounding box for each triangle and build 
 
 ![](img/bvh.png)
 
+## Bloopers
+
+![](img/b1.png)
+![](img/b2.png)
+
 ## Third Party References
 
 * PBRT
