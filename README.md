@@ -109,8 +109,14 @@ When conducting ray tracing on a GPU, certain rays might terminate earlier than 
 ##### Implementation of Stream Compaction
 
 - **Identifying Active Rays**: The algorithm must discern between active and terminated rays.
-
 - **Memory Coalescing**: Actively traced rays are then repositioned contiguously in memory, ensuring efficient memory access patterns and reducing wasted computation.
+
+|                               | Cornell Sphere | stanford bunny (144046 triangles) | rungholt (6704264 triangles) |
+| ----------------------------- | -------------- | --------------------------------- | ---------------------------- |
+| Delay Without compaction (ms) | ~10            | ~17                               | ~4000                        |
+| Delay With compaction (ms)    | ~12            | ~13                               | ~91                          |
+
+Compaction incurs a overhead of scanning and scattering, so when the scene is very simple, it's not very useful, but when the scene is more complex, we should definitely enable ray compaction.
 
 #### Section 2: Enhancing Performance via Material Consistency in Warp Execution
 
@@ -128,16 +134,16 @@ When dealing with light scattering in GPU-based ray tracing, ensuring that all t
 
 1. **Material Sorting**: Rays could be sorted based on intersected material types (BSDF function), thereby grouping rays that interact with the same material.
 
-*In practice, I didn't get a speedup by sorting the material, I think it's mainly because the sorting overhead outruns the gain of coherent access and reduced divergence.*
+*In practice, I didn't get a speedup by sorting the material, I think it's mainly because the sorting overhead outruns the gain of coherent access and reduced divergence. And I don't have a scene full of objects with diverse materials.*
 
 ### First intersection caching
 
 When anti-aliasing is not enabled, we can cache the first intersection information for each ray.
 
-|                            | rungholt (6704264 triangles) | stanford bunny (144046 triangles) |
-| -------------------------- | ---------------------------- | --------------------------------- |
-| Delay With caching (ms)    | 87.5                         | 13.5                              |
-| Delay Without caching (ms) | 91.3                         | 12.9                              |
+|                            | Cornell Sphere | rungholt (6704264 triangles) | stanford bunny (144046 triangles) |
+| -------------------------- | -------------- | ---------------------------- | --------------------------------- |
+| Delay With caching (ms)    | ~13            | ~88                          | ~14                               |
+| Delay Without caching (ms) | ~13            | ~91                          | ~13                               |
 
 In a large scene, first intersection caching will slightly improve performance. This is because using intersection cache will incur the overhead of copying, so when scene is not too complex, the copying of the cached value will be the bottle neck. But when scene is very complex, copying from the cache is actually faster than traverse a deep BVH tree.
 
@@ -170,9 +176,9 @@ In a metallic workflow, materials are described primarily using three main prope
 - **Roughness:** This controls how smooth or rough a surface is, affecting how it scatters light.
 
 The formula for metallic workflow BSDF is as follow:
-$$
-\text{BSDF}(\omega_i, \omega_o) = k_d \cdot \frac{(1 - M) \cdot \text{BaseColor}}{\pi} + k_s \cdot \frac{F(\omega_i, \omega_o) \cdot G_{2}(\omega_i, \omega_o, \omega_h) \cdot D(\omega_h)}{4 (\omega_i \cdot \omega_n)(\omega_o \cdot \omega_n)}
-$$
+
+![](./img/bsdf-formula.svg)
+
 Here I choose to use frensel-schlick approximation, GGX-normal distribution and smith geometry term for F, D and G term.
 
 #### Texture Maps:
@@ -183,16 +189,16 @@ In the metallic workflow, texture maps play a vital role in defining how a mater
 - **Metallic and Roughness Map:** Provides per-pixel control over the metallic and roughness of the material.
 - **Normal Map:** This is used to add surface detail without increasing the geometric complexity of the 3D model.
 
-For normal mapping, we need a proper way to generate tangents from existing normals and texture coordinates. The GLTF specification says
+For normal mapping, we need a proper way to generate tangents from existing normals and texture coordinates. The GLTF specification says: *When tangents are not specified, client implementations SHOULD calculate tangents using default [MikkTSpace](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#mikktspace) algorithms with the specified vertex positions, normals, and texture coordinates associated with the normal texture.*
 
 #### Importance sampling of GGX visible normal distribution
 
 Visible normals distribution are basically normals that are visible to a certain viewing angle.
 
 The importance sampling is based on pdf function of visible normals:
-$$
-D\omega_o(\omega_h) = \frac{G_1(\omega_o, \omega_h) |\omega_o \cdot \omega_h| D(\omega_h)}{|\omega_o \cdot \omega_g|}
-$$
+
+![](./img/ggxvndf-formula.svg)
+
 This is a function which considers the shadowing and masking effect of microfacets, and if you plug it into the rendering equation with microfacet BSDF, you will find out that the denominator will have a more stable pdf than using just normal distribution, and thus the firefly artifacts are not likely to happen.
 
 ### Multiple importance sampling
