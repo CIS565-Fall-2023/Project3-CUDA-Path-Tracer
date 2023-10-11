@@ -56,7 +56,9 @@ Same scene at 30 iterations:
 I use the tinyObj for parsing and loading the obj format meshes. After meshed are loaded, a list containing all the triangles in the scene is transported to GPU for intersection computing.
 To accelerate the intersection process, I added a BVH structure. It is constructed on CPU, and then a list of BVH nodes and a list of index of triangles used by BVH nodes are transported to GPU. As expected, it improves some of the intersection performance. If BVH is turned off, the meshes will still be culled by bounding boxes.
 This test was under VS Debug mode and thus it was quite slow. (I just realized I should use VS Release mode, but exceptions occured when transfering to Release mode and still working on fixing it...)
+
 <img width="400" alt="1" src="img/bvh_test.png">
+
 <img width="300" alt="1" src="img/bvh.png">
 |                                  | Without BVH             |With BVH                 |
 | -----------------------          | ----------------------- | ----------------------- |
