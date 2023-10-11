@@ -61,7 +61,9 @@ void Scene::constructBVHforAllGeom()
     {
         if (geoms[i].type == OBJ) 
         {
+            geoms[i].bvhStart = bvhNodes.size();
             buildBVH(geoms[i].triStart, geoms[i].triEnd);
+            geoms[i].bvhEnd = bvhNodes.size();
         }
     }
 }

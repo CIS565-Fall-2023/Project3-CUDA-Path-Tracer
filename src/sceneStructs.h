@@ -85,6 +85,9 @@ struct Geom {
     int triStart;
     int triEnd;
 
+    int bvhStart;
+    int bvhEnd;
+
     BBox box;
 
     int texId = -1;

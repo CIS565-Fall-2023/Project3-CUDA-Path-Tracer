@@ -246,7 +246,8 @@ __host__ __device__ float bvhTriangleIntersectionTest(Geom mesh, Ray r, Triangle
     q.origin = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
     q.direction = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
-    BVHNode* curBVH = bvhNodes + mesh.triStart;
+    BVHNode* curBVH = bvhNodes + mesh.bvhStart;
+    Triangle* curTri = triangles + mesh.triStart;
 
     int bvhStack[BVH_MAX_SIZE];
     bvhStack[0] = 0;
@@ -260,7 +261,7 @@ __host__ __device__ float bvhTriangleIntersectionTest(Geom mesh, Ray r, Triangle
     {
         int curIdx = bvhStack[endIdx];
         endIdx--;
-        const BVHNode& curNode = bvhNodes[curIdx];
+        const BVHNode& curNode = curBVH[curIdx];
 
         if (!hasIntersection(q, curNode.bbox)) continue;
 
@@ -268,7 +269,7 @@ __host__ __device__ float bvhTriangleIntersectionTest(Geom mesh, Ray r, Triangle
         {
             for (int i = curNode.firstPrimOffset; i < curNode.firstPrimOffset + curNode.nPrimitives; i++) 
             {
-                const Triangle& tri = triangles[i];
+                const Triangle& tri = curTri[i];
                 glm::vec3 bcenter;
                 bool intersect = glm::intersectRayTriangle(q.origin, q.direction, tri.verts[0], tri.verts[1], tri.verts[2], bcenter);
 
