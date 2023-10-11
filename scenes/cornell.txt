@@ -123,10 +123,9 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// OBJECT
-OBJECT 6
-sphere
-material 3
-TRANS       -1 4 -1
-ROTAT       0 0 0
-SCALE       3 3 3
+// OBJ 1
+GLTF_FILE ../scenes/BrainStem.gltf
+material 1
+TRANS       0 9 0
+ROTAT       90 0 0
+SCALE       5 5 5

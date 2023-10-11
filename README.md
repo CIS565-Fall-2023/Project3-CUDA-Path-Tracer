@@ -73,3 +73,30 @@ The implementation if based on PBRT[6.2.3]. We introduce two additional camera p
 ![](img/noanti.png)
 #### With AA
 ![](img/anti.png)
+
+### Direct Lighting
+
+It's hard to see the different between the two renders. The one with direct lighting converges faster.
+
+#### Naive
+![](img/nodirectlight.png)
+#### Direct Light
+![](img/directlight.png)
+
+### Motion Blur
+
+I added a simple jittering for motion blur, the velocity of motion could be changed in the macro MOTION_VELO.
+
+![](img/mb.png)
+
+### Mesh Loading
+I implemented mesh loading for both .obj and .gltf files. The performance analysis of using or not using bounding box/BVH will be discussed later.
+
+#### .obj bunny
+![](img/bunny2.png)
+![](img/bunnyobj.png)
+
+### .gltf
+
+![](img/gltfsphere.png)
+![](img/gltfpeople.png)

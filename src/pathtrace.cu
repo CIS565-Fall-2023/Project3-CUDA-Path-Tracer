@@ -26,7 +26,7 @@
 #define ANTIALIASING 0
 #define DIRECT_LIGHTING 1
 #define MOTION_BLUR 0
-#define MOTION_VELO glm::vec3(0.5, 0.5, 0.0)
+#define MOTION_VELO glm::vec3(2.5, 0.5, 0.3)
 #define BVH 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
