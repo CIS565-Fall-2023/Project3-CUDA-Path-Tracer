@@ -134,10 +134,10 @@ When dealing with light scattering in GPU-based ray tracing, ensuring that all t
 
 When anti-aliasing is not enabled, we can cache the first intersection information for each ray.
 
-|                            | rungholt (6704264 triangles) | stanford bunny (144046 triangles) |      |
-| -------------------------- | ---------------------------- | --------------------------------- | ---- |
-| Delay With caching (ms)    | 87.5                         | 13.5                              |      |
-| Delay Without caching (ms) | 91.3                         | 12.9                              |      |
+|                            | rungholt (6704264 triangles) | stanford bunny (144046 triangles) |
+| -------------------------- | ---------------------------- | --------------------------------- |
+| Delay With caching (ms)    | 87.5                         | 13.5                              |
+| Delay Without caching (ms) | 91.3                         | 12.9                              |
 
 In a large scene, first intersection caching will slightly improve performance. This is because using intersection cache will incur the overhead of copying, so when scene is not too complex, the copying of the cached value will be the bottle neck. But when scene is very complex, copying from the cache is actually faster than traverse a deep BVH tree.
 
@@ -356,4 +356,6 @@ Sponza scene with 100 spp:
 [Implementing a Photorealistic Rendering System using GLSL]: https://arxiv.org/abs/1505.06022
 [Ray Tracing Gems II]: https://www.realtimerendering.com/raytracinggems/rtg2/index.html
 [McGuire Computer Graphics Archive]: https://casual-effects.com/data/
+[Multiple Importance Sampling]: https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf
+[Sampling the GGX Distribution of Visible Normals]: https://jcgt.org/published/0007/04/01/paper.pdf#page=11&amp;zoom=100,139,815
 
