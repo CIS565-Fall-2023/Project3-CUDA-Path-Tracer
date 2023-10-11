@@ -195,7 +195,7 @@ __host__ __device__ bool aabbIntersectionTest(AABB box, Ray& r, float& t) {
 }
 
 /**
- * Test intersection between a ray and a triangulated mesh.
+ * Test intersection between a ray and a triangulated gltf/glb/obj mesh.
  *
  * @param intersectionPoint  Output parameter for point of intersection.
  * @param normal             Output parameter for surface normal.
@@ -245,6 +245,11 @@ __host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
     return -1.f;
 }
 
+
+__host__ __device__ bool isNodeLeaf(const BVHNode* node) {
+    return (node->triCount > 0);
+}
+
 // Helper function for bvhIntersection test
 // @return  FLT_MIN denotes a 'miss', while any other value is a hit at the reported distance
 __host__ __device__ float bvhAABBIntersectionTest(const Ray& r, const BVHNode& node) {
@@ -258,109 +263,6 @@ __host__ __device__ float bvhAABBIntersectionTest(const Ray& r, const BVHNode& n
         return tmin;
     }
     return 1e30f;
-}
-
-/**
- * Test intersection between a ray and a BVH structure.
- *
- * @param intersectionPoint  Output parameter for point of intersection.
- * @param normal             Output parameter for surface normal.
- * @return                   Ray parameter `t` value. -1 if no intersection.
- * 
- * reference:
- * https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
- */
-__host__ __device__ float bvhIntersectionTest(Geom mesh, Ray& r,
-    const Triangle* tris, const BVHNode* bvhNodes, const int* triIndices,
-    glm::vec3& intersectionPoint, glm::vec3& normal) {
-    
-    BVHNode node = bvhNodes[0]; // start with root
-    BVHNode stack[32];
-    int stackPtr = 0;
-
-    Triangle tri;
-    glm::vec3 barycenter, objSpaceIsect;
-    float tMin = FLT_MAX;
-    bool hasIntersection = false;
-
-    // An infinite loop is used, whenever two child nodes require a visit, 
-    // one of them is pushed on a small stack. 
-    // The loop completes when we try to pop from an empty stack.
-    while (true) {
-        if (node.isLeaf()) {
-            for (int i = 0; i < node.triCount; i++) {
-                
-                /* triangle intersection test---------------------- start*/
-                tri = tris[triIndices[node.firstTriIdx + i]];
-                bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
-                    tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
-                if (!intersect) continue;
-
-                // find intersection point and normal
-                float u = barycenter.x;
-                float v = barycenter.y;
-                float w = 1.f - u - v;
-                objSpaceIsect = w * tri.v0.pos
-                    + u * tri.v1.pos
-                    + v * tri.v2.pos;
-                
-                float t = glm::length(r.origin - objSpaceIsect);
-
-                glm::vec3 intersectionNormal = glm::normalize(
-                    glm::cross(tri.v1.pos - tri.v0.pos,
-                               tri.v2.pos - tri.v0.pos));
-
-                if (t < tMin) {
-                    tMin = t;
-                    intersectionPoint = /*objSpaceIsect; */multiplyMV(mesh.transform, glm::vec4(objSpaceIsect, 1.f));
-                    normal = /*intersectionNormal; */glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(intersectionNormal, 0.f)));;
-                    hasIntersection = true;
-                }
-                /* triangle intersection test------------------------- end*/
-
-            }
-            if (stackPtr == 0) { // base case: last node in tree
-                if (hasIntersection) return tMin;
-                break;
-            }
-            else {
-                node = stack[--stackPtr];
-            }
-            continue;
-        }
-
-        BVHNode leftChild = bvhNodes[node.leftChild];
-        BVHNode rightChild = bvhNodes[node.leftChild + 1];
-        float dist1 = bvhAABBIntersectionTest(r, leftChild);
-        float dist2 = bvhAABBIntersectionTest(r, rightChild);
-        if (dist1 > dist2) {
-            swap(dist1, dist2);
-            BVHNode temp = leftChild;
-            leftChild = rightChild;
-            rightChild = temp;
-        }
-        if (dist1 == 1e30f) {
-            if (stackPtr == 0) {
-                if (hasIntersection) return tMin;
-                break;
-            }
-            else {
-                node = stack[--stackPtr];
-            }
-        }
-        else {
-            node = leftChild;
-            if (dist2 != 1e30f) {
-                stack[stackPtr++] = rightChild;
-            }
-        }
-    }
-
-    return -1.f;
-}
-
-__host__ __device__ bool isNodeLeaf(const BVHNode* node) {
-    return (node->triCount > 0);
 }
 
 __host__ __device__ float triangleIntersectionTest(Triangle tri, Ray& r,
@@ -387,7 +289,7 @@ __host__ __device__ void bvhIntersectTriangles(const Triangle* tris, Ray& r, int
             tri = tris[i];
         }
 
-        /* triangle intersection test---------------------- start
+        /* triangle intersection test for obj ---------------------- start
         tri = tris[triIndices[node.firstTriIdx + i]];
         bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
             tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
@@ -413,24 +315,35 @@ __host__ __device__ void bvhIntersectTriangles(const Triangle* tris, Ray& r, int
             normal = intersectionNormal; glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(intersectionNormal, 0.f)));;
             hasIntersection = true;
         }
-        //triangle intersection test------------------------- end
+        //triangle intersection test for obj------------------------- end
         */
     }
 }
 
-__host__ __device__ float bvhIntersectionTest2(const BVHNode* nodes, const Triangle* tris, Ray& r, int triangleCount,
-    glm::vec3& intersectionPoint, glm::vec3& normal) {
 
-    int stack[32];
-    int stackPtr = -1;
+/**
+ * Test intersection between a ray and a BVH structure.
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ * 
+ * reference:
+ * https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+ */
+__host__ __device__ float bvhIntersectionTest(const BVHNode* nodes, const Triangle* tris, Ray& r,
+    int triangleCount, glm::vec3& intersectionPoint, glm::vec3& normal) {
 
     Triangle tri;
     glm::vec3 barycenter;
     float tMin = FLT_MAX;
+    int stack[32];
+    int stackPtr = -1;
 
     // Push root node
     stack[++stackPtr] = 0;
     int currNodeIdx = stack[stackPtr];
+
     while (stackPtr >= 0)
     {
         // Check intersection with left and right children

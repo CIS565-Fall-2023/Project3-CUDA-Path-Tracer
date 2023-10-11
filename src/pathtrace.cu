@@ -267,8 +267,7 @@ __global__ void computeIntersections(
 			else if ((geom.type == OBJ) || (geom.type = GLTF))
 			{
 #if BVH
-				//t = bvhIntersectionTest(geom, ray, tris, bvhNodes, trisIndices, tmp_intersect, tmp_normal);
-				t = bvhIntersectionTest2(bvhNodes, tris, ray, geom.triangleCount, tmp_intersect, tmp_normal);
+				t = bvhIntersectionTest(bvhNodes, tris, ray, geom.triangleCount, tmp_intersect, tmp_normal);
 #elif BB_CULLING
 				if (aabbIntersectionTest(geom.aabb, ray, t)) {
 					t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);

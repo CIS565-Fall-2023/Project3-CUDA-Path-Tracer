@@ -32,6 +32,9 @@
 #define TIMER               0               // Gpu timer for performance analysis
 #define BB_CULLING          0               // Test ray against mesh AABB
 #define BVH                 1               // Use Bounding Volumn Hierarchy to speed up mesh loading
+#ifdef BVH
+#define BVH_SAH             0	            // Use surface area heuristics to split plane, default is midpoint split
+#endif
 
 
 class GuiDataContainer

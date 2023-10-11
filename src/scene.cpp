@@ -49,8 +49,7 @@ Scene::Scene(string filename) {
         cout << "Building BVH..." << endl;
         auto startTime = utilityCore::timeSinceEpochMillisec();
 
-        //buildBVH();
-        generateBVH();
+        buildBVH();
 
         auto endTime = utilityCore::timeSinceEpochMillisec();
         auto duration = (endTime - startTime);
@@ -626,22 +625,6 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
 // Tutorial: stack based BVH
 // https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
 // https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
-void Scene::buildBVH() {
-    bvhNodes.resize(2 * triangles.size() - 1);
-
-    // assign all triangles to root node
-    BVHNode root;
-    root.leftChild = 0;
-    root.firstTriIdx = 0;
-    root.triCount = triangles.size();
-    bvhNodes.push_back(root);
-
-    // update each node's AABB
-    updateNodeBounds(0); // root idx = 0
-    
-    // subdivide recursively
-    subdivide(0);
-}
 
 void Scene::updateNodeBounds(int nodeIdx) {
     BVHNode& node = bvhNodes[nodeIdx];
@@ -657,175 +640,73 @@ void Scene::updateNodeBounds(int nodeIdx) {
     }
 }
 
-void Scene::subdivide(int nodeIdx) {
-    
-    // terminate recursion
-    BVHNode& node = bvhNodes[nodeIdx];
-    if (node.triCount <= 2) return; // 2 triangles quite often form a quad in real-world scenes. If this quad is axis-aligned, there is no way we can split it (with an axis-aligned plane) into two non-empty halves. For this reason, we typically terminate when we have 2 or less primitives in a leaf. Even this is not completely safe.
-
-    // determine split axis and position
-    // for now, implement mid-point split along its longest axis
-    glm::vec3 extent = node.aabb.max - node.aabb.min;
-    int axis = 0;
-    if (extent.y > extent.x) {
-        axis = 1;
-    }
-    if (extent.z > extent[axis]) {
-        axis = 2;
-    }
-    float splitPos = node.aabb.min[axis] + extent[axis] * 0.5f;
-    
-    // in-place partition
-    int i = node.firstTriIdx;
-    int j = i + node.triCount - 1;
-    while (i <= j) {
-        if (triangles[triIndices[i]].centroid[axis] < splitPos)
-            i++;
-        else
-            swap(triIndices[i], triIndices[j--]);
-    }
-
-    // stop split if one of the sides is empty
-    int leftCount = i - node.firstTriIdx;
-    if (leftCount == 0 || leftCount == node.triCount) return;
-    
-    // create child nodes
-    int leftChildIdx = nodesUsed++;
-    int rightChildIdx = nodesUsed++;
-
-    int tmpTriCount = node.triCount;
-    node.leftChild = leftChildIdx;
-    node.triCount = 0; // we rely on the triCount to identify leaves and interior nodes.
-
-    BVHNode leftChild;
-    BVHNode rightChild;
-    leftChild.firstTriIdx = node.firstTriIdx;
-    leftChild.triCount = leftCount;
-    rightChild.firstTriIdx = i;
-    rightChild.triCount = tmpTriCount - leftCount;
-    bvhNodes.push_back(leftChild);
-    bvhNodes.push_back(rightChild);
-
-    updateNodeBounds(leftChildIdx);
-    updateNodeBounds(rightChildIdx);
-    
-    // recurse
-    subdivide(leftChildIdx);
-    subdivide(rightChildIdx);
-}
-
-/// BASIC BVH FUNCTIONS ///
-int maxExtent(glm::vec3 extent) {
-    if (extent.x > extent.y && extent.x > extent.z) {
-        return 0;
-    }
-    else if (extent.y > extent.z) {
-        return 1;
-    }
-    else {
-        return 2;
-    }
-}
-
-AABB Union(AABB aabb, glm::vec3 p) {
-    glm::vec3 umin = glm::min(aabb.min, p);
-    glm::vec3 umax = glm::max(aabb.max, p);
-    return AABB{ umin, umax };
-}
-
-AABB Union(AABB left, AABB right) {
+AABB combineAABB(AABB& left, AABB& right) {
     glm::vec3 umin = glm::min(left.min, right.min);
     glm::vec3 umax = glm::max(left.max, right.max);
     return AABB{ umin, umax };
 }
 
-// Finds the new bounds of the aabb
-void Scene::updateBounds(const int idx)
-{
-    BVHNode& node = bvhNodes[idx];
-    for (int i = node.firstTriIdx; i < node.firstTriIdx + node.triCount; ++i)
-    {
-        node.aabb = Union(node.aabb, triangles[i].aabb);
-    }
-}
-
-// SAH cost = num_triangles_left * left_box_area + num_triangles_right * right_box_area
 // Determines bounding boxes that result from splitting at this position and how many
-// triangles to place in each box. Once these are determined, we can calculate SAH cost
-//float evalSAH(Scene* scene, BVHNode* node, float queryPos, int axis)
-//{
-//    AABB leftChild = { glm::vec3{INFINITY, INFINITY, INFINITY}, glm::vec3{-INFINITY, -INFINITY, -INFINITY} };
-//    AABB rightChild = { glm::vec3{INFINITY, INFINITY, INFINITY}, glm::vec3{-INFINITY, -INFINITY, -INFINITY} };
-//    int leftCount = 0;
-//    int rightCount = 0;
-//
-//    for (int i = node->firstTri; i < node->firstTri + node->numTris; ++i) {
-//        glm::vec3 centroid = scene->triangles[i].centroid;
-//        if (centroid[axis] < queryPos) {
-//            leftCount++;
-//            leftChild = Union(leftChild, scene->triangles[i].aabb);
-//        }
-//        else {
-//            rightCount++;
-//            rightChild = Union(rightChild, scene->triangles[i].aabb);
-//        }
-//    }
-//    // Calculate cost
-//    float cost = leftCount * leftChild.surfaceArea() + rightCount * rightChild.surfaceArea();
-//
-//    return cost;
-//}
-//
-//void calculateSAHSplit(Scene* scene, BVHNode* node, float& split, int& axis)
-//{
-//    // To find the optimal cost, we must calculate the cost of splitting along each
-//    // axis for each triangle contained within this node
-//    float optimalCost = INFINITY;
-//    for (int i = 0; i < 3; ++i) {
-//        for (int j = node->firstTri; j < node->firstTri + node->numTris; ++j) {
-//            float centroidPos = scene->triangles[j].centroid[i];
-//            float cost = evalSAH(scene, node, centroidPos, i);
-//            if (cost < optimalCost) {
-//                optimalCost = cost;
-//                split = centroidPos;
-//                axis = i;
-//            }
-//        }
-//    }
-//}
-
-void Scene::chooseSplit(BVHNode* node, float& split, int& axis)
+// triangles to place in each box.
+float Scene::evaluateSAH(BVHNode* node, float query, int axis)
 {
+    // SAH cost = num_triangles_left * left_box_area + num_triangles_right * right_box_area
 
-#if BVH_SAH
-    //calculateSAHSplit(node, split, axis);
+    AABB leftChild = { glm::vec3{FLT_MAX}, glm::vec3{-FLT_MAX} };
+    AABB rightChild = { glm::vec3{FLT_MAX}, glm::vec3{-FLT_MAX} };
+    int leftCount = 0, rightCount = 0;
 
-#else
-    // Find bounding box of centroids 
-    AABB centroidAABB = { glm::vec3{FLT_MAX}, glm::vec3{-FLT_MAX} };
-    for (int i = node->firstTriIdx; i < node->firstTriIdx + node->triCount; ++i)
-        centroidAABB = Union(centroidAABB, triangles[i].centroid);
-    axis = maxExtent(centroidAABB.max - centroidAABB.min);
-    split = (centroidAABB.min[axis] + centroidAABB.max[axis]) * 0.5f;
-#endif
+    for (int i = node->firstTriIdx; i < node->firstTriIdx + node->triCount; ++i) {
+        glm::vec3 centroid = triangles[i].centroid;
+        if (centroid[axis] < query) {
+            leftCount++;
+            leftChild = combineAABB(leftChild, triangles[i].aabb);
+        }
+        else {
+            rightCount++;
+            rightChild = combineAABB(rightChild, triangles[i].aabb);
+        }
+    }
 
+    // Calculate cost
+    return leftCount * leftChild.surfaceArea() + rightCount * rightChild.surfaceArea();
 }
 
-void Scene::addChildren(BVHNode* node)
+void Scene::subdivide(BVHNode* node)
 {
     if (!node->isLeaf()) return;
 
     // determine split axis and position
+    int axis = 0;
+    float splitPos = 0.f;
+
+#if BVH_SAH
+    // To find the optimal cost, we must calculate the cost of splitting along each
+    // axis for each triangle contained within this node
+    float optimalCost = FLT_MAX;
+    for (int i = 0; i < 3; i++) {
+        for (int j = node->firstTriIdx; j < node->firstTriIdx + node->triCount; j++) {
+            float centroid = triangles[j].centroid[i];
+            float cost = evaluateSAH(node, centroid, i);
+            if (cost < optimalCost) {
+                optimalCost = cost;
+                splitPos = centroid;
+                axis = i;
+            }
+        }
+    }
+#else
     // for now, implement mid-point split along its longest axis
     glm::vec3 extent = node->aabb.max - node->aabb.min;
-    int axis = 0;
+    axis = 0;
     if (extent.y > extent.x) {
         axis = 1;
     }
     if (extent.z > extent[axis]) {
         axis = 2;
     }
-    float splitPos = node->aabb.min[axis] + extent[axis] * 0.5f;
+    splitPos = node->aabb.min[axis] + extent[axis] * 0.5f;
+#endif
 
     // Partition primitives (in-place sorting)
     int start = node->firstTriIdx;
@@ -856,22 +737,19 @@ void Scene::addChildren(BVHNode* node)
     updateNodeBounds(node->leftChild);
     updateNodeBounds(node->rightChild);
 
-    addChildren(&bvhNodes[node->leftChild]);
-    addChildren(&bvhNodes[node->rightChild]);
+    subdivide(&bvhNodes[node->leftChild]);
+    subdivide(&bvhNodes[node->rightChild]);
 }
 
-void Scene::generateBVH() {
-
+void Scene::buildBVH() {
     // Resize BVH
     bvhNodes.resize(2 * triangles.size() - 1);
 
     // Initialize root node
     BVHNode* root = &bvhNodes[0];
-    //root->aabb.min = geomAABBs[0].min;
-    //root->aabb.max = geomAABBs[0].max;
     root->firstTriIdx = 0;
     root->triCount = triangles.size();
 
     // Construct hierarchy
-    addChildren(root);
+    subdivide(root);
 }

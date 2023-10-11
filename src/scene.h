@@ -17,17 +17,16 @@ private:
     int loadMaterial(string materialid);
     int loadGeom(string objectid);
     int loadCamera();
+
+    // Mesh loading
     int loadMeshGltf(string filename, Geom& geom, int objectId);
     int loadMeshObj(string filename, Geom& geom);
 
-    void buildBVH();
+    // BVH optimization
     void updateNodeBounds(int nodeIdx);
-    void subdivide(int nodeIdx);
-
-    void updateBounds(const int idx);
-    void chooseSplit(BVHNode* node, float& split, int& axis);
-    void addChildren(BVHNode* node);
-    void generateBVH();
+    void subdivide(BVHNode* node);
+    float evaluateSAH(BVHNode* node, float query, int axis);
+    void buildBVH();
 
 public:
     Scene(string filename);

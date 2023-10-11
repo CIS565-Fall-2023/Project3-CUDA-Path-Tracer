@@ -165,9 +165,9 @@ VEL	    0 0 0
 
 // Mesh
 OBJECT 6
-gltf gltf/Cube.gltf
+gltf gltf/duck_2decimals.glb
 material 1
 TRANS       0 2 0
 ROTAT       0 0 0
-SCALE       1 1 1
+SCALE       .05 .05 .05
 VEL	    0 0 0
