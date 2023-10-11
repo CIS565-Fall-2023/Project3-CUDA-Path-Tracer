@@ -38,7 +38,7 @@ CUDA Path Tracer
 ### Core features (As required by project instruction)
 - Diffuse & Specular
 
-![Diffuse & Specular Demo]()
+![Diffuse & Specular Demo](img/basic_pathtracer.png)
 
 - Jittering
 <table>
@@ -47,13 +47,10 @@ CUDA Path Tracer
         <th>After jittering</th>
     </tr>
     <tr>
-        <th><img src="./img/sampler_indep.jpg"/></th>
-        <th><img src="./img/sampler_sobol.jpg"/></th>
+        <th><img src="./img/without_jittering.png"/></th>
+        <th><img src="./img/with_jittering.png"/></th>
     </tr>
 </table>
-
-- 
-
 
 ### BVH
 On host, we can construct and traverse BVH recursively. While in this project, our code run on GPU. While recent cuda update allows recursive function execution on device, we cannot take that risk as raytracer is very performance-oriented. Recursive execution will slow down the kernel function, as it may bring dynamic stack size. 

@@ -112,7 +112,7 @@ static DevScene* scene;
 //static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_empty_room.glb");
 
 //static Scene* hst_scene = new Scene("..\\scenes\\pathtracer_mis_demo.glb");
-static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_robot.glb");
+static Scene * hst_scene = new Scene("..\\scenes\\pathtracer_robots_demo.glb");
 static BSDFStruct * dev_bsdfStructs = nullptr;
 static BVHAccel * bvh = nullptr;
 static BVHNode* dev_bvhNodes = nullptr;
