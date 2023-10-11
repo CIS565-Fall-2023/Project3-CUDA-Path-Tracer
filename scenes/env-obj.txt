@@ -8,7 +8,6 @@ REFL        0
 REFR        0
 REFRIOR     1.55
 EMITTANCE   0
-TEXTURE    ../scenes/obj/wahoo.bmp
 
 // Camera
 CAMERA
@@ -24,12 +23,11 @@ FOCAL       0
 LENS_RADIUS 0
 FAR_PLANE   1000.0
 
-
 // Sphere
 OBJECT 0
 obj
 material 0
 TRANS       0 0 0
-ROTAT       0 90 0
-SCALE       10 10 10
-OBJFILE ../scenes/obj/wahoo.obj
+ROTAT       0 0 0
+SCALE       50 50 50
+OBJFILE ../scenes/obj/dragon.obj

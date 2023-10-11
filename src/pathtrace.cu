@@ -15,11 +15,11 @@
 #include "intersections.h"
 #include "interactions.h"
 
-#define ERRORCHECK 1
+#define ERRORCHECK 0
 
 #define SORT_MATERIALS 0
-#define FIRST_BOUNCE_CACHE 0
-#define ANTI_ALIASING 0
+#define FIRST_BOUNCE_CACHE 1
+#define ANTI_ALIASING 1
 
 #define NAIVE 0
 #define DIRECT_MIS 0
@@ -758,7 +758,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		// sort by material?
 #if SORT_MATERIALS
-		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + cur_num_paths, dev_paths, compareByMaterialId());
+		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths, compareByMaterialId());
 #endif
 		// TODO:
 		// --- Shading Stage ---
