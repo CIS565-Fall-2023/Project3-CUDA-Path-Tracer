@@ -38,6 +38,8 @@ Glass = 50% chance of refraction + 50% chance of reflection (With Fresnel dielec
 Plastic = 50% chance of diffuse + 50% chance of reflection (With Fresnel dielectric evaluation).
 
 
+
+
 ###  Direct lighting (A full lighting Integrator)
 At first, I added a kernal to compute the direct lighting for each bounce in each path. And then I added a full integrator which combines the direct lighting and global illumination. For optimization, I added Russian roulette to give some chance to terminate the paths that have relatively low light throughput. Compared with the naive method, it renders a more converged image in a shorter period of time. 
 
@@ -52,6 +54,8 @@ Same scene at 30 iterations:
 | ![](img/dl_off.png) | ![](img/dl_on.png)     |
 
 
+
+
 ### Obj Mesh Loading (with bounding box or BVH)
 I use the tinyObj for parsing and loading the obj format meshes. After meshed are loaded, a list containing all the triangles in the scene is transported to GPU for intersection computing.
 To accelerate the intersection process, I added a BVH structure. It is constructed on CPU, and then a list of BVH nodes and a list of index of triangles used by BVH nodes are transported to GPU. As expected, it improves some of the intersection performance. If BVH is turned off, the meshes will still be culled by bounding boxes.
@@ -64,6 +68,8 @@ This test was under VS Debug mode and thus it was quite slow. (I just realized I
 |                                  | Without BVH             |With BVH                 |
 | -----------------------          | ----------------------- | ----------------------- |
 |     Average Time Per Frame (ms)  | ~59000              |~43000                       |
+
+
 
 
 ### Stratified sampling
