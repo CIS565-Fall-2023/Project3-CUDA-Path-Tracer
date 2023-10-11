@@ -15,6 +15,7 @@ enum GeomType {
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+    float time;
 };
 
 struct Geom {
@@ -26,6 +27,7 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+    glm::vec3 velocity;
 };
 
 struct Material {
@@ -38,6 +40,10 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    //glm::vec3 sssAlbedo;
+    //float sssDepth;
+    glm::vec3 sigma_a = glm::vec3(0.f);
+    glm::vec3 sigma_s = glm::vec3(0.f);
 };
 
 struct Camera {
@@ -73,4 +79,5 @@ struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;
+  bool outside;
 };

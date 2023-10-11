@@ -74,6 +74,8 @@ int Scene::loadGeom(string objectid) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+            } else if (strcmp(tokens[0].c_str(), "VEL") == 0) {
+                newGeom.velocity = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             }
 
             utilityCore::safeGetline(fp_in, line);
@@ -160,28 +162,50 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 9; i++) {
             string line;
             utilityCore::safeGetline(fp_in, line);
             vector<string> tokens = utilityCore::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "RGB") == 0) {
-                glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
+                glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "SPECEX") == 0) {
                 newMaterial.specular.exponent = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "SPECRGB") == 0) {
                 glm::vec3 specColor(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 newMaterial.specular.color = specColor;
-            } else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "REFL") == 0) {
                 newMaterial.hasReflective = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "REFR") == 0) {
                 newMaterial.hasRefractive = atof(tokens[1].c_str());
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 newMaterial.indexOfRefraction = atof(tokens[1].c_str());
             } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 newMaterial.emittance = atof(tokens[1].c_str());
+            }/* else if (strcmp(tokens[0].c_str(), "SIGMAA") == 0) {
+                glm::vec3 sigma(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.sigma_a = sigma;
+            } else if (strcmp(tokens[0].c_str(), "SIGMAS") == 0) {
+                glm::vec3 sigma(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.sigma_s = sigma;
+            }*/ else if (strcmp(tokens[0].c_str(), "SIGMAA") == 0) {
+                glm::vec3 sigma_a(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.sigma_a = sigma_a;
+            } else if (strcmp(tokens[0].c_str(), "SIGMAS") == 0) {
+                glm::vec3 sigma_s(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.sigma_s = sigma_s;
             }
+
         }
+
+        std::cout << "sigma a: " << newMaterial.sigma_a.x << " " << newMaterial.sigma_a.y << " " << newMaterial.sigma_a.z << std::endl;
+        std::cout << "sigma s: " << newMaterial.sigma_s.x << " " << newMaterial.sigma_s.y << " " << newMaterial.sigma_s.z << std::endl;
+
         materials.push_back(newMaterial);
         return 1;
     }

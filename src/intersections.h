@@ -5,6 +5,7 @@
 
 #include "sceneStructs.h"
 #include "utilities.h"
+#include <glm/gtc/matrix_inverse.hpp>
 
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
