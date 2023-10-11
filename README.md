@@ -9,7 +9,7 @@ CUDA Path Tracer
 
 ## Brief Intro
 This is a CUDA-based path tracer capable of rendering globally-illuminated images very quickly. \
-Why cuda? Because cuda is natively good at paralling rays and shading. To utiliza more parallism and improve occupancy, paths/rays are further divided into small path segments and processed in parallel. More performance improvement tricks are included in later part.\
+Why cuda? Because cuda is natively good at paralling rays and shading. To utiliza more parallism and improve occupancy, paths/rays are further divided into small path segments and processed in parallel. More performance improvement tricks are included in later part.
 
 ### Details
 
@@ -61,6 +61,16 @@ Without direct light
 ![](./img/OIMD.png)
 The above two pictures are basically the same scene and you can easily find the outcome applied with open image AI denoiser is much clearear than the one without denoiser.
 
-Here i use first hit intersection to act as the albedo and normal filter of the pixel.
+Here I use first hit intersection to act as the albedo and normal filter of the pixel.
 
 #### Performance Analysis
+
+Stream compaction vs Non-stream compaction
+
+I use the gear scene to test the performance of stream compaction. 
+
+- bounding box intersection culling
+`#define BOUND_BOX 1` in the intersections.h to toggle the bounding box intersection culling. 
+The result is shown below.
+
+![](./img/performance1.png)
