@@ -74,6 +74,8 @@ set(headers
     src/preview.h
     src/utilities.h
     src/ImGui/imconfig.h
+    src/tiny_obj_loader.h
+    src/BVH.h
 	
 	src/ImGui/imgui.h
     src/ImGui/imconfig.h
@@ -111,11 +113,20 @@ list(SORT sources)
 source_group(Headers FILES ${headers})
 source_group(Sources FILES ${sources})
 
-#add_subdirectory(src/ImGui)
+
+set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+add_subdirectory(src/tinygltf)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
+#set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+#set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+
 
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
+    #tinygltf
     #stream_compaction  # TODO: uncomment if using your stream compaction
     )
+
+#add_subdirectory(tinygltf)
