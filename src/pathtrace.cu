@@ -273,7 +273,8 @@ __global__ void computeIntersections(
 #if MOTION_BLUR
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_index, pathSegment.remainingBounces);
 			thrust::uniform_real_distribution<float> u01(0, 1);
-			//Jitter the ray randomly about a given axis, here faking velocity as axis 
+			
+			// Jitter ray randomly about a given axis, here faking velocity vector as axis 
 			if (glm::length(geom.velocity) > 1.f) {
 				ray.origin += u01(rng) * geom.velocity;
 			}

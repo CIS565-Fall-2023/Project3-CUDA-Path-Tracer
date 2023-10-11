@@ -43,7 +43,7 @@ struct Triangle
     Vertex v0;
     Vertex v1;
     Vertex v2;
-    glm::vec3 centroid; // need for BVH subdivision
+    glm::vec3 centroid; // for BVH subdivision
     AABB aabb;
 
     void computeAABB() {

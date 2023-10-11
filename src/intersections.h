@@ -289,6 +289,8 @@ __host__ __device__ void bvhIntersectTriangles(const Triangle* tris, Ray& r, int
             tri = tris[i];
         }
 
+        // TODO: need to fix world/local transformation for glb & obj
+
         /* triangle intersection test for obj ---------------------- start
         tri = tris[triIndices[node.firstTriIdx + i]];
         bool intersect = glm::intersectRayTriangle(r.origin, r.direction,

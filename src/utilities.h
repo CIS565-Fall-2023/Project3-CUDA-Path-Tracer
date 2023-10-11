@@ -24,17 +24,21 @@
 #define SORT_MAT            0				// Sort by material (Keep same material contiguous in memory)
 #define COMPACT             1				// Stream compaction
 #define AA		            1				// Anti-aliasing
+
 #ifndef AA
 #define CACHE_FIRST_BOUNCE  1	            // Cache first bounce of rays, ONLY if AA is disabled
 #endif
+
 #define MOTION              0               // Real-time moving objects
 #define MOTION_BLUR	MOTION  0               // Hard-coded motion blur
 #define TIMER               0               // Gpu timer for performance analysis
 #define BB_CULLING          0               // Test ray against mesh AABB
 #define BVH                 1               // Use Bounding Volumn Hierarchy to speed up mesh loading
+
 #ifdef BVH
 #define BVH_SAH             0	            // Use surface area heuristics to split plane, default is midpoint split
 #endif
+
 #define DOF                 0               // Camera lens effect: depth of field
 #define LENS_RADIUS         0.4f            // TODO: move to scene.txt
 #define FOCAL_DIST          6.0f            // TODO: move to scene.txt

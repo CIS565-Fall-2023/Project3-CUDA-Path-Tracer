@@ -311,6 +311,7 @@ inline void printTriAABB(Triangle& tri)
 void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
     std::vector<Triangle>& tris, std::vector<int>& triIndices,
     std::vector<Geom>* geoms) {
+
     for (size_t i = 0; i < mesh.primitives.size(); ++i) {
         tinygltf::Primitive& primitive = mesh.primitives[i];
 
@@ -346,6 +347,7 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
         // are the indices of the vertices of one triangle.
         Triangle tri;
         if (primitive.indices >= 0)  {
+            
             // triangulate mesh
             const tinygltf::Accessor& idxAccessor = model.accessors[primitive.indices];
             const tinygltf::BufferView& idxBufferView = model.bufferViews[idxAccessor.bufferView];
@@ -459,6 +461,7 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
 void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, Geom& geom,
     std::vector<Triangle>& tris, std::vector<int>& triIndices,
     std::vector<Geom>* geoms) {
+
     if ((node.mesh >= 0) && (node.mesh < model.meshes.size())) {
         parseMesh(model, model.meshes[node.mesh], geom, tris, triIndices, geoms);
     }
@@ -470,6 +473,7 @@ void parseModelNodes(tinygltf::Model& model, tinygltf::Node& node, Geom& geom,
 void parseModel(tinygltf::Model& model, Geom& geom, 
     std::vector<Triangle>& tris, std::vector<int>& triIndices,
     std::vector<Geom>* geoms) {
+
     const tinygltf::Scene& scene = model.scenes[model.defaultScene];
     for (size_t i = 0; i < scene.nodes.size(); ++i) {
 #if DEBUG_MESH
@@ -544,7 +548,6 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
         std::vector<Triangle> trisInMesh;
 
         // track AABB for the current geometry
-        geomAABBs.resize(shapes.size());
         glm::vec3 bbMin = glm::vec3(FLT_MAX);
         glm::vec3 bbMax = glm::vec3(-FLT_MAX);
 
@@ -602,11 +605,10 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
             bbMin = glm::min(bbMin, tri.aabb.min);
             bbMax = glm::max(bbMax, tri.aabb.max);
         }
-        geomAABBs[s].min = bbMin;
-        geomAABBs[s].max = bbMax;
 
         // initialize new geom
-        geom.aabb = geomAABBs[s];
+        geom.aabb.min = bbMin;
+        geom.aabb.max = bbMax;
         geom.startTriIdx = triangles.size();
         geom.triangleCount = trisInMesh.size();
         

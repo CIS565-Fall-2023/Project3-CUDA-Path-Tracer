@@ -281,6 +281,7 @@ void scatterRay(
     pathSegment.remainingBounces--;
 }
 
+// For camera DOF
 // reference from CIS5610
 __host__ __device__
 glm::vec3 concentricSampleDisk(const glm::vec2& sampler) {
