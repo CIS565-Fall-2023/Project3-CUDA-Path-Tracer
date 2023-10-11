@@ -60,6 +60,7 @@ This test was under VS Debug mode and thus it was quite slow. (I just realized I
 <img width="400" alt="1" src="img/bvh_test.png">
 
 <img width="300" alt="1" src="img/bvh.png">
+
 |                                  | Without BVH             |With BVH                 |
 | -----------------------          | ----------------------- | ----------------------- |
 |     Average Time Per Frame (ms)  | ~59000              |~43000                       |
