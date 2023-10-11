@@ -134,3 +134,9 @@ I use ```thrust::sort_by_key``` to sort rays by material. However, this accelera
 Stream compaction removes terminated rays to improve the performance. I implemented this using ```thrust::stable_partition```. I observed a significant performance improvement by using stream compaction both on closed and open scene, and on both shading kernel and compute intersection kernel.
 
 ![](img/stream.png)
+
+### BVH
+
+My implementation includes calculating bounding box for each triangle and build a BVH tree that each node has a bounding box that is calculated from the triangles in it. For a BVH tree, deeper child nodes have smaller volumes so we reduce the times of intersection checks by ignoring subtrees that are not intersected in the parent node. I observed significant performance improvement by using BVH.
+
+![](img/bvh.png)

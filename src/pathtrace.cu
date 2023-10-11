@@ -20,11 +20,11 @@
 
 #define CACHE_FIRST_BOUNCE 1
 #define SORT_MATERIAL 1
-#define STREAM_COMPACTION 0
+#define STREAM_COMPACTION 1
 
 #define DEPTH_OF_FIELD 0
 #define ANTIALIASING 0
-#define DIRECT_LIGHTING 0
+#define DIRECT_LIGHTING 1
 #define MOTION_BLUR 0
 #define MOTION_VELO glm::vec3(2.5, 0.5, 0.3)
 #define BVH 1
@@ -347,7 +347,7 @@ __global__ void computeIntersections(
 #if BVH
 				t = bvhTriangleIntersectionTest(geom, pathSegment.ray, triangles, bvhNodes, tri_size, tmp_intersect, tmp_normal, tmp_uv, outside);
 #else
-				t = triangleIntersectionTest(geom, pathSegment.ray, triangles, tri_size, tmp_intersect, tmp_normal, tmp_uv, outsides);
+				t = triangleIntersectionTest(geom, pathSegment.ray, triangles, tri_size, tmp_intersect, tmp_normal, tmp_uv, outside);
 #endif
 			}
 
