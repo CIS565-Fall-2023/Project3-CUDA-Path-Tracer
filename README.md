@@ -3,11 +3,38 @@ CUDA Path Tracer
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Helena Zhang
+* Tested on: Windows 11, i7-10750 @ 2.6GHz 16GB, Geforce RTX 2060 6GB
 
-### (TODO: Your README)
+Analysis
+================
+* stream compaction
+* cache first hit
+* material sort
+Stream compaction helps most after a few bounces. Print and plot the effects of stream compaction within a single iteration (i.e. the number of unterminated rays after each bounce) and evaluate the benefits you get from stream compaction.
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+Compare scenes which are open (like the given cornell box) and closed (i.e. no light can escape the scene). Again, compare the performance effects of stream compaction! Remember, stream compaction only affects rays which terminate, so what might you expect?
+
+For optimizations that target specific kernels, we recommend using stacked bar graphs to convey total execution time and improvements in individual kernels.
+  
+Extra Features
+================
+**Mesh import (gltf)**
+insert images
+performance impact: tbd, compare # vertices vs performance
+
+**Direct Lighting**
+insert low iteration low depth images
+performance impact: tbd
+
+**Refraction**
+insert squid image without glass & water and with glass & water
+performance impact: tbd
+
+**Depth of Field Camera**
+Lens Radius Effect: (insert 2 sheep pictures)
+Focus Distance Effect: (insert 3 sheep pictures)
+Performance impact: none
+
+
 
