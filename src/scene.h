@@ -39,7 +39,7 @@ public:
     std::vector<int> triIndices;
     std::vector<BVHNode> bvhNodes;
     std::vector<AABB> geomAABBs;
-    int nodesUsed = 1;
+    int nodesUsed = 1; // keep track of the current available node in the tree
     int meshCount;
     RenderState state;
 };

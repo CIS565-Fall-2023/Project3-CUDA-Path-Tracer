@@ -12,7 +12,7 @@
 #include "tiny_obj_loader.h"
 
 #define DEBUG_MESH 1
-#define DEBUG_BVH  1
+#define DEBUG_BVH  0
 
 Scene::Scene(string filename) {
     basePath = filename.substr(0, filename.rfind('/') + 1);
@@ -451,7 +451,7 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
         }
 #if DEBUG_MESH
         cout << "Triangle count: " << geom.triangleCount << endl;
-        printTri(tri);
+        // printTri(tri);
 #endif
     }
 }
@@ -617,7 +617,7 @@ int Scene::loadMeshObj(string filename, Geom& geom) {
 
 #if DEBUG_MESH
         cout << "Triangle count: " << trisInMesh.size() << endl;
-        printTri(triangles[0]);
+        //printTri(triangles[0]);
 #endif
     }
     return 1;
@@ -645,8 +645,8 @@ void Scene::buildBVH() {
 
 void Scene::updateNodeBounds(int nodeIdx) {
     BVHNode& node = bvhNodes[nodeIdx];
-    node.aabb.min = glm::vec3(1e30f);
-    node.aabb.max = glm::vec3(-1e30f);
+    node.aabb.min = glm::vec3(FLT_MAX);
+    node.aabb.max = glm::vec3(-FLT_MAX);
     
     int startTriIdx = node.firstTriIdx;
     for (int i = 0; i < node.triCount; i++) {
@@ -739,9 +739,6 @@ AABB Union(AABB left, AABB right) {
     return AABB{ umin, umax };
 }
 
-// Counter to keep track of the current available node in the tree
-int idx = 1;
-
 // Finds the new bounds of the aabb
 void Scene::updateBounds(const int idx)
 {
@@ -818,16 +815,23 @@ void Scene::addChildren(BVHNode* node)
 {
     if (!node->isLeaf()) return;
 
-    // Choose split axis and position
-    float split = 0.f;
+    // determine split axis and position
+    // for now, implement mid-point split along its longest axis
+    glm::vec3 extent = node->aabb.max - node->aabb.min;
     int axis = 0;
-    chooseSplit(node, split, axis);
+    if (extent.y > extent.x) {
+        axis = 1;
+    }
+    if (extent.z > extent[axis]) {
+        axis = 2;
+    }
+    float splitPos = node->aabb.min[axis] + extent[axis] * 0.5f;
 
     // Partition primitives (in-place sorting)
     int start = node->firstTriIdx;
     int end = node->firstTriIdx + node->triCount - 1;
     while (start <= end) {
-        if (triangles[start].centroid[axis] < split) {
+        if (triangles[start].centroid[axis] < splitPos) {
             start++;
         }
         else {
@@ -841,24 +845,23 @@ void Scene::addChildren(BVHNode* node)
     if (count == 0 || count == node->triCount) return;
 
     // Set children nodes
-    int leftChildIdx = idx++;
-    int rightChildIdx = idx++;
-    bvhNodes[leftChildIdx].firstTriIdx = node->firstTriIdx;
-    bvhNodes[leftChildIdx].triCount = start - node->firstTriIdx;
-    bvhNodes[rightChildIdx].firstTriIdx = start;
-    bvhNodes[rightChildIdx].triCount = node->triCount - bvhNodes[leftChildIdx].triCount;
-    node->leftChild = leftChildIdx;
+    node->leftChild = nodesUsed++;
+    node->rightChild = nodesUsed++;
+    bvhNodes[node->leftChild].firstTriIdx = node->firstTriIdx;
+    bvhNodes[node->leftChild].triCount = start - node->firstTriIdx;
+    bvhNodes[node->rightChild].firstTriIdx = start;
+    bvhNodes[node->rightChild].triCount = node->triCount - bvhNodes[node->leftChild].triCount;
     node->triCount = 0;
 
-    updateBounds(leftChildIdx);
-    updateBounds(rightChildIdx);
+    updateNodeBounds(node->leftChild);
+    updateNodeBounds(node->rightChild);
 
-    addChildren(&bvhNodes[leftChildIdx]);
-    addChildren(&bvhNodes[rightChildIdx]);
+    addChildren(&bvhNodes[node->leftChild]);
+    addChildren(&bvhNodes[node->rightChild]);
 }
 
-void Scene::generateBVH()
-{
+void Scene::generateBVH() {
+
     // Resize BVH
     bvhNodes.resize(2 * triangles.size() - 1);
 

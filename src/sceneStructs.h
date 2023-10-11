@@ -73,7 +73,7 @@ struct Geom {
 
 struct BVHNode {
     AABB aabb;
-    int leftChild; // BVHNode* left, * right; rightChild based off leftChild
+    unsigned int leftChild, rightChild; // BVHNode* left, * right; rightChild based off leftChild
     int firstTriIdx; // std::vector<Triangle*> triangles;
     int triCount;
 
