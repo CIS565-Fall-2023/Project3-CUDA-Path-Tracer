@@ -9,7 +9,7 @@ CUDA Path Tracer
 * Compute capability: 8.9
 
 ## Final Visual Output
-
+![](final.png)
 
 ## Features
 This is a project implmenting a CUDA path tracer with GPU-accelerated intersection tests, shading and other features to increase performance in reality and speed.

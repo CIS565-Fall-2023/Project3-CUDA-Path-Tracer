@@ -42,9 +42,9 @@ EMITTANCE   0
 
 // Transmit
 MATERIAL 4
-RGB         .69 .88 .69 
+RGB         .99 .95 .26
 SPECEX      0
-SPECRGB     .69 .88 .69 
+SPECRGB     .99 .95 .26
 REFL        1
 REFR        1
 REFRIOR     1.55
@@ -183,45 +183,6 @@ cube
 material 1
 TRANS       0 0 0
 ROTAT       0 0 0
-SCALE       10 .01 20
+SCALE       20 .01 20
 
-// Back wall
-OBJECT 10
-cube
-material 9
-TRANS       0 5 -5
-ROTAT       0 90 0
-SCALE       .01 10 10
-
-// Left wall
-OBJECT 11
-cube
-material 9
-TRANS       -5 5 0
-ROTAT       0 0 0
-SCALE       .01 10 20
-
-// Right wall
-OBJECT 12
-cube
-material 9
-TRANS       5 5 0
-ROTAT       0 0 0
-SCALE       .01 10 20
-
-// Back wall
-OBJECT 13
-cube
-material 1
-TRANS       0 10 10
-ROTAT       0 90 0
-SCALE       .01 10 10
-
-// Ceiling
-OBJECT 14
-cube
-material 1
-TRANS       0 10 0
-ROTAT       0 0 90
-SCALE       .01 10 20
 
