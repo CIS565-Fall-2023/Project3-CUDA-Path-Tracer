@@ -40,7 +40,7 @@ Rays are cast for `n` bounces every frame. Rays collect material and global illu
     - [4. Ray termination via russian roulette](#4-ray-termination-via-russian-roulette)
     - [5. Naive Axis-Aligned Bounding Box (AABB) Acceleration](#5-naive-axis-aligned-bounding-box-aabb-acceleration)
     - [6. Bounding Volume Hierarchy (BVH) Acceleration](#6-bounding-volume-hierarchy-bvh-acceleration)
-- [References](#references)
+ - [References](#references)
 
 ## Visual Features
 
