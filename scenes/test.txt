@@ -53,9 +53,9 @@ SCALE       10 .3 10
 // Stage
 OBJECT 2
 mesh
-../scenes/gltf/seele_light.gltf
+../scenes/gltf/triple_seele.glb
 material -1
-TRANS 0 0 1
+TRANS 0 0 -1
 ROTAT 0 0 0
 SCALE 5 5 5
 
