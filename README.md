@@ -10,6 +10,8 @@ CUDA Path Tracer
 ---
 ## Overview
 
+![](img/featured.png)
+
 A path tracer is a rendering technique that simulates the behavior of light in a scene. It uses Monte Carlo method to estimate the radiance at each pixel of an image by tracing the path of light through the scene. The algorithm is iterative and parallel in nature, so it runs intuitively and fairly well on CUDA. And it is able to simulate many effects that are difficult with other rendering techniques, such as soft shadows, depth of field, caustics, ambient occlusion, and indirect lighting.
 
 | Coffee Shop | Stanford Bunny |
@@ -86,11 +88,11 @@ All scenes were rendered in $800 \times 800$ resolution with $2000$ spp and $8$ 
 
 ### Mesh Loading
 
-With the help of [tinyobjloader](https://github.com/syoyo/tinyobjloader) and [tinygltf](https://github.com/syoyo/tinygltf/) libraries, the path tracer is able to load `.obj` and `.gltf` files (partially). Thus, we can render more complex scenes.
+With the help of [tinyobjloader](https://github.com/syoyo/tinyobjloader) and [tinygltf](https://github.com/syoyo/tinygltf/) libraries, the path tracer is able to load `.obj` and `.gltf` files (partially). Thus, we can render more complex scenes, and put more stress on the path tracer.
 
 ### Procedural Textures
 
-Procedural textures can be achieved by using the barycentric interpolated uv coordinate of the intersection point. Check out the following example.
+Procedural textures can be achieved by using the barycentric interpolated uv coordinate of the intersection point. There is hardly any performance impact. Check out the following example.
 
 | Gradient Mario | Checkerboard Mario |
 | :-----: | :----: |
@@ -102,8 +104,7 @@ All scenes were rendered in $800 \times 800$ resolution with $1000$ spp and $8$ 
 
 [Open Image Denoise](https://www.openimagedenoise.org/) is a high-performance, high-quality denoising library for ray tracing. It is able to remove noise from rendered images without losing much details. Additional filters like albedo and normal map are added to the denoiser pre-filter to improve the quality of the denoised image.
 
-The denoiser is integrated into the system as a post-processing step. Triggered every fixed number of intervals, the denoised image is merged to the original image using exponential moving average.
-
+The denoiser is integrated into the system as a post-processing step. Triggered every fixed number of intervals, the denoised image is merged to the original image using exponential moving average. Although it does have a small impact on the performance, the quality of the image is significantly improved and we could get a much cleaner image with the much fewer number of samples.
 
 The following example shows the effect of the denoiser with $200$ samples per pixel, a relatively low sample rate.
 
@@ -129,15 +130,34 @@ Additionally, we could sort the rays by material type to improve the performance
 
 ### Bounding Volume Hierarchy
 
-
 Bounding volume hierarchy (BVH) is a tree structure on top of the scene geometry to accelerate ray tracing. The idea is to group the scene geometry into a hierarchy of bounding volumes, and the ray tracer can quickly discard the entire group of primitives if the ray does not intersect with the bounding volume.
 
 ![](img/bvh.svg)
 
-Image from [PBRT 4.3](https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) is a good illustration of BVH true. The BVH is built using the equal count partition method, which tries to split the primitives into two equal sized groups. The BVH is built on the CPU in a linear buffer (heap like structure) and then copied to the GPU for ray tracing.
+Image from [PBRT 4.3](https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) is a good illustration of BVH true. The BVH is built using the equal count partition method, which tries to split the primitives into two equal sized groups. The BVH is built on the CPU in a linear buffer (heap like structure) and then copied to the GPU for ray tracing. BVH could be potentially optimized by utilizing SAH (Surface Area Heuristic) and building the BVH directly on the GPU.
 
 ## Performance Analysis
 
-Let's take a look at the performance of the path tracer with different features enabled. We will use most loved Mario as the test scene. Stream compaction plays a important role in the correctness of the algorithm in addition to its performance benefits. So stream compaction will be enabled in all tests and we will use path tracer with only stream compaction method enabled as the baseline.
+Let's take a look at the performance of the path tracer with different features enabled. Stream compaction plays a important role in the correctness of the algorithm in addition to its performance benefits. So stream compaction will be enabled in all tests and we will use path tracer with only stream compaction method enabled as the baseline.
+
+![](img/Average%20Frame%20Generation%20Time%20Comparison%20(Lower%20is%20Better).svg)
+
+Cornell-Metal and Cornell-Glass are simple scenes with metal or glass material balls in side the cornell box. Those spheres is not in the mesh system therefore BVH has no effect on the performance.
+
+More complex scenes like Mario-Metal and Mario-Glass are the same as the previous two scenes except that the spheres are replaced with Mario mesh. The mesh system is able to load `.obj` files or `.gltf` files (partially). The number of triangles in the Mario mesh is about 5,000.
+
+Lastly the Teapot-Complex scene consists of 5 teapots with different materials. The teapots are loaded from `.obj` file. The teapots are uniformly placed in the scene and the total number of triangles is about 50,000.
+
+### Observations
+
+- **Material Sorting** is not a good optimization. It is not only not improving the performance, but also slowing down the path tracer. The reason, as hinted before, is that the sorting process itself is very expensive compared to the performance gain. There is not no significant performance improvement to compensate for the cost.
+- **First Bounce Caching** has limited performance improvement. The reason is that the first bounce is only a small part of the entire ray tracing process. Besides, when enabling more advanced visual features like anti-aliasing, depth-of-field, and motion blur, the first bounce is no longer the same for every iteration.
+- **BVH** is mind-blowing. It is able to improve the performance by a factor of 15x or reducing the rendering time by 90%! BVH enables quick discard of groups of primitives if the ray does not intersect with the bounding volume. This is especially useful when the scene is complex and the number of primitives is large. Although BVH traversal requires additional global memory access, the performance gain is still significant.
 
 ## References
+1. [Physically Based Rendering: From Theory To Implementation](https://pbr-book.org/)
+2. [glTF Specification and Example BxDF Implementation](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation)
+3. [GPU-based Importance Sampling](https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling)
+4. [Axis-Aligned Bounding Box (AABB) intersection algorithm](https://tavianator.com/2011/ray_box.html)
+5. [Iterative BVH Traversal with near $O(1)$ Memory](https://developer.nvidia.com/blog/thinking-parallel-part-ii-tree-traversal-gpu/)
+6. [Open Image Denoise](https://www.openimagedenoise.org/)
