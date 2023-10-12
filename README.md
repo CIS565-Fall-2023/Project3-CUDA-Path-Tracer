@@ -37,7 +37,7 @@ Rays are cast for `n` bounces every frame. Rays collect material and global illu
     - [1. Ray termination using stream compaction](#1-ray-termination-using-stream-compaction)
     - [2. Mesh sort by materials for GPU coherency](#2-mesh-sort-by-materials-for-gpu-coherency)
     - [3. First bounce cache](#3-first-bounce-cache)
-    - [4. Ray termination via russian roulette](#4-ray-termination-via-russian-roulette)
+    - [4. Ray termination via Russian roulette](#4-ray-termination-via-russian-roulette)
     - [5. Naive Axis-Aligned Bounding Box (AABB) Acceleration](#5-naive-axis-aligned-bounding-box-aabb-acceleration)
     - [6. Bounding Volume Hierarchy (BVH) Acceleration](#6-bounding-volume-hierarchy-bvh-acceleration)
  - [References](#references)
@@ -213,9 +213,9 @@ There is a very slight performance boost from this additional caching, and the a
 
 Further testing and evaluation of first bounce cache is done below along with ray termination via russian roulette.
 
-### 4. Ray termination via russian roulette
+### 4. Ray termination via Russian roulette
 
-Ray termination via russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive in `utilities.h`.
+Ray termination via Russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive in `utilities.h`.
 
 To test performance, the following scene configurations were used:
 - Open scene: 3 Blender Monkeys (16k total tris) a light, everything surrounded by cornell box with camera side of cornell box without wall (3 walls, a floor and a ceiling)
