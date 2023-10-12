@@ -154,7 +154,7 @@ RGB = RGB_{HDR} / (1.0 + RGB_{HDR})
 [Gamma Correction](https://www.cambridgeincolour.com/tutorials/gamma-correction.htm) helps convert the images to colours that feel more natural to our eyes using the formula
 
 ```math
-RGB = \pow(RGB, 1/2.2)
+RGB = RGB^{1/2.2}
 ```
 
 Without these changes, images may appear very dark or very bright.
@@ -183,12 +183,28 @@ In the scenario where the first rays are always cast from the center of the pixe
 
 Ray termination via russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive in `utilities.h`.
 
-### 5. Simple Axis-Aligned Bounding Box (AABB) Acceleration
+### 5. Naive Axis-Aligned Bounding Box (AABB) Acceleration
 
+The basic mesh intersection test iterates through every single triangle in meshes and tests for intersections to find the closest intersecting geometry. This is okay for very simple meshes, but with increasing mesh complexity this becomes unusable.
 
+To help with performance, the CPU side GLTF mesh parsing code computes the AABB for each mesh and stores that information. This can later be used to naively accelerate performance while path-tracing. Before intersecting with all triangles in a mesh, rays can first check intersections with the bounding box of each mesh. If the ray does not intersect with the bounding box, it can avoid checking intersections with every single triangle in that mesh.
+
+Even though this is a naive approac, it helps increase performance to a usable degree. However, this only works when the meshes are small compared to the screen size. Once the meshes become big and cover more of the screen area, more and more rays will intersect with the AABB and pass this test.
+
+This can be enabled using the `ENABLE_NAIVE_AABB_OPTIMISATION` preprocessor directive in `utilities.h`.
 
 ### 6. Bounding Volume Hierarchy (BVH) Acceleration
 
+The naive AABB intersection check acceleration has its flaws, and was only useful for testing my path-tracer as I was working on it, but did not have a proper acceleration algorithm programmed yet. As I started importing more complex meshes I realised it would be impossible to render those scenes without an accelaration algorithm like the Bounding Volume Hierarchy (BVH).
+
+A BVH subdivides each mesh into two child *nodes* by splitting **by triangles**. The implementation of a BVH in this project closely follows the implementation mentioned in PBRT. At each subdivision step, the AABB for the overall triangles in the node is calculated. Triangles are sorted based on their centroid location on the *longest axis* of the calculated AABB, and then split into equal halves. The splitting continues until a *leaf node* only has a single triangle.
+
+There are a few differences in this project's BVH compared to the one in PBRT:
+
+- The PBRT construction works in two steps: a pointer based step that recursively subdivides the BVH into children nodes, and a second "flattening" step that flattens the BVH into an array that would make the access-order of the BVH nodes coherent in memory. In this path-tracer, both operations happen in a single step: instead of sorting the triangles themselves, indirection is applied by sorting their indices and directly storing BVH nodes in an array.
+- The PBRT BVH comprises the entire scene, but this project has a separate BVH per mesh.
+
+BVH acceleration can be enabled using the `ENABLE_BVH` preprocessor directive in `utilities.h`. This will automatically turn off the naive AABB acceleration, as that becomes pointless with the BVH turned on.
 
 ## Performance Analysis
 
