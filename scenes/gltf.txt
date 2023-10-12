@@ -58,14 +58,24 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
+// Imperfect diffuse specular cyan
+MATERIAL 6
+RGB         0.98 0.98 0.98
+SPECEX      0
+SPECRGB     0.98 0.98 0.98
+REFL        0
+REFR        1
+REFRIOR     1.55
+EMITTANCE   0
+
 // Camera
 CAMERA
 RES         800 800
 FOVY        45    
-ITERATIONS  5000
-DEPTH       2
+ITERATIONS  1000
+DEPTH       8
 FILE        cornell
-EYE         0.0 5 10.5
+EYE         0.0 5 9.5
 LOOKAT      0 5 0
 UP          0 1 0
 LENSRADIUS  1
@@ -119,18 +129,10 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Avocado
+//Teapot
 OBJECT 6
-mesh_gltf   Avocado.gltf
-material 5
-TRANS       -2 2 0
-ROTAT       -35 180 20
-SCALE       80 80 80
-
-// Suzanne
-OBJECT 7
-mesh_gltf   Suzanne.gltf
-material 4
-TRANS       2 5 2
-ROTAT       0 0 -20
-SCALE       3 3 3
+mesh_gltf   teapot.gltf
+material 6
+TRANS       -1 3 0
+ROTAT       -70 30 -20
+SCALE       0.05 0.05 0.05
