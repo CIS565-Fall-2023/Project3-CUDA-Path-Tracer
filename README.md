@@ -100,22 +100,81 @@ Figure 3: The effect of sorting rays by material before shading in rendering the
 It is clear from the graph that the cost of sorting rays by material significantly outweighs the benefit of branching reduction. This makes sense as modern GPUs have much better performance with some branching and even if threads are idle, the time of computing a new ray direction and shading in each branch is so small that the idle is still significantly smaller than sorting, which tends to be a very expensive operation even with GPU parallelization.
 
 ## Base Naive Path Tracing
+For basic path tracing, how a ray is colored and where it is scattered next is dependent on the properties of the material it intersects, and this is simulated by the light transport equation. The three most basic forms are diffusion, specular reflection, and specular transmission. The following images showcases all these shading scenarios.
+
+![](img/shading_cornell.10000samp.png)
+
+The leftmost cuboid features both specular reflection and specular transmission with an index of refraction of 1.55, intended to simulate glass. The middle cube has only specular transmission with an index of refraction of 1.55. The rightmost cube has only specular reflection, and is intended to simulate a mirror. The top sphere is a diffuse sphere with a grayish-white diffuse color.
+
+### Diffusion
+A diffusive material diffuses light in all directions with equal probaility. This creates the matte looking texture that we see in most rougher opaque objects. The color of light diffused depends on the color of the material, and to some extend also the influence of reflected light from other nearby materials.  
+This is most obvious on the diffuse sphere in the middle, where reflections from the walls and the light can be seen lightly on the edges of the sphere, while the base color of the sphere, a grayish white, is still visible overall.
+
+### Specular Reflection
+Specular reflection describes the mirror-like reflection of light. That is, when light hits the surface, it is reflected in the exact opposite angle relative to the surface normal. Since light coming from the same direction always bounces off in the same manner, we get a consistent reflection of incoming rays, and hence the mirroring proprety.  
+
+ In code, this is simply implemented as the reflection of the incoming ray across the surface normal, and the color is simply the color of the incoming ray influenced by the color of the material itself. (Yes, you can make a blue mirror here by specifying a specular color)    
+
+ The rightmost cube is a mirror with a white specular color, so it just reflects light coming to it. On the faces visible, we see the influence of the floor, the back wall, and the green wall. The bit of black reflects the lack of light from the void outside the box. We can also see some light reflected on the floor to the left face of the mirror cube that comes from the mirror reflecting direct light from the light source.
 
 ### Specular Transmission
+Specular transmission essentially describes refraction through a uniform material. When light enters a medium that is denser, it bends slightly towards the surface normal of the incident surface separating the mediums, and when it enters a medium that is less dense, it bends away from the surface normal. This results in the bending effect we see on a stick that is half-submerged in water.  
+
+For this implementation, specular transmission is simulated using snell's law to calcualte the bending of the ray. Unlike reflection, transmitted rays pass into the object and then out from the other side, hence the name transmission. The incident ray color is influenced by the specular color of the transmissive material similar to specular reflection.  
+
+This can be seen in the middle cube, where we can clearly see the floor and wall behind it, but there is some slightly distortion to the position of the wall corner. We also see some red light from the left wall that passes through the cube, showing on both the left and right face.
 
 ### Fresnel Dielectric
+In reality, when light strikes a specular surface, some of it is reflected and some of it is refracted. The Fresnel equations describes this ratio of reflected light to refracted light. The full set of equations describes much more than just transmission to reflection ratio, but for this purpose we are only interested in teh transmission and reflection coefficients.  
+
+In this implementation, when a ray hits a dielectric surface, there is a 50% chance that it will be sampled using specular reflection, and 50% chance that it will be sampled using specular transmission. The color, or intensity, of the new resultant ray is then attenuated by the corresponding coefficient to account for the correct ratio of influence. However, since on any iteration only either of reflection or refraction is sampled, the effect of each ray is doubled so that when averaged out across samples, the effect would be the same as taking both a reflection and refraction sample on each iteration.
+
+This can be seen on the left glass cuboid. While it is slightly difficult to see the different between this glass cuboid and the center transmissive cube, the light reflected on the red wall gives a more obvious indication that reflection is also happening.  
 
 ### Further Improvements
+The additional performance cost of implementing these different shaders is relatively small as each sampling function takes about the same amount of computation, and the branching time from four brief branches isn't too noticeable. Compared to the most basic cornell box with one diffuse sphere, the extra geometries introduced a mere 6ms additional rendering time per frame. 
+
+One major limitation of this implementation though is that the exact sampling code can also run on the CPU, which means that the parallel architecture of the GPU is not leveraged at all beyond the parallelization benefits from the Path Tracing Loop. In fact, there is little room for improvement to the sampling functions themselves as they are just solving a few simple equations. A more thorough, but definitely more useful change, especially with a sufficiently complex scene, would be to separate the shading kernel into several dedicated kernels, one for each type of material. This will resolve the impact of branching. However, it is also unclear how effective this would be given the expensive cost of material sorting discussed earlier.
+
+In terms of additional sampling methods, two methods that would increase the photorealisticness of the simulation greatly are microfacet sampling and subsurface scattering. Microfacet sampling allows for the simulation of materials with various roughness, which would allow the simulation of a much greater variety of real-life materials. Subsurface scattering on the other hand would improve the realisticness of materials like skin, where some light can pass through and be visible as a change to the surface color of the material.
 
 ## Camera Effects
+While pinhole camera with an infinitely small aperture is not possible in the real world, we can simulate some realistic effects as well as improve the quality of our render by tweaking the way we generate rays from the camera. These changes are often computationally inexpensive but can make dramatic differences in the output.
 
 ### Stochastic Antialiasing
+Aliasing describes the jagged edges that result from the fact that pixels have area and thus can't perfectly represent an edge between two surfaces. This can result in the diagonal stairscase outlines you sometimes see in certain video games, or, in cases where the primitives sampled are small enough relative to the pixel size, the complete omission of some detail or even gaps. This is caused by the camera always shooting out rays form the center of a pixel, causing the region in between two pixel centers to be missed. Take a look at the closed box demo rendered without antialiasing below on the left.
+
+<img src="img/no_antialiasing.10000samp.png" width="50%" /><img src="img/seele_face_vertex.png" width="50%" />
+
+There are rough edges at corners of the walls and around the contour of Seele. These jagged edges are the result of these pixel samples only select either of the two intersecting materials as the color of the entire pixel.
+
+Another interesting and jarringly artifact is the gap straight down the middle of Seele's face. This particular model of Seele has a rather abrubt height change towards the center line of the face to represent the protrusion from the nose arch. It is clear from the wireframe on the right that from a front view, there are only a few very narrow traingles that account for most of the elevation change. This can result in a very unique situation where the sampled ray intersects with her face exactly on the edge between the triangles that define the two sides of her nose bridge. It happens that neither triangle considers the ray as in bounds and thus it passes straight through the mesh to the back wall, and returns the blue color of the wall as the pixel color.
+
+All of these artifacts can be solved by stochastic antialiasing, which is a very simple technique that jiggers the positions within a pixel from which a ray is generated between different samples. Using a uniform jigger, we will sample the entirety of the pixel with approximately equal weighting given enough samples. This way, the averaged pixel color would be a blend of the colors of all surfaces within the pixel, resulting in a smoother transition and elimination of a rays unexpectedly tunneling through meshes. Below is a side by side comparison of the render without aliasing from above and a render with antialiasing to illustrate the difference.
+
+<img src="img/no_antialiasing.10000samp.png" width="50%" /><img src="img/basic_demo_closed.10000samp.png" width="50%" />
+
+The additional computational cost per ray of stochastic antialiasing is just taking two uniform samples between [0, 1] and adding it to the position of the ray. Again, this cost is negligible compared to the other more expensive parts of the cycle, and performs similarly to a CPU implementation. (The parallelization of ray generation on GPU is certainly faster than sequential generation on CPU, but this difference is not a result of antialiasing implementation)
 
 ### Depth of Field
+Real cameras have lenses that focus light through a finite-sized aperture on the the receptors on the camera's film plane. Lenses can only focus on a single plane, and as a result objects that are further away from the focus plane will appear blurrier. This bigger the aperture, the greater this effect. In practice, objects do not have to be exactly on the plane of focus to appear in sharp focus. There is actually a region of focus, which is called the lens' depth of field.
+
+For this implemention, this effect is simulated using the thin-lens approximation, which specifies a simple set of equations to calculate where a light ray would focus on the focal plane based on the angle and position at which it passes through the lens. For each ray generated, we simply transform it by how it would bend given where it would pass through the imaginary lens. The refractive properties of the thin less would effective create a cone that pentrates through the plane of focus, where a circle of rays coming from beyond the plane of focus would focus onto a single point on the lens, causing all their rays to blend into one, resulting in the blurry effect.
+
+Below we demonstrate some renders with different combinations of focal distance and lens radius.
+
+<img src="img/dof_1.5744samp.png" width="50%" /><img src="img/dof_2.5872samp.png" width="50%" />
+<img src="img/dof_3.5813samp.png" width="50%" /><img src="img/dof_4.5078samp.png" width="50%" />
+
+The computational cost of depth-of-field is a bit more noticeable. For the closed box demo, it adds on average 4ms per frame. This cost is independent of the focal distance and lens radius used. Perhaps the primary cause of this noticeable computational increase is that the thin lens equation involves divisions, and divisions are notoriously expensive arithmetic operations. Unfortunately, this division value cannot be cached as each ray uses a different divisor. Similar to antialiasing, the CPU implementation of this function would not be different.
 
 ## Mesh Rendering
+While spheres and cubes are great primitives to start with, they are very tedious to work with for constructing more complex models. Mesh based models, which are commonly used in CAD software for modeling pretty much anything from people to objects, are constructed from many interconnected triangles. The primary benefits of using triangles are that they are small to store, can approximate a smooth surface very well given enough suffiently small triangles, and for any point inside a triangle, its position, normals, and uvs can easily be interpolated using just the three vertices. Thus, any renderer isn't complete without support for mesh rendering. Since mesh rendeirng is much more difficult to implement and debug, this project only supports one rather particular format.
 
 ### GLTF Mesh Loading
+GLTF is a newer standard for storing meshes that can conveniently hold vertex, normals, uvs, and even material and texture data in one file. It also has support for animation, armatures, and other features commonly used in 3D animations, but those are not used in this implementation.
+
+Mesh loading is done on the GPU side with help from the TinyGLTF library for decoding the binary `.glb` format and json `.gltf` format. For each model in the file, we traverse iteratively through the models in every node and load its primitives into memory as a buffer of triangles. Each vertex of the triangles stores its position, normal, and uv. Once a mesh is fully loaded, it is linked to a geometry by specifying a starting index for its primitives in the buffer, and a count of the number of primitives to indicate the end of its occupied segment in the buffer. The path tracer can then interact with these triangle primitives by checking for intersection and then shading through its normal pipeline. The cost of checking mesh intersection is enormous. More details on this will be discussed in the Bounding Volume Hiearchy section.
 
 ### Albedo texture mapping
 
