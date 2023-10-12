@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtx/intersect.hpp>
-
+#include <iostream>
 #include "sceneStructs.h"
 #include "utilities.h"
 
@@ -125,10 +125,10 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     if (t1 < 0 && t2 < 0) {
         return -1;
     } else if (t1 > 0 && t2 > 0) {
-        t = min(t1, t2);
+        t = glm::min(t1, t2);
         outside = true;
     } else {
-        t = max(t1, t2);
+        t = glm::max(t1, t2);
         outside = false;
     }
 
@@ -142,3 +142,168 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__
+bool boundingBoxIntersectionTest(AABB aabb, Ray q)
+{
+    float tmin = -1e38f;
+    float tmax = 1e38f;
+    for (int i = 0; i < 3; i++) {
+        float d = q.direction[i];
+        float t1 = (aabb.min[i] - q.origin[i]) / d;
+        float t2 = (aabb.max[i] - q.origin[i]) / d;
+        float tempMin = glm::min(t1, t2);
+        float tempMax = glm::max(t1, t2);
+        if (tempMin > 0 && tempMin > tmin) {
+            tmin = tempMin;
+        }
+        if (tempMax < tmax) {
+            tmax = tempMax;
+        }
+    }
+
+    if (tmax >= tmin && tmax > 0) {       
+        return true;
+    }
+
+    return false;
+}
+
+__host__ __device__ float objIntersectionTest(Geom mesh, Ray r, Triangle* triangles,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
+{
+    Ray q = r;
+ 
+    if (!boundingBoxIntersectionTest(mesh.aabb, q)) {
+        return -1;
+    }
+
+    float tmin = 1e38f;
+    int endIdx = mesh.triIdx + mesh.triCnt;
+    bool hasIntersection = false;
+    for (int i = mesh.triIdx; i < endIdx ; i++)
+    {
+        Triangle triangle = triangles[i];
+        glm::vec3 baryPos;
+        glm::vec3 objspaceIntersection;
+        if (glm::intersectRayTriangle(q.origin, q.direction,
+            triangle.v[0], triangle.v[1], triangle.v[2], baryPos))
+        {
+            objspaceIntersection = (1 - baryPos[0] - baryPos[1]) * triangle.v[0] +
+                baryPos[0] * triangle.v[1] + baryPos[1] * triangle.v[2];
+
+            float t = glm::length(objspaceIntersection - q.origin);
+            if (t < tmin)
+            {
+                tmin = t;
+                glm::vec3 a = triangle.v[1] - triangle.v[0];
+                glm::vec3 b = triangle.v[2] - triangle.v[0];
+                glm::vec3 localNorm = glm::normalize(glm::cross(a, b));
+                outside = glm::dot(localNorm, q.direction) < 0;
+                intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objspaceIntersection, 1.f));
+                normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(localNorm, 0.f)));
+                hasIntersection = true;
+            }          
+        }
+    }
+
+    if (hasIntersection)
+    {
+        return tmin;
+    }
+    
+    return -1;
+}
+
+
+__host__ __device__ float IntersectAABB(Ray r, BVHNode node)
+{
+    float tx1 = (node.aabbMin.x - r.origin.x) * r.direction.x, tx2 = (node.aabbMax.x - r.origin.x) * r.direction.x;
+    float tmin = glm::min(tx1, tx2), tmax = glm::max(tx1, tx2);
+    float ty1 = (node.aabbMin.y - r.origin.y) * r.direction.y, ty2 = (node.aabbMax.y - r.origin.y) * r.direction.y;
+    tmin = glm::max(tmin, glm::min(ty1, ty2)), tmax = glm::min(tmax, glm::max(ty1, ty2));
+    float tz1 = (node.aabbMin.z - r.origin.z) * r.direction.z, tz2 = (node.aabbMax.z - r.origin.z) * r.direction.z;
+    tmin = glm::max(tmin, glm::min(tz1, tz2)), tmax = glm::min(tmax, glm::max(tz1, tz2));
+    if (tmax >= tmin && tmax > 0) return tmin; else return 1e30f;
+}
+
+__host__ __device__ float BVHIntersect(Ray r,
+    Triangle* tri, BVHNode* bvhNode, int* triIdx,
+    glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside, int& geomIdx)
+{
+    BVHNode node = bvhNode[0];
+    BVHNode stack[32];
+    int stackPtr = 0;
+    float tmin = 1e38f;
+    bool hasIntersection = false;
+
+    while (1)
+    {
+        if (node.triCount > 0) // isLeaf()
+        {
+
+            for (int i = 0; i < node.triCount; i++)
+            {
+                Triangle triangle = tri[triIdx[node.firstTriIdx + i]];
+                glm::vec3 baryPos;
+                glm::vec3 intersectionPos;
+                if (glm::intersectRayTriangle(r.origin, r.direction,
+                    triangle.v[0], triangle.v[1], triangle.v[2], baryPos))
+                {
+                    intersectionPos = (1 - baryPos[0] - baryPos[1]) * triangle.v[0] +
+                        baryPos[0] * triangle.v[1] + baryPos[1] * triangle.v[2];
+
+                    float t = glm::length(intersectionPos - r.origin);
+                    if (t < tmin)
+                    {
+                        tmin = t;
+                        glm::vec3 a = triangle.v[1] - triangle.v[0];
+                        glm::vec3 b = triangle.v[2] - triangle.v[0];
+                        glm::vec3 localNorm = glm::normalize(glm::cross(a, b));
+                        outside = glm::dot(localNorm, r.direction) < 0;
+                        intersectionPoint = intersectionPos;
+                        normal = localNorm;
+                        geomIdx = triangle.geomIdx;
+                        hasIntersection = true;
+                    }
+                }
+
+            }
+            if (stackPtr == 0) {
+                if (hasIntersection) return tmin;
+                else return -1;
+            }
+            else {
+                node = stack[--stackPtr];
+            }
+            continue;
+        }
+
+        BVHNode child1 = bvhNode[node.leftNode];
+        BVHNode child2 = bvhNode[node.leftNode + 1];
+        float dist1 = IntersectAABB(r, child1);
+        float dist2 = IntersectAABB(r, child2);
+        if (dist1 > dist2)
+        {
+            float d = dist1; dist1 = dist2; dist2 = d;
+            BVHNode c = child1; child1 = child2; child2 = c;
+        }
+        if (dist1 == 1e30f)
+        {
+            if (stackPtr == 0) {
+                if (hasIntersection) return tmin;
+                else return -1;
+            }
+            else {
+                node = stack[--stackPtr];
+            }
+        }
+        else
+        {
+            node = child1;
+            if (dist2 != 1e30f) stack[stackPtr++] = child2;
+        }
+    }
+}
+
+

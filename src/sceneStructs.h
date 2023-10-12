@@ -10,11 +10,39 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    MESH,
+};
+
+enum MatType {
+    DIFFUSE,
+    SPEC_GLASS,
+    SPEC_REFL,
+    SPEC_TRANS,
+    PLASTIC,
 };
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+};
+
+struct Triangle {
+    glm::vec3 v[3];
+    glm::vec3 n[3];       
+    glm::vec2 uv[3];
+    glm::vec3 centroid;
+    int geomIdx;
+};
+
+struct AABB {
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
+struct BVHNode
+{
+    glm::vec3 aabbMin, aabbMax;
+    int leftNode, firstTriIdx, triCount;
 };
 
 struct Geom {
@@ -26,9 +54,14 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+
+    int triIdx = -1;
+    int triCnt = 0;
+    AABB aabb;
 };
 
 struct Material {
+    MatType type;
     glm::vec3 color;
     struct {
         float exponent;
@@ -61,9 +94,11 @@ struct RenderState {
 
 struct PathSegment {
     Ray ray;
-    glm::vec3 color;
+    glm::vec3 L;
+    glm::vec3 throughput;
     int pixelIndex;
     int remainingBounces;
+    bool specularBounce;
 };
 
 // Use with a corresponding PathSegment to do:
