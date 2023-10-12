@@ -20,6 +20,8 @@ This is a CUDA implementation of a simple path tracer with bounding volume heira
 L_O(p,\omega_o) = L_E(p,\omega_o) + \int_{s} f(p,\omega_o,\omega_i)  L_i(p,\omega_i) V(p\prime,p) |dot(\omega_i, N)| \,d\omega_i
 ```
 
+Rays are cast for `n` bounces every frame. Rays collect material and global illumination information if and until they hit a light source. This result is gathered at the end of the frame and the result is blended together using lerp on the blended result so far and the current frame render. This produces more accurate results than simple additive blending where the current frame's render is divided by the frame number.
+
 ## Table of Contents
 
 - [Features](#features)
@@ -139,7 +141,27 @@ This path tracer supports loading of mesh data from GLTF files stored with the G
 |:-:|:-:|
 |Flat Shaded Normals|Barycentrically Interpolated Normals|
 
-### 5. High Dynamic Range (HDR) and Gamma Correction
+### 5. Tone Mapping
+
+This path-tracer supports tone mapping using High Dynamic Range (HDR) and gamma correction. Tone mapping can be enabled using the `ENABLE_HDR_GAMMA_CORRECTION` preprocessor directive in `utilities.h`.
+
+[HDR tone mapping](https://bruop.github.io/tonemapping/) uses the Reinhard Operator. This helps reduce washed-out images that have a very large range of bright and dark values.
+
+```math
+RGB = RGB_{HDR} / (1.0 + RGB_{HDR})
+```
+
+[Gamma Correction](https://www.cambridgeincolour.com/tutorials/gamma-correction.htm) helps convert the images to colours that feel more natural to our eyes using the formula
+
+```math
+RGB = \pow(RGB, 1/2.2)
+```
+
+Without these changes, images may appear very dark or very bright.
+
+|<img src="img/no_tone_map.png" width=400>|<img src="img/gamma_corrected.png" width=400>|
+|:-:|:-:|
+|No tone mapping|HDR + Gamma Correction|
 
 ## Performance Optimization Features
 
