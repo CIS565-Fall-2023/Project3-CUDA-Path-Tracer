@@ -39,15 +39,19 @@ With 4x anti-aliasing, the image is much smoother than the one without anti-alia
 
 ![](./img/withoutantiliasing.png)
 #### Depth of field
-![](./img/depthoffield.png)
+| depth of field with small aperture      | depth of field with big aperture      |
+|:-------------------------------------------:|:-------------------------------------------:|
+| ![](./img/dof_smallaperture.png) | ![](./img/dof_bigaperture.png)|
+
+
 
 #### Direct light
 
-With direct light, the image is brighter than the one without direct light. The image without direct light is shown below.``
-![](./img/withdirectlight.png)
+| With direct light      | Without direct light      |
+|:-------------------------------------------:|:-------------------------------------------:|
+| ![](./img/withdirectlight.png) | ![](./img/withoutdirectlight.png)|
 
-Without direct light
-![](./img/withoutdirectlight.png)
+With direct light, the image is brighter than the one without direct light.
 
 #### ObJ Mesh loading with bounding volume intersection culling
 
