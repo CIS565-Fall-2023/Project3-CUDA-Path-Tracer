@@ -35,6 +35,31 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
     return glm::vec3(m * v);
 }
 
+
+__host__ __device__ bool boundingBoxTest(const Ray& ray, const AABB& aabb) {
+    float min_t = EPSILON;
+    float max_t = 1000.f;
+
+    for (int a = 0; a < 3; a++) {
+        float o = ray.origin[a];
+        float invD = 1.0f / ray.direction[a];
+
+        float t0 = (aabb.minPoint[a] - o) * invD;
+        float t1 = (aabb.maxPoint[a] - o) * invD;
+
+        if (invD < 0) {
+            float tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+
+        min_t = fmax(t0, min_t);
+        max_t = fmin(t1, max_t);
+    }
+        
+    return max_t >= min_t && max_t > 0.0f;
+}
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed cube. Untransformed,
@@ -46,7 +71,7 @@ __host__ __device__ glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v) {
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
+        glm::vec3 &intersectionPoint, glm::vec3 &normal, glm::vec3 &tangent, bool &outside) {
     Ray q;
     q.origin    =                multiplyMV(box.inverseTransform, glm::vec4(r.origin   , 1.0f));
     q.direction = glm::normalize(multiplyMV(box.inverseTransform, glm::vec4(r.direction, 0.0f)));
@@ -84,6 +109,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
         }
         intersectionPoint = multiplyMV(box.transform, glm::vec4(getPointOnRay(q, tmin), 1.0f));
         normal = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(tmin_n, 0.0f)));
+        tangent = glm::normalize(multiplyMV(box.invTranspose, glm::vec4(normal, 0.0f)));
         return glm::length(r.origin - intersectionPoint);
     }
     return -1;
@@ -100,7 +126,7 @@ __host__ __device__ float boxIntersectionTest(Geom box, Ray r,
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
-        glm::vec3 &intersectionPoint, glm::vec3 &normal, bool &outside) {
+        glm::vec3 &intersectionPoint, glm::vec3 &normal, glm::vec3& tangent, bool &outside) {
     float radius = .5;
 
     glm::vec3 ro = multiplyMV(sphere.inverseTransform, glm::vec4(r.origin, 1.0f));
@@ -136,9 +162,143 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
+    tangent = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(normal, 0.0f)));
     if (!outside) {
         normal = -normal;
     }
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float meshIntersectionTest(Geom mesh, Ray r,
+    glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, glm::vec2& uv, bool& outside) {
+
+    glm::vec3 ro = multiplyMV(mesh.inverseTransform, glm::vec4(r.origin, 1.0f));
+    glm::vec3 rd = glm::normalize(multiplyMV(mesh.inverseTransform, glm::vec4(r.direction, 0.0f)));
+
+    Ray rt;
+    rt.origin = ro;
+    rt.direction = rd;
+
+    Triangle triangle = mesh.triangle;
+    glm::vec3 baryPosition;
+    bool intersect = glm::intersectRayTriangle(rt.origin, rt.direction,
+        triangle.position[0], triangle.position[1], triangle.position[2], baryPosition);
+
+    if (intersect && baryPosition.z < FLT_MAX) {
+        intersectionPoint = multiplyMV(mesh.transform, glm::vec4(getPointOnRay(rt, baryPosition.z), 1.0f));
+
+        normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(
+            baryPosition.x * triangle.normal[0] + 
+            baryPosition.y * triangle.normal[1] + 
+            (1.0f - baryPosition.x - baryPosition.y) * triangle.normal[2], 0.0f)));
+
+        uv = baryPosition.x * triangle.texcoord[0] + baryPosition.y * triangle.texcoord[1] + 
+            (1.0f - baryPosition.x - baryPosition.y) * triangle.texcoord[2];
+        //normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(triangle.normal[0], 0.0f)));
+        tangent = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(normal, 0.0f)));
+        outside = true;
+        return glm::length(r.origin - intersectionPoint);
+    }
+    else {
+        return -1;
+    }
+}
+
+__host__ __device__ void computeRayIntersection(Geom* geoms, int numGeoms, Ray ray, ShadeableIntersection& intersection) {
+    float t;
+    glm::vec3 intersect_point;
+    glm::vec3 normal;
+    glm::vec3 tangent;
+    glm::vec2 uv;
+    float t_min = FLT_MAX;
+    int hit_geom_index = -1;
+    bool outside = true;
+
+    glm::vec3 tmp_intersect;
+    glm::vec3 tmp_normal;
+    glm::vec3 tmp_tangent;
+    glm::vec2 tmp_uv;
+
+    // naive parse through global geoms
+
+    for (int i = 0; i < numGeoms; i++)
+    {
+        Geom& geom = geoms[i];
+
+        if (geom.type == CUBE)
+        {
+            t = boxIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
+        }
+        else if (geom.type == SPHERE)
+        {
+            t = sphereIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, outside);
+        } 
+        else if (geom.type == MESH)
+		{
+			t = meshIntersectionTest(geom, ray, tmp_intersect, tmp_normal, tmp_tangent, tmp_uv, outside);
+		}
+        // TODO: add more intersection tests here... triangle? metaball? CSG?
+
+        // Compute the minimum t from the intersection tests to determine what
+        // scene geometry object was hit first.
+        if (t > 0.0f && t_min > t)
+        {
+            t_min = t;
+            hit_geom_index = i;
+            intersect_point = tmp_intersect;
+            normal = tmp_normal;
+            tangent = tmp_tangent;
+            uv = tmp_uv;
+        }
+    }
+
+    if (intersection.t > 0.0f && intersection.t < t_min) {
+		return;
+	}
+
+    if (hit_geom_index == -1)
+    {
+        intersection.t = -1.0f;
+    }
+    else
+    {
+        //The ray hits something
+        intersection.t = t_min;
+        intersection.materialId = geoms[hit_geom_index].materialid;
+        intersection.geomId = geoms[hit_geom_index].geomId;
+        intersection.surfaceNormal = normal;
+        intersection.surfaceTangent = tangent;
+        intersection.uv = uv;
+    }
+}
+
+__host__ __device__ void computeRayIntersectionFromKdTree(Geom* geoms, KDAccelNode* nodes, int node_size, Ray ray, ShadeableIntersection& intersection) {
+    int curNodeId = 0;
+    int todo[64]{};
+    int todoOffset = 0;
+
+    while (curNodeId < node_size)
+    {
+        auto& cur = nodes[curNodeId];
+        if (boundingBoxTest(ray, cur.aabb)) {
+            if (nodes[curNodeId].numGeoms > 0) {
+                // leaf
+                computeRayIntersection(geoms + cur.geomStart, cur.numGeoms,
+                    ray, intersection);
+            }
+            else {
+                // test left, right
+                todo[todoOffset++] = cur.rightOffset;
+                todo[todoOffset++] = curNodeId + 1;
+            }
+        }
+        if (todoOffset == 0) break;
+        curNodeId = todo[--todoOffset];
+    }
+
+    if (intersection.t == FLT_MAX) {
+		intersection.t = -1.0f;
+	}
+}
+

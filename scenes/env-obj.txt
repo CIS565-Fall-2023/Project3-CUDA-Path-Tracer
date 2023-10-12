@@ -1,0 +1,33 @@
+ENVIRONMENT_MAP ../scenes/hdr/interior_atelier_soft_daylight.hdr
+
+MATERIAL 0
+RGB         .98 .98 .98
+SPECEX      0
+SPECRGB     .98 .98 .98
+REFL        0
+REFR        0
+REFRIOR     1.55
+EMITTANCE   0
+
+// Camera
+CAMERA
+RES         800 800
+FOVY        45
+ITERATIONS  5000
+DEPTH       8
+FILE        hdr
+EYE         0 8 10
+LOOKAT      30 5 0
+UP          0 1 0
+FOCAL       0
+LENS_RADIUS 0
+FAR_PLANE   1000.0
+
+// Sphere
+OBJECT 0
+obj
+material 0
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       50 50 50
+OBJFILE ../scenes/obj/dragon.obj

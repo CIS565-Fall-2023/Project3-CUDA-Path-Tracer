@@ -73,9 +73,14 @@ set(headers
     src/sceneStructs.h
     src/preview.h
     src/utilities.h
+    src/material.h
+    src/light.h	
+    src/sample.h
+    src/medium.h
+    src/hdrloader.h
+
     src/ImGui/imconfig.h
-	
-	src/ImGui/imgui.h
+    src/ImGui/imgui.h
     src/ImGui/imconfig.h
     src/ImGui/imgui_impl_glfw.h
      src/ImGui/imgui_impl_opengl3.h 
@@ -84,6 +89,8 @@ set(headers
      src/ImGui/imstb_rectpack.h 
      src/ImGui/imstb_textedit.h 
      src/ImGui/imstb_truetype.h 
+
+   src/tiny_obj_loader.h
     )
 
 set(sources
@@ -95,6 +102,7 @@ set(sources
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
+    src/hdrloader.cpp
 	
     src/ImGui/imgui.cpp 
       src/ImGui/imgui_demo.cpp 
@@ -103,6 +111,8 @@ set(sources
      src/ImGui/imgui_impl_opengl3.cpp 
      src/ImGui/imgui_tables.cpp 
      src/ImGui/imgui_widgets.cpp 
+
+   src/tiny_obj_loader.cc
     )
 
 list(SORT headers)
