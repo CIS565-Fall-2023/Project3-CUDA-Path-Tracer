@@ -40,6 +40,7 @@ Rays are cast for `n` bounces every frame. Rays collect material and global illu
    - [5. Naive Axis-Aligned Bounding Box (AABB) Acceleration](#5-naive-axis-aligned-bounding-box-aabb-acceleration)
    - [6. Bounding Volume Hierarchy (BVH) Acceleration](#6-bounding-volume-hierarchy-bvh-acceleration)
  - [References](#references)
+ - [Credits](#credits)
 
 ## Visual Features
 
@@ -283,3 +284,7 @@ This one is very interesting! I'll try and break down what is seen here:
 - [PBR Book](https://www.pbr-book.org/)
 - [Gamma Correction Notes](https://www.cambridgeincolour.com/tutorials/gamma-correction.htm)
 - [Tone Mapping Notes](https://bruop.github.io/tonemapping/)
+
+# Credits
+- [GLTF 2.0 Models](https://github.com/KhronosGroup/glTF-Sample-Models)
+- Calavera model from my game [Fling to the Finish](https://store.steampowered.com/app/1054430/Fling_to_the_Finish/), created by my good friend and teammate Andre Edgarian
