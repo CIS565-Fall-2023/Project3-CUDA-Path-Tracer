@@ -5,6 +5,7 @@ CUDA Path Tracer
 Jason Xie, Fall 2023
 
 [LinkedIn](https://www.linkedin.com/in/jia-chun-xie/)
+
 [Website](https://www.jchunx.dev)
 
 ## Overview
