@@ -146,11 +146,3 @@ material 4
 TRANS       -2 3 -2
 ROTAT       0 0 0
 SCALE       3 3 3
-
-// Suzanne
-OBJECT 7
-mesh_gltf   Dragon.gltf
-material 4
-TRANS       2 5 2
-ROTAT       0 0 -20
-SCALE       3 3 3

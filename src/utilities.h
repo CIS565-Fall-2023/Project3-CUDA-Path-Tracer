@@ -21,8 +21,8 @@
 #define EPSILON                 0.00001f
 #define STREAM_COMPACTION       0
 #define MATERIAL_SORT           0
-#define ANTI_ALIASING           1
-#define FIRST_BOUNCE_CACHED     0  && !ANTI_ALIASING
+#define ANTI_ALIASING           0
+#define FIRST_BOUNCE_CACHED     1  && !ANTI_ALIASING
 #define DEPTH_OF_FIELD          0
 #define USE_BVH                 1
 #define REINHARD_GAMMA          1
