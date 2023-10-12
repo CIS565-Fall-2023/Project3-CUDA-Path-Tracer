@@ -126,29 +126,47 @@ The implementation is as follows: if the aperture size is greater than zero, the
 
 This path tracer supports loading of mesh data from GLTF files stored with the GLTF 2.0 spec.
 
+|<img src="img/calavera.png" width=400>|<img src="img/avocado.png" width=400>|
+|:-:|:-:|
+
 **Mesh Triangulation**: if indices buffers exist in the GLTF data, they're used in the triangulation of the mesh, otherwise *fan triangulation* is applied on the position buffers.
 
 **Interleaved vs separate buffers**: This project supports loading of position-vertex-normal data that is either stored as separate buffers or as a single interleaved buffer.
 
-**Normals**: if normal buffers exist, they're used for lighting calculation, otherwise a flat-shaded model is used. The normal for each triangle is calculated using the cross-product of any two of its edges.
+**Normals**: if normal buffers exist for every vertex, they're barycentrically interpolated to find the normal at the intersection point for lighting calculation, otherwise a flat-shaded model is used. The normal for each triangle is calculated using the cross-product of any two of its edges.
+
+|<img src="img/mesh_blenderMonke_flat.png" width=400>|<img src="img/mesh_blenderMonkey_normals.png" width=400>|
+|:-:|:-:|
+|Flat Shaded Normals|Barycentrically Interpolated Normals|
+
+### 5. High Dynamic Range (HDR) and Gamma Correction
 
 ## Performance Optimization Features
 
 ### 1. Ray termination using stream compaction
 
-During path tracing, there are many rays that hit nothing, and this is especially true for open scenes with not a lot of geometry to intersect with. Unnecessary computations on these rays impact performance. Stream compaction helps with terminating the rays that don't hit anything for a further bounce.
+During path tracing, there are many rays that hit nothing, and this is especially true for open scenes with not a lot of geometry to intersect with. Unnecessary computations on these rays impact performance. Stream compaction helps with terminating the rays that don't hit anything for a further bounce. This can be toggled using the `STREAM_COMPACT` preprocessor directive in `utilities.h`.
 
-### 2. Ray termination via russian roulette
+### 2. Mesh sort by materials for GPU coherency
 
-Ray termination via russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive.
+This project handles all material calculations in a single CUDA kernel. Meshes exist in a mesh array. Each mesh has a material index associated with it, that is used to index into a separate material array from which the material for that mesh is retreived in the kernel. This is a coherency and thread divergence problem, as meshes with the same material are not aligned in the mesh array, therefore divergence will increase with increasing number of materials.
 
-### 3. Simple Axis-Aligned Bounding Box (AABB) Acceleration
+To help with this, there is an option to toggle sorting of meshes by their material ids to reduce thread divergence. This can be toggled using the `SORT_BY_MATERIAL` preprocessor directive in `utilities.h`.
+
+### 3. First bounce cache
+
+In the scenario where the first rays are always cast from the center of the pixel into the pinhole camera, the first bounce for each ray can be cached, as these rays are deterministic and will always be the same. However, this caching becomes useless as soon as more complex features are added, such as a the thin-lens camera model or subpixel jittering for anti-aliasing. First bounce caching can be toggled using the `CACHE_FIRST_INTERSECTION` preprocessor directive in `utilities.h`. Warning: using this will automatically disable thin-lens camera and anti-aliasing.
+
+### 4. Ray termination via russian roulette
+
+Ray termination via russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive in `utilities.h`.
+
+### 5. Simple Axis-Aligned Bounding Box (AABB) Acceleration
 
 
 
-### 4. Bounding Volume Hierarchy (BVH) Acceleration
+### 6. Bounding Volume Hierarchy (BVH) Acceleration
 
-### 8. High Dynamic Range (HDR) and Gamma Correction
 
 ## Performance Analysis
 
