@@ -250,75 +250,37 @@ __host__ __device__ bool isNodeLeaf(const BVHNode* node) {
     return (node->triCount > 0);
 }
 
-// Helper function for bvhIntersection test
-// @return  FLT_MIN denotes a 'miss', while any other value is a hit at the reported distance
-__host__ __device__ float bvhAABBIntersectionTest(const Ray& r, const BVHNode& node) {
-    float tx1 = (node.aabb.min.x - r.origin.x) * r.direction.x, tx2 = (node.aabb.max.x - r.origin.x) * r.direction.x;
-    float tmin = glm::min(tx1, tx2), tmax = glm::max(tx1, tx2);
-    float ty1 = (node.aabb.min.y - r.origin.y) * r.direction.y, ty2 = (node.aabb.max.y - r.origin.y) * r.direction.y;
-    tmin = glm::max(tmin, glm::min(ty1, ty2)), tmax = glm::min(tmax, glm::max(ty1, ty2));
-    float tz1 = (node.aabb.min.z - r.origin.z) * r.direction.z, tz2 = (node.aabb.max.z - r.origin.z) * r.direction.z;
-    tmin = glm::max(tmin, glm::min(tz1, tz2)), tmax = glm::min(tmax, glm::max(tz1, tz2));
-    if (tmax >= tmin && tmax > 0) {
-        return tmin;
-    }
-    return 1e30f;
-}
-
-__host__ __device__ float triangleIntersectionTest(Triangle tri, Ray& r,
-    glm::vec3& barycenter) {
-
-    bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
-        tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
-    if (!intersect) return -1.f;
-    r.intersectionCount++;
-
-    return barycenter.z;
-}
-
-__host__ __device__ void bvhIntersectTriangles(const Triangle* tris, Ray& r, int start, int trisCount,
-    Triangle& tri, glm::vec3& barycenter, float& tMin) {
-
+__host__ __device__ void bvhIntersectTriangles(const Geom* geom, const Triangle* tris, Ray& r,
+    int start, int trisCount,
+    glm::vec3& intersectionPoint, glm::vec3& normal, float& tMin) {
+    
+    glm::vec3 barycenter, objSpaceIsect;
     for (int i = start; i < start + trisCount; ++i) {
-        glm::vec3 baryPos;
-        float t = triangleIntersectionTest(tris[i], r, baryPos);
-        if (t < tMin && t > 0.f)
-        {
-            tMin = t;
-            barycenter = baryPos;
-            tri = tris[i];
-        }
-
-        // TODO: need to fix world/local transformation for glb & obj
-
-        /* triangle intersection test for obj ---------------------- start
-        tri = tris[triIndices[node.firstTriIdx + i]];
+    
         bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
-            tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
+            tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, barycenter);
         if (!intersect) continue;
+        r.intersectionCount++;
 
         // find intersection point and normal
         float u = barycenter.x;
         float v = barycenter.y;
         float w = 1.f - u - v;
-        objSpaceIsect = w * tri.v0.pos
-            + u * tri.v1.pos
-            + v * tri.v2.pos;
+        objSpaceIsect = w * tris[i].v0.pos
+            + u * tris[i].v1.pos
+            + v * tris[i].v2.pos;
 
         float t = glm::length(r.origin - objSpaceIsect);
-
         glm::vec3 intersectionNormal = glm::normalize(
-            glm::cross(tri.v1.pos - tri.v0.pos,
-                tri.v2.pos - tri.v0.pos));
+            glm::cross(tris[i].v1.pos - tris[i].v0.pos,
+                       tris[i].v2.pos - tris[i].v0.pos));
 
-        if (t < tMin) {
+        if (t < tMin)
+        {
             tMin = t;
-            intersectionPoint = objSpaceIsect; multiplyMV(mesh.transform, glm::vec4(objSpaceIsect, 1.f));
-            normal = intersectionNormal; glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(intersectionNormal, 0.f)));;
-            hasIntersection = true;
+            intersectionPoint = objSpaceIsect; multiplyMV(geom->transform, glm::vec4(objSpaceIsect, 1.f));
+            normal = intersectionNormal; glm::normalize(multiplyMV(geom->invTranspose, glm::vec4(intersectionNormal, 0.f)));
         }
-        //triangle intersection test for obj------------------------- end
-        */
     }
 }
 
@@ -333,11 +295,9 @@ __host__ __device__ void bvhIntersectTriangles(const Triangle* tris, Ray& r, int
  * reference:
  * https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
  */
-__host__ __device__ float bvhIntersectionTest(const BVHNode* nodes, const Triangle* tris, Ray& r,
-    int triangleCount, glm::vec3& intersectionPoint, glm::vec3& normal) {
+__host__ __device__ float bvhIntersectionTest(Geom geom, const BVHNode* nodes,
+    const Triangle* tris, Ray& r, glm::vec3& intersectionPoint, glm::vec3& normal) {
 
-    Triangle tri;
-    glm::vec3 barycenter;
     float tMin = FLT_MAX;
     int stack[32];
     int stackPtr = -1;
@@ -360,11 +320,11 @@ __host__ __device__ float bvhIntersectionTest(const BVHNode* nodes, const Triang
 
         // If intersection found, and they are leaf nodes, check for triangle intersections
         if (intersectLeft && isNodeLeaf(left)) {
-            bvhIntersectTriangles(tris, r, left->firstTriIdx, left->triCount, tri, barycenter, tMin);
+            bvhIntersectTriangles(&geom, tris, r, left->firstTriIdx, left->triCount, intersectionPoint, normal, tMin);
             //if (r.intersectionCount >= triangleCount) return -1.f;
         }
         if (intersectRight && isNodeLeaf(right)) {
-            bvhIntersectTriangles(tris, r, right->firstTriIdx, right->triCount, tri, barycenter, tMin);
+            bvhIntersectTriangles(&geom, tris, r, right->firstTriIdx, right->triCount, intersectionPoint, normal, tMin);
             //if (r.intersectionCount >= triangleCount) return -1.f;
         }
 
@@ -384,13 +344,6 @@ __host__ __device__ float bvhIntersectionTest(const BVHNode* nodes, const Triang
             }
         }
     }
-
-    // Find intersection point and normal
-    float u = barycenter.x;
-    float v = barycenter.y;
-    float w = 1.f - u - v;
-    intersectionPoint = w * tri.v0.pos + u * tri.v1.pos + v * tri.v2.pos;
-    normal = u * tri.v0.nor + v * tri.v1.nor + w * tri.v2.nor;
 
     return tMin;
 }

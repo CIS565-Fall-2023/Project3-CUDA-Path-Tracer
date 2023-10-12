@@ -32,8 +32,8 @@
 #define MOTION              0               // Real-time moving objects
 #define MOTION_BLUR	MOTION  0               // Hard-coded motion blur
 #define TIMER               0               // Gpu timer for performance analysis
-#define BB_CULLING          0               // Test ray against mesh AABB
-#define BVH                 1               // Use Bounding Volumn Hierarchy to speed up mesh loading
+#define BB_CULLING          1               // Test ray against mesh AABB
+#define BVH                 !BB_CULLING               // Use Bounding Volumn Hierarchy to speed up mesh loading
 
 #ifdef BVH
 #define BVH_SAH             0	            // Use surface area heuristics to split plane, default is midpoint split
@@ -43,6 +43,9 @@
 #define LENS_RADIUS         0.4f            // TODO: move to scene.txt
 #define FOCAL_DIST          6.0f            // TODO: move to scene.txt
 
+// Debug
+#define DEBUG_MESH 1
+#define DEBUG_BVH  0
 
 class GuiDataContainer
 {

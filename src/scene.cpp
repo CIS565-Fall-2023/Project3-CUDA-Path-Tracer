@@ -11,8 +11,6 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
-#define DEBUG_MESH 1
-#define DEBUG_BVH  0
 
 Scene::Scene(string filename) {
     basePath = filename.substr(0, filename.rfind('/') + 1);
@@ -323,7 +321,6 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
         // parse position buffer data
         const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
         const size_t posElemCount = posAccessor.count;
-        cout << "posAccessor.count: " << posAccessor.count << endl;
         const tinygltf::BufferView& posBufferView = model.bufferViews[posAccessor.bufferView];
         const tinygltf::Buffer& posBuffer = model.buffers[posBufferView.buffer];
         posData = reinterpret_cast<const float*>(&(posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset])); // data alignment
@@ -356,7 +353,6 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
             indexData32 = reinterpret_cast<const uint32_t*>(&(idxBuffer.data[idxBufferView.byteOffset + idxAccessor.byteOffset]));
 
             // populate Triangle structure
-            cout << "idxAccessor.count: " << idxAccessor.count << endl;
             for (size_t i = 0; i < idxAccessor.count; i += 3) {
                 // vertex positions
                 int vertIdx0, vertIdx1, vertIdx2;
@@ -375,7 +371,7 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
                 tri.v0.pos = glm::vec3(posData[vertIdx0 * 3], posData[vertIdx0 * 3 + 1], posData[vertIdx0 * 3 + 2]);
                 tri.v1.pos = glm::vec3(posData[vertIdx1 * 3], posData[vertIdx1 * 3 + 1], posData[vertIdx1 * 3 + 2]);
                 tri.v2.pos = glm::vec3(posData[vertIdx2 * 3], posData[vertIdx2 * 3 + 1], posData[vertIdx2 * 3 + 2]);
-                
+
                 // update transformation
                 tri.v0.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v0.pos, 1.f));
                 tri.v1.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v1.pos, 1.f));
@@ -424,11 +420,21 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
                 tri.v1.pos = glm::vec3(posData[vertIdx1 * 3], posData[vertIdx1 * 3 + 1], posData[vertIdx1 * 3 + 2]);
                 tri.v2.pos = glm::vec3(posData[vertIdx2 * 3], posData[vertIdx2 * 3 + 1], posData[vertIdx2 * 3 + 2]);
 
+                // update transformation
+                tri.v0.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v0.pos, 1.f));
+                tri.v1.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v1.pos, 1.f));
+                tri.v2.pos = utilityCore::multiplyMV(geom.transform, glm::vec4(tri.v2.pos, 1.f));
+
                 // vertex normals
                 if (norData) {
                     tri.v0.nor = glm::vec3(norData[vertIdx0 * 3], norData[vertIdx0 * 3 + 1], norData[vertIdx0 * 3 + 2]);
                     tri.v1.nor = glm::vec3(norData[vertIdx1 * 3], norData[vertIdx1 * 3 + 1], norData[vertIdx1 * 3 + 2]);
                     tri.v2.nor = glm::vec3(norData[vertIdx2 * 3], norData[vertIdx2 * 3 + 1], norData[vertIdx2 * 3 + 2]);
+
+                    // update transformation
+                    tri.v0.nor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(tri.v0.nor, 0.f));
+                    tri.v1.nor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(tri.v1.nor, 0.f));
+                    tri.v2.nor = utilityCore::multiplyMV(geom.invTranspose, glm::vec4(tri.v2.nor, 0.f));
                 }
 
                 // TODO: uv

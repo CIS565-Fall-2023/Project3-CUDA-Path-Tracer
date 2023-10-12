@@ -290,7 +290,7 @@ __global__ void computeIntersections(
 			else if ((geom.type == OBJ) || (geom.type = GLTF))
 			{
 #if BVH
-				t = bvhIntersectionTest(bvhNodes, tris, ray, geom.triangleCount, tmp_intersect, tmp_normal);
+				t = bvhIntersectionTest(geom, bvhNodes, tris, ray, tmp_intersect, tmp_normal);
 #elif BB_CULLING
 				if (aabbIntersectionTest(geom.aabb, ray, t)) {
 					t = meshIntersectionTest(geom, ray, tris, tmp_intersect, tmp_normal);
@@ -395,6 +395,10 @@ __global__ void shadeMaterials(
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	if (intersection.t > 0.f) { // if the intersection exists...
+#if DEBUG_BVH
+		pathSegments[idx].color = intersection.surfaceNormal * 0.5f + 0.5f;
+		return;
+#endif
 		// Set up the RNG
 		thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
 		thrust::uniform_real_distribution<float> u01(0, 1);
