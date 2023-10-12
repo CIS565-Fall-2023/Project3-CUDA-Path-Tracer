@@ -10,11 +10,15 @@ CUDA Path Tracer
 ---
 ## Overview
 
+A path tracer is a rendering technique that simulates the behavior of light in a scene. It uses Monte Carlo method to estimate the radiance at each pixel of an image by tracing the path of light through the scene. The algorithm is iterative and parallel in nature, so it runs intuitively and fairly well on CUDA. And it is able to simulate many effects that are difficult with other rendering techniques, such as soft shadows, depth of field, caustics, ambient occlusion, and indirect lighting.
+
 <img src="img/stanford-bunny.2023-10-11_16-37-58z.1000samp.png" width="100%" />
 
-Stanford Bunny with Blue-tinted Glossy Material in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $16$ light bounces.
+Stanford Bunny with Blue-tinted Glossy Material in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $8$ light bounces.
 
-A path tracer is a rendering algorithm that simulates the behavior of light in a scene. It uses Monte Carlo method to estimate the radiance at each pixel of an image by tracing the path of light through the scene. The algorithm is iterative and parallel in nature, so it runs intuitively and fairly well on CUDA. And it is able to simulate many effects that are difficult with other rendering techniques, such as soft shadows, depth of field, caustics, ambient occlusion, and indirect lighting.
+<img src="img/cow.2023-10-07_12-21-39z.1000samp.png" width="100%" />
+
+Cow with Stainless Steel Material and Procedural Texture in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $16$ light bounces.
 
 ## Features
 
@@ -34,30 +38,11 @@ Material system is adopted on the above rendering pipeline from [glTF Specificat
 
 Using the `metallic` and `roughness` parameter, the material can be either dielectric or metal, and its reflection model can be either diffuse or specular. In addition with multiple importance sampling, the path tracer is able to render imperfect specular materials and produce better roughness effect. Also, by controlling the `ior` and `opacity` of dielectrics, the material can produce glass-like refraction with fresnel effect.
 
-<style>
-.m table th:first-of-type {
-    width: 10%;
-}
-.m table th:nth-of-type(2) {
-    width: 30%;
-}
-.m table th:nth-of-type(3) {
-    width: 30%;
-}
-.m table th:nth-of-type(4) {
-    width: 30%;
-}
-</style>
-
-<div class="m">
-
 || Diffuse | Imperfect Specular | Pure Specular |
 |-:| :----------: | :-----------: | :----------------: |
 |**Dielectric**| ![](img/cornell.2023-10-12_00-04-31z.2000samp.png) | ![](img/cornell.2023-10-12_00-11-43z.2000samp.png) | ![](img/cornell.2023-10-12_00-05-52z.2000samp.png) |
 |**Metal**| ![](img/cornell.2023-10-12_00-21-21z.2000samp.png) | ![](img/cornell.2023-10-12_00-17-32z.2000samp.png) | ![](img/cornell.2023-10-12_00-23-53z.2000samp.png) |
 |**Glass**| ![](img/cornell.2023-10-12_01-07-37z.2000samp.png) | ![](img/cornell.2023-10-12_00-55-54z.2000samp.png) | ![](img/cornell.2023-10-12_00-47-47z.2000samp.png) |
-
-</div>
 
 Use the material system, we can mimic many real-world materials. For example, we have the following materials like aluminum, titanium, stainless steel, and different glasses.
 
@@ -65,20 +50,17 @@ Use the material system, we can mimic many real-world materials. For example, we
 | :----: | :---: |
 | ![](img/cornell-metal.2023-10-12_01-18-06z.2000samp.png) | ![](img/cornell-glass.2023-10-12_01-14-29z.2000samp.png) |
 
+And many Suzanne
+
+| Glass | Aluminum | Yellow Plastic | Stainless Steel |
+| :----: | :---: | :---: | :---: |
+| ![](img/suzanne.2023-10-05_10-13-29z.2000samp.png) | ![](img/suzanne.2023-10-05_10-16-08z.2000samp.png) | ![](img/suzanne.2023-10-05_10-48-35z.2000samp.png) | ![](img/suzanne.2023-10-05_10-49-59z.2000samp.png) |
+
 All scenes rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
 
 ### Anti-Aliasing
 
 Anti-aliasing can be achieved by jittering rays within a pixel. In the following example, the image is rendered in low resolution to exaggerate the effect.
-
-<style>
-table th:first-of-type {
-    width: 50%;
-}
-table th:nth-of-type(2) {
-    width: 50%;
-}
-</style>
 
 | AA OFF | AA ON |
 | :----: | :---: |
