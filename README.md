@@ -12,13 +12,19 @@ CUDA Path Tracer
 
 A path tracer is a rendering technique that simulates the behavior of light in a scene. It uses Monte Carlo method to estimate the radiance at each pixel of an image by tracing the path of light through the scene. The algorithm is iterative and parallel in nature, so it runs intuitively and fairly well on CUDA. And it is able to simulate many effects that are difficult with other rendering techniques, such as soft shadows, depth of field, caustics, ambient occlusion, and indirect lighting.
 
-<img src="img/stanford-bunny.2023-10-11_16-37-58z.1000samp.png" width="100%" />
+| Coffee Shop | Stanford Bunny |
+| :------------------: | :---------------: |
+| <img src="img/085-coffee.2023-10-12_05-41-53z.1000samp.png" width=1200 /> | <img src="img/stanford-bunny.2023-10-11_16-37-58z.1000samp.png" width=1200 /> |
+| **Cow** | **Gear** |
+| <img src="img/cow.2023-10-07_12-21-39z.1000samp.png" width=1200 /> | <img src="img/gear.2023-10-12_06-02-45z.1000samp.png" width=1200 /> |
 
-Stanford Bunny with Blue-tinted Glossy Material in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $8$ light bounces.
+All the above scenes were rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $8$ light bounces.
 
-<img src="img/cow.2023-10-07_12-21-39z.1000samp.png" width="100%" />
+And we also have an interesting mirror scene, where a glossy sphere is placed in a cube with all sides mirrors, rendered in $2000 \times 2000$ resolution with $200$ samples per pixel and with different number of light bounces.
 
-Cow with Stainless Steel Material and Procedural Texture in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $16$ light bounces.
+| 1 Bounce | 8 Bounces | 64 Bounces |
+| :------: | :-------: | :--------: |
+| ![](img/mirrors.2023-10-12_09-33-26z.200samp.png) | ![](img/mirrors.2023-10-12_09-34-11z.200samp.png) | ![](img/mirrors.2023-10-12_09-35-19z.200samp.png) |
 
 ## Visual Features
 
@@ -56,7 +62,7 @@ And many Suzanne
 | :----: | :---: | :---: | :---: |
 | ![](img/suzanne.2023-10-05_10-13-29z.2000samp.png) | ![](img/suzanne.2023-10-05_10-16-08z.2000samp.png) | ![](img/suzanne.2023-10-05_10-48-35z.2000samp.png) | ![](img/suzanne.2023-10-05_10-49-59z.2000samp.png) |
 
-All scenes rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
+All scenes were rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
 
 ### Anti-Aliasing
 
@@ -66,7 +72,7 @@ Anti-aliasing can be achieved by jittering rays within a pixel. In the following
 | :----: | :---: |
 | ![](img/aa.2023-10-11_23-07-26z.2000samp.png) | ![](img/aa.2023-10-11_23-08-21z.2000samp.png) |
 
-All scenes rendered in $200 \times 200$ (up-sampled to $800 \times 800$) resolution with $2000$ spp and $8$ light bounces.
+All scenes were rendered in $200 \times 200$ (up-sampled to $800 \times 800$) resolution with $2000$ spp and $8$ light bounces.
 
 ### Physically-Based Depth-of-Field
 
@@ -76,7 +82,7 @@ Depth-of-field can be achieved by jittering rays within an aperture. In the foll
 | :-----: | :----: |
 | ![](img/dof.2023-10-11_17-23-28z.2000samp.png) | ![](img/dof.2023-10-11_17-22-50z.2000samp.png) |
 
-All scenes rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
+All scenes were rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
 
 ### Mesh Loading
 
@@ -90,26 +96,48 @@ Procedural textures can be achieved by using the barycentric interpolated uv coo
 | :-----: | :----: |
 | ![](img/wahoo.2023-10-12_01-32-39z.1000samp.png) | ![](img/wahoo.2023-10-12_01-35-52z.1000samp.png) |
 
-All scenes rendered in $800 \times 800$ resolution with $1000$ spp and $8$ light bounces.
+All scenes were rendered in $800 \times 800$ resolution with $1000$ spp and $8$ light bounces.
 
 ### Open Image Denoise
 
-[Open Image Denoise](https://www.openimagedenoise.org/) is a high-performance, high-quality denoising library for ray tracing. It is able to remove noise from rendered images without losing much details. Additional filters like albedo and normal map are added to the denoiser pre-filter to improve the quality of the denoised image. The following example shows the effect of the denoiser with $200$ samples per pixel, a relatively low sample rate.
+[Open Image Denoise](https://www.openimagedenoise.org/) is a high-performance, high-quality denoising library for ray tracing. It is able to remove noise from rendered images without losing much details. Additional filters like albedo and normal map are added to the denoiser pre-filter to improve the quality of the denoised image.
+
+The denoiser is integrated into the system as a post-processing step. Triggered every fixed number of intervals, the denoised image is merged to the original image using exponential moving average.
+
+
+The following example shows the effect of the denoiser with $200$ samples per pixel, a relatively low sample rate.
 
 | Denoiser OFF | Denoiser ON |
 | :----------: | :---------: |
 | ![](img/teapot.2023-10-12_03-02-07z.200samp.png) | ![](img/teapot.2023-10-12_03-00-19z.200samp.png) |
 
-All scenes rendered in $800 \times 800$ resolution with $200$ spp and $8$ light bounces.
+All scenes were rendered in $800 \times 800$ resolution with $200$ spp and $8$ light bounces.
 
-## Performance Features and Analysis
+## Performance Features
 
 ### Stream Compaction
 
+When a ray hits a light source, goes into void, or exceeds the maximum number of bounces, it is terminated. The terminated rays are removed from the ray pool using stream compaction. Luckily the stream compaction algorithm is already implemented in the [CUDA Thrust](https://docs.nvidia.com/cuda/thrust/index.html) library, we can use `thrust::remove_if` or in this case `thrust::partition` to remove the terminated rays from the ray pool. Any custom work efficient stream compaction implementation with shared memory optimization and bank conflict avoidance, like [Project2-Stream-Compaction](https://github.com/toytag/Project2-Stream-Compaction), will do just fine.
+
 ### First Bounce Caching
+
+When anti-aliasing is not enabled, the first ray from the camera is always the same for every iteration. So we can cache the first ray bounce and reuse it for every iteration. However, this optimization is not particularly useful when more advanced visual features like anti-aliasing, depth-of-field, and motion blur are enabled.
 
 ### Material Sorting
 
+Additionally, we could sort the rays by material type to improve the performance. The idea is that rays with the same material type will have similar process time so that we can reduce warp divergence. However, this optimization later proved to be not very useful and even harmful to the performance. The reason is that the sorting process itself is very expensive compared to the performance gain. There is not no significant performance improvement to compensate for the cost.
+
 ### Bounding Volume Hierarchy
+
+
+Bounding volume hierarchy (BVH) is a tree structure on top of the scene geometry to accelerate ray tracing. The idea is to group the scene geometry into a hierarchy of bounding volumes, and the ray tracer can quickly discard the entire group of primitives if the ray does not intersect with the bounding volume.
+
+![](img/bvh.svg)
+
+Image from [PBRT 4.3](https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) is a good illustration of BVH true. The BVH is built using the equal count partition method, which tries to split the primitives into two equal sized groups. The BVH is built on the CPU in a linear buffer (heap like structure) and then copied to the GPU for ray tracing.
+
+## Performance Analysis
+
+Let's take a look at the performance of the path tracer with different features enabled. We will use most loved Mario as the test scene. Stream compaction plays a important role in the correctness of the algorithm in addition to its performance benefits. So stream compaction will be enabled in all tests and we will use path tracer with only stream compaction method enabled as the baseline.
 
 ## References
