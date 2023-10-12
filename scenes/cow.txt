@@ -1,0 +1,139 @@
+// Camera
+CAMERA
+RES             2000 2000
+FOVY            45
+LENSRADIUS      0
+FOCALDISTANCE   0
+ITERATIONS      1000
+DEPTH           8
+FILE            cow
+EYE             0 2 2
+LOOKAT          0 4 0
+UP              0 1 0
+
+// Emissive material (light)
+MATERIAL light
+RGB         1 1 1
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   1
+
+// Diffuse white
+MATERIAL diffuse_white
+RGB         .98 .98 .98
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+MATERIAL red
+RGB         .85 .35 .35
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+MATERIAL green
+RGB         .35 .85 .35
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Specular white
+MATERIAL specular_white
+RGB         .98 .98 .98
+METALLIC    1
+ROUGHNESS   0.5
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Aluminum
+MATERIAL aluminum
+RGB         .90 .90 .90
+METALLIC    1
+ROUGHNESS   0.3
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Stainless Steel
+MATERIAL stainless_steel
+RGB         .98 .98 .98
+METALLIC    1
+ROUGHNESS   0.025
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Yellow Plastic
+MATERIAL yellow_plastic
+RGB         0.894 0.784 0.42
+METALLIC    0
+ROUGHNESS   0.1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Glass glossy
+MATERIAL glass_glossy
+RGB         .98 .98 .98
+METALLIC    0
+ROUGHNESS   0.025
+IOR         1.45
+OPACITY     0
+EMITTANCE   0
+
+// Floor
+OBJECT 1
+cube
+material specular_white
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       10 .01 10
+
+// Ceiling
+OBJECT 2
+cube
+material light
+TRANS       0 10 0
+ROTAT       0 0 90
+SCALE       .01 10 10
+
+// Back wall
+OBJECT 3
+cube
+material specular_white
+TRANS       0 5 -5
+ROTAT       0 90 0
+SCALE       .01 10 10
+
+// Left wall
+OBJECT 4
+cube
+material red
+TRANS       -5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Right wall
+OBJECT 5
+cube
+material green
+TRANS       5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Cube (OBJ)
+OBJECT suzanne
+mesh obj/cow.obj
+material stainless_steel
+TRANS       -.5 3.6 0
+ROTAT       0 -30 0
+SCALE       1 1 1

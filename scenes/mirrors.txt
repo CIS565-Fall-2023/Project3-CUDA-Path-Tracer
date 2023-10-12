@@ -1,0 +1,196 @@
+// Camera
+CAMERA
+RES             2000 2000
+FOVY            45
+LENSRADIUS      0
+FOCALDISTANCE   0
+ITERATIONS      200
+DEPTH           64
+FILE            mirrors
+EYE             0.0 5 4.95
+LOOKAT          0 5 0
+UP              0 1 0
+
+// Emissive material (light)
+MATERIAL light
+RGB         1 1 1
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   1
+
+// Diffuse white
+MATERIAL diffuse_white
+RGB         .98 .98 .98
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Emissive material (light)
+MATERIAL red_light
+RGB         .85 .35 .35
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   1
+
+// Emissive material (light)
+MATERIAL green_light
+RGB         .35 .85 .35
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   1
+
+// Emissive material (light)
+MATERIAL blue_light
+RGB         .35 .35 .85
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   1
+
+// Emissive material (light)
+MATERIAL yellow_light
+RGB         .85 .85 .35
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   1
+
+// Specular white
+MATERIAL specular_white
+RGB         .96 .96 .96
+METALLIC    1
+ROUGHNESS   0.0001
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Glass glossy
+MATERIAL glass_glossy
+RGB         .99 .99 .99
+METALLIC    0
+ROUGHNESS   0.0001
+IOR         1.45
+OPACITY     0
+EMITTANCE   0
+
+// Floor
+OBJECT 1
+cube
+material specular_white
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       100 .01 100
+
+// Ceiling
+OBJECT 2
+cube
+material specular_white
+TRANS       0 10 0
+ROTAT       0 0 0
+SCALE       100 .01 100
+
+// Back wall
+OBJECT 3
+cube
+material specular_white
+TRANS       0 5 -5
+ROTAT       0 0 0
+SCALE       100 100 .01
+
+// Left wall
+OBJECT 4
+cube
+material specular_white
+TRANS       -5 5 0
+ROTAT       0 0 0
+SCALE       .01 100 100
+
+// Right wall
+OBJECT 5
+cube
+material specular_white
+TRANS       5 5 0
+ROTAT       0 0 0
+SCALE       .01 100 100
+
+// light
+OBJECT l_left
+cube
+material yellow_light
+TRANS       -5 5 -5
+ROTAT       0 0 0
+SCALE       .1 100 .1
+
+OBJECT l_right
+cube
+material blue_light
+TRANS       5 5 -5
+ROTAT       0 0 0
+SCALE       .1 100 .1
+
+OBJECT l_top
+cube
+material red_light
+TRANS       0 10 -5
+ROTAT       0 0 0
+SCALE       100 .1 .1
+
+OBJECT l_bot
+cube
+material green_light
+TRANS       0 0 -5
+ROTAT       0 0 0
+SCALE       100 .1 .1
+
+OBJECT l_bot_left
+cube
+material red_light
+TRANS       -5 0 0
+ROTAT       0 0 0
+SCALE       .1 .1 100
+
+OBJECT l_bot_right
+cube
+material yellow_light
+TRANS       5 0 0
+ROTAT       0 0 0
+SCALE       .1 .1 100
+
+OBJECT l_top_left
+cube
+material blue_light
+TRANS       -5 10 0
+ROTAT       0 0 0
+SCALE       .1 .1 100
+
+OBJECT l_top_right
+cube
+material green_light
+TRANS       5 10 0
+ROTAT       0 0 0
+SCALE       .1 .1 100
+
+// Back wall behind camera
+OBJECT behind_camera
+cube
+material specular_white
+TRANS       0 5 5
+ROTAT       0 0 0
+SCALE       100 100 .01
+
+OBJECT s
+sphere
+material glass_glossy
+TRANS       0 5 0
+ROTAT       0 0 0
+SCALE       5 5 5

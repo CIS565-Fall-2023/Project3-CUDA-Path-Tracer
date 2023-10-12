@@ -1,0 +1,156 @@
+// Camera
+CAMERA
+RES             800 800
+FOVY            45
+LENSRADIUS      0
+FOCALDISTANCE   0
+ITERATIONS      2000
+DEPTH           8
+FILE            cornell-metal
+EYE             0 5 10.5
+LOOKAT          0 5 0
+UP              0 1 0
+
+// Emissive material (light)
+MATERIAL light
+RGB         1 1 1
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   5
+
+// Diffuse white
+MATERIAL diffuse_white
+RGB        .98 .98 .98
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Diffuse red
+MATERIAL diffuse_red
+RGB        .85 .35 .35
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Diffuse green
+MATERIAL diffuse_green
+RGB         .35 .85 .35
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Diffuse blue
+MATERIAL diffuse_blue
+RGB         .35 .35 .85
+METALLIC    0
+ROUGHNESS   1
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Aluminum
+MATERIAL aluminum
+RGB         .90 .90 .90
+METALLIC    1
+ROUGHNESS   0.3
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Titanium
+MATERIAL titanium
+RGB         .55 .55 .50
+METALLIC    1
+ROUGHNESS   0.6
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Stainless Steel
+MATERIAL stainless_steel
+RGB         .98 .98 .98
+METALLIC    1
+ROUGHNESS   0.025
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Ceiling light
+OBJECT 0
+cube
+material light
+TRANS       0 10 0
+ROTAT       0 0 0
+SCALE       3 .3 3
+
+// Floor
+OBJECT 1
+cube
+material diffuse_white
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       10 .01 10
+
+// Ceiling
+OBJECT 2
+cube
+material diffuse_white
+TRANS       0 10 0
+ROTAT       0 0 90
+SCALE       .01 10 10
+
+// Back wall
+OBJECT 3
+cube
+material diffuse_white
+TRANS       0 5 -5
+ROTAT       0 90 0
+SCALE       .01 10 10
+
+// Left wall
+OBJECT 4
+cube
+material diffuse_red
+TRANS       -5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Right wall
+OBJECT 5
+cube
+material diffuse_green
+TRANS       5 5 0
+ROTAT       0 0 0
+SCALE       .01 10 10
+
+// Sphere 1
+OBJECT 6
+sphere
+material aluminum
+TRANS       -3 5 -2
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Sphere 2
+OBJECT 7
+sphere
+material titanium
+TRANS       0 5 -2
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Sphere 3
+OBJECT 8
+sphere
+material stainless_steel
+TRANS       3 5 -2
+ROTAT       0 0 0
+SCALE       3 3 3

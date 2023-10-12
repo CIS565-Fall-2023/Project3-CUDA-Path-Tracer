@@ -1,0 +1,113 @@
+// Camera
+CAMERA
+RES             200 200
+FOVY            45
+LENSRADIUS      0
+FOCALDISTANCE   10
+ITERATIONS      2000
+DEPTH           8
+FILE            dof
+EYE             0.0 5 10.5
+LOOKAT          0 5 0
+UP              0 1 0
+
+// Emissive material (light)
+MATERIAL red_light
+RGB         .85 .35 .35
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   2
+
+// Emissive material (light)
+MATERIAL green_light
+RGB         .35 .85 .35
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   2
+
+// Emissive material (light)
+MATERIAL blue_light
+RGB         .35 .35 .85
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   2
+
+// Emissive material (light)
+MATERIAL yellow_light
+RGB         .60 .60 .35
+METALLIC    0
+ROUGHNESS   0
+IOR         0
+OPACITY     1
+EMITTANCE   2
+
+// Specular white
+MATERIAL specular_white
+RGB         .98 .98 .98
+METALLIC    1
+ROUGHNESS   0.5
+IOR         1.5
+OPACITY     1
+EMITTANCE   0
+
+// Floor
+OBJECT 1
+cube
+material green_light
+TRANS       0 0 0
+ROTAT       0 0 0
+SCALE       10 .01 10
+
+// Ceiling
+OBJECT 2
+cube
+material red_light
+TRANS       0 10 0
+ROTAT       0 0 90
+SCALE       .01 10 10
+
+// Sphere
+OBJECT s
+sphere
+material specular_white
+TRANS       4 5 4
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Sphere
+OBJECT s
+sphere
+material specular_white
+TRANS       2 5 2
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Sphere
+OBJECT s
+sphere
+material specular_white
+TRANS       0 5 0
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Sphere
+OBJECT s
+sphere
+material specular_white
+TRANS       -2 5 -2
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Sphere
+OBJECT s
+sphere
+material specular_white
+TRANS       -4 5 -4
+ROTAT       0 0 0
+SCALE       3 3 3
