@@ -4,7 +4,7 @@ RES             800 800
 FOVY            45
 LENSRADIUS      0
 FOCALDISTANCE   0
-ITERATIONS      5000
+ITERATIONS      2000
 DEPTH           8
 FILE            cornell-glass
 EYE             0 5 10.5
@@ -135,7 +135,7 @@ SCALE       .01 10 10
 OBJECT 6
 sphere
 material glass_matte
-TRANS       -3 5 2
+TRANS       -3 5 -2
 ROTAT       0 0 0
 SCALE       3 3 3
 
@@ -143,7 +143,7 @@ SCALE       3 3 3
 OBJECT 7
 cube
 material diffuse_blue
-TRANS       -3 5 -3
+TRANS       -3 5 -5
 ROTAT       0 0 0
 SCALE       1 10 1
 
@@ -151,7 +151,7 @@ SCALE       1 10 1
 OBJECT 8
 sphere
 material glass_flat
-TRANS       0 5 2
+TRANS       0 5 -2
 ROTAT       0 0 0
 SCALE       3 3 3
 
@@ -159,7 +159,7 @@ SCALE       3 3 3
 OBJECT 9
 cube
 material diffuse_green
-TRANS       0 5 -3
+TRANS       0 5 -5
 ROTAT       0 0 0
 SCALE       1 10 1
 
@@ -167,7 +167,7 @@ SCALE       1 10 1
 OBJECT 10
 sphere
 material glass_glossy
-TRANS       3 5 2
+TRANS       3 5 -2
 ROTAT       0 0 0
 SCALE       3 3 3
 
@@ -175,6 +175,6 @@ SCALE       3 3 3
 OBJECT 11
 cube
 material diffuse_red
-TRANS       3 5 -3
+TRANS       3 5 -5
 ROTAT       0 0 0
 SCALE       1 10 1

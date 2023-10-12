@@ -4,7 +4,7 @@ RES             800 800
 FOVY            45
 LENSRADIUS      0
 FOCALDISTANCE   0
-ITERATIONS      5000
+ITERATIONS      2000
 DEPTH           8
 FILE            cornell
 EYE             0.0 5 10.5
@@ -50,10 +50,10 @@ EMITTANCE   0
 // Specular white
 MATERIAL 4
 RGB         .98 .98 .98
-METALLIC    1
-ROUGHNESS   0.5
+METALLIC    0
+ROUGHNESS   0.3
 IOR         1.5
-OPACITY     1
+OPACITY     0
 EMITTANCE   0
 
 // Ceiling light
