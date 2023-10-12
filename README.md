@@ -20,7 +20,13 @@ This is a CUDA implementation of a simple path tracer with bounding volume heira
 L_O(p,\omega_o) = L_E(p,\omega_o) + \int_{s} f(p,\omega_o,\omega_i)  L_i(p,\omega_i) V(p\prime,p) |dot(\omega_i, N)| \,d\omega_i
 ```
 
-## Features
+## Table of Contents
+
+- [Features](#features)
+  - [1. Bidrectional Scattering Distribution Functions](#1-bidrectional-scattering-distribution-function-computation)
+- []()
+- 
+## Visual Features
 
 ### 1. Bidrectional Scattering Distribution Function Computation
 
@@ -50,9 +56,9 @@ The Index of Refraction (IOR) value of the material can be specified in the `<sc
 
 Additionally, there is support for imperfect specular and refractive materials, using **fresnel computation**. If a material has either  both reflective and refractive (glass) properties, or both reflective and diffuse (plastic) properties, then the ray either performs reflective BSDF calculation, or diffuse/refractive BSDF computation with an equal weight given to both. Specular reflection is only applied to areas on the geometry where the surface normal is not aligned to the view direction (fresnel), and diffuse and refractive BSDFs are applied to the other directions. Since both reflection and diffuse/refraction are only computed half the times, their contributions are boosted twice to account for bias.
 
-|<img src="img/cornell_glass_fresnel.png" width=400>|<img src="img/cornell_plastic.png" width=400>|
-|:-:|:-:|
-|Glass|Perfect Specular|
+|<img src="img/cornell_glass_fresnel.png" width=400>|<img src="img/cornell_plastic.png" width=400>|<img src="img/cornell_glass_plastic.png" width=400>
+|:-:|:-:|:-:|
+|Glass|Plastic|Plastic + Glass|
 
 **Caustics**
 
@@ -77,6 +83,72 @@ When rays are generated, instead of shooting them directly through the center of
 |<img src="img/cornellWithoutAA.png" width=400>|<img src="img/cornellWithAA.png" width=400>|
 |:-:|:-:|
 |Without anti-aliasing|With anti-aliasing|
+
+### 3. Depth of Field using Thin Lens Camera Model
+
+This path tracer assumes a *pinhole camera model* to be the default camera model, but it can be overriden to be a *thin lens camera model* to produce approximated depth-of-field effects. A thin lens camera has a radius instead of a single point through which the ray passes, as well as a focal length. These values can be added to the `CAMERA` model in the `<sceneName>.txt` file by adding `APERTURE` and `FOCALLENGTH`.
+
+The implementation is as follows: if the aperture size is greater than zero, then after generating a ray from the center of the lens (so the same ray as the pinhole camera ray), a focal point is found where the ray would intersect the focal plane. Then, a new ray is generated from a random point on the lens to this focal point, and this is the ray that is used for the path tracing. The random point generation is done by sampling 2 random floating point numbers in the range [0,1] and mapping that square (x,y) sample point to a sample point on a concentric disk, since the lens is a disk.
+
+<table>
+    <tr>
+        <td><img src="img/DOF_none.png" width = 400></td>
+        <td><img src="img/DOF_mid.png" width = 400></td>
+        <td><img src="img/DOF_high.png" width = 400></td>
+    </tr>
+    <tr>
+        <td>Aperture size 0.0 (no DoF)</td>
+        <td>Aperture size 0.2 (low DoF)</td>
+        <td>Aperture size 0.5 (high DoF)</td>
+    </tr>
+    <tr>
+        <td colspan=3 align="center">Varying aperture size | middle object in focus </td>
+    </tr>
+</table>
+
+<table>
+    <tr>
+        <td><img src="img/DOF_close.png" width = 400></td>
+        <td><img src="img/DOF_mid.png" width = 400></td>
+        <td><img src="img/DOF_far.png" width = 400></td>
+    </tr>
+    <tr>
+        <td>Low focal length</td>
+        <td>Medium focal length</td>
+        <td>High focal length</td>
+    </tr>
+    <tr>
+        <td colspan=3 align="center">Varying focal length | different objects in focus </td>
+    </tr>
+</table>
+
+### 4. GLTF Mesh Loading
+
+This path tracer supports loading of mesh data from GLTF files stored with the GLTF 2.0 spec.
+
+**Mesh Triangulation**: if indices buffers exist in the GLTF data, they're used in the triangulation of the mesh, otherwise *fan triangulation* is applied on the position buffers.
+
+**Interleaved vs separate buffers**: This project supports loading of position-vertex-normal data that is either stored as separate buffers or as a single interleaved buffer.
+
+**Normals**: if normal buffers exist, they're used for lighting calculation, otherwise a flat-shaded model is used. The normal for each triangle is calculated using the cross-product of any two of its edges.
+
+## Performance Optimization Features
+
+### 1. Ray termination using stream compaction
+
+During path tracing, there are many rays that hit nothing, and this is especially true for open scenes with not a lot of geometry to intersect with. Unnecessary computations on these rays impact performance. Stream compaction helps with terminating the rays that don't hit anything for a further bounce.
+
+### 2. Ray termination via russian roulette
+
+Ray termination via russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive.
+
+### 3. Simple Axis-Aligned Bounding Box (AABB) Acceleration
+
+
+
+### 4. Bounding Volume Hierarchy (BVH) Acceleration
+
+### 8. High Dynamic Range (HDR) and Gamma Correction
 
 ## Performance Analysis
 
