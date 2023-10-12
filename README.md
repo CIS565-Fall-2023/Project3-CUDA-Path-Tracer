@@ -20,13 +20,13 @@ Stanford Bunny with Blue-tinted Glossy Material in Cornell Box, rendered in $200
 
 Cow with Stainless Steel Material and Procedural Texture in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $16$ light bounces.
 
-## Features
+## Visual Features
 
 ### Material System
 
 ![](img/materials.svg)
 
-Material system is adopted on the above rendering pipeline from [glTF Specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation).
+Material system is adopted on the above rendering implementation from [glTF Specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation).
 
 - **Albedo**: The color of the material.
 - **Metallic**: The ratio of diffuse and specular reflection. A value of $0$ means the material is dielectric, and a value of $1$ means the material is metal.
@@ -78,12 +78,38 @@ Depth-of-field can be achieved by jittering rays within an aperture. In the foll
 
 All scenes rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
 
+### Mesh Loading
+
+With the help of [tinyobjloader](https://github.com/syoyo/tinyobjloader) and [tinygltf](https://github.com/syoyo/tinygltf/) libraries, the path tracer is able to load `.obj` and `.gltf` files (partially). Thus, we can render more complex scenes.
+
 ### Procedural Textures
 
-Procedural textures can be achieved by using the `uv` coordinate of the intersection point. Check out the following example.
+Procedural textures can be achieved by using the barycentric interpolated uv coordinate of the intersection point. Check out the following example.
 
 | Gradient Mario | Checkerboard Mario |
 | :-----: | :----: |
 | ![](img/wahoo.2023-10-12_01-32-39z.1000samp.png) | ![](img/wahoo.2023-10-12_01-35-52z.1000samp.png) |
 
 All scenes rendered in $800 \times 800$ resolution with $1000$ spp and $8$ light bounces.
+
+### Open Image Denoise
+
+[Open Image Denoise](https://www.openimagedenoise.org/) is a high-performance, high-quality denoising library for ray tracing. It is able to remove noise from rendered images without losing much details. Additional filters like albedo and normal map are added to the denoiser pre-filter to improve the quality of the denoised image. The following example shows the effect of the denoiser with $200$ samples per pixel, a relatively low sample rate.
+
+| Denoiser OFF | Denoiser ON |
+| :----------: | :---------: |
+| ![](img/teapot.2023-10-12_03-02-07z.200samp.png) | ![](img/teapot.2023-10-12_03-00-19z.200samp.png) |
+
+All scenes rendered in $800 \times 800$ resolution with $200$ spp and $8$ light bounces.
+
+## Performance Features and Analysis
+
+### Stream Compaction
+
+### First Bounce Caching
+
+### Material Sorting
+
+### Bounding Volume Hierarchy
+
+## References
