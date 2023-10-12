@@ -286,7 +286,6 @@ int Scene::loadMeshGltf(const string filename, Geom& gltfMesh) {
                     gltfMesh.albedoTexId = tex.id;
                     float* albedoTexture = stbi_loadf(albedoMapPath.c_str(), &tex.width, &tex.height, &tex.numChannels, 0);
                     for (int i = 0; i < tex.width * tex.height; i++) {
-                        tex.numChannels = 3;
                         glm::vec3 col = glm::vec3(albedoTexture[tex.numChannels * i], albedoTexture[tex.numChannels * i + 1], albedoTexture[tex.numChannels * i + 2]);
                         textures.push_back(col);
                     }
