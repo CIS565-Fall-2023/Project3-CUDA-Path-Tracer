@@ -178,8 +178,21 @@ Mesh loading is done on the GPU side with help from the TinyGLTF library for dec
 
 ### Albedo texture mapping
 
-### Bounding Volume Hierarchy
+For more intricate models, it doesn't make sense to just specify a single material for each primitive. Within the space of a primitive, there can be a blend of colours or heterogeneous speckles, like realistic human skin. To faciliate this level of detail, a commonly used technique is to create a square image known as a texture and sample from the texture for the color to apply for a given mesh-ray intersection. Each vertex in a traingle records a 2D vector called uv, which is a normalized coordinate for sampling a texture. Furthermore, using barycentric interpolation, the exact point to sample on a texture can be computed for any point on a triangular primitive.  
 
+In this implementation, each Triangle struct contains the three vertices and their data as well as an index to the relevant texture to sample. When a triangle is selected as the intersecting object, the shader then will look for its uv to extract the relevant color from the referenced texture, and shade it using diffuse shading.
+
+The outcome of GLTF mesh loading and albedo texture shading are demonstrated below in two scenes involving one and three Seele models respectively. Both scenes have two 4800K light sources acting as diffuse lights for portrait photography and a white diffuse box on the bottom for flooring.
+
+![](img/seele_scene.10000samp.png)
+![](img/seele_portrait.10000samp.png)
+
+In terms of performance, most of the time is spent on the overhead cost of loading the textures from GLTF file, which is done on the CPU side by looping through the set of materials and associated textures to load them into memory buffers. The textures are then copied into GPU memory using CUDA dedicated texture objects. These objects are optimized for hardware level texture sampling, which makes the cost of sampling a texture for diffuse shade not too different from directly passing a diffuse color vector from global memory. Thus, while the start time has increased, the actual rendering time per frame does not change significantly between texture sampling and direct shading.
+
+### Bounding Volume Hierarchy
+While naively looping through all the geometries in the scene works for simple scenes like the cornell boxes, this approach no longer works once meshes are introduced. The Seele model in open box and closed box demo as well as the single Seele demo consists of 23079 triangles. Naively iterating through all these traingles to test for intersection would take an extremely long time compared to checking 5 - 10 basic geometries in the basic cornell scenes. This clearly does not scale well as the three Seele scene, which is still a relatively simple scene, has 73788 triangles, and thus 73788 checks per ray generated.
+
+To reduce the number of checks required for finding an intersection, one option is to use a Bounding Volume Hiearchy (BVH). The basic concept behind this is that each mesh is contained within an axis-aligned bounding box, which is then recursively subdivided into smaller bounding boxes  containing less primitives. Each subdivision occurs along one axis so that all child bounding boxes remain axis-aligned. Axis-alignment allows a box to be specified with just two coordinates.
 ### Further Improvements
 
 ## Final Demonstrations

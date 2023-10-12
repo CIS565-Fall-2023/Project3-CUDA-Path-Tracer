@@ -1,76 +1,18 @@
 // Emissive material (light)
+// 4000k 1 .82 .64
+// 4800k 1 .88 .77
 MATERIAL 0
-RGB         1 1 1
+RGB         1 .88 .77
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   7
+EMITTANCE   5
 
 // Diffuse white
 MATERIAL 1
-RGB         .98 .98 .98
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse red
-MATERIAL 2
-RGB         .85 .35 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse green
-MATERIAL 3
-RGB         .35 .85 .35
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Glass
-MATERIAL 4
-RGB         .1 .1 .1
-SPECEX      0
-SPECRGB     .9 .9 .98
-REFL        1
-REFR        1
-REFRIOR     1.55
-EMITTANCE   0
-
-// Mirror
-MATERIAL 5
-RGB         .1 .1 .1
-SPECEX      0
-SPECRGB     .98 .98 .98
-REFL        1
-REFR        0
-REFRIOR     1.55
-EMITTANCE   0
-
-// Matte White
-MATERIAL 6
-RGB         .85 .81 .78
-SPECEX      0
-SPECRGB     0 0 0
-REFL        0
-REFR        0
-REFRIOR     0
-EMITTANCE   0
-
-// Diffuse blue
-MATERIAL 7
-RGB         .35 .35 .85
+RGB         .78 .78 .78
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -80,13 +22,13 @@ EMITTANCE   0
 
 // Camera
 CAMERA
-RES         800 800
+RES         1000 1000
 FOVY        45
 ITERATIONS  10000
 DEPTH       8
-FILE        basic_demo_closed
-EYE         0 5 4.9
-LOOKAT      0 5 0
+FILE        seele_scene
+EYE         0 1 10.5
+LOOKAT      0 4 0
 UP          0 1 0
 FOCALDIST   5
 LENSRADIUS  0
@@ -96,95 +38,31 @@ LENSRADIUS  0
 OBJECT 0
 cube
 material 0
-TRANS       0 10 0
-ROTAT       10 0 0
-SCALE       3 .3 3
+TRANS       -5 17 13.5
+ROTAT       30 45 0
+SCALE       10 .3 10
 
-// Floor
+// Ceiling light
 OBJECT 1
 cube
-material 1
-TRANS       0 0 0
-ROTAT       0 0 0
-SCALE       10 .01 10
+material 0
+TRANS       5 17 13.5
+ROTAT       30 -45 0
+SCALE       10 .3 10
 
-// Ceiling
+// Stage
 OBJECT 2
-cube
-material 1
-TRANS       0 10 0
-ROTAT       0 0 90
-SCALE       .01 10 10
-
-// Back wall
-OBJECT 3
-cube
-material 7
-TRANS       0 5 -5
-ROTAT       0 90 0
-SCALE       .01 10 10
-
-// Left wall
-OBJECT 4
-cube
-material 2
-TRANS       -5 5 0
-ROTAT       0 0 0
-SCALE       .01 10 10
-
-// Right wall
-OBJECT 5
-cube
-material 3
-TRANS       5 5 0
-ROTAT       0 0 0
-SCALE       .01 10 10
-
-// Glass Cube
-OBJECT 6
-cube
-material 4
-TRANS       -2.5 0 -2.3
-ROTAT       0 17.8 0
-SCALE       2.1 8.6 2.1
-
-// Mirror Cube
-OBJECT 7
-cube
-material 5
-TRANS       3 1 -3
-ROTAT       0 -17.5 0
-SCALE       2 2 2
-
-// Sphere
-OBJECT 8
-sphere
-material 6
-TRANS       -2.8 0.7 -3.4
-ROTAT       0 0 0
-SCALE       1.5 1.5 1.5
-
-// Sphere
-OBJECT 9
-sphere
-material 6
-TRANS       -2.1 2.3 -2.3
-ROTAT       0 0 0
-SCALE       1.5 1.5 1.5
-
-// Seele
-OBJECT 10
 mesh
 ../scenes/gltf/seele_light.gltf
-material 3
-TRANS 0 0 -1
+material -1
+TRANS 0 0 1
 ROTAT 0 0 0
 SCALE 5 5 5
 
-// Cage wall
-OBJECT 11
+// Floor
+OBJECT 3
 cube
-material 7
-TRANS 0 5 5
-ROTAT 0 90 0
-SCALE .01 10 10
+material 1
+TRANS 0 -1 0
+ROTAT 0 0 0
+SCALE 50 .1 50
