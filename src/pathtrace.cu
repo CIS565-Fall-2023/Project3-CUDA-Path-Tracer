@@ -25,7 +25,8 @@
 #define STREAM_COMPACTION 1
 #define SORT_MATERIAL 1
 #define CACHE_FIRST_BOUNCE 1
-#define ANTI_ALIASING 0
+#define APERTURE 1.2
+#define ANTI_ALIASING 1
 #define DIRECT_LIGHT 0
 #define BVHOPEN 1
 
@@ -219,6 +220,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		);
 #endif
 
+#if !CACHE_FIRST_BOUNCE
+		cam.aperture = APERTURE;
 		// Depth of Field effect
 		// Ref: PBTR 6.2
 		if (cam.aperture > 0.0f) {
@@ -233,7 +236,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			segment.ray.origin += cam.right * pointOnLens.x + cam.up * pointOnLens.y;
 			segment.ray.direction = glm::normalize(focalPoint - segment.ray.origin);
 		}
-
+#endif
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
 	}
@@ -340,8 +343,6 @@ __host__ __device__ bool intersectBoundingBox(const glm::vec3& minCorner, const 
 //}
 
 
-
-
 // TODO:
 // computeIntersections handles generating ray intersections ONLY.
 // Generating new rays is handled in your shader(s).
@@ -395,6 +396,13 @@ __global__ void computeIntersections(
 
 				for (int j = geom.triangleIdStart; j <= geom.triangleIdEnd; j++) {
 					Triangle& tri = triangles[j];
+
+					/*tri.vertices[0] = multiplyMV(geom.invTranspose, glm::vec4(tri.vertices[0], 1));
+					tri.vertices[1] = multiplyMV(geom.invTranspose, glm::vec4(tri.vertices[1], 1));
+					tri.vertices[2] = multiplyMV(geom.invTranspose, glm::vec4(tri.vertices[2], 1));
+					tri.normals[0] = glm::normalize(multiplyMV(geom.transform, glm::vec4(tri.normals[0], 1)));
+					tri.normals[1] = glm::normalize(multiplyMV(geom.transform, glm::vec4(tri.normals[1], 1)));
+					tri.normals[2] = glm::normalize(multiplyMV(geom.transform, glm::vec4(tri.normals[2], 1)));*/
 
 					glm::vec3 cur_intersect;
 					glm::vec3 cur_normal;
@@ -794,7 +802,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		}
 		
 #endif
-		computeBVHIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
 			, dev_paths

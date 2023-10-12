@@ -107,31 +107,20 @@ glm::vec3 calculateRandomDirectionInHemisphere(
 }
 
 __host__ __device__
-float calculateFresnelReflectance(const glm::vec3& incident, const glm::vec3& normal, float indexOfRefraction) {
-    float cosI = glm::dot(incident, normal); // cosine of the incident angle
-    float etaI = 1.0f; // air
-    float etaT = indexOfRefraction;
+float calculateFresnelReflectance(const glm::vec3& rayDir, glm::vec3& normal, float indexOfRefraction) {
+    float cosThetaI = glm::dot(rayDir, normal);
+    float R1 = indexOfRefraction;
+    float R2 = 1.0f;
 
-    // If the ray is inside the object
-    if (cosI < 0.0f) {
-        cosI = -cosI;
-        std::swap(etaI, etaT);
+    if (cosThetaI < 0.0f) {
+        cosThetaI = -cosThetaI;
+        std::swap(R1, R2);
+        normal = -normal;
     }
 
-    // Compute sini using the trigonometric identity
-    float sinI = sqrt(1.0f - cosI * cosI);
-    float sinT = etaI / etaT * sinI;
-
-    // Total internal reflection
-    if (sinT >= 1.0f) {
-        return 1.0f;
-    }
-
-    float cosT = sqrt(1.0f - sinT * sinT);
-    float R0 = (etaI - etaT) / (etaI + etaT);
-    R0 *= R0;
-
-    return R0 + (1.0f - R0) * pow(1.0f - cosI, 5);
+    //Schlick
+    float R0 = pow((R1 - R2) / (R1 + R2), 2);
+    return R0 + (1 - R0) * pow(1 - cosThetaI, 5);
 }
 
 
@@ -183,31 +172,26 @@ void scatterRay(
     if (pathSegment.remainingBounces <= 0) return;
 
     thrust::uniform_real_distribution<float> u01(0, 1);
+    thrust::uniform_real_distribution<float> u02(0, 1);
     float random = u01(rng);
+    float random2 = u02(rng);
     glm::vec3 newDir;
 
-
     if (m.hasReflective && m.hasRefractive) {
-        float cosThetaI = glm::dot(-1.f * pathSegment.ray.direction, normal);
-        float R1 = m.indexOfRefraction;
-        float R2 = 1.0f;
-
+        float cosThetaI = glm::dot(pathSegment.ray.direction, normal);
         if (cosThetaI < 0.0f) {
             cosThetaI = -cosThetaI;
-            std::swap(R1, R2);
             normal = -normal;
         }
 
-        //Schlick
-        float R0 = pow((R1 - R2) / (R1 + R2), 2);
-        float R = R0 + (1 - R0) * pow(1 - cosThetaI, 5);
+        float R = calculateFresnelReflectance(pathSegment.ray.direction, normal, m.indexOfRefraction);
 
-        // Importance Sampling: Favor the specular direction
         if (random < R) {
             newDir = glm::reflect(pathSegment.ray.direction, normal);
         }
         else {
-            newDir = glm::refract(pathSegment.ray.direction, normal, R1 / R2);
+            float eta = cosThetaI > 0 ? 1.0f / m.indexOfRefraction : m.indexOfRefraction;
+            newDir = glm::refract(pathSegment.ray.direction, normal, eta);
         }
 
         // Russian Roulette with color-based termination
@@ -228,15 +212,15 @@ void scatterRay(
     }
     else if (m.hasReflective) {
 #if IMPERFECT_SPECULAR
-        float fresnelReflectance = calculateFresnelReflectance(pathSegment.ray.direction, normal, m.indexOfRefraction);
+        float fresnelReflectance = calculateFresnelReflectance(-pathSegment.ray.direction, normal, m.indexOfRefraction);
         if (random < fresnelReflectance)
-        {
-            newDir = calculateRandomDirectionInHemisphere(normal, rng);
-        }
-        else
         {
             newDir = glm::reflect(pathSegment.ray.direction, normal);
             pathSegment.color *= m.specular.color;
+        }
+        else
+        {
+            newDir = calculateRandomDirectionInHemisphere(normal, rng);
         }
         pathSegment.color *= m.color;
 #else
@@ -253,7 +237,7 @@ void scatterRay(
             newDir = glm::reflect(pathSegment.ray.direction, normal);
         }
         pathSegment.color *= m.specular.color * m.color;
-    }
+}
     else if (m.hasSubsurface) {
         BSSRDF subsurfaceModel(1.2f, 1.0f, 1.3f);
         thrust::uniform_real_distribution<float> u01(0, 1);
@@ -278,7 +262,7 @@ void scatterRay(
                 thrust::uniform_real_distribution<int> u02(0, lightNum - 1);
                 Geom light = lights[u02(rng)];
                 glm::vec3 lightPos = glm::vec3(light.translation * glm::vec3(u01(rng), u01(rng), u01(rng)));
-                
+
                 glm::vec3 new_origin = intersect + scattering_direction * m.subsurfaceRadius;
                 glm::vec3 lightDir = glm::normalize(lightPos - intersect);
 

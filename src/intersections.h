@@ -145,12 +145,8 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
 __host__ __device__ float triangleIntersectionTest(Geom obj, Ray r, glm::vec3& intersectionPoint, Triangle& tri, glm::vec3& normal, glm::vec2& uv, bool& outside) {
 
-    // Transform ray origin and direction with object's inverse transform
-    glm::vec3 transformedOrigin = multiplyMV(obj.inverseTransform, glm::vec4(r.origin, 1.0f));
-    glm::vec3 transformedDirection = glm::normalize(multiplyMV(obj.inverseTransform, glm::vec4(r.direction, 0.0f)));
-
     glm::vec3 barycentricCoords;
-    bool is_hit = glm::intersectRayTriangle(transformedOrigin, transformedDirection, tri.vertices[0], tri.vertices[1], tri.vertices[2], barycentricCoords);
+    bool is_hit = glm::intersectRayTriangle(r.origin, r.direction, tri.vertices[0], tri.vertices[1], tri.vertices[2], barycentricCoords);
 
     if (!is_hit) {
         return FLT_MAX;
@@ -158,7 +154,7 @@ __host__ __device__ float triangleIntersectionTest(Geom obj, Ray r, glm::vec3& i
 
     // Compute barycentric position
     glm::vec3 baryPosition = (1.f - barycentricCoords.x - barycentricCoords.y) * tri.vertices[0] + barycentricCoords.x * tri.vertices[1] + barycentricCoords.y * tri.vertices[2];
-    intersectionPoint = multiplyMV(obj.transform, glm::vec4(baryPosition, 1.f));
+    intersectionPoint = baryPosition;
 
     // If normals are present in the obj, use them, else compute them.
     glm::vec3 triNormal = glm::normalize(glm::cross(tri.vertices[1] - tri.vertices[0], tri.vertices[2] - tri.vertices[0]));
@@ -181,7 +177,6 @@ __host__ __device__ float triangleIntersectionTest(Geom obj, Ray r, glm::vec3& i
 
     // Compute interpolated normals and uvs using barycentric weights
     normal = glm::normalize(normals[0] * weights[0] + normals[1] * weights[1] + normals[2] * weights[2]);
-    normal = glm::normalize(multiplyMV(obj.invTranspose, glm::vec4(normal, 0.f)));
 
     if ((glm::length(tri.uvs[0]) != 0) && (glm::length(tri.uvs[1]) != 0) && (glm::length(tri.uvs[2]) != 0)) {
         uv = tri.uvs[0] * weights[0] + tri.uvs[1] * weights[1] + tri.uvs[2] * weights[2];
