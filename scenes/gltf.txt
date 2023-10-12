@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   4
+EMITTANCE   8
 
 // Diffuse white
 MATERIAL 1
@@ -60,12 +60,12 @@ EMITTANCE   0
 
 // Imperfect diffuse specular cyan
 MATERIAL 6
-RGB         0.98 0.98 0.98
+RGB         .25 .85 .85
 SPECEX      0
-SPECRGB     0.98 0.98 0.98
+SPECRGB     0.9 0.9 0.9
 REFL        0
-REFR        1
-REFRIOR     1.55
+REFR        0
+REFRIOR     0
 EMITTANCE   0
 
 // Camera
@@ -75,7 +75,7 @@ FOVY        45
 ITERATIONS  1000
 DEPTH       8
 FILE        cornell
-EYE         0.0 5 9.5
+EYE         0.0 5 6
 LOOKAT      0 5 0
 UP          0 1 0
 LENSRADIUS  1
@@ -131,8 +131,8 @@ SCALE       .01 10 10
 
 //Teapot
 OBJECT 6
-mesh_gltf   teapot.gltf
+mesh_gltf   Suzanne.gltf
 material 6
-TRANS       -1 3 0
-ROTAT       -70 30 -20
-SCALE       0.05 0.05 0.05
+TRANS       0 5 0
+ROTAT       -20 0 0
+SCALE       2 2 2
