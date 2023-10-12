@@ -123,14 +123,14 @@ SCALE       .01 10 10
 OBJECT 6
 mesh_gltf   Avocado.gltf
 material 5
-TRANS       -2 2 -1
+TRANS       -2 2 0
 ROTAT       -35 180 20
 SCALE       80 80 80
 
 // Suzanne
 OBJECT 7
 mesh_gltf   Suzanne.gltf
-material 5
-TRANS       2 4 -1
+material 4
+TRANS       2 5 2
 ROTAT       0 0 -20
-SCALE       2 2 2
+SCALE       3 3 3

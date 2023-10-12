@@ -29,7 +29,7 @@ public:
     void collapseIntoSingleAABB(std::vector<AABB>& boundingBoxes);
 };
 
-void buildBVH(BVHNode*& node, std::vector<AABB> boundingBoxes);
+void buildBVH(BVHNode*& node, std::vector<AABB>& boundingBoxes);
 void nofOfNodesInBVH(BVHNode* node, int& count);
 int flattenBVH(std::vector<LBVHNode>& flattenedBVH, BVHNode* node, int& offset);
 #endif
@@ -52,7 +52,9 @@ public:
     std::vector<glm::vec3> textures;
     RenderState state;
 #if USE_BVH
+    bool bvhBuilt = false;
     BVHNode* root;
+    std::vector<LBVHNode> flattenedBVH;
     std::vector<AABB> boundingBoxes;   
     void computeAABB(Geom geom);
 #endif

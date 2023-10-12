@@ -39,6 +39,12 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #endif
 }
 
+PerformanceTimer& timer()
+{
+	static PerformanceTimer timer;
+	return timer;
+}
+
 struct continue_ray
 {
 	__host__ __device__
@@ -123,6 +129,7 @@ static Triangle* dev_tris = NULL;
 static Texture* dev_albedo_textures = NULL;
 static glm::vec3* dev_textures = NULL;
 static PathSegment* dev_paths = NULL;
+
 #if FIRST_BOUNCE_CACHED
 static ShadeableIntersection* dev_intersections_cached = NULL;
 #endif
@@ -173,14 +180,8 @@ void pathtraceInit(Scene* scene) {
 #endif
 
 #if USE_BVH
-	buildBVH(scene->root, scene->boundingBoxes);
-	int nodes = 0;
-	nofOfNodesInBVH(scene->root, nodes);
-	std::vector<LBVHNode> flattenedBVH(nodes, LBVHNode());
-	int offset = 0;
-	flattenBVH(flattenedBVH, scene->root, offset);
-	cudaMalloc(&dev_lbvh_nodes, flattenedBVH.size() * sizeof(LBVHNode));
-	cudaMemcpy(dev_lbvh_nodes, flattenedBVH.data(), flattenedBVH.size() * sizeof(LBVHNode), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_lbvh_nodes, scene->flattenedBVH.size() * sizeof(LBVHNode));
+	cudaMemcpy(dev_lbvh_nodes, scene->flattenedBVH.data(), scene->flattenedBVH.size() * sizeof(LBVHNode), cudaMemcpyHostToDevice);
 #endif
 
 	checkCUDAError("pathtraceInit");
@@ -298,10 +299,19 @@ __global__ void computeIntersections(
 		//BVH traversal
 #if 0
 		int currNodeIdx = 0, visitOffset = 0;
+		int nodesIntersected = 0;
 		int stack[64] = { 0 };
 		while (true) {
 			LBVHNode* currNode = &lbvh[currNodeIdx];
 			if (doesRayIntersectAABB(pathSegment.ray, currNode->boundingBox, tris, currNode->isLeaf, t, tmp_intersect, tmp_normal)) {
+
+				nodesIntersected++;
+				if (nodesIntersected > 1000)
+				{
+					intersectionPoint = pathSegment.ray.origin + pathSegment.ray.direction * 2.0f;
+					return 2.0f;;
+				}
+
 				if (currNode->isLeaf) {
 
 					Geom geom = currNode->boundingBox.geom;
@@ -344,6 +354,7 @@ __global__ void computeIntersections(
 #endif
 
 #if 1
+		int noIntersections = 0;
 		int top = 0;
 		int stack[64] = { 0 };
 		while (top >= 0 && top < 64) {
@@ -382,11 +393,13 @@ __global__ void computeIntersections(
 				}
 				else {
 					if (doesRayIntersectAABB(pathSegment.ray, lbvh[currNodeIdx + 1].boundingBox)) {
+						noIntersections++;
 						top++;
 						stack[top] = currNodeIdx + 1; //left child
 					}
 
 					if (currNode->secondChildOffset != -1 && doesRayIntersectAABB(pathSegment.ray, lbvh[currNode->secondChildOffset].boundingBox)) {
+						noIntersections++;
 						top++;
 						stack[top] = currNode->secondChildOffset; //right child
 					}
@@ -553,8 +566,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// * Finally, add this iteration's results to the image. This has been done
 	//   for you.
 
-	// TODO: perform one iteration of path tracing
-
+	// TODO: perform one iteration of path tracing	
 	generateRayFromCamera << <blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
 	checkCUDAError("generate camera ray");
 
@@ -582,6 +594,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 				, dev_paths
 				, dev_geoms
 				, dev_tris
+#if USE_BVH
+				, dev_lbvh_nodes
+#endif
 				, hst_scene->geoms.size()
 				, dev_intersections
 				);
@@ -664,5 +679,5 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,
 		pixelcount * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 
-	checkCUDAError("pathtrace");
+	checkCUDAError("pathtrace");	
 }
