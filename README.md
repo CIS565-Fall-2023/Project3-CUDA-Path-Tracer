@@ -7,7 +7,7 @@ CUDA Path Tracer
   * [LinkedIn](https://www.linkedin.com/in/udwivedi/), [personal website](https://utkarshdwivedi.com/)
 * Tested on: Windows 11 Home, AMD Ryzen 7 5800H @ 3.2GHz 16 GB, Nvidia GeForce RTX 3060 Laptop GPU 6 GB
 
-# CUDA Path Tracer
+---
 
 ![](img/cornell_highlight1.png)
 
@@ -24,10 +24,24 @@ Rays are cast for `n` bounces every frame. Rays collect material and global illu
 
 ## Table of Contents
 
-- [Features](#features)
-  - [1. Bidrectional Scattering Distribution Functions](#1-bidrectional-scattering-distribution-function-computation)
-- []()
-- 
+- [CUDA Path Tracer](#cuda-path-tracer)
+  - [Introduction](#introduction)
+  - [Table of Contents](#table-of-contents)
+  - [Visual Features](#visual-features)
+    - [1. Bidrectional Scattering Distribution Function Computation](#1-bidrectional-scattering-distribution-function-computation)
+    - [2. Anti-aliasing with subpixel ray jittering](#2-anti-aliasing-with-subpixel-ray-jittering)
+    - [3. Depth of Field using Thin Lens Camera Model](#3-depth-of-field-using-thin-lens-camera-model)
+    - [4. GLTF Mesh Loading](#4-gltf-mesh-loading)
+    - [5. Tone Mapping](#5-tone-mapping)
+  - [Acceleration Features \& Performance Analysis](#acceleration-features--performance-analysis)
+    - [1. Ray termination using stream compaction](#1-ray-termination-using-stream-compaction)
+    - [2. Mesh sort by materials for GPU coherency](#2-mesh-sort-by-materials-for-gpu-coherency)
+    - [3. First bounce cache](#3-first-bounce-cache)
+    - [4. Ray termination via russian roulette](#4-ray-termination-via-russian-roulette)
+    - [5. Naive Axis-Aligned Bounding Box (AABB) Acceleration](#5-naive-axis-aligned-bounding-box-aabb-acceleration)
+    - [6. Bounding Volume Hierarchy (BVH) Acceleration](#6-bounding-volume-hierarchy-bvh-acceleration)
+- [References](#references)
+
 ## Visual Features
 
 ### 1. Bidrectional Scattering Distribution Function Computation
@@ -163,11 +177,17 @@ Without these changes, images may appear very dark or very bright.
 |:-:|:-:|
 |No tone mapping|HDR + Gamma Correction|
 
-## Performance Optimization Features
+## Acceleration Features & Performance Analysis
 
 ### 1. Ray termination using stream compaction
 
 During path tracing, there are many rays that hit nothing, and this is especially true for open scenes with not a lot of geometry to intersect with. Unnecessary computations on these rays impact performance. Stream compaction helps with terminating the rays that don't hit anything for a further bounce. This can be toggled using the `STREAM_COMPACT` preprocessor directive in `utilities.h`.
+
+|<img src="img/streamCompactOpen.png" width=500>|<img src="img/streamCompactClosed.png" width=500>
+|:-:|:-:|
+|Open Scene|Closed Scene|
+
+Based on the graphs above, stream compaction based ray termination does not really impact performance much. In fact, it *reduces* performance in scenes with low complexity. This is likely due to the fact that the benefit of reducing warp divergence from stream compaction is not nearly as much as the overhead of performing stream compaction itself.
 
 ### 2. Mesh sort by materials for GPU coherency
 
@@ -175,13 +195,43 @@ This project handles all material calculations in a single CUDA kernel. Meshes e
 
 To help with this, there is an option to toggle sorting of meshes by their material ids to reduce thread divergence. This can be toggled using the `SORT_BY_MATERIAL` preprocessor directive in `utilities.h`.
 
+|<img src="img/materialSort.png" width=600>|
+|:-:|
+|Material sort performance in low and high complexity scenes|
+
+From the above graph, we can see that for scenes with low complexity (400 triangles in this case), material sort reduces performance. We start seeing performance benefits once we pass a scene complexity threshold. This is because the overhead of sorting by material index is more than the performance gain for smaller scenes like the ones in this readme, but we can start seeing real benefits with more complicated scenes. It is also possible that the BSDF computations in the current project are not that complex, and with more complex BSDFs sorting would show real value. Perhaps a dynamic toggle based on scene and material complexity would be ideal. 
+
 ### 3. First bounce cache
 
-In the scenario where the first rays are always cast from the center of the pixel into the pinhole camera, the first bounce for each ray can be cached, as these rays are deterministic and will always be the same. However, this caching becomes useless as soon as more complex features are added, such as a the thin-lens camera model or subpixel jittering for anti-aliasing. First bounce caching can be toggled using the `CACHE_FIRST_INTERSECTION` preprocessor directive in `utilities.h`. Warning: using this will automatically disable thin-lens camera and anti-aliasing.
+In the scenario where the first rays are always cast from the center of the pixel into the pinhole camera, the first bounce for each ray can be cached, as these rays are deterministic and will always be the same. First bounce caching can be toggled using the `CACHE_FIRST_INTERSECTION` preprocessor directive in `utilities.h`. Warning: using this will automatically disable thin-lens camera and anti-aliasing.
+
+|<img src="img/firstBounceCache.png" width=600>|
+|:-:|
+|Material sort performance in low and high complexity scenes|
+
+There is a very slight performance boost from this additional caching, and the amount of performance gained does not justify the amount of memory required to store the first bounce. Additionally, this caching becomes useless as soon as more complex features are added, such as a the thin-lens camera model or subpixel jittering for anti-aliasing.
+
+Further testing and evaluation of first bounce cache is done below along with ray termination via russian roulette.
 
 ### 4. Ray termination via russian roulette
 
 Ray termination via russian roulette terminates rays that are less likely to contribute to the overall colour of the scene, and boosts the contribution of rays that do contribute to combat the bias introduced by early ray termination. In this implementation, each ray is terminated based on a random probability `q` if the maximum of the ray's throughput is less than the probability. Otherwise, the ray's contribution is divided by `q` to boost its contribution. Russian roulette can be enabled using the `ENABLE_RUSSIAN_ROULETTE` preprocessor directive in `utilities.h`.
+
+To test performance, the following scene configurations were used:
+- Open scene: 3 Blender Monkeys (16k total tris) a light, everything surrounded by cornell box with camera side of cornell box without wall (3 walls, a floor and a ceiling)
+- Closed scene: 3 Blender Monkeys (16k total tris), a light, everything surrounded by cornell box (4 walls, a floor and a ceiling)
+
+|<img src="img/activeRaysOpen.png" width=500>|<img src="img/activeRaysClosed.png" width=500>
+|:-:|:-:|
+|Open Scene|Closed Scene|
+
+From above graphs we can see that stream compaction does not do nearly as much ray termination as russian roulette does, while the image quality stays the same in both. Also, stream compaction helps mostly with open scenes where rays *have already terminated* and thus are moved to one side of the array. Russian roulette, however, works equally in both open and closed scenes and is an *active ray termination concept*. **Stream compaction removes already terminated rays while russian roulette randomly terminates additional rays.** With this in mind, it seems that combining both processes would get us ideal benefit: russian roulette would terminate extra rays, and then stream compaction would move those rays to one side of the array. This hypothesis is tested on the open scene:
+
+|<img src="img/rayTerminationMode.png">|
+|:-:|
+|FPS gains for different modes of ray termination|
+
+As we can see, the above hypothesis is indeed correct. Combining both stream compaction and russian roulette results in most performance gains!
 
 ### 5. Naive Axis-Aligned Bounding Box (AABB) Acceleration
 
@@ -189,9 +239,17 @@ The basic mesh intersection test iterates through every single triangle in meshe
 
 To help with performance, the CPU side GLTF mesh parsing code computes the AABB for each mesh and stores that information. This can later be used to naively accelerate performance while path-tracing. Before intersecting with all triangles in a mesh, rays can first check intersections with the bounding box of each mesh. If the ray does not intersect with the bounding box, it can avoid checking intersections with every single triangle in that mesh.
 
-Even though this is a naive approac, it helps increase performance to a usable degree. However, this only works when the meshes are small compared to the screen size. Once the meshes become big and cover more of the screen area, more and more rays will intersect with the AABB and pass this test.
+Even though this is a naive approach, it helps increase performance to a usable degree. However, this only works when the meshes are small compared to the screen size. Once the meshes become big and cover more of the screen area, more and more rays will intersect with the AABB and pass this test.
 
 This can be enabled using the `ENABLE_NAIVE_AABB_OPTIMISATION` preprocessor directive in `utilities.h`.
+
+This acceleration is tested on the same closed scene used in testing [russian roulette](#4-ray-termination-via-russian-roulette).
+
+|<img src="img/naiveAcceleration.png">|
+|:-:|
+|Naive acceleration method performance|
+
+From the above graph, we can see that the stream compact + Russian roulette combination is still the dominant king, but combining the two with even more acceleration methods does indeed help! The rightmost bar where all three methods are combined is the best performing one, which makes sense because now in addition to rays being terminated by Russian roulette, even more rays are terminated by AABB checks, and then compacted away by stream compaction.
 
 ### 6. Bounding Volume Hierarchy (BVH) Acceleration
 
@@ -206,10 +264,23 @@ There are a few differences in this project's BVH compared to the one in PBRT:
 
 BVH acceleration can be enabled using the `ENABLE_BVH` preprocessor directive in `utilities.h`. This will automatically turn off the naive AABB acceleration, as that becomes pointless with the BVH turned on.
 
-## Performance Analysis
+BVH acceleration is tested on the same closed scene used in testing [russian roulette](#4-ray-termination-via-russian-roulette).
 
-## References
+|<img src="img/bvh.png">|
+|:-:|
+|Naive acceleration method performance|
+
+This one is very interesting! I'll try and break down what is seen here:
+
+- **Just adding BVH *significantly* improved performance**: this much makes sense. A BVH reduces the number of intersections from linear to logarithmic.
+- **Performing stream compaction in addition to BVH *reduces* performance**: This is because now that we've already reduced the number of intersections significantly, the performance overhead of using stream compaction outweighs the gains.
+- **Performing Russian roulette ray termination in addition to BVH acceleration is the fastest**: this also makes sense. As opposed to stream compaction, there is relatively little to no overhead of performing Russian roulette ray termination. A simple probability check simply terminates even more rays that were not already terminated from the BVH.
+- **Combining stream compaction with everything is also slow**: again, the BVH and Russian roulette combined have so much performance boost without the need for any kind of sorting or shuffling, that adding stream compaction starts to show its limitations.
+
+# References
 
 - Adam Mally's CIS 561 Advanced Computer Graphics course at University of Pennsylvania
-- TinyGLTF
-- PBRT
+- [TinyGLTF](https://github.com/syoyo/tinygltf)
+- [PBR Book](https://www.pbr-book.org/)
+- [Gamma Correction Notes](https://www.cambridgeincolour.com/tutorials/gamma-correction.htm)
+- [Tone Mapping Notes](https://bruop.github.io/tonemapping/)
