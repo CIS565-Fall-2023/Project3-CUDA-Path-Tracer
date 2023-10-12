@@ -10,7 +10,8 @@ CUDA Path Tracer
 ---
 ## Overview
 
-![](img/stanford-bunny.2023-10-11_16-37-58z.1000samp.png)
+<img src="img/stanford-bunny.2023-10-11_16-37-58z.1000samp.png" width="100%" />
+
 Stanford Bunny with Blue-tinted Glossy Material in Cornell Box, rendered in $2000 \times 2000$ resolution with $1000$ samples per pixel and $16$ light bounces.
 
 A path tracer is a rendering algorithm that simulates the behavior of light in a scene. It uses Monte Carlo method to estimate the radiance at each pixel of an image by tracing the path of light through the scene. The algorithm is iterative and parallel in nature, so it runs intuitively and fairly well on CUDA. And it is able to simulate many effects that are difficult with other rendering techniques, such as soft shadows, depth of field, caustics, ambient occlusion, and indirect lighting.
@@ -28,16 +29,35 @@ Material system is adopted on the above rendering pipeline from [glTF Specificat
 - **Roughness**: The roughness of the material. A value of $0$ means the material is perfectly smooth, and a value of $1$ means the material is pure diffuse reflection.
 - **IOR**: The index of refraction of the material. A value of $1$ means the material is vacuum, and a value of $1.5$ is a good compromise for most opaque, dielectric materials.
 - **Opacity**: The opacity of the material. A value of $0$ means the material is fully transparent, and a value of $1$ means the material is fully opaque.
-- **Emittance**: The emittance of the material. A value of $0$ means the material is not emissive, and a value $ > 0$ means the material is emissive, controlling the brightness of the material.
+- **Emittance**: The emittance of the material. A value of $0$ means the material is not emissive, and a value greater than $0$ means the material is emissive, controlling the brightness of the material.
 
 
 Using the `metallic` and `roughness` parameter, the material can be either dielectric or metal, and its reflection model can be either diffuse or specular. In addition with multiple importance sampling, the path tracer is able to render imperfect specular materials and produce better roughness effect. Also, by controlling the `ior` and `opacity` of dielectrics, the material can produce glass-like refraction with fresnel effect.
+
+<style>
+.m table th:first-of-type {
+    width: 10%;
+}
+.m table th:nth-of-type(2) {
+    width: 30%;
+}
+.m table th:nth-of-type(3) {
+    width: 30%;
+}
+.m table th:nth-of-type(4) {
+    width: 30%;
+}
+</style>
+
+<div class="m">
 
 || Diffuse | Imperfect Specular | Pure Specular |
 |-:| :----------: | :-----------: | :----------------: |
 |**Dielectric**| ![](img/cornell.2023-10-12_00-04-31z.2000samp.png) | ![](img/cornell.2023-10-12_00-11-43z.2000samp.png) | ![](img/cornell.2023-10-12_00-05-52z.2000samp.png) |
 |**Metal**| ![](img/cornell.2023-10-12_00-21-21z.2000samp.png) | ![](img/cornell.2023-10-12_00-17-32z.2000samp.png) | ![](img/cornell.2023-10-12_00-23-53z.2000samp.png) |
 |**Glass**| ![](img/cornell.2023-10-12_01-07-37z.2000samp.png) | ![](img/cornell.2023-10-12_00-55-54z.2000samp.png) | ![](img/cornell.2023-10-12_00-47-47z.2000samp.png) |
+
+</div>
 
 Use the material system, we can mimic many real-world materials. For example, we have the following materials like aluminum, titanium, stainless steel, and different glasses.
 
@@ -50,6 +70,15 @@ All scenes rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light
 ### Anti-Aliasing
 
 Anti-aliasing can be achieved by jittering rays within a pixel. In the following example, the image is rendered in low resolution to exaggerate the effect.
+
+<style>
+table th:first-of-type {
+    width: 50%;
+}
+table th:nth-of-type(2) {
+    width: 50%;
+}
+</style>
 
 | AA OFF | AA ON |
 | :----: | :---: |
@@ -65,7 +94,7 @@ Depth-of-field can be achieved by jittering rays within an aperture. In the foll
 | :-----: | :----: |
 | ![](img/dof.2023-10-11_17-23-28z.2000samp.png) | ![](img/dof.2023-10-11_17-22-50z.2000samp.png) |
 
-rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
+All scenes rendered in $800 \times 800$ resolution with $2000$ spp and $8$ light bounces.
 
 ### Procedural Textures
 
