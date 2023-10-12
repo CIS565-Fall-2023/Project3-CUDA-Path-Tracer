@@ -17,7 +17,7 @@ _247,963 triangles, 5000 iterations, max 10 bounces per ray_
 _Stanford Dragon - 871,306 triangles, 5000 iterations, max 8 bounces per ray_
  <img src="images/stanford_dragon.png" width=900>
  
-<img src="images/avocado_suzanne.png" width=250> <img src="images/cornell.2023-10-12_00-57-47z.2519samp.png" width=250> <img src="images/cornell.2023-10-11_16-08-35z.5000samp.png" width=250>
+<img src="images/avocado_suzanne.png" width=290> <img src="images/cornell.2023-10-12_00-57-47z.2519samp.png" width=290> <img src="images/cornell.2023-10-11_16-08-35z.5000samp.png" width=290>
 
 ## Features Implemented
 
