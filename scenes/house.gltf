@@ -1913,24 +1913,13 @@
     },
     {
       "doubleSided": true,
-      "extensions": {
-        "KHR_materials_pbrSpecularGlossiness": {
-          "diffuseFactor": [
-            1.0,
-            1.0,
-            1.0,
-            1.0
-          ],
-          "diffuseTexture": {
-            "index": 0
-          },
-          "glossinessFactor": 0.0,
-          "specularFactor": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        }
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [ 0.200, 0.966, 0.336, 1.0 ],
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
       },
       "name": "Grass"
     },
@@ -2028,24 +2017,13 @@
     },
     {
       "doubleSided": true,
-      "extensions": {
-        "KHR_materials_pbrSpecularGlossiness": {
-          "diffuseFactor": [
-            1.0,
-            1.0,
-            1.0,
-            1.0
-          ],
-          "diffuseTexture": {
-            "index": 0
-          },
-          "glossinessFactor": 0.0,
-          "specularFactor": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        }
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [ 0.8, 0.8, 0.136, 1.0 ],
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
       },
       "name": "Oak_Stairs"
     },

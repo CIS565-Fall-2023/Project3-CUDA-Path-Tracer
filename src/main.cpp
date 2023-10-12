@@ -33,9 +33,6 @@ int height;
 //-------------------------------
 
 int main(int argc, char** argv) {
-	std::cout << "sleeping..." << std::endl;
-    sleep(3);
-    std::cout << "awake!" << std::endl;
 	startTimeString = currentTimeString();
 
 	if (argc < 2) {
@@ -199,7 +196,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 		camchanged = true;
 	}
 	else if (rightMousePressed) {
-		zoom += (ypos - lastY) / height;
+		zoom += 10*(ypos - lastY) / height;
 		zoom = std::fmax(0.1f, zoom);
 		camchanged = true;
 	}

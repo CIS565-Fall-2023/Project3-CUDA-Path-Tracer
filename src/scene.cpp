@@ -65,7 +65,6 @@ Scene::~Scene() {
 }
 
 int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4& baseTransform) {
-    std::cout << "====\n parsing node: " << node << std::endl;
     int status = 1;
     auto& nodeObj = model.nodes[node];
     glm::mat4 transform(1.0f);
@@ -100,24 +99,14 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
     //rotation = glm::eulerAngles(glm::quat_cast(transform));
     scale = glm::vec3(glm::length(transform[0]), glm::length(transform[1]), glm::length(transform[2]));
     
-    // print transform
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4;j++) {
-            std::cout << transform[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-    // if nodeObj has mesh
     if (nodeObj.mesh != -1) {
         int mesh = nodeObj.mesh;
         auto& meshObj = model.meshes[mesh];
-        std::cout << "mesh: " << mesh << std::endl;
         auto& primitives = meshObj.primitives;
         for (auto& primitive : primitives) {
             auto& attributes = primitive.attributes;
             auto it = attributes.find("POSITION");
             if (it == attributes.end()) {
-                std::cout << "no position attribute" << std::endl;
                 continue;
             }
 
@@ -153,7 +142,6 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
             Material newMaterial;
             auto& material = primitive.material;
             if (material == -1) {
-                std::cout << "no material found for primitive, using default material" << std::endl;
                 newMaterial.color = glm::vec3(0.5f);
             }
             else {
@@ -167,11 +155,6 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
                 auto& emitFactor = materialObj.emissiveFactor;
                 newMaterial.emittance = glm::length(glm::vec3(emitFactor[0], emitFactor[1], emitFactor[2]));
                 newMaterial.hasRefractive = 0.0f;
-
-                std::cout << "material: " << material << std::endl;
-                std::cout << "baseColor: " << baseColor[0] << " " << baseColor[1] << " " << baseColor[2] << std::endl;
-                std::cout << "metallicFactor: " << metallicFactor << std::endl;
-                std::cout << "emittance: " << newMaterial.emittance << std::endl;
             }
             materials.push_back(newMaterial);
 
@@ -197,55 +180,15 @@ int Scene::parseGLTFNode(const int node, const tinygltf::Model &model, glm::mat4
             boundingVolume.transform = transform * boundingVolume.transform;
             boundingVolume = getAxisAlignedBoundingBox(boundingVolume);
             newMesh.boundingVolume = boundingVolume;
-            std::cout << "bounding volume: " << std::endl;
-            for (int i = 0; i < 4; i++) {
-                for (int j = 0; j < 4;j++) {
-                    std::cout << boundingVolume.transform[i][j] << " ";
-                }
-                std::cout << std::endl;
-            }
-
             meshes.push_back(newMesh);
 
             Octree tree = buildOctree(newMesh);
             octrees.emplace_back(tree);
-            std::cout << "******************* octree size: " << tree.nodes.size() << std::endl;
-            std::cout << "transform: " << std::endl;
-            for (int i = 0; i < 4; i++) {
-                for (int j = 0; j < 4;j++) {
-                    std::cout << transform[i][j] << " ";
-                }
-                std::cout << std::endl;
-            }
-            for (int i=0; i<tree.nodes.size(); i++) {
-                std::cout << "node: " << i << std::endl;
-                for (int j=0; j<8; j++) {
-                    std::cout << "  child: " << tree.nodes[i].children[j] << std::endl;
-                }
-                std::cout << "  dataStart: " << tree.dataStarts[i] << std::endl;
-                std::cout << "  centroid: " << tree.boundingBoxes[i].translation.x << " " << tree.boundingBoxes[i].translation.y << " " << tree.boundingBoxes[i].translation.z << std::endl;
-                std::cout << "  triangles: " << std::endl;
-                for (int j=tree.dataStarts[i]; j<tree.dataStarts[i+1]; j++) {
-                    std::cout << "------" << std::endl;
-                    std::cout << "    " << tree.triangles[j].vertices[0].x << " " << tree.triangles[j].vertices[0].y << " " << tree.triangles[j].vertices[0].z << std::endl;
-                    std::cout << "    " << tree.triangles[j].vertices[1].x << " " << tree.triangles[j].vertices[1].y << " " << tree.triangles[j].vertices[1].z << std::endl;
-                    std::cout << "    " << tree.triangles[j].vertices[2].x << " " << tree.triangles[j].vertices[2].y << " " << tree.triangles[j].vertices[2].z << std::endl;
-                }
-                std::cout << "  bounding box: " << std::endl;
-                auto& boundingBox = tree.boundingBoxes[i];
-                for (int j = 0; j < 4; j++) {
-                    for (int k = 0; k < 4; k++) {
-                        std::cout << boundingBox.transform[j][k] << " ";
-                    }
-                    std::cout << std::endl;
-                }
-            }
         }
     }
     else if (nodeObj.camera != -1) {
         int camera = nodeObj.camera;
         auto& cameraObj = model.cameras[camera];
-        std::cout << "camera: " << camera << std::endl;
         if (cameraObj.type == "perspective") {
             status = loadGLTFPerspectiveCamera(cameraObj, translation) && status;
         }
@@ -269,7 +212,6 @@ Geom Scene::findBoundingVolume(float* vertices, int numVertices) {
     float minX, minY, minZ = std::numeric_limits<float>::infinity();
 
     for (int i = 0; i < numVertices; i++) {
-        std::cout << "vertex: " << vertices[i * 3] << " " << vertices[i * 3 + 1] << " " << vertices[i * 3 + 2] << std::endl;
         maxX = fmax(maxX, vertices[i * 3]);
         maxY = fmax(maxY, vertices[i * 3 + 1]);
         maxZ = fmax(maxZ, vertices[i * 3 + 2]);
@@ -284,9 +226,6 @@ Geom Scene::findBoundingVolume(float* vertices, int numVertices) {
     boundingVolume.translation = translation;
     glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
     boundingVolume.rotation = rotation;
-    std::cout << "min max x: " << minX << " " << maxX << std::endl;
-    std::cout << "min max y: " << minY << " " << maxY << std::endl;
-    std::cout << "min max z: " << minZ << " " << maxZ << std::endl;
     float xBound = (maxX - minX);
     float yBound = (maxY - minY);
     float zBound = (maxZ - minZ);
@@ -323,18 +262,6 @@ Octree Scene::buildOctree(const Mesh& mesh) {
     tree.inverseTransform = mesh.inverseTransform;
     tree.invTranspose = mesh.invTranspose;
 
-    // Geom boundingBox;
-    // boundingBox.type = CUBE;
-    // boundingBox.materialid = 1;
-    // boundingBox.translation = mesh.translation;
-
-    // boundingBox.scale = mesh.boundingVolume.scale;
-    // boundingBox.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    // boundingBox.transform = utilityCore::buildTransformationMatrix(
-    //     boundingBox.translation, boundingBox.rotation, boundingBox.scale);
-    // boundingBox.inverseTransform = glm::inverse(boundingBox.transform);
-    // boundingBox.invTranspose = glm::inverseTranspose(boundingBox.transform);
-
     tree.root = buildOctreeImpl(tree, mesh.boundingVolume, 0, triangles.begin(), triangles.end());
     tree.dataStarts.push_back(tree.triangles.size());
     return tree;
@@ -355,21 +282,13 @@ Geom Scene::getAxisAlignedBoundingBox(const Geom& meshBoundingVolume) {
     for (int i = 0; i < 8; i++) {
 
         vertices[i] = glm::vec3(meshBoundingVolume.transform * glm::vec4(vertices[i], 1.0f));
-        std::cout << "TRASFORMED vertex: " << vertices[i].x << " " << vertices[i].y << " " << vertices[i].z << std::endl;
         maxX = fmax(maxX, vertices[i].x);
         maxY = fmax(maxY, vertices[i].y);
         maxZ = fmax(maxZ, vertices[i].z);
         minX = min(minX, vertices[i].x);
         minY = fmin(minY, vertices[i].y);
         minZ = fmin(minZ, vertices[i].z);
-        std::cout << "min max x: " << minX << " " << maxX << std::endl;
-        std::cout << "min max y: " << minY << " " << maxY << std::endl;
-        std::cout << "min max z: " << minZ << " " << maxZ << std::endl;
     }
-    std::cout << "bounds =========================" << std::endl;
-    std::cout << "min max x: " << minX << " " << maxX << std::endl;
-    std::cout << "min max y: " << minY << " " << maxY << std::endl;
-    std::cout << "min max z: " << minZ << " " << maxZ << std::endl;
 
     glm::mat4 transform = glm::translate(glm::mat4(), glm::vec3((maxX + minX) / 2, (maxY + minY) / 2, (maxZ + minZ) / 2));
     glm::mat4 scale = glm::scale(glm::mat4(), glm::vec3(0.1f + maxX - minX, 0.1f + maxY - minY, 0.1f + maxZ - minZ));
@@ -389,14 +308,8 @@ Geom Scene::getAxisAlignedBoundingBox(const Geom& meshBoundingVolume) {
 template <typename Iterator>
 int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Iterator begin, Iterator end) {
     int newNodeId = tree.nodes.size();
-    std::cout << "BUILDOCTTREE: " << newNodeId << " depth: " << depth << std::endl;
     
-    if (begin == end) {
-        std::cout << "   ===>no triangles " << newNodeId << std::endl;
-        return -1;
-    }
-    if (depth > OCTREE_MAX_DEPTH) {
-        std::cout << "   ===>max depth reached" << newNodeId << std::endl;
+    if (begin == end || depth > OCTREE_MAX_DEPTH) {
         return -1;
     }
     
@@ -412,7 +325,6 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
         return newNodeId;
     }
     glm::vec3 center = boundingBox.translation;
-    std::cout << "center: " << center.x << " " << center.y << " " << center.z << std::endl;
 
     auto xComp = [center](const Triangle& triangle) {
         return triangle.centroid.x < center.x;
@@ -439,29 +351,13 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
     for (int x = -1; x <=1; x+=2) {
         for (int y = -1; y <=1; y+=2) {
             for (int z = -1; z <=1; z+=2) {
-                std::cout << "  OG bounding box: " << std::endl;
-                for (int j = 0; j < 4; j++) {
-                    for (int k = 0; k < 4; k++) {
-                        std::cout << boundingBox.transform[j][k] << " ";
-                    }
-                    std::cout << std::endl;
-                }
                 childBoundingBoxes[idx].type = CUBE;
                 childBoundingBoxes[idx].materialid = 0;
 
                 glm::vec3 translation = glm::vec3(x * translationScale.x, y * translationScale.y, z * translationScale.z);
 
                 glm::mat4 transform = glm::scale(glm::mat4(), halfScale);
-                std::cout << "intended transform: " << std::endl;
-                for (int j = 0; j < 4; j++) {
-                    for (int k = 0; k < 4; k++) {
-                        std::cout << transform[j][k] << " ";
-                    }
-                    std::cout << std::endl;
-                }
-                std::cout << "boundngBoxScale: " << boundingBox.scale.x << " " << boundingBox.scale.y << " " << boundingBox.scale.z << std::endl; 
-                std::cout << "translationScale: " << translationScale.x << " " << translationScale.y << " " << translationScale.z << std::endl;
-                std::cout << "intended translation: " << translation.x << " " << translation.y << " " << translation.z << std::endl;
+
                 childBoundingBoxes[idx].transform = boundingBox.transform * transform;
                 childBoundingBoxes[idx].transform = glm::translate(glm::mat4(), translation) * childBoundingBoxes[idx].transform;
                 childBoundingBoxes[idx].inverseTransform = glm::inverse(childBoundingBoxes[idx].transform);
@@ -472,13 +368,6 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
                                                           glm::length(childBoundingBoxes[idx].transform[1]), 
                                                           glm::length(childBoundingBoxes[idx].transform[2]));
 
-                std::cout << "  NEW bounding box: " << std::endl;
-                for (int j = 0; j < 4; j++) {
-                    for (int k = 0; k < 4; k++) {
-                        std::cout << childBoundingBoxes[idx].transform[j][k] << " ";
-                    }
-                    std::cout << std::endl;
-                }
                 idx++;
             }
         }
@@ -502,34 +391,6 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
         tree.nodes[newNodeId].children[i] = child_idx;
     }
 
-    // // // -x -y -z
-    // int child_idx = buildOctreeImpl(tree, childBoundingBoxes[0], depth + 1, begin, split_y_lower_z_lower);
-    // std::cout << "    node: " << newNodeId << " child: " << child_idx << std::endl;
-    // tree.nodes[newNodeId].children[0] = child_idx;
-
-    // // -x -y +z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[1], depth + 1, split_y_lower_z_lower, split_y_lower);
-    // tree.nodes[newNodeId].children[1] = child_idx;
-    // // -x +y -z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[2], depth + 1, split_y_lower, split_y_lower_z_upper);
-    // tree.nodes[newNodeId].children[2] = child_idx;
-    // // +x -y -z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[3], depth + 1, split_y_lower_z_upper, split_x);
-    // tree.nodes[newNodeId].children[3] = child_idx;
-
-    // // +x -y -z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[4], depth + 1, split_x, split_y_upper_z_lower);
-    // tree.nodes[newNodeId].children[4] = child_idx;
-    // // +x -y +z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[5], depth + 1, split_y_upper_z_lower, split_y_upper);
-    // tree.nodes[newNodeId].children[5] = child_idx;
-    // // +x +y -z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[6], depth + 1, split_y_upper, split_y_upper_z_upper);
-    // tree.nodes[newNodeId].children[6] = child_idx;
-    // // +x +y +z
-    // child_idx = buildOctreeImpl(tree, childBoundingBoxes[7], depth + 1, split_y_upper_z_upper, end);
-    // tree.nodes[newNodeId].children[7] = child_idx;
-
     for (int i = 0; i < 8; i++) {
         if (tree.nodes[newNodeId].children[i] != -1) {
             tree.nodes[newNodeId].isLeaf = false;
@@ -537,12 +398,6 @@ int Scene::buildOctreeImpl(Octree& tree, const Geom& boundingBox, int depth, Ite
         }
     }
 
-    for (int i = 0; i < 8; i++) {
-        std::cout << "    node: " << newNodeId << std::endl;
-        std::cout << "    child: " << tree.nodes[newNodeId].children[i] << std::endl;
-    }
-
-    std::cout << "   ===>return node: " << newNodeId << std::endl;
     return newNodeId;
 }
 
@@ -558,25 +413,24 @@ int Scene::parseGLTFModel(const tinygltf::Model &model) {
         }
     }
     addGlobalIllumination();
-    //addDefaultCamera();
     return status;
 }
 
 int Scene::addGlobalIllumination() {
     Material lightMaterial1;
     lightMaterial1.color = glm::vec3(1.0f, 0.5f, 0.5f);
-    lightMaterial1.emittance = 15.0f;
+    lightMaterial1.emittance = 150.0f;
     materials.push_back(lightMaterial1);
 
     Material lightMaterial2;
     lightMaterial2.color = glm::vec3(0.5f, 0.5f, 1.0f);
-    lightMaterial2.emittance = 15.0f;
+    lightMaterial2.emittance = 150.0f;
     materials.push_back(lightMaterial2);
 
-    float x_spacing = 40.0f;
-    float z_spacing = 40.0f;
-    int num_x = 10;
-    int num_z = 10;
+    float x_spacing = 350.0f;
+    float z_spacing = 350.0f;
+    int num_x = 3;
+    int num_z = 3;
     float x_start = -num_x * x_spacing / 2.0f;
     float z_start = -num_z * z_spacing / 2.0f;
 
@@ -591,9 +445,9 @@ int Scene::addGlobalIllumination() {
                 else {
                     light.materialid = materials.size()-1;
                 }
-                light.translation = glm::vec3(i*x_spacing+x_start, k * 50.0f, j * z_spacing + z_start);
+                light.translation = glm::vec3(i*x_spacing+x_start, k * 400.0f, j * z_spacing + z_start);
                 light.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-                light.scale = glm::vec3(10.0f, 10.0f, 10.0f);
+                light.scale = glm::vec3(70.f, 70.f, 70.f);
                 light.transform = utilityCore::buildTransformationMatrix(
                     light.translation, light.rotation, light.scale);
                 light.inverseTransform = glm::inverse(light.transform);
@@ -603,24 +457,41 @@ int Scene::addGlobalIllumination() {
         }
     }
     
+    Material groundMaterial;
+    groundMaterial.color = glm::vec3(0.2f, 0.4f, 0.2f);
+    groundMaterial.emittance = 0.0f;
+    groundMaterial.hasReflective = 0.0f;
+    materials.push_back(groundMaterial);
 
+    Geom ground;
+    ground.type = CUBE;
+    ground.materialid = materials.size()-1;
+    ground.translation = glm::vec3(0.0f, -300.0f, 0.0f);
+    ground.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    ground.scale = glm::vec3(100000.0f, 0.001f, 100000.0f);
+    ground.transform = utilityCore::buildTransformationMatrix(
+        ground.translation, ground.rotation, ground.scale);
+    ground.inverseTransform = glm::inverse(ground.transform);
+    ground.invTranspose = glm::inverseTranspose(ground.transform);
+    geoms.push_back(ground);
 
-    Material skyMaterial;
-    skyMaterial.color = glm::vec3(0.9f, 0.9f, 1.0f);
-    skyMaterial.emittance = 0.5f;
-    materials.push_back(skyMaterial);
+    // Material groundMaterial2;
+    // groundMaterial2.color = glm::vec3(0.2f, 0.2f, 0.4f);
+    // groundMaterial2.emittance = 0.0f;
+    // groundMaterial2.hasReflective = 0.0f;
+    // materials.push_back(groundMaterial2);
 
-    // Geom sky;
-    // sky.type = SPHERE;
-    // sky.materialid = materials.size()-1;
-    // sky.translation = glm::vec3(0.0f, 0.1f, 0.0f);
-    // sky.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    // sky.scale = glm::vec3(1000.0f, 1000.0f, 1000.0f);
-    // sky.transform = utilityCore::buildTransformationMatrix(
-    //     sky.translation, sky.rotation, sky.scale);
-    // sky.inverseTransform = glm::inverse(sky.transform);
-    // sky.invTranspose = glm::inverseTranspose(sky.transform);
-    // geoms.push_back(sky);
+    // Geom ground2;
+    // ground2.type = CUBE;
+    // ground2.materialid = materials.size()-1;
+    // ground2.translation = glm::vec3(0.0f, 600.0f, 0.0f);
+    // ground2.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    // ground2.scale = glm::vec3(100000.0f, 0.001f, 100000.0f);
+    // ground2.transform = utilityCore::buildTransformationMatrix(
+    //     ground2.translation, ground2.rotation, ground2.scale);
+    // ground2.inverseTransform = glm::inverse(ground2.transform);
+    // ground2.invTranspose = glm::inverseTranspose(ground2.transform);
+    // geoms.push_back(ground2);
 
     return 1;
 }
@@ -680,18 +551,6 @@ int Scene::loadGLTFPerspectiveCamera(const tinygltf::Camera &cameraObj, glm::vec
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
     state.iterations = 2000; // TODO
     state.traceDepth = 8; // TODO
-
-    std::cout << "camera position: " << glm::to_string(camera.position) << std::endl;
-    std::cout << "camera lookAt: " << glm::to_string(camera.lookAt) << std::endl;
-    std::cout << "camera up: " << glm::to_string(camera.up) << std::endl;
-    std::cout << "camera right: " << glm::to_string(camera.right) << std::endl;
-    std::cout << "camera view: " << glm::to_string(camera.view) << std::endl;
-    std::cout << "camera pixelLength: " << glm::to_string(camera.pixelLength) << std::endl;
-    std::cout << "camera fov: " << glm::to_string(camera.fov) << std::endl;
-    std::cout << "camera resolution: " << glm::to_string(camera.resolution) << std::endl;
-    std::cout << "camera aspectRatio: " << aspectRatio << std::endl;
-    std::cout << "camera xscaled: " << xscaled << std::endl;
-    std::cout << "camera yscaled: " << yscaled << std::endl;
 
     cout << "Loaded gltf camera!" << endl;
     return 1;
@@ -838,11 +697,6 @@ int Scene::loadCamera() {
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
 
-    cout << "camera view: " << glm::to_string(camera.view) << endl;
-    cout << "camera up: " << glm::to_string(camera.up) << endl;
-    cout << "camera right: " << glm::to_string(camera.right) << endl;
-    cout << "camera lookAt: " << glm::to_string(camera.lookAt) << endl;
-    cout << "Loaded camera!" << endl;
     return 1;
 }
 

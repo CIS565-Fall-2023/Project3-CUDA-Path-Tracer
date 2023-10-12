@@ -222,7 +222,7 @@ __host__ __device__ float octreeIntersectionTest(
     rt.direction = rd;
 
     float t = -1;
-    int stack[8*8*8];
+    int stack[8*8*8]; // TODO: determine max stack size
     int stackSize = 0;
     stack[stackSize] = octree.root;
     stackSize++;

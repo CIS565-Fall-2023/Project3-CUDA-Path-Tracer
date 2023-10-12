@@ -83,7 +83,7 @@ static ShadeableIntersection* dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
 static bool sortByMaterial = false;
 static bool hasGBuffer = false;
-static bool useGBuffer = true;
+static bool useGBuffer = false;
 static ShadeableIntersection* dev_intersections_gbuffer = NULL;
 static thrust::device_vector<int> index_array;
 static Mesh* dev_meshes = NULL;
@@ -310,26 +310,7 @@ __global__ void computeIntersections(
 				normal = tmp_normal;
 			}
 		}
-		// for (int i = 0; i < meshes_size; i++)
-		// {
-		// 	Mesh& mesh = meshes[i];
 
-		// 	t = boxIntersectionTest(mesh.boundingVolume, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-		// 	if (t <= 0.0f)
-		// 	{
-		// 		continue;
-		// 	}
-		// 	t = meshIntersectionTest(mesh, pathSegment.ray, tmp_intersect, tmp_normal, outside);
-		// 	// if (t > 0.0f && t_min > t)
-		// 	// {
-		// 	// 	t_min = t;
-		// 	// 	hit_mesh_index = i;
-		// 	// 	hit_geom_index = -1;
-		// 	// 	hit_tree_index = -1;
-		// 	// 	intersect_point = tmp_intersect;
-		// 	// 	normal = tmp_normal;
-		// 	// }
-		// }
 		for (int i = 0; i < num_trees; i++)
 		{
 			OctreeDev& octree = octrees[i];
@@ -585,6 +566,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 		dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, is_valid());
 		num_paths = dev_path_end - dev_paths;
+		std::cout << "num_paths: " << num_paths << std::endl;
 
 		if (num_paths <= 0 || depth >= traceDepth) {
 			iterationComplete = true;
