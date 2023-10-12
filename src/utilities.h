@@ -24,7 +24,7 @@
 #define ANTI_ALIASING           1
 #define FIRST_BOUNCE_CACHED     0  && !ANTI_ALIASING
 #define DEPTH_OF_FIELD          0
-#define USE_BVH                 0
+#define USE_BVH                 1
 #define REINHARD_GAMMA          1
 
 class GuiDataContainer
