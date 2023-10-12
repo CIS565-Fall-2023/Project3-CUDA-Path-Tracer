@@ -20,15 +20,15 @@ _Stanford Dragon - 871,306 triangles, 5000 iterations, max 8 bounces per ray_
 ## Features Implemented
 
 1. BSDFs - Diffuse, Perfectly Specular, Perfectly Reflective, Imperfect Specular/Diffuse, Refractive
-2. Acceleration Structure - Bounding Volume Heirarchy (BVH)
 3. Stochastic Sampled Antialiasing
 4. Physically-Based Depth of Field
 5. Support for loading glTF meshes
 6. Texture Mapping for glTF meshes
-7. Stream Compaction for ray path termination
+7. Reinhard operator & Gamma correction
 8. First bounce caching
-9. Material Sorting
-10. Reinhard operator & Gamma correction
+9. Stream Compaction for ray path termination
+10. Material Sorting
+11. Acceleration Structure - Bounding Volume Heirarchy (BVH)
 
 ## Path Tracer
 
@@ -39,6 +39,74 @@ The Light Transport Equation
 #### L<sub>o</sub>(p, &#969;<sub>o</sub>) = L<sub>e</sub>(p, &#969;<sub>o</sub>) + &#8747;<sub><sub>S</sub></sub> f(p, &#969;<sub>o</sub>, &#969;<sub>i</sub>) L<sub>i</sub>(p, &#969;<sub>i</sub>) V(p', p) |dot(&#969;<sub>i</sub>, N)| _d_&#969;<sub>i</sub>
 
 The [PBRT](https://pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/The_Light_Transport_Equation#) book is an exceptional resource to understand the light transport equation, and I constantly referred it throughout the course of this project.
+
+# Visual Features
+
+ The following features were implemented in this path-tracer to make the renders look more _physically-based_.
+
+ ## 1. Bidirectional Distribution Functions (BSDFs)
+
+ BSDF is a function that defines a material in terms of how it scatters rays when light interacts with it. This path tracer implements the requisite BSDFs to support perfectly diffuse, perfectly specular, imeprfect specular/diffuse, and refractive materials.
+
+ | <img src="images/material_diffuse.png" width=1000> | <img src="images/material_imperfect_spec_diffuse.png" width=850> | <img src="images/material_spec.png" width=1100> | <img src="images/material_refractive.png" width=1100> |
+|:--:|:--:|:--:|:--:|
+| *Diffuse (Lambertian)* | *Partially Diffuse/Specular* |  *Perfectly Specular* |  *Perfectly Refractive* |
+
+## 2. Stochastic Sampled Anti-Aliasing
+
+Ray generation for each pixel, if not perturbed, will be deterministic. This means that the rays generated from the camera in each iteration would hit the same geometry always. This gives visibly jagged _aliased_ edges in the final render. To prevent this, we can select different points on each pixel in each iteartion using [Stratified Sampling](https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling). This way, each ray originating from the camera is 'jittered' by a small amount, giving the much needed random seed to the path tracer. Since we accumulate pixel colours over iterations, the random jitterling helps averaging out the abrupt jagged edges to smoothly-shaded ones. This feature can be toggled ON/OFF using the preprocessor directive `ANTI_ALIASING` in the `utilities.h` file.
+
+| <img src="images/withaa_combine.png" width=600> | <img src="images/withoutaa_combine.png" width=600> |
+|:--:|:--:|
+| *Visibly Aliased Edges* | *After Anti-Aliasing* |
+
+## 3. Physically-Based Depth of Field
+
+The camera model assumed until now is a _thin-lens model_, that allow light to pass only through a very small aperture to reach the camera film. Real cameras instead have lenses of a finite-sized aperture with a certain _lens radius_ and a _focal plane_. The larger the aperture, i.e. the _lens radius_, the shorter are the exposure times to accurately capture an image. However, such lenses can only focus on the _focal plane_, and any nearer/farther objects appear blurrier. PBRT describes a [thin-lens approximation](https://pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models#TheThinLensModelandDepthofField) for such a camera model, which we implement in our path tracer. The concept is fairly straightforward:
+1. Generate a random point on the surface of the disc.
+2. Determine the intersection point on the plane for the ray assuming a pinhole camera model.
+3. The origin of the ray now becomes the randomly generated point on the lens, and its direction is the vector from this new origin towards the point calculated on the film.
+
+Such a simple yet physically accurate implementation allowed us to get the following interesting visual results:
+
+<table>
+  <tr>
+    <td align="center"><b>Lens Radius = 0.01</b></td>
+    <td align="center"><b>Lens Radius = 0.1</b></td>
+    <td align="center"><b>Lens Radius = 0.6</b></td>
+  </tr>
+  <tr>
+    <td><img src="images/radiusp01focal6p31kiters8depth.png" /></td>
+    <td><img src="images/radiusp1focal6p31kiters8depth.png" /></td>
+    <td><img src="images/radiusp6focal6p31kiters8depth.png" /></td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><i>Focal Length = 6.3, 1000 iterations, trace depth = 8</i></td>
+  </tr>
+</table>
+A very small lens radius approximates the pin-hole camera, and therefore we get an almost clear render. As we increase the lens radius, more and more light enters the lens surface, and all of it that does not get focused onto the focal plane ends up giving a blurry effect. The above sequence of images shows the results of varying the lens radius while keeping the focal length fixed.  
+
+
+<table>
+  <tr>
+    <td align="center"><b>Focal Length = 4</b></td>
+    <td align="center"><b>Focal Length = 6</b></td>
+    <td align="center"><b>Focal Length = 8</b></td>
+  </tr>
+  <tr>
+    <td><img src="images/radiusp4focal41kiters8depth.png" /></td>
+    <td><img src="images/radiusp4focal61kiters8depth.png" /></td>
+    <td><img src="images/radiusp4focal81kiters8depth.png" /></td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><i>Lens Radius = 0.4, 1000 iterations, trace depth = 8</i></td>
+  </tr>
+</table>  
+
+
+The above sequence of images correctly demonstrate the concept of focal length - this is the distance at which our camera is able to 'focus'. Everything nearer to or further away from the camera gets blurred.
+
+This feature can be toggled ON/OFF using the preprocessor directive `DEPTH_OF_FIELD` in the `utilities.h` file.
 
 # Performance Analysis
 
