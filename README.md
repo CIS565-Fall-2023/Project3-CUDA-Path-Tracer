@@ -241,7 +241,7 @@ _Sorry Suzanne, I didn't know glTF specified the number of channels for the text
 <img src="images/bloop_suzanne.png" width=350>   
 
 
-# Refernces
+# References
 * [tinygltf](https://github.com/syoyo/tinygltf/) for loading/supporting glTF meshes.
 * [Physicall Based Rendering: From Theory To Implementation](https://pbrt.org/).
 * [Watermelon Fruit Model](https://sketchfab.com/3d-models/watermelon-fruit-f120452f84bf4e979139b106bf9f096c) by [catafest](https://sketchfab.com/catafest) licensed under [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/).
