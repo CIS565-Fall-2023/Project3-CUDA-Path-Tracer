@@ -191,7 +191,7 @@ void scatterRay(
             pathSegment.ray.origin = intersect + 0.0001f * pathSegment.ray.direction;
             pathSegment.color /= fmax(1.f - col.a, EPSILON);
         }
-        // Sample_f_diffuse(isect.surfaceNormal, rng, intersect, isect.surfaceNormal, pathSegment);
+        /*Sample_f_diffuse(glm::vec3(isect.uv.x, isect.uv.y, 1.f), rng, intersect, isect.surfaceNormal, pathSegment);*/
         return;
     }
     if (m.color == glm::vec3(0.f) && m.specular.color == glm::vec3(0.f)) {
@@ -199,8 +199,6 @@ void scatterRay(
         return;
     }
     if (!(m.hasReflective || m.hasRefractive)) {
-       /* float4 texCol = tex2D<float4>(texObjs[15], u01(rng), u01(rng));
-        glm::vec3 col = glm::vec3(texCol.x, texCol.y, texCol.z);*/
         Sample_f_diffuse(m.color, rng, intersect, isect.surfaceNormal, pathSegment);
         return;
     }

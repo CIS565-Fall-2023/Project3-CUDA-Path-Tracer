@@ -175,7 +175,7 @@ void pathtraceInit(Scene* scene) {
 			cudaCreateTextureObject(&host_textureObjs[i], &resDesc, &texDesc, NULL);
 		}
 
-		cudaMalloc((void**)&dev_textureObjs, numTextures * sizeof(cudaTextureObject_t));
+		cudaMalloc(&dev_textureObjs, numTextures * sizeof(cudaTextureObject_t));
 		cudaMemcpy(dev_textureObjs, host_textureObjs, numTextures * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
 	}
 
@@ -511,7 +511,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	// Shoot ray into scene, bounce between objects, push shading chunks
 	bool iterationComplete = false;
 	while (!iterationComplete) {
-		if (guiData->cacheFirstBounce && guiData->fbCached) {
+		if (guiData->cacheFirstBounce && guiData->fbCached && depth == 0) {
 			thrust::copy(dev_thrust_fbc, dev_thrust_fbc + pixelcount, dev_thrust_intersections);
 			checkCUDAError("load first bounce cache");
 		}
@@ -539,7 +539,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		if (guiData->cacheFirstBounce && !(guiData->fbCached)) {
 			thrust::copy(dev_thrust_intersections, dev_thrust_intersections + pixelcount, dev_thrust_fbc);
 			checkCUDAError("compute first bounce cache");
-			guiData->fbCached = false;
+			guiData->fbCached = true;
 		}
 
 		// --- Shading Stage ---

@@ -109,8 +109,8 @@ void cleanupCuda() {
 }
 
 void initCuda() {
-	cudaSetDevice(1);
-	// cudaGLSetGLDevice(1);
+	// cudaSetDevice(1);
+	cudaGLSetGLDevice(1);
 
 	// Clean up on program exit
 	atexit(cleanupCuda);
