@@ -7,9 +7,17 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
+struct Image {
+    std::vector<float> imgdata;
+    int width;
+    int height;
+    int channels;
+};
+
 enum GeomType {
     SPHERE,
     CUBE,
+    MESH,
 };
 
 struct Ray {
@@ -18,8 +26,12 @@ struct Ray {
 };
 
 struct Geom {
+    int index;
+    int textureIdx;
     enum GeomType type;
     int materialid;
+    int triCount;
+    int triIdx;
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -38,6 +50,16 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+};
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 nor;
+    glm::vec2 uv;
+};
+
+struct Triangle {
+    Vertex vertices[3];
 };
 
 struct Camera {
@@ -62,8 +84,11 @@ struct RenderState {
 struct PathSegment {
     Ray ray;
     glm::vec3 color;
+    glm::vec3 accumRay;
+    bool dead;
     int pixelIndex;
     int remainingBounces;
+    bool spec;
 };
 
 // Use with a corresponding PathSegment to do:
@@ -73,4 +98,6 @@ struct ShadeableIntersection {
   float t;
   glm::vec3 surfaceNormal;
   int materialId;
+  int hitGeomIdx;
+  glm::vec2 uv;
 };

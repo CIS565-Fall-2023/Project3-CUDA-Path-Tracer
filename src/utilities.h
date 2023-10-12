@@ -11,14 +11,20 @@
 
 #define PI                3.1415926535897932384626422832795028841971f
 #define TWO_PI            6.2831853071795864769252867665590057683943f
+#define INV_PI            0.3183098861837906715377675267450287240689f
 #define SQRT_OF_ONE_THIRD 0.5773502691896257645091487805019574556476f
 #define EPSILON           0.00001f
 
 class GuiDataContainer
 {
 public:
-    GuiDataContainer() : TracedDepth(0) {}
+    GuiDataContainer() : TracedDepth(0), caching(true), material_sort(false), lens_radius(0.0f), focal_distance(5.0f) {}
     int TracedDepth;
+    bool caching;
+    bool material_sort;
+    float lens_radius;
+    float focal_distance;
+
 };
 
 namespace utilityCore {
