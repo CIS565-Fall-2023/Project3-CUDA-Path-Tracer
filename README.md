@@ -150,9 +150,22 @@ Lastly the Teapot-Complex scene consists of 5 teapots with different materials. 
 
 ### Observations
 
-- **Material Sorting** is not a good optimization. It is not only not improving the performance, but also slowing down the path tracer. The reason, as hinted before, is that the sorting process itself is very expensive compared to the performance gain. There is not no significant performance improvement to compensate for the cost.
+- **Material Sorting** is not a good optimization. It is slowing down the path tracer. The reason, as hinted before, is that the sorting process itself is very expensive compared to the performance gain. There is not no significant performance improvement to compensate for the cost.
 - **First Bounce Caching** has limited performance improvement. The reason is that the first bounce is only a small part of the entire ray tracing process. Besides, when enabling more advanced visual features like anti-aliasing, depth-of-field, and motion blur, the first bounce is no longer the same for every iteration.
 - **BVH** is mind-blowing. It is able to improve the performance by a factor of 15x or reducing the rendering time by 90%! BVH enables quick discard of groups of primitives if the ray does not intersect with the bounding volume. This is especially useful when the scene is complex and the number of primitives is large. Although BVH traversal requires additional global memory access, the performance gain is still significant.
+
+### Possible Improvements
+
+- Subsurface scattering
+- Wavelength dependent refraction
+- Volumetric rendering
+- Texture and normal map
+- Motion blur
+- Environment map
+- Better random number generator
+- BVH with SAH and BVH on GPU
+- Occupancy optimization
+- Shared memory optimization
 
 ## References
 1. [Physically Based Rendering: From Theory To Implementation](https://pbr-book.org/)
