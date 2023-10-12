@@ -11,24 +11,27 @@ CUDA Path Tracer
 This project is a learning attempt turned into a definitive milestone in my journey of learning CUDA. The aim of making a path tracer using CUDA and C++ is to replicate the behaviour of the graphics pipeline while manually being in-charge of the GPU-side kernel invocations. Using CUDA, I map each of the steps in the graphics pipeline (i.e. vertex shader, rasterization, fragment shader, etc.) into equivalent kernel invocations, thus solidfying both experience with CUDA as well as knowledge of the graphics pipeline. This project also turned out to be a good way of keeping me true to my understanding of the core graphics concepts such as coordinate transformations and barycentric interpolation. By implementing a combination of visually pleasing and computationally accelerating features, I was able to generate some fun renders such as these:
 
 ## Representative Outcomes  
-_247,963 triangles, 5000 iterations, max 10 bounces per ray_
- ![](images/finalrender1.png)  
+_247,963 triangles, 5000 iterations, max 10 bounces per ray_ 
+ <img src="images/finalrender1.png" width=900>
 
 _Stanford Dragon - 871,306 triangles, 5000 iterations, max 8 bounces per ray_
-![](images/cornell.2023-10-11_16-31-13z.5000samp.png) 
+ <img src="images/stanford_dragon.png" width=900>
+
+ _Other results I liked:_  
+<img src="images/avocado_suzanne.png" width=300> <img src="images/cornell.2023-10-12_00-57-47z.2519samp.png" width=300> <img src="images/cornell.2023-10-11_16-08-35z.5000samp.png" width=300>
 
 ## Features Implemented
 
-1. BSDFs - Diffuse, Perfectly Specular, Perfectly Reflective, Imperfect Specular/Diffuse, Refractive
-3. Stochastic Sampled Antialiasing
-4. Physically-Based Depth of Field
-5. Support for loading glTF meshes
-6. Texture Mapping for glTF meshes
-7. Reinhard operator & Gamma correction
-8. First bounce caching
-9. Stream Compaction for ray path termination
-10. Material Sorting
-11. Acceleration Structure - Bounding Volume Heirarchy (BVH)
+1. [BSDFs - Diffuse, Perfectly Specular, Perfectly Reflective, Imperfect Specular/Diffuse, Refractive](#visual-one)
+3. [Stochastic Sampled Antialiasing](#visual-two)
+4. [Physically-Based Depth of Field](#visual-three)
+5. [Support for loading glTF meshes](#visual-four)
+6. [Texture Mapping for glTF meshes](#visual-four)
+7. [Reinhard operator & Gamma correction](#visual-five)
+8. [First bounce caching](#perf-one)
+9. [Stream Compaction for ray path termination](#perf-two)
+10. [Material Sorting](#perf-three)
+11. [Acceleration Structure - Bounding Volume Heirarchy (BVH)](#perf-four)
 
 ## Path Tracer
 
@@ -44,6 +47,7 @@ The [PBRT](https://pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Th
 
  The following features were implemented in this path-tracer to make the renders look more _physically-based_.
 
+<a id="visual-one"></a>
  ## 1. Bidirectional Distribution Functions (BSDFs)
 
  BSDF is a function that defines a material in terms of how it scatters rays when light interacts with it. This path tracer implements the requisite BSDFs to support perfectly diffuse, perfectly specular, imeprfect specular/diffuse, and refractive materials.
@@ -52,6 +56,7 @@ The [PBRT](https://pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Th
 |:--:|:--:|:--:|:--:|
 | *Diffuse (Lambertian)* | *Partially Diffuse/Specular* |  *Perfectly Specular* |  *Perfectly Refractive* |
 
+<a id="visual-two"></a>
 ## 2. Stochastic Sampled Anti-Aliasing
 
 Ray generation for each pixel, if not perturbed, will be deterministic. This means that the rays generated from the camera in each iteration would hit the same geometry always. This gives visibly jagged _aliased_ edges in the final render. To prevent this, we can select different points on each pixel in each iteartion using [Stratified Sampling](https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling). This way, each ray originating from the camera is 'jittered' by a small amount, giving the much needed random seed to the path tracer. Since we accumulate pixel colours over iterations, the random jitterling helps averaging out the abrupt jagged edges to smoothly-shaded ones. This feature can be toggled ON/OFF using the preprocessor directive `ANTI_ALIASING` in the `utilities.h` file.
@@ -60,6 +65,7 @@ Ray generation for each pixel, if not perturbed, will be deterministic. This mea
 |:--:|:--:|
 | *Visibly Aliased Edges* | *After Anti-Aliasing* |
 
+<a id="visual-three"></a>
 ## 3. Physically-Based Depth of Field
 
 The camera model assumed until now is a _thin-lens model_, that allow light to pass only through a very small aperture to reach the camera film. Real cameras instead have lenses of a finite-sized aperture with a certain _lens radius_ and a _focal plane_. The larger the aperture, i.e. the _lens radius_, the shorter are the exposure times to accurately capture an image. However, such lenses can only focus on the _focal plane_, and any nearer/farther objects appear blurrier. PBRT describes a [thin-lens approximation](https://pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models#TheThinLensModelandDepthofField) for such a camera model, which we implement in our path tracer. The concept is fairly straightforward:
@@ -108,6 +114,7 @@ The above sequence of images correctly demonstrate the concept of focal length -
 
 This feature can be toggled ON/OFF using the preprocessor directive `DEPTH_OF_FIELD` in the `utilities.h` file.
 
+<a id="visual-four"></a>
 ## 4. Supporting glTF Meshes & Texture Mapping
 
 Given the wide usage of glTF file format in the industry for its ease of defining scenes and animations, I always wanted some experience of working with it. So I took this project as an opportunity to gain some ahnds-on experience with the same. Since this pathtracer is an attempt to replicate the graphics pipeline, there are certain things that I needed to do in the opposite way while working with glTF files, since its format is specifically meant to be handled as-is by the graphics pipeline, which is totally absent here. Such tasks included:
@@ -118,10 +125,27 @@ Given the wide usage of glTF file format in the industry for its ease of definin
 |:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | *Flat Normals generated by edge cross product* |&rarr;| *Barycentric Interpolated Normals* |&rarr;| *Loading the model's texture map* |&rarr;| *Sampling texture using Barycentric Interpolated UVs* |
 
+<a id="visual-five"></a>
+## 5. Reinhard Operator and Gamma Correction
+
+[Renhard Operator or Tone Mapping](https://expf.wordpress.com/2010/05/04/reinhards_tone_mapping_operator/) is implemented to map the High Dynamic Range (HDR) to a lower range that is capable of being processed by the output devices.
+`Reinhard Operator: color.rgb = color.rgb/(1 + color.rgb)`
+
+[Gamma Correction](https://www.cambridgeincolour.com/tutorials/gamma-correction.htm) defines a relationship between the pixel's numerical value and it's actual luminance so that our eyes can see the colors as they were captured by a digital camera.
+`Gamma Correction: color.rgb = pow(color.rgb, 1/2.2)`
+
+This feature can be toggled ON/OFF using the preprocessor directive `REINHARD_GAMMA` in the `utilities.h` file.
+
+| <img src="images/gamma_off.png" width=300> | <img src="images/gamma_on.png" width=300> |
+|:--:|:--:|
+| `REINHARD_GAMMA` OFF | `REINHARD_GAMMA` ON|
+
+
 # Performance Analysis
 
 Here I will document the attempts I made to boost the performance of my pathtracer - my hypothesis on why I thought the change could result in a potential performance improvement, and my actual findings along with supporting metrics.
 
+<a id="perf-one"></a>
 ## 1. First Bounce Caching
 
 As a rudimentary optimization, one could try caching the first ray intersections with the scene geometry. The first set of rays generated from the camera per pixel is deterministic, and hence the first intersections would always be the same. Therefore, one can expect a small performance boost from this optimization. Note that this optimization would be invalidated as soon as **Multi-Sampled Anti Aliasing (MSAA)** is implemented, since in that case the first set of generated rays would no longer remain deterministic. This feature can be toggled ON/OFF using the preprocessor directive `FIRST_BOUNCE_CACHED` in the `utilities.h` file, although this feature won't be turned on at all if `ANTI_ALIASING' is turned ON.
@@ -132,6 +156,7 @@ As a rudimentary optimization, one could try caching the first ray intersections
 
 As expected, caching the first bounce indeed results in a small performance gain. However, this gain becomes less and less significant with increasing trace depth of rays, potentially offset due to more computationally expensive intersections.
 
+<a id="perf-two"></a>
 ## 2. Stream Compaction for Ray Path Termination
 
 For each iteartion, we bounce a ray around the scene until it terminates, i.e., either hits a light source or reaches some terminating condition (such as max depth reached, no scene geometry hit, etc.). After each iteartion of scene intersection, if we were to compact the ray paths, then potential performance gains could result due to the following reasons:
@@ -151,7 +176,7 @@ This feature can be toggled ON/OFF using the preprocessor directive `STREAM_COMP
 
 * **Closed Scene:** For a closed scene, there is a much higher probability for rays to reach the light source by bouncing around the scene numerous times. This is corroborated by the grpah, wherein we do not see the number of unterminated rays decreasing with depth count unlike the open scene case. Hence, stream compaction happens to be just an unnecessary overhead in this case, and is never able to offset the naive path termination's performance.
 
-
+<a id="perf-three"></a>
 ## 3. Material Sorting
 
 Another potential candidate for a performance boost is sorting the rays and intersections based on the material indices. Every path segment in a buffer is using one large shading kernel for all BSDF evaluations. Such differences in materials within the kernel will take different amounts of time to complete, making our kernel highly divergent. Therefore, sorting the rays to make paths interacting with the same material contiguous in memory before shading could potentially give us better performance by reducing **Warp Divergence**.
@@ -164,6 +189,7 @@ This feature can be toggled ON/OFF using the preprocessor directive `MATERIAL_SO
 
 We see that for our case, at such a small level, material sorting is not really giving us a benefit. In fact, it is actually incurring an extreme overhead. The reason for this could be the small scale and the simplpicity of our scenes, where  there is no significant gain that could offset the hit we take from sorting each ray and intersection based on material.
 
+<a id="perf-four"></a>
 ## 4. Acceleration Structure - Bounding Volume Heirarchy (BVH)
 
 BVHs are widely used acceleration structures, and I had always wanted to implement one. There are very many versions out there of BVHs, both in terms of implementation as well as traversal. I implemented a very basic version referring to [PBRT](https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies).
@@ -214,3 +240,14 @@ _Wrong ray transformation sent me in the depths of the depths of the...depths...
 
 _Sorry Suzanne, I didn't know glTF specified the number of channels for the texture in the model itself!._   
 <img src="images/bloop_suzanne.png" width=350>   
+
+
+# Refernces
+* [tinygltf](https://github.com/syoyo/tinygltf/) for loading/supporting glTF meshes.
+* [Physicall Based Rendering: From Theory To Implementation](https://pbrt.org/).
+* [Watermelon Fruit Model](https://sketchfab.com/3d-models/watermelon-fruit-f120452f84bf4e979139b106bf9f096c) by [catafest](https://sketchfab.com/catafest) licensed under [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/).
+* [Avocado Model](https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/Avocado) was taken from the Khronos Group glTF sample models repository.
+* [Orange Fruit](https://sketchfab.com/3d-models/orange-fruit-cbdf758f21924c168c1c3da1afed9754) by [polyplant3d](https://sketchfab.com/polyplant3d) licensed under [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/).
+* [The Utah Teapot](https://skfb.ly/BYQA) by 3D graphics 101 licensed under [Creative Commons Attribution-NonCommercial](http://creativecommons.org/licenses/by-nc/4.0/).
+* [Stanford Bunny Zipper reconstruction)](https://skfb.ly/BSyr) by 3D graphics 101 licensed under [Creative Commons Attribution-NonCommercial](http://creativecommons.org/licenses/by-nc/4.0/).
+* [Alec Jacobson Common 3D Test Models](https://github.com/alecjacobson/common-3d-test-models)
