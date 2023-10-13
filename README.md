@@ -40,7 +40,6 @@ Leveraging the CUDA API from NVIDIA, we efficiently parallelize CPU-bound tasks,
 * [Building Instructions](#installation)
 * [References](#references)
 
-
 ## <a name="path-tracer-basics">Path Tracer Basics</a>
 Path tracing is a rendering algorithm that emulates the behavior of light as it interacts and propagates through a scene, mirroring real-world light dynamics. In a path-traced image, the scene encompasses comprehensive topological data of all objects within the image. Each pixel in the image is rendered by calculating the incident light on that pixel's corresponding object, considering the object's material color and properties. Consequently, the resulting image adheres to the physical principles governing light in reality, yielding a highly realistic visual representation.
 
