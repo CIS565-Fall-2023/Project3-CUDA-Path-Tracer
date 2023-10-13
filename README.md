@@ -227,9 +227,9 @@ In path tracing, Direct Lighting(fake) directs the final ray towards a random po
 
 Incorporating principles from [PBRT 11.6](https://pbr-book.org/3ed-2018/Volume_Scattering/The_BSSRDF), my pathtracer adeptly handles subsurface scattering. Upon detecting materials with subsurface attributes, it initializes a BSSRDF model. It differentiates whether a ray is inside or outside an object based on its alignment with the surface normal. For rays inside, it calculates Fresnel reflectance to decide between single or multiple scattering, updating the ray's color accordingly. Rays outside are refracted and their colors adjusted based on the BSSRDF's single scattering function. The system then decrements the ray's remaining bounces, effectively simulating light's intricate interactions within translucent materials.
 
-|BSSRDF with Texture|BSSRDF without Texture|
+|BSSRDF without Texture|BSSRDF with Texture|
 |---|---|
-|![](img/bssrdf.png) |![](img/bssrdfnt.png)
+|![](img/bssrdfnt.png)|![](img/bssrdf.png)|
 
 ![](img/bssrdf2.png)
 
