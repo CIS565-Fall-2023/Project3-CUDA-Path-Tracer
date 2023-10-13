@@ -60,6 +60,7 @@ Scene::Scene(string filename) {
 
         std::cout << "level: " << level << std::endl;
         std::cout << "num nodes: " << num_nodes << std::endl;
+        std::cout << "Tri num: " << num_tris << std::endl;
     }
 }
 

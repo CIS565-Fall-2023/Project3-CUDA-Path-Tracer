@@ -23,9 +23,9 @@
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 #define BlockSize 128
 #define STREAM_COMPACTION 1
-#define SORT_MATERIAL 1
-#define CACHE_FIRST_BOUNCE 1
-#define APERTURE 1.2
+#define SORT_MATERIAL 0
+#define CACHE_FIRST_BOUNCE 0
+#define APERTURE 0
 #define ANTI_ALIASING 1
 #define DIRECT_LIGHT 0
 #define BVHOPEN 1
@@ -802,7 +802,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 		}
 		
 #endif
-		computeIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
+		computeBVHIntersections << <numblocksPathSegmentTracing, blockSize1d >> > (
 			depth
 			, num_paths
 			, dev_paths
