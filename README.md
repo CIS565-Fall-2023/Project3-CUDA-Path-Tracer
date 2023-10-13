@@ -140,7 +140,7 @@ Utah Teapot | Stanford Bunny | Standford Dragon | (CG@Penn) Mario
 
 
 ## <a name="performance">Performance Analysis</a>
-We use the default scene without anti-aliasing, stream compaction, first ray caching and material sorting, as the benchmark to compare with the optimizations below.
+We use a test scene of the mario model in the default cornell box without anti-aliasing, stream compaction, first ray caching and material sorting, as the benchmark to compare with the optimizations below. The mario glTF model contains 36,482 triangles.
 
 ### <a name="stream-compaction">Stream Compaction</a>
 In a path tracer, rays are traced through the scene to simulate light interactions. However, once a ray's path is terminated (e.g., it hits a light source or reaches a maximum number of bounces), there's no need to continue processing that ray. Stream compaction involves removing these terminated rays from further computations, thus avoiding unnecessary operations and associated memory accesses. In practice, we use the `thrust::partition` kernel to partition paths based on completion. This technique is crucial for efficiency and performance optimization in GPU programming and leverages key GPU architecture concepts. Below are some of the advantages:
@@ -154,6 +154,8 @@ In GPU architecture, threads are organized into warps, which execute instruction
 3. Faster Computation and Convergence:
 By removing inactive rays, we reduce unnecessary calculations, enabling faster traversal through the rendering process. Stream compaction accelerates convergence by focusing computational resources on active rays, converging to a noise-free, accurate rendering output more efficiently.
 
+These benefits are reflected in the noticeable performance gain in the graphs below.
+
 ![numRaysVersusDepth](/img/stats/numRaysDepthStreamCompaction.png)
 
 *Figure 1. Stream Compaction Performance, Unterminated Rays After Each Bounce for One Iteration*
@@ -161,13 +163,31 @@ By removing inactive rays, we reduce unnecessary calculations, enabling faster t
 ![runtimeStreamCompaction](img/stats/streamCompaction.png)
 
 *Figure 2. Stream Compaction Performance, Average Execution Time with/without Stream Compaction*
+ 
+In an "open" scene, like the Cornell Box, rays have the potential to escape the scene by passing through openings or reflective surfaces. Stream compaction proves highly effective in such scenarios. Terminated rays can be compacted, eliminating unnecessary computation for those rays that no longer contribute to the image, resulting in significant performance gains. As rays terminate (e.g., exit the scene), they are removed from the active ray set, reducing the overall computational load and improving efficiency.
 
-This gives noticeable performance gain as less paths have to be processed by the kernel after each bounce. 
+Conversely, in a "closed" scene where light is entirely contained within the environment (e.g., a closed room), rays typically do not escape, leading to fewer rays terminating. Stream compaction may not offer substantial performance improvements in this context since the majority of rays are expected to complete their path within the closed environment. The termination rate is lower, minimizing the impact of compacting the ray stream. However, it's important to note that even though stream compaction may not yield significant performance gains in a closed scene, it can still optimize the traversal of terminated rays and streamline the ray processing pipeline.
+
 
 ### <a name="material-sorting">Material Sorting</a>
+ Consider the problem with coloring every path segment in a buffer and performing BSDF evaluation using one big shading kernel: different materials/BSDF evaluations within the kernel will take different amounts of time to complete. Making path segments contiguous in memory by material type should help achieve some performance gain. I use `thrust::sort_by_key`` to sort the rays/path segments so that rays/paths interacting with the same material are contiguous in memory before shading. However, contrary to the my expection, the overall performance downgrades significantly after implementing material sorting, as seen in the graph below. Even with an attempt to increase the number of materials used in the scene, the application runtime/FPS was still worse than the unsorted case. My understanding is that with the current scene construction and assets, our test cases perhaps are still simple. There may be little warp divergence in the shading kernel. With presumably much overhead of the sorting kernel call, the impact of material sorting can really be felt in a complex scene with numerous different materials.
+
+![matSorting](/img/stats/matSort.png)
+
+*Figure 3. Material Sorting Performance Based on the Number of Materials in the Scene*
+
 ### <a name="first-bounce-caching">First Bounce Ray Caching</a>
+Given the deterministic nature of the first intersection test, we employ caching for the initial bounce by storing the results in a buffer. This approach allows us to read these results for subsequent iterations, eliminating the need for an additional `computeIntersections` call per run. However, this optimization isn't compatible with anti-aliasing or depth-of-field techniques, as camera ray jittering in these scenarios may lead to varying first bounce intersection outcomes.
+
+![firstBounceCaching](/img/stats/firstCache.png)
+
+*Figure 4. First Bounce Ray Caching Performance Impact for Varying Trace Depth*
+
+The above chart shows that caching the first bounce intersections had a very subtle boost in performance. This is likely benefited from the other features I have implemented, specifically the BVH acceleration structure, which is discussed in the next section. The BVH intersection test is much faster, which decreases the total amount of impact that caching one of these tests can have overall. As the ray depth increases, the performance impact from caching also decreased, as now the cached bounce is a smaller weight of the overall computation. For the example of max ray depth 8, 1 of 24 total intersection tests is made per sample, as opposed to 1 of 3 total for max ray depth 1.
+
 ### <a name="bvh">Bounding Volumn Hierarchy</a>
 
+(TODO)
 
 ## <a name="bloopers">Other Scenes & Bloopers!</a>
 Time step set too big so the sphere quickly flew out of the box.
