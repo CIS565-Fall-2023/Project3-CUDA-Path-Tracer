@@ -6,7 +6,7 @@ SPECRGB     0 0 0
 REFL        0
 REFR        0
 REFRIOR     0
-EMITTANCE   10
+EMITTANCE   5
 TRANS	    0
 
 // Diffuse white
@@ -103,7 +103,7 @@ RES         800 800
 FOVY        45
 ITERATIONS  5000
 DEPTH       8
-FILE        cornell
+FILE        obj
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
 UP          0 1 0
@@ -115,7 +115,7 @@ cube
 material 0
 TRANS       0 10 0
 ROTAT       0 0 0
-SCALE       3 .3 3
+SCALE       5 .1 5
 VEL	    0 0 0
 
 // Floor
@@ -165,9 +165,9 @@ VEL	    0 0 0
 
 // Mesh
 OBJECT 6
-obj obj/bunny_10s.obj
+gltf gltf/mario/mario.gltf
 material 1
-TRANS       0 2 0
-ROTAT       0 0 0
-SCALE       30 30 30
+TRANS       0 0 0
+ROTAT       -90 0 0
+SCALE       1 1 1
 VEL	    0 0 0
