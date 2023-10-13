@@ -20,9 +20,9 @@ REFRIOR     0
 EMITTANCE   0
 TRANS	    0
 
-// Diffuse red
+// Diffuse yellow
 MATERIAL 2
-RGB         .85 .35 .35
+RGB         1, 0.922, 0.49
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -31,9 +31,9 @@ REFRIOR     0
 EMITTANCE   0
 TRANS	    0
 
-// Diffuse green
+// Diffuse blue
 MATERIAL 3
-RGB         .35 .85 .35
+RGB         0.42, 0.749, 0.949
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -46,7 +46,7 @@ TRANS	    0
 MATERIAL 4
 RGB         0 0 0
 SPECEX      0
-SPECRGB     .98 .98 .98
+SPECRGB     0.318, 0.588, 0.208
 REFL        1
 REFR        0
 REFRIOR     0
@@ -57,7 +57,7 @@ TRANS	    0
 MATERIAL 5
 RGB         0 0 0
 SPECEX      0
-SPECRGB     .98 .98 .98
+SPECRGB     0.98 0.98 0.98
 REFL        0
 REFR        1
 REFRIOR     1.55
@@ -66,7 +66,7 @@ TRANS	    0
 
 // Transmissive purple
 MATERIAL 6
-RGB         .3 .1 .7
+RGB         0.737, 0.435, 0.969
 SPECEX      0
 SPECRGB     0 0 0
 REFL        0
@@ -77,7 +77,7 @@ TRANS	    1
 
 // Glass white
 MATERIAL 7
-RGB         .98 .98 .98
+RGB         0.318, 0.588, 0.208
 SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
@@ -88,9 +88,9 @@ TRANS	    0
 
 // Plastic white
 MATERIAL 8
-RGB         .98 .98 .98
+RGB         0.3 0.1 0.7
 SPECEX      0
-SPECRGB     .98 .98 .98
+SPECRGB     0.98 0.98 0.98
 REFL        1
 REFR        0
 REFRIOR     1.55
@@ -102,9 +102,9 @@ CAMERA
 RES         800 800
 FOVY        45
 ITERATIONS  5000
-DEPTH       8
-FILE        cornell
-EYE         0.0 5 10.5
+DEPTH       9
+FILE        motion_blur
+EYE         0.0 5 8.5
 LOOKAT      0 5 0
 UP          0 1 0
 
@@ -113,9 +113,9 @@ UP          0 1 0
 OBJECT 0
 cube
 material 0
-TRANS       0 10 0
+TRANS      0 10 0
 ROTAT       0 0 0
-SCALE       3 .3 3
+SCALE       10 .1 1
 VEL	    0 0 0
 
 // Floor
@@ -166,17 +166,18 @@ VEL	    0 0 0
 // Sphere
 OBJECT 6
 sphere
-material 1
-TRANS       -1 4 -1
+material 4
+TRANS       -1 6 0
 ROTAT       0 0 0
-SCALE       3 3 3
-VEL	    1 1 1
+SCALE       3.5 3.5 3.5
+VEL	    0.1 0.1 0
 
 // Cube
 OBJECT 7
 cube
-material 5
-TRANS       2 2 2
+material 6
+TRANS       0 2 0
 ROTAT       0 -30 0
 SCALE       2.5 4 2.5
-VEL	    0 0 0
+VEL	    -0.4 0 0.1
+
