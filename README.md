@@ -49,8 +49,8 @@ There is a fundamental difference between the path tracing and real-world light 
 
 <p align="left">
   <img src="/img/bsdf.png" width="300"/>
-  <img src="/img/backward_tracing.PNG" width="300"/>
-  <img src="/img/real_world_light.PNG" width="300"/>
+  <img src="/img/backward_tracing.PNG" width="200"/>
+  <img src="/img/real_world_light.PNG" width="200"/>
 </p>
 
 *Left: [Bidirectional Scattering Distribution Functions (BSDF)](https://en.wikipedia.org/wiki/Bidirectional_scattering_distribution_function), Middle: How Light Bounces in a Path Tracer, Right: How Light Bounces in Real-world*
@@ -70,9 +70,17 @@ We evaluate Bidirectional Scattering Distribution Function (BSDF) for various ma
 
 The table below shows a variation of sphere's materials in comparison with the white diffuse material of the box.
 
-Reflective |  Refractive |  Glass |  Plastic  |  Transmissive (Experiment)
---- | --- | --- | --- | ---
-![](img/results/cornell_reflective_ball.png) | ![](img/results/cornell_refractive_ball.png) | ![](img/results/cornell_glass_ball.png) | ![](img/results/cornell_plastic_ball.png) | ![](img/results/cornell_diffuse_transmissive_ball_accidental_ao_5000samp.png)
+Reflective |  Refractive
+--- | --- 
+![](img/results/cornell_reflective_ball.png) | ![](img/results/cornell_refractive_ball.png) 
+
+ Glass |  Plastic
+--- | --- 
+![](img/results/cornell_glass_ball.png) | ![](img/results/cornell_plastic_ball.png) 
+
+ |  Transmissive (Experiment)
+ | ---
+![](img/results/cornell_diffuse_transmissive_ball_accidental_ao_5000samp.png)
 
 
 - Diffuse BRDF: For ideal diffuse surfaces, light is dispersed equally in all directions within the hemisphere centered about the normal. We use random sampling (cosine-weighted scatter function) to choose the ray direction in `calculateRandomDirectionInHemisphere`.
@@ -124,9 +132,13 @@ Nevertheless, the motion blur effect is a fun feature to work on, and gives you 
 To achieve the thin lens effect and depth of field (DOF), two key parameters are essential: `FOCAL_DISTANCE` and `APERTURE`. `FOCAL_DISTANCE` determines the focus point's distance where objects appear sharp. `APERTURE` serves as a measure of the desired blur for out-of-focus elements. In terms of implementation, first we identify the target we want to focus on, aka the focal point, in the scene based on `FOCAL_DISTANCE`. Next, we introduce blur to the remaining scene by adjusting the ray's origin and recalculating its direction, originating from the new point of origin and aligning with the focal point. This technique simulates the desired depth of field and a realistic thin lens effect.
 
 Aperture = 0.8 for varying focal length below:
-No DOF | Focal Dist  = 10.0 | Focal Dist = 8.0 | Focal Dist = 6.0
---- | --- | --- | ---
-![](img/results/dof_none.png) | ![](img/results/dof_dist_10.png) | ![](img/results/dof_dist_8.png) |   ![](img/results/dof_dist_6.png)
+No DOF | Focal Dist  = 10.0 
+--- | --- 
+![](img/results/dof_none.png) | ![](img/results/dof_dist_10.png) 
+
+Focal Dist = 8.0 | Focal Dist = 6.0
+--- | ---
+![](img/results/dof_dist_8.png) |   ![](img/results/dof_dist_6.png)
 
 
 ### <a name="mesh-loading">Arbitrary Mesh Loading</a>
@@ -134,9 +146,13 @@ In order to render more complex as well as visually interesting scenes, we need 
 
 Classic sample models in the realm of Computer Graphics:
 
-Utah Teapot | Stanford Bunny | Standford Dragon | (CG@Penn) Mario
---- | --- | --- | ---
-![](img/results/teapotGLTF_70-80ms_noBVH_5000samp.png) | ![](img/results/bunnyOBJ_3165samp.png) | ![](img/results/dragonGLTF_1580samp.png) |   ![](img/results/marioGLTF_4072samp.png)
+Utah Teapot | Stanford Bunny
+--- | --- 
+![](img/results/teapotGLTF_70-80ms_noBVH_5000samp.png) | ![](img/results/bunnyOBJ_3165samp.png) 
+
+Standford Dragon | (CG@Penn) Mario
+--- | ---
+![](img/results/dragonGLTF_1580samp.png) |   ![](img/results/marioGLTF_4072samp.png)
 
 
 ## <a name="performance">Performance Analysis</a>
@@ -194,6 +210,13 @@ Time step set too big so the sphere quickly flew out of the box.
 
 ![](/img/results/motion_flying_out.png)
 
+Barbieland
+
+![](/img/results/barbie.png)
+
+Applying the imperfect diffuse transmissive material to the walls.
+
+![](/img/results/naive_cornell_diffuseTrans_5000samp_blooper.png)
 
 ## <a name="installation">Building Instructions</a>
 All the `macro`s are defined in `utilities.h` where you can toggle the corresponding features. The variable names should be quite self-explanatory given the descriptive comments. Any additional heads-up in terms of running the project is listed below:
