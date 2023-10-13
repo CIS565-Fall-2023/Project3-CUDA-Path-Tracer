@@ -229,7 +229,7 @@ void scatterRay(
 #endif
     }
     else if (m.hasRefractive) {
-        float cosTheta = glm::dot(normal, pathSegment.ray.direction);
+        float cosTheta = glm::dot(-pathSegment.ray.direction, normal);
         bool entering = cosTheta > 0;
         float eta = entering ? 1.0f / m.indexOfRefraction : m.indexOfRefraction;
         newDir = glm::refract(pathSegment.ray.direction, normal, eta);
