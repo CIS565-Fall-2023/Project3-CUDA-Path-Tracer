@@ -397,10 +397,19 @@ int Scene::loadObj(const char* inputfile) {
     return 1;
 }
 
-float noise(float x)
+glm::vec3 gridStripeNoise(float x, float y, float cellSize)
 {
-    float r = (sin(x * 127.1) * 43758.5453);
-    return r - (long)r;
+    int ix = static_cast<int>(x / cellSize);
+    int iy = static_cast<int>(y / cellSize);
+
+    if ((ix + iy) % 2 == 0)
+    {
+        return glm::vec3(1, 1, 1);
+    }
+    else
+    {
+        return glm::vec3(0, 0, 0);
+    }
 }
 
 int Scene::loadTexture(string textureID)
@@ -441,31 +450,17 @@ int Scene::loadTexture(string textureID)
         texture.width = 1000;
         texture.height = 1;
         texture.channel = 3;
-        for (float i = 0.f; i < 1000.f; ++i)
+        for (int j = 0; j < texture.height; j++)
         {
-            glm::vec3 col = glm::vec3(noise(i), noise(i * 2.f), noise(i * 3.f));
-            textureColors.emplace_back(col);
-        }
-        textures.push_back(texture);
-        return 1;
-    }
-    else if (strcmp(tokens[0].c_str(), "BUMP_PATH") == 0) {
-        const char* bumpPath = tokens[1].c_str();
-        unsigned char* bumpImg = stbi_load(bumpPath, &width, &height, &channels, 0);
-        if (bumpImg && width > 0 && height > 0) {
-            texture.width = width;
-            texture.height = height;
-            texture.channel = channels;
-            texture.bumpMap = new float[width * height];
-            for (int i = 0; i < width * height; ++i) {
-                texture.bumpMap[i] = bumpImg[i * channels] / 255.f;
+            for (int i = 0; i < texture.width; i++)
+            {
+                glm::vec3 col = gridStripeNoise(static_cast<float>(i), static_cast<float>(j), 10.f);
+                textureColors.emplace_back(col);
             }
         }
-        stbi_image_free(bumpImg);
         textures.push_back(texture);
         return 1;
     }
-
     std::cout << "Texture path does not exist" << endl;
     return -1;
 
