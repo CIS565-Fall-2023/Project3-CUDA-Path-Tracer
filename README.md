@@ -229,7 +229,7 @@ Incorporating principles from [PBRT 11.6](https://pbr-book.org/3ed-2018/Volume_S
 
 |BSSRDF without Texture|BSSRDF with Texture|
 |---|---|
-|![](img/bssrdfnt.png)|![](img/bssrdf.png)|
+|![](img/bssrdfNT.png)|![](img/bssrdf.png)|
 
 ![](img/bssrdf2.png)
 
