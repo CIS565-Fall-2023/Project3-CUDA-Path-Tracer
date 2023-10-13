@@ -110,3 +110,20 @@ std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
         }
     }
 }
+
+std::string utilityCore::extractFilename(const std::string& filePath) {
+    size_t lastSlash = filePath.find_last_of("/\\"); // Find the last directory separator
+
+    if (lastSlash != std::string::npos) {
+        return filePath.substr(lastSlash + 1);
+    }
+    return filePath;
+}
+
+bool utilityCore::matchFileExtension(const std::string& filePath, std::string extension) {
+    size_t lastDot = filePath.find_last_of(".");
+    if (lastDot != std::string::npos) {
+        return filePath.substr(lastDot + 1) == extension;
+    }
+    return false;
+}

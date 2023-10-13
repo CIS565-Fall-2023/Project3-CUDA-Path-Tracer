@@ -109,7 +109,8 @@ void cleanupCuda() {
 }
 
 void initCuda() {
-	cudaGLSetGLDevice(0);
+	// cudaSetDevice(1);
+	cudaGLSetGLDevice(1);
 
 	// Clean up on program exit
 	atexit(cleanupCuda);
@@ -189,7 +190,7 @@ void InitImguiData(GuiDataContainer* guiData)
 
 
 // LOOK: Un-Comment to check ImGui Usage
-void RenderImGui()
+void RenderImGui(bool& camchanged)
 {
 	mouseOverImGuiWinow = io->WantCaptureMouse;
 
@@ -219,6 +220,10 @@ void RenderImGui()
 	//ImGui::Text("counter = %d", counter);
 	ImGui::Text("Traced Depth %d", imguiData->TracedDepth);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	camchanged |= ImGui::SliderFloat("Focal Distance", &imguiData->focalDistance, 0.f, 25.f);
+	camchanged |= ImGui::SliderFloat("Lens Radius", &imguiData->lensRadius, 0.f, 2.f);
+	ImGui::Checkbox("Sort buffers by material type", &(imguiData->sortMaterial));
+	ImGui::Checkbox("Cache First Bounce", &(imguiData->cacheFirstBounce));
 	ImGui::End();
 
 
@@ -232,7 +237,7 @@ bool MouseOverImGuiWindow()
 	return mouseOverImGuiWinow;
 }
 
-void mainLoop() {
+void mainLoop(bool& camchanged) {
 	while (!glfwWindowShouldClose(window)) {
 		
 		glfwPollEvents();
@@ -253,7 +258,7 @@ void mainLoop() {
 		glDrawElements(GL_TRIANGLES, 6,  GL_UNSIGNED_SHORT, 0);
 
 		// Render ImGui Stuff
-		RenderImGui();
+		RenderImGui(camchanged);
 
 		glfwSwapBuffers(window);
 	}

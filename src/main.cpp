@@ -32,6 +32,7 @@ int height;
 //-------------------------------
 
 int main(int argc, char** argv) {
+
 	startTimeString = currentTimeString();
 
 	if (argc < 2) {
@@ -70,6 +71,9 @@ int main(int argc, char** argv) {
 	ogLookAt = cam.lookAt;
 	zoom = glm::length(cam.position - ogLookAt);
 
+	guiData->focalDistance = cam.focalDistance;
+	guiData->lensRadius = cam.lensRadius;
+
 	// Initialize CUDA and GL components
 	init();
 
@@ -78,7 +82,7 @@ int main(int argc, char** argv) {
 	InitDataContainer(guiData);
 
 	// GLFW main loop
-	mainLoop();
+	mainLoop(camchanged);
 
 	return 0;
 }
@@ -124,7 +128,13 @@ void runCuda() {
 		cam.position = cameraPosition;
 		cameraPosition += cam.lookAt;
 		cam.position = cameraPosition;
+
+		cam.focalDistance = guiData->focalDistance;
+		cam.lensRadius = guiData->lensRadius;
+
 		camchanged = false;
+
+		guiData->fbCached = false;
 	}
 
 	// Map OpenGL buffer object for writing from CUDA on a single GPU
