@@ -60,7 +60,7 @@ The [PBRT](https://pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Th
 
 Ray generation for each pixel, if not perturbed, will be deterministic. This means that the rays generated from the camera in each iteration would hit the same geometry always. This gives visibly jagged _aliased_ edges in the final render. To prevent this, we can select different points on each pixel in each iteartion using [Stratified Sampling](https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling). This way, each ray originating from the camera is 'jittered' by a small amount, giving the much needed random seed to the path tracer. Since we accumulate pixel colours over iterations, the random jitterling helps averaging out the abrupt jagged edges to smoothly-shaded ones. This feature can be toggled ON/OFF using the preprocessor directive `ANTI_ALIASING` in the `utilities.h` file.
 
-| <img src="images/withaa_combine.png" width=600> | <img src="images/withoutaa_combine.png" width=600> |
+| <img src="images/noaanew.png" width=600> | <img src="images/waanew.png" width=600> |
 |:--:|:--:|
 | *Visibly Aliased Edges* | *After Anti-Aliasing* |
 
