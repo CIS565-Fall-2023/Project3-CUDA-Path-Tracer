@@ -113,9 +113,13 @@ Here randomness is determined by a noise function of range [-1, 1]. Since each j
 
 In this example, the sphere has a velocity of [1, 1, 0] and box [-4, 0, 1].
 
-Static Scene | Motion Blur | Runtime Movement
---- | --- | ---
-![](img/results/motion_static.png) | ![](img/results/motion_blur.png) | ![](img/results/motion_real.png)
+Static Scene 
+--- 
+![](img/results/motion_static.png)
+
+Motion Blur | Runtime Movement
+--- | ---
+![](img/results/motion_blur.png) | ![](img/results/motion_real.png)
 
 ### <a name="motion">Runtime Object Movement</a>
 For the runtime object movement, we update the transformation of the object at every iteration by some time step: 
