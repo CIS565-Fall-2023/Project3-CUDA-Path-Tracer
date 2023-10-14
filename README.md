@@ -213,13 +213,16 @@ A basic optimization I implemented was bounding box culling for mesh loading. Th
 ### <a name="bvh">Bounding Volume Hierarchy for Mesh Loaders</a>
 One method for avoiding checking a ray against every primitive in the scene or every triangle in a mesh is to bin the primitives in a hierarchical spatial data structure such as a bounding volume hierarchy (BVH). Ray-primitive intersection then involves recursively testing the ray against bounding volumes at different levels in the tree until a leaf containing a subset of primitives/triangles is reached, at which point the ray is checked against all the primitives/triangles in the leaf. This traversal is incredibly efficient, as it allows the algorithm to quickly identify the potential intersection candidates by checking the ray against the bounding volumes at each level. Rays that do not intersect any bounding volume can be pruned early in the traversal, saving computational resources. The illustration from [PBR 4.3](https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) helps visualize a BVH for a simple scene. 
 
-![](/img/bvh.png)
-
+<p align="left">
+  <img src="/img/bvh.png" width="500"/>
+</p>
 
 In practice, we build the data structure on the CPU and encapsulate the tree buffers into their own struct, with its own dedicated GPU memory management functions. For tree construction, I implemented both the midpoint split and surface area heuristic (SAH) partitioning algorithms.
 - **Midpoint Split**: This method involves recursively splitting a set of bounding boxes along their longest axis at the midpoint, creating two child nodes. This process continues until less than 3 primitives (or <= 2) is left in the AABB, resulting in a leaf node. The goal is to partition the bounding volumes efficiently, optimizing for fast ray-object intersection tests by minimizing the traversal depth in the hierarchy. However, if the primitives all have large overlapping bounding boxes, this splitting method may fail to separate the primitives into two groups. This limitation made us shift to the second partitioning approach, SAH.
 
-![](/img/bvh_midpoint.jpg) 
+<p align="left">
+  <img src="/img/bvh_midpoint.jpg" width="500"/>
+</p>
 
 - **Surface Area Heuristic (SAH)**: The SAH model estimates the computational expense of performing ray intersection tests, including the time spent traversing nodes of the tree and the time spent on ray–primitive intersection tests for a particular partitioning of primitives. The chance that a random ray hits a random primitive is proportional to the surface area of that primitive. A partition of the primitives along the chosen axis that gives a minimal SAH cost estimate is found by considering a number of candidate partitions. Below is the formulation of SAH evaluation:
 
