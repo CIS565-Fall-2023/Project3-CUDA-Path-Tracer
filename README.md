@@ -239,7 +239,7 @@ Figure 5 shows the performance impact BVH has on loading high-poly meshes:
 
 *Figure 5. Performance Comparison of Different Acceleration Methods for Mesh Loaders. **Note** that since the construction for SAH-BVH took forever for the dragon model we could never measure the actual frame time so here in the graph we put a question mark. The reason for this is explained below.*
 
-With BVH of any sort employed, the frame time drops significantly compared to naive mesh loading and even bounding box culling. Looking at naive versus midpoint BVH, the frame time is nearly 6x faster for Teapot, 49x faster for Mario, 122x faster for Stanford Bunny and 647x faster for Stanford Dragon. BVH based on SAH in general has a slight speedup compared to midpoint split. I waited ~4 hours for `buildBVH` to execute but still couldn't reach its completion. This is because although with SAH the trees are more balanced, it increases immensely the computational complexity during BVH construction due to the cost checks. Basically we perform `3 * numTriangles` cost evaluations to determin a split. The cost function is dependent on the number of triangles that would be placed in each child of the current node as well as the surface area of those boxes.
+With BVH of any sort employed, the frame time drops significantly compared to naive mesh loading and even bounding box culling. Looking at naive versus midpoint BVH, the frame time is nearly 6x faster for Teapot, 49x faster for Mario, 122x faster for Stanford Bunny and 647x faster for Stanford Dragon. BVH based on SAH in general has a slight speedup compared to midpoint split. I waited ~4 hours for `buildBVH` to execute but still couldn't reach its completion. This is because although with SAH the trees are more balanced, it increases immensely the computational complexity during BVH construction due to the cost checks. Basically we perform `3 * numTriangles` cost evaluations to determin a split. The cost function is dependent on the number of triangles that would be placed in each child of the current node as well as the surface area of those boxes. Given that my SAH implementation does not outperform midpoint split that much, it is highly doubtful if SAH should be preferred considering the total execution length of rendering complex scenes.
 
 ![](/img/stats/buildBVH.png)
 
@@ -266,6 +266,7 @@ All the `macro`s are defined in `utilities.h` where you can toggle the correspon
 
 ## <a name="references">References</a>
 * Assets
+    * [Mario](https://sketchfab.com/3d-models/mario-obj-c549d24b60f74d8f85c7a5cbd2f55d0f)
     * [Common 3D Test Models](https://github.com/alecjacobson/common-3d-test-models/tree/master)
     * [glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0)
     * [CesiumGS SampleData](https://github.com/CesiumGS/cesium/tree/master/Apps/SampleData/models)
