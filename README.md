@@ -113,8 +113,8 @@ Here randomness is determined by a noise function of range [-1, 1]. Since each j
 
 In this example, the sphere has a velocity of [1, 1, 0] and box [-4, 0, 1].
 
-Static Scene 
---- 
+| Static Scene 
+| --- 
 ![](img/results/motion_static.png)
 
 Motion Blur | Runtime Movement
