@@ -9,17 +9,22 @@ CUDA Path Tracer
 
 # Overview
 
-### Rifle
-
-![](img/case1.png)
-
 ### Reaper
 
 ![](img/case2.png)
 
+### Walle
+
+![](img/case4.png)
+
+### Rifle
+
+![](img/case1.png)
+
 ### Squid Game
 
 ![](img/case3.png)
+
 This project harnesses the power of CUDA-enabled GPU for rapid path tracing, generating high-quality, globally-lit visuals. Path tracing works by sending out rays from the camera. These rays, when they meet reflective or refractive surfaces, keep traveling until they intersect with a light source. Leveraging parallel processing, this method accurately determines the overall light intensity at a specific spot on an object, resulting in a lifelike representation. Incorporating CUDA guarantees peak performance in Physically-based Rendering.
 
 # Table of Contents  
