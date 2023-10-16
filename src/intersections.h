@@ -125,10 +125,10 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     if (t1 < 0 && t2 < 0) {
         return -1;
     } else if (t1 > 0 && t2 > 0) {
-        t = min(t1, t2);
+        t = glm::min(t1, t2);
         outside = true;
     } else {
-        t = max(t1, t2);
+        t = glm::max(t1, t2);
         outside = false;
     }
 
@@ -136,6 +136,54 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
 
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
+    if (!outside) {
+        normal = -normal;
+    }
+
+    return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__ float triangleIntersectionTest(Geom obj, Ray r, glm::vec3& intersectionPoint, Triangle& tri, glm::vec3& normal, glm::vec2& uv, bool& outside) {
+
+    glm::vec3 barycentricCoords;
+    bool is_hit = glm::intersectRayTriangle(r.origin, r.direction, tri.vertices[0], tri.vertices[1], tri.vertices[2], barycentricCoords);
+
+    if (!is_hit) {
+        return FLT_MAX;
+    }
+
+    // Compute barycentric position
+    glm::vec3 baryPosition = (1.f - barycentricCoords.x - barycentricCoords.y) * tri.vertices[0] + barycentricCoords.x * tri.vertices[1] + barycentricCoords.y * tri.vertices[2];
+    intersectionPoint = baryPosition;
+
+    // If normals are present in the obj, use them, else compute them.
+    glm::vec3 triNormal = glm::normalize(glm::cross(tri.vertices[1] - tri.vertices[0], tri.vertices[2] - tri.vertices[0]));
+    glm::vec3 normals[3] = {
+        glm::length(tri.normals[0]) != 0 ? tri.normals[0] : triNormal,
+        glm::length(tri.normals[1]) != 0 ? tri.normals[1] : triNormal,
+        glm::length(tri.normals[2]) != 0 ? tri.normals[2] : triNormal
+    };
+
+    // Compute barycentric weights for normal and uv interpolation
+    glm::vec3 cross0 = glm::cross(tri.vertices[1] - baryPosition, tri.vertices[2] - baryPosition);
+    glm::vec3 cross1 = glm::cross(tri.vertices[0] - baryPosition, tri.vertices[2] - baryPosition);
+    glm::vec3 cross2 = glm::cross(tri.vertices[0] - baryPosition, tri.vertices[1] - baryPosition);
+    float S = 0.5f * glm::length(glm::cross(tri.vertices[1] - tri.vertices[0], tri.vertices[2] - tri.vertices[1]));
+    float weights[3] = {
+        0.5f * glm::length(cross0) / S,
+        0.5f * glm::length(cross1) / S,
+        0.5f * glm::length(cross2) / S
+    };
+
+    // Compute interpolated normals and uvs using barycentric weights
+    normal = glm::normalize(normals[0] * weights[0] + normals[1] * weights[1] + normals[2] * weights[2]);
+
+    if ((glm::length(tri.uvs[0]) != 0) && (glm::length(tri.uvs[1]) != 0) && (glm::length(tri.uvs[2]) != 0)) {
+        uv = tri.uvs[0] * weights[0] + tri.uvs[1] * weights[1] + tri.uvs[2] * weights[2];
+    }
+
+    // Check if the intersection is from inside or outside
+    outside = glm::dot(normal, r.direction) <= 0;
     if (!outside) {
         normal = -normal;
     }
