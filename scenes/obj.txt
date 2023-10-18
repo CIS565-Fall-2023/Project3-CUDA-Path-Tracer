@@ -102,7 +102,7 @@ CAMERA
 RES         800 800
 FOVY        45
 ITERATIONS  5000
-DEPTH       2
+DEPTH       8
 FILE        obj
 EYE         0.0 5 10.5
 LOOKAT      0 5 0
@@ -163,11 +163,36 @@ ROTAT       0 0 0
 SCALE       .01 10 10
 VEL	    0 0 0
 
+//OBJECT 6
+//gltf gltf/teapot.gltf
+//material 1
+//TRANS       0 1 0
+//ROTAT       0 0 0
+//SCALE       1 1 1
+//VEL	    0 0 0
+
 // Mesh
+//OBJECT 6
+//gltf gltf/mario/mario.gltf
+//material 1
+//TRANS       0 0 0
+//ROTAT       -90 0 0
+//SCALE       1 1 1
+//VEL	    0 0 0
+
+//OBJECT 6
+//obj obj/bunny_10s.obj
+//material 1
+//TRANS       0 2 0
+//ROTAT       0 0 0
+//SCALE       30 30 30
+//VEL	    0 0 0
+
+
 OBJECT 6
-gltf gltf/mario/mario.gltf
+gltf gltf/dragon/dragon.gltf
 material 1
-TRANS       0 0 0
-ROTAT       -90 0 0
-SCALE       1 1 1
+TRANS       0 3 0
+ROTAT       90 0 -90
+SCALE       8 8 8
 VEL	    0 0 0

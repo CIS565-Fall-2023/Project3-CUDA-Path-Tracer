@@ -197,7 +197,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	}
 	else if (rightMousePressed) {
 		zoom += (ypos - lastY) / height;
-		zoom = std::fmax(1.f, zoom);
+		zoom = std::fmax(5.f, zoom); // change the degree of zoom-in/out
 		camchanged = true;
 	}
 	else if (middleMousePressed) {

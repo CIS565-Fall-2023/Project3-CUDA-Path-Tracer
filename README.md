@@ -136,13 +136,9 @@ Nevertheless, the motion blur effect is a fun feature to work on, and gives you 
 To achieve the thin lens effect and depth of field (DOF), two key parameters are essential: `FOCAL_DISTANCE` and `APERTURE`. `FOCAL_DISTANCE` determines the focus point's distance where objects appear sharp. `APERTURE` serves as a measure of the desired blur for out-of-focus elements. In terms of implementation, first we identify the target we want to focus on, aka the focal point, in the scene based on `FOCAL_DISTANCE`. Next, we introduce blur to the remaining scene by adjusting the ray's origin and recalculating its direction, originating from the new point of origin and aligning with the focal point. This technique simulates the desired depth of field and a realistic thin lens effect.
 
 Aperture = 0.8 for varying focal length below:
-No DOF | Focal Dist  = 10.0 
---- | --- 
-![](img/results/dof_none.png) | ![](img/results/dof_dist_10.png) 
-
-Focal Dist = 8.0 | Focal Dist = 6.0
---- | ---
-![](img/results/dof_dist_8.png) |   ![](img/results/dof_dist_6.png)
+Focal Dist  = 10.0 | Focal Dist = 8.0 | Focal Dist = 6.0
+--- | --- | ---
+![](img/results/dof_dist_10.png) | ![](img/results/dof_dist_8.png) |   ![](img/results/dof_dist_6.png)
 
 
 ### <a name="mesh-loading">Arbitrary Mesh Loading</a>

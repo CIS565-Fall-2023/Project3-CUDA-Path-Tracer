@@ -54,6 +54,7 @@ Scene::Scene(string filename) {
         cout << "Complete BVH of node size: " << bvhNodes.size() 
             << " using " << duration << "ms" << endl;
     }
+    else { cout << "no BVH" << endl; }
 
 #endif
 }
@@ -404,7 +405,7 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
                 geom.aabb.max = bbMax;
                 geom.triangleCount++;
 #if DEBUG_BVH
-                printTriAABB(tri);
+                //printTriAABB(tri);
 #endif
             }
         }
@@ -451,7 +452,7 @@ void parseMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, Geom& geom,
                 geom.aabb.max = bbMax;
                 geom.triangleCount++;
 #if DEBUG_BVH
-                printTriAABB(tri);
+                //printTriAABB(tri);
 
 #endif
             }

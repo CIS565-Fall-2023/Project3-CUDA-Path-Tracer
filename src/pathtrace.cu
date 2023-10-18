@@ -206,7 +206,7 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 #if DOF
 		// Sample point on lens
-		glm::vec3 point = concentricSampleDisk(glm::vec2(u01(rng), u01(rng))) * LENS_RADIUS;
+		glm::vec3 point = concentricSampleDisk(glm::vec2(u01(rng), u01(rng))) * APERTURE;
 
 		glm::vec3 ref = cam.position + (cam.view * FOCAL_DIST);
 
@@ -274,8 +274,8 @@ __global__ void computeIntersections(
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, path_index, pathSegment.remainingBounces);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 			
-			// Jitter ray randomly about a given axis, here faking velocity vector as axis 
-			if (glm::length(geom.velocity) > 1.f) {
+			// Jitter ray in between the original position and one step in direction of velocity vector 
+			if (glm::length(geom.velocity) > OFFSET) {
 				ray.origin += u01(rng) * geom.velocity;
 			}
 #endif
@@ -395,7 +395,7 @@ __global__ void shadeMaterials(
 
 	ShadeableIntersection intersection = shadeableIntersections[idx];
 	if (intersection.t > 0.f) { // if the intersection exists...
-#if DEBUG_BVH
+#if DEBUG_NOR
 		pathSegments[idx].color = intersection.surfaceNormal * 0.5f + 0.5f;
 		return;
 #endif
@@ -494,12 +494,15 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 
 	// Implement motion blur by updating object's tranformation
 #if MOTION
-		//float timeStep = iter; //wrong, fly out of scene
-		// how long we want geom to arrive at the expected position -- here is 500 iteration
+	// how long we want geom to arrive at the expected position -- here is 500 iteration
 	float timeStep = 1 / (hst_scene->state.iterations * 0.1f);
 
 	for (int i = 0; i < hst_scene->geoms.size(); i++)
 	{
+		if (glm::length(hst_scene->geoms[i].velocity) < OFFSET) {
+			continue;
+		}
+
 		hst_scene->geoms[i].translation += hst_scene->geoms[i].velocity * timeStep;
 		hst_scene->geoms[i].transform = utilityCore::buildTransformationMatrix(hst_scene->geoms[i].translation, hst_scene->geoms[i].rotation, hst_scene->geoms[i].scale);
 		hst_scene->geoms[i].inverseTransform = glm::inverse(hst_scene->geoms[i].transform);
@@ -602,7 +605,9 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	  // materials you have in the scenefile.
 	  // TODO: compare between directly shading the path segments and shading
 	  // path segments that have been reshuffled to be contiguous in memory.
-
+#if TIMER
+		timer.startGpuTimer();
+#endif
 #if SORT_MAT
 		// shuffle paths to be continugous in memory by material type
 		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths,
@@ -636,11 +641,13 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 	}
 #if TIMER
 	timer.endGpuTimer();
-	std::cout << "with stream compaction: " << timer.getGpuElapsedTimeForPreviousOperation() << "ms" << std::endl;
+	std::cout << "Exec completion with stream compaction: " << timer.getGpuElapsedTimeForPreviousOperation() << "ms" << std::endl;
+	//std::cout << "num_paths with stream compaction: " << num_paths << std::endl;
 #endif
 
 	// remember to recover num paths
 	num_paths = dev_path_end - dev_paths;
+
 	// Assemble this iteration and apply it to the image
 	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
 	finalGather << <numBlocksPixels, blockSize1d >> > (num_paths, dev_image, dev_paths);

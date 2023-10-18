@@ -59,7 +59,7 @@ glm::vec3 sampleDiffuseTrans(const Material& m, glm::vec3 nor,
     float& absDot, float& pdf) {
     // sample wi in the opposite hemisphere of wo, everything else same as diffuse_refl
     wi = calculateRandomDirectionInHemisphere(nor, rng);
-    wi.x = -wi.z;
+    wi.z = -wi.z;
     absDot = glm::abs(glm::dot(nor, wi));
     pdf = absDot * INV_PI;
     return m.color * INV_PI;
@@ -92,7 +92,7 @@ glm::vec3 sampleSpecularTrans(const Material& m, glm::vec3 nor,
     nor = entering ? nor : -nor;
     wi = glm::refract(wo, nor, eta);
 
-    // handle total internal refl
+    // handle total internal refl --> basically specular BRDF
     if (glm::length(wi) < EPSILON) {
         wi = glm::reflect(wo, nor);
         return glm::vec3(0.0f);
@@ -139,23 +139,65 @@ float fresnelDielectricEval(const Material& m, float cosThetaI) {
 
 __host__ __device__
 glm::vec3 sampleGlass(const Material& m, glm::vec3 nor,
-    thrust::default_random_engine& rng, glm::vec3 wo, glm::vec3& wi) {
+    thrust::default_random_engine& rng, glm::vec3 wo, glm::vec3& wi,
+    float& absDot, float& pdf) {
 
     thrust::uniform_real_distribution<float> u01(0, 1);
     bool random = u01(rng);
 
     float fresnel = fresnelDielectricEval(m, glm::dot(wo, nor));
     glm::vec3 bsdf(0.f);
-    if (random < fresnel) {
-        // Have to double contribution b/c we only sample
-        // reflection BxDF half the time
-        bsdf = sampleSpecularRefl(m, nor, wo, wi);
-        return bsdf;
+    //if (random < fresnel) {
+    //    // Have to double contribution b/c we only sample
+    //    // reflection BxDF half the time
+    //    bsdf = sampleSpecularRefl(m, nor, wo, wi);
+    //    return bsdf;
+    //}
+    //else {
+    //    bsdf = sampleSpecularTrans(m, nor, wo, wi);
+    //    return bsdf; // 1-fr b/c all conditions sum up to 1
+    //}
+    // spec glass
+    float eta = m.indexOfRefraction;
+    if (u01(rng) < 0.5f) {
+        // specular reflection
+        wi = glm::reflect(wo, nor);
+        absDot = glm::abs(glm::dot(nor, wi));
+        pdf = 1.0f;
+        if (absDot == 0.0f) {
+            bsdf = m.color;
+        }
+        else {
+            bsdf = m.color / absDot;
+        }
+        bsdf *= fresnel;
     }
     else {
-        bsdf = sampleSpecularTrans(m, nor, wo, wi);
-        return bsdf; // 1-fr b/c all conditions sum up to 1
+        // specular refraction
+        if (glm::dot(nor, wo) < 0.0f) {
+            // outside
+            eta = 1.0f / eta;
+            wi = glm::refract(wo, nor, eta);
+        }
+        else {
+            // inside
+            wi = glm::refract(wo, -nor, eta);
+        }
+        absDot = glm::abs(glm::dot(nor, wi));
+        pdf = 1.0f;
+        if (glm::length(wi) <= 0.0001f) {
+            // total internal reflection
+            bsdf = glm::vec3(0.0f);
+        }
+        if (absDot == 0.0f) {
+            bsdf = m.specular.color;
+        }
+        else {
+            bsdf = m.specular.color / absDot;
+        }
+        bsdf *= (1.0f - fresnel);
     }
+    return bsdf * 2.0f;
 }
 
 __host__ __device__
@@ -181,15 +223,15 @@ glm::vec3 samplePlastic(const Material& m, glm::vec3 nor,
 
     if (random < 0.5f) {
         // diffuse
-        bsdf = sampleDiffuse(m, nor, rng, wi);// glm::normalize(calculateRandomDirectionInHemisphere(normal, rng));
+        bsdf = sampleDiffuse(m, nor, rng, wi);// glm::normalize(calculateRandomDirectionInHemisphere(nor, rng));
         absDot = glm::abs(glm::dot(nor, wi));
         pdf = absDot * INV_PI;
         bsdf = m.color * INV_PI;
-        bsdf *= 1.f - fresnel;
+        bsdf *= (1.f - fresnel);
     }
     else {
         // spec refl
-        bsdf = sampleSpecularRefl(m, nor, wo, wi);// glm::reflect(wo, normal);
+        bsdf = sampleSpecularRefl(m, nor, wo, wi);// glm::reflect(wo, nor);
         absDot = glm::abs(glm::dot(nor, wi));
         pdf = 1.0f;
         if (absDot > 0.0f) {
@@ -250,7 +292,8 @@ void scatterRay(
 
     // Based on material type
     if (m.hasReflective && m.hasRefractive) {
-        bsdf = sampleGlass(m, normal, rng, wo, wi);
+        bsdf = sampleGlass(m, normal, rng, wo, wi, absDot, pdf);
+        manualCalc = true;
     }
     // Had to manually calculate absDot and pdf to get correct results, otherwise not working properly
     else if (m.hasReflective && glm::length(m.color) > EPSILON) {
