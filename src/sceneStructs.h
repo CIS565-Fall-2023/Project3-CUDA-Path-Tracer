@@ -10,11 +10,50 @@
 enum GeomType {
     SPHERE,
     CUBE,
+    GLTF,
+    OBJ,
 };
 
 struct Ray {
     glm::vec3 origin;
     glm::vec3 direction;
+    int intersectionCount = 0;
+};
+
+struct AABB {
+    glm::vec3 min;
+    glm::vec3 max;
+
+    // for surface area heuristic (SAH) later
+    float surfaceArea() {
+        glm::vec3 e = min - max;
+        return 2.f * (e.x * e.y + e.x * e.z + e.y * e.z);
+    };
+};
+
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 nor;
+};
+
+struct Triangle
+{
+    int objectId;
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+    glm::vec3 centroid; // for BVH subdivision
+    AABB aabb;
+
+    void computeAABB() {
+        aabb.min = glm::min(v0.pos, glm::min(v1.pos, v2.pos));
+        aabb.max = glm::max(v0.pos, glm::max(v1.pos, v2.pos));
+    }
+
+    void computeCentroid() {
+        centroid = (v0.pos + v1.pos + v2.pos) / 3.f;
+    }
 };
 
 struct Geom {
@@ -23,13 +62,28 @@ struct Geom {
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
+    glm::vec3 velocity;
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+    int startTriIdx;
+    int triangleCount;
+    AABB aabb;
+};
+
+struct BVHNode {
+    AABB aabb;
+    unsigned int leftChild, rightChild; // BVHNode* left, * right; rightChild based off leftChild
+    int firstTriIdx; // std::vector<Triangle*> triangles;
+    int triCount;
+
+    bool isLeaf() {
+        return triCount > 0;
+    }
 };
 
 struct Material {
-    glm::vec3 color;
+    glm::vec3 color;           // albedo
     struct {
         float exponent;
         glm::vec3 color;
@@ -38,6 +92,7 @@ struct Material {
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+    float hasTransmission;
 };
 
 struct Camera {
@@ -61,9 +116,10 @@ struct RenderState {
 
 struct PathSegment {
     Ray ray;
-    glm::vec3 color;
+    glm::vec3 color;        // accumulated light
     int pixelIndex;
     int remainingBounces;
+    glm::vec3 throughput;   // represents how materials we have encountered so far will alter the color of a light source when it scttaers off of them
 };
 
 // Use with a corresponding PathSegment to do:

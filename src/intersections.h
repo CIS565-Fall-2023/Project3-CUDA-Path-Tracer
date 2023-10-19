@@ -137,8 +137,213 @@ __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r,
     intersectionPoint = multiplyMV(sphere.transform, glm::vec4(objspaceIntersection, 1.f));
     normal = glm::normalize(multiplyMV(sphere.invTranspose, glm::vec4(objspaceIntersection, 0.f)));
     if (!outside) {
-        normal = -normal;
+        // Commented out b/c affects refraction
+        // This makes nor point inward if the ray starts inside, while
+        // convention assumes nor would always point away from the sphere.
+        //normal = -normal;
     }
 
     return glm::length(r.origin - intersectionPoint);
+}
+
+__host__ __device__ void swap(float& a, float& b) {
+    float tmp = a;
+    a = b;
+    b = tmp;
+}
+
+// reference: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+__host__ __device__ bool aabbIntersectionTest(AABB box, Ray& r, float& t) {
+    float tmin = (box.min.x - r.origin.x) / r.direction.x;
+    float tmax = (box.max.x - r.origin.x) / r.direction.x;
+
+    if (tmin > tmax) swap(tmin, tmax);
+
+    float tymin = (box.min.y - r.origin.y) / r.direction.y;
+    float tymax = (box.max.y - r.origin.y) / r.direction.y;
+
+    if (tymin > tymax) swap(tymin, tymax);
+
+    if ((tmin > tymax) || (tymin > tmax))
+        return false;
+
+    if (tymin > tmin)
+        tmin = tymin;
+
+    if (tymax < tmax)
+        tmax = tymax;
+
+    float tzmin = (box.min.z - r.origin.z) / r.direction.z;
+    float tzmax = (box.max.z - r.origin.z) / r.direction.z;
+
+    if (tzmin > tzmax) swap(tzmin, tzmax);
+
+    if ((tmin > tzmax) || (tzmin > tmax))
+        return false;
+
+    if (tzmin > tmin)
+        tmin = tzmin;
+
+    if (tzmax < tmax)
+        tmax = tzmax;
+
+    bool intersect = tzmin <= tzmax && tzmax >= 0;
+    t = intersect ? tzmin : -1.f;
+    if (t < 0.f) t = tzmax;
+
+    return true;
+}
+
+/**
+ * Test intersection between a ray and a triangulated gltf/glb/obj mesh.
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
+__host__ __device__ float meshIntersectionTest(Geom mesh, Ray& r,
+    const Triangle* tris, glm::vec3& intersectionPoint, glm::vec3& normal) {
+
+    Triangle tri;
+    glm::vec3 barycenter, objSpaceIsect;
+    float tMin = FLT_MAX;
+    bool hasIntersection = false;
+
+    // do intersection test with every triangle
+    for (int i = mesh.startTriIdx; i < mesh.startTriIdx + mesh.triangleCount; ++i) {
+        
+        tri = tris[i];
+        bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
+            tri.v0.pos, tri.v1.pos, tri.v2.pos, barycenter);
+        if (!intersect) continue;
+
+        // find intersection point and normal
+        float u = barycenter.x;
+        float v = barycenter.y;
+        float w = 1.f - u - v;
+        objSpaceIsect = w * tri.v0.pos
+            + u * tri.v1.pos
+            + v * tri.v2.pos;
+
+        float t = glm::length(r.origin - objSpaceIsect);
+
+        glm::vec3 intersectionNormal = glm::normalize(
+            glm::cross(tri.v1.pos - tri.v0.pos, 
+                       tri.v2.pos - tri.v0.pos));
+
+        if (t < tMin) {
+            tMin = t;
+            intersectionPoint = multiplyMV(mesh.transform, glm::vec4(objSpaceIsect, 1.f));
+            normal = glm::normalize(multiplyMV(mesh.invTranspose, glm::vec4(intersectionNormal, 0.f)));;
+            hasIntersection = true;
+        }
+    }
+
+    if (hasIntersection) {
+        return tMin;
+    }
+    return -1.f;
+}
+
+
+__host__ __device__ bool isNodeLeaf(const BVHNode* node) {
+    return (node->triCount > 0);
+}
+
+__host__ __device__ void bvhIntersectTriangles(const Geom* geom, const Triangle* tris, Ray& r,
+    int start, int trisCount,
+    glm::vec3& intersectionPoint, glm::vec3& normal, float& tMin) {
+    
+    glm::vec3 barycenter, objSpaceIsect;
+    for (int i = start; i < start + trisCount; ++i) {
+    
+        bool intersect = glm::intersectRayTriangle(r.origin, r.direction,
+            tris[i].v0.pos, tris[i].v1.pos, tris[i].v2.pos, barycenter);
+        if (!intersect) continue;
+        r.intersectionCount++;
+
+        // find intersection point and normal
+        float u = barycenter.x;
+        float v = barycenter.y;
+        float w = 1.f - u - v;
+        objSpaceIsect = w * tris[i].v0.pos
+            + u * tris[i].v1.pos
+            + v * tris[i].v2.pos;
+
+        float t = glm::length(r.origin - objSpaceIsect);
+        glm::vec3 intersectionNormal = glm::normalize(
+            glm::cross(tris[i].v1.pos - tris[i].v0.pos,
+                       tris[i].v2.pos - tris[i].v0.pos));
+
+        if (t < tMin)
+        {
+            tMin = t;
+            intersectionPoint = objSpaceIsect; multiplyMV(geom->transform, glm::vec4(objSpaceIsect, 1.f));
+            normal = intersectionNormal; glm::normalize(multiplyMV(geom->invTranspose, glm::vec4(intersectionNormal, 0.f)));
+        }
+    }
+}
+
+
+/**
+ * Test intersection between a ray and a BVH structure.
+ *
+ * @param intersectionPoint  Output parameter for point of intersection.
+ * @param normal             Output parameter for surface normal.
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ * 
+ * reference:
+ * https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+ */
+__host__ __device__ float bvhIntersectionTest(Geom geom, const BVHNode* nodes,
+    const Triangle* tris, Ray& r, glm::vec3& intersectionPoint, glm::vec3& normal) {
+
+    float tMin = FLT_MAX;
+    int stack[32];
+    int stackPtr = -1;
+
+    // Push root node
+    stack[++stackPtr] = 0;
+    int currNodeIdx = stack[stackPtr];
+
+    while (stackPtr >= 0)
+    {
+        // Check intersection with left and right children
+        int leftChild = nodes[currNodeIdx].leftChild;
+        int rightChild = nodes[currNodeIdx].rightChild;
+        const BVHNode* left = &nodes[leftChild];
+        const BVHNode* right = &nodes[rightChild];
+
+        float t;
+        bool intersectLeft = aabbIntersectionTest(left->aabb, r, t);
+        bool intersectRight = aabbIntersectionTest(right->aabb, r, t);
+
+        // If intersection found, and they are leaf nodes, check for triangle intersections
+        if (intersectLeft && isNodeLeaf(left)) {
+            bvhIntersectTriangles(&geom, tris, r, left->firstTriIdx, left->triCount, intersectionPoint, normal, tMin);
+            //if (r.intersectionCount >= triangleCount) return -1.f;
+        }
+        if (intersectRight && isNodeLeaf(right)) {
+            bvhIntersectTriangles(&geom, tris, r, right->firstTriIdx, right->triCount, intersectionPoint, normal, tMin);
+            //if (r.intersectionCount >= triangleCount) return -1.f;
+        }
+
+        // If internal nodes, keep traversing
+        bool traverseLeftSubtree = (intersectLeft && !isNodeLeaf(left));
+        bool traverseRightSubtree = (intersectRight && !isNodeLeaf(right));
+
+        if (!traverseLeftSubtree && !traverseRightSubtree) {
+            // Pop node from stack
+            currNodeIdx = stack[stackPtr--];
+        }
+        else {
+            currNodeIdx = traverseLeftSubtree ? leftChild : rightChild;
+            if (traverseLeftSubtree && traverseRightSubtree) {
+                // Push right child onto stack
+                stack[++stackPtr] = rightChild;
+            }
+        }
+    }
+
+    return tMin;
 }

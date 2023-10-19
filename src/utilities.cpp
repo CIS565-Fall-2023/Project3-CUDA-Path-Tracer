@@ -79,6 +79,10 @@ std::vector<std::string> utilityCore::tokenizeString(std::string str) {
     return results;
 }
 
+glm::vec3 utilityCore::multiplyMV(glm::mat4 m, glm::vec4 v) {
+    return glm::vec3(m * v);
+}
+
 std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
     t.clear();
 
@@ -109,4 +113,14 @@ std::istream& utilityCore::safeGetline(std::istream& is, std::string& t) {
             t += (char)c;
         }
     }
+}
+
+uint64_t utilityCore::timeSinceEpochMillisec() {
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
+bool utilityCore::fileHasExtension(const std::string& filePath, const std::string& ext) {
+    if (filePath.size() <= ext.size()) return false;
+    return std::equal(ext.rbegin(), ext.rend(), filePath.rbegin());
 }

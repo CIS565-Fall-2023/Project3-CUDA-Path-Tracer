@@ -1,0 +1,11 @@
+Model Information:
+* title:	Mario obj
+* source:	https://sketchfab.com/3d-models/mario-obj-c549d24b60f74d8f85c7a5cbd2f55d0f
+* author:	MatiasH290 (https://sketchfab.com/matias029)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Mario obj" (https://sketchfab.com/3d-models/mario-obj-c549d24b60f74d8f85c7a5cbd2f55d0f) by MatiasH290 (https://sketchfab.com/matias029) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

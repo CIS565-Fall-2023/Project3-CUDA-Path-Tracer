@@ -3,6 +3,7 @@
 #include <cstring>
 
 static std::string startTimeString;
+static std::string imageFolderPath = "../img/results/";
 
 // For camera controls
 static bool leftMousePressed = false;
@@ -98,7 +99,7 @@ void saveImage() {
 
 	std::string filename = renderState->imageName;
 	std::ostringstream ss;
-	ss << filename << "." << startTimeString << "." << samples << "samp";
+	ss << imageFolderPath << filename << "." << startTimeString << "." << samples << "samp";
 	filename = ss.str();
 
 	// CHECKITOUT
@@ -196,7 +197,7 @@ void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	}
 	else if (rightMousePressed) {
 		zoom += (ypos - lastY) / height;
-		zoom = std::fmax(0.1f, zoom);
+		zoom = std::fmax(5.f, zoom); // change the degree of zoom-in/out
 		camchanged = true;
 	}
 	else if (middleMousePressed) {
