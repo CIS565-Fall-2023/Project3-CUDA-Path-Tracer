@@ -22,14 +22,14 @@
 
 #define SORT_MATERIALS 0
 
-#define CACHE_FIRST_BOUNCE 1
+#define CACHE_FIRST_BOUNCE 0
 
 // enable 4x Stochastic Sample Anti-Aliasing
 #define ANTIALIASING 0
 
 #define DIRECT_LIGHT 0
 
-#define IMAGE_DENOISE 1
+#define IMAGE_DENOISE 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -298,9 +298,10 @@ void pathtraceFree() {
 
 __host__ __device__ void concentricSampleDisk(float* sampledX, float* sampledY, thrust::default_random_engine& rng) {
 	// Generate two random numbers between -1 and 1
-	thrust::uniform_real_distribution<float> uniformDistribution(-1, 1);
-	float randomX = uniformDistribution(rng);
-	float randomY = uniformDistribution(rng);
+	thrust::uniform_real_distribution<float> u01(-1, 1);
+	thrust::uniform_real_distribution<float> u02(-1, 1);
+	float randomX = u01(rng);
+	float randomY = u02(rng);
 
 	// Map random points to concentric disk
 	float radius, theta;
@@ -317,7 +318,6 @@ __host__ __device__ void concentricSampleDisk(float* sampledX, float* sampledY, 
 	*sampledX = radius * cosf(theta);
 	*sampledY = radius * sinf(theta);
 }
-
 
 /**
 * Generate PathSegments with rays from the camera through the screen into the
@@ -349,8 +349,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 		thrust::uniform_real_distribution<float> u02(-1, 1);
 
 		segment.ray.direction = glm::normalize(cam.view
-			- cam.right * cam.pixelLength.x * ((float)x + u01(rng) * 4.f - (float)cam.resolution.x * 2 * 0.5f) / 2.f
-			- cam.up * cam.pixelLength.y * ((float)y + u02(rng) * 4.f - (float)cam.resolution.y * 2 * 0.5f) / 2.f
+			- cam.right * cam.pixelLength.x * ((float)x + u01(rng)  - (float)cam.resolution.x * 2 * 0.5f) / 2.f
+			- cam.up * cam.pixelLength.y * ((float)y + u02(rng) - (float)cam.resolution.y * 2 * 0.5f) / 2.f
 		);
 
 		if (cam.lensRadius > 0) {
@@ -408,14 +408,18 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 			glm::vec3 lensPosition = cam.lensRadius * glm::vec3(lensSampleX, lensSampleY, 0.f);
 
 			// Calculate the distance from the lens to the focal plane
-			float focalPlaneIntersectionDistance = cam.focalLength / -segment.ray.direction.z;
+			//float focalPlaneIntersectionDistance = cam.focalLength / -segment.ray.direction.z;
+			float focalPlaneIntersectionDistance = cam.focalLength / glm::dot(cam.view, segment.ray.direction);
 
 			// Determine the point of intersection on the focal plane
-			glm::vec3 focalPlaneIntersection = focalPlaneIntersectionDistance * segment.ray.direction;
+			glm::vec3 focalPlaneIntersection = segment.ray.origin + focalPlaneIntersectionDistance * segment.ray.direction;
+		
 
 			// Update ray origin and direction for the effect of the lens
-			segment.ray.origin += lensPosition;
-			segment.ray.direction = glm::normalize(focalPlaneIntersection - lensPosition);
+			//segment.ray.origin += lensPosition;
+			segment.ray.origin += cam.right * lensPosition.x + cam.up * lensPosition.y;
+			segment.ray.direction = glm::normalize(focalPlaneIntersection - segment.ray.origin);
+
 		}
 
 		segment.ray.isShadow = false;
@@ -919,7 +923,7 @@ void pathtrace(uchar4* pbo, int frame, int iter) {
 #endif
 
 #if ANTIALIASING
-	cudaMemcpy(hst_scene->state.image.data(), dev_image,
+	cudaMemcpy(hst_scene->state.image.data(), dev_final_image,
 		pixelcount / 4 * sizeof(glm::vec3), cudaMemcpyDeviceToHost);
 #else
 	cudaMemcpy(hst_scene->state.image.data(), dev_image,

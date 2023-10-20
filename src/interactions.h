@@ -131,7 +131,7 @@ void scatterRay(
         glm::vec3 newDir = glm::vec3(0.0f);
 
         if (m.hasRefractive > 0.0f) {
-          pathSegment.color *= m.specular.color;
+          pathSegment.color *= m.color;
           newDir = reflectionAndRefraction(normal, pathSegment.ray.direction, m.indexOfRefraction, rng, &is_refraction);
           
         }
