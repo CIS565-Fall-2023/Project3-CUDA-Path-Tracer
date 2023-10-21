@@ -190,7 +190,7 @@ void InitImguiData(GuiDataContainer* guiData)
 	imguiData = guiData;
 }
 
-
+static bool ui_hide = false;
 // LOOK: Un-Comment to check ImGui Usage
 void RenderImGui()
 {
@@ -231,6 +231,32 @@ void RenderImGui()
 	if (ImGui::SliderInt("Depth:", &imguiData->Depth, 1, 50))
 	{
 		depthChanged = true;
+	}
+
+	ImGui::Text("press H to hide GUI completely.");
+	if (ImGui::IsKeyPressed('H')) {
+		ui_hide = !ui_hide;
+	}
+
+	ImGui::SliderInt("Iterations", &ui_iterations, 1, startupIterations);
+
+	ImGui::Checkbox("Denoise", &ui_denoise);
+
+	ImGui::SliderInt("Filter Size", &ui_filterSize, 0, 100);
+	ImGui::SliderFloat("Color Weight", &ui_colorWeight, 0.0f, 30.0f);
+	ImGui::SliderFloat("Normal Weight", &ui_normalWeight, 0.0f, 10.0f);
+	ImGui::SliderFloat("Position Weight", &ui_positionWeight, 0.0f, 10.0f);
+
+	ImGui::Separator();
+	ImGui::Text("Show Gbuffer: ");
+	ImGui::Checkbox("Show Time of Flight", &ui_showGbuffer);
+	ImGui::Checkbox("Show normal", &ui_showNormal);
+	ImGui::Checkbox("Show position", &ui_showPosition);
+
+	ImGui::Separator();
+
+	if (ImGui::Button("Save image and exit")) {
+		ui_saveAndExit = true;
 	}
 
 	ImGui::End();

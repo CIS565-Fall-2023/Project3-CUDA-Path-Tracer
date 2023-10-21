@@ -38,6 +38,19 @@ extern bool sortMaterial;
 extern bool Compaction;
 extern bool CacheFirstBound;
 
+extern int ui_iterations;
+extern int startupIterations;
+extern bool ui_showGbuffer;
+extern bool ui_denoise;
+extern bool ui_showNormal;
+extern bool ui_showPosition;
+extern int ui_filterSize;
+extern float ui_colorWeight;
+extern float ui_normalWeight;
+extern float ui_positionWeight;
+extern bool ui_saveAndExit;
+
+
 void runCuda();
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void mousePositionCallback(GLFWwindow* window, double xpos, double ypos);

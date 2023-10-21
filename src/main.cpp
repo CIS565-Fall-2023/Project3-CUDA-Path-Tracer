@@ -2,6 +2,7 @@
 #include "preview.h"
 #include <cstring>
 
+
 static std::string startTimeString;
 
 // For camera controls
@@ -12,6 +13,18 @@ static double lastX;
 static double lastY;
 
 const float CameraSpeed = 1.0f;
+int ui_iterations = 0;
+int startupIterations = 0;
+int lastLoopIterations = 0;
+bool ui_showGbuffer = false;
+bool ui_denoise = false;
+bool ui_showNormal = false;
+bool ui_showPosition = false;
+int ui_filterSize = 80;
+float ui_colorWeight = 0.45f;
+float ui_normalWeight = 0.35f;
+float ui_positionWeight = 0.2f;
+bool ui_saveAndExit = false;
 
 static bool camchanged = true;
 static float dtheta = 0, dphi = 0;
@@ -141,24 +154,34 @@ void runCuda() {
 		pathtraceInit(scene);
 	}
 
-	if (iteration < renderState->iterations) {
-		uchar4* pbo_dptr = NULL;
+	uchar4* pbo_dptr = NULL;
+	cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
+
+	if (iteration < 10) {
 		iteration++;
-		cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
+		printf("%d", iteration);
 
 		// execute the kernel
 		int frame = 0;
 		pathtrace(pbo_dptr, frame, iteration);
-
-		// unmap buffer object
-		cudaGLUnmapBufferObject(pbo);
 	}
-	else {
+
+	if (ui_showGbuffer || ui_showNormal || ui_showPosition) {
+        showGBuffer(pbo_dptr, ui_showGbuffer, ui_showNormal, ui_showPosition);
+    }
+    else if (ui_denoise) {
+        denoise(pbo_dptr, iteration, ui_colorWeight, ui_normalWeight, ui_positionWeight, ui_filterSize);
+    }
+    else {
+        //showImage(pbo_dptr, iteration);
+    }
+
+	// unmap buffer object
+	cudaGLUnmapBufferObject(pbo);
 		//saveImage();
 		//pathtraceFree();
 		//cudaDeviceReset();
 		//exit(EXIT_SUCCESS);
-	}
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -189,6 +212,10 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
 		case GLFW_KEY_3:
 			CacheFirstBound = !CacheFirstBound;
+			break;
+		case GLFW_KEY_4:
+			ui_denoise = !ui_denoise;
+			printf("denoise");
 			break;
 		}
 

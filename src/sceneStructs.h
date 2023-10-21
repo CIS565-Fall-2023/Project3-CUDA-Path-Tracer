@@ -94,8 +94,8 @@ struct Camera {
     glm::vec3 right;
     glm::vec2 fov;
     glm::vec2 pixelLength;
-    float aperture = 0.0 ;
-    float focalDistance = 5.0;
+    float aperture = 0.0f;
+    float focalDistance = 5.0f;
 };
 
 struct RenderState {
@@ -126,6 +126,15 @@ struct ShadeableIntersection {
   float u;
   float v;
 };
+
+// CHECKITOUT - a simple struct for storing scene geometry information per-pixel.
+// What information might be helpful for guiding a denoising filter?
+struct GBufferPixel {
+    float t;
+    glm::vec3 pos = glm::vec3(0.f);
+    glm::vec3 nor = glm::vec3(0.f);
+};
+
 
 struct SortIntersection
 {
