@@ -20,7 +20,7 @@ bool ui_showGbuffer = false;
 bool ui_denoise = false;
 bool ui_showNormal = false;
 bool ui_showPosition = false;
-int ui_filterSize = 80;
+int ui_filterSize = 30;
 float ui_colorWeight = 0.45f;
 float ui_normalWeight = 0.35f;
 float ui_positionWeight = 0.2f;
@@ -191,8 +191,8 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
-		case GLFW_KEY_F:
-			saveImage();
+		case GLFW_KEY_S:
+			//saveImage();
 			break;
 		case GLFW_KEY_SPACE:
 		{
