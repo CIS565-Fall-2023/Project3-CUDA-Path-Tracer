@@ -157,7 +157,7 @@ void runCuda() {
 	uchar4* pbo_dptr = NULL;
 	cudaGLMapBufferObject((void**)&pbo_dptr, pbo);
 
-	if (iteration < 10) {
+	if (iteration < 100) {
 		iteration++;
 		printf("%d", iteration);
 
@@ -191,8 +191,8 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			saveImage();
 			glfwSetWindowShouldClose(window, GL_TRUE);
 			break;
-		case GLFW_KEY_S:
-			//saveImage();
+		case GLFW_KEY_F:
+			saveImage();
 			break;
 		case GLFW_KEY_SPACE:
 		{
