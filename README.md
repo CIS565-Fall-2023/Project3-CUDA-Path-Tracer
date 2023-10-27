@@ -1,7 +1,7 @@
-CUDA Path Tracer
-================
+CUDA Denoiser For CUDA Path Tracer
+==================================
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
+**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 4**
 
 * Xitong Zheng
   * [LinkedIn](https://www.linkedin.com/in/xitong-zheng-5b6543205/), [Instagram](https://www.instagram.com/simonz_zheng/), etc.
@@ -55,6 +55,31 @@ With direct light, the image is brighter than the one without direct light.
 
 #### ObJ Mesh loading with bounding volume intersection culling
 
+I use `tinyObj` third-party loading code to bring the data to load the obj mesh. An Obj file can contains vertices, normals, texture coordinates, and faces in the following format:
+
+```
+v x y z
+
+The vertex command, this specifies a vertex by its three coordinates. 
+
+vt u v [w]
+
+The vertex texture command specifies the UV (and optionally W) mapping. 
+
+vn x y z
+
+The vertex normal command specifies a normal vector. 
+
+f v1[/vt1][/vn1] v2[/vt2][/vn2] v3[/vt3][/vn3] ...
+
+The face command specifies a polygon made from the verticies listed.
+```
+
+Here I use the vertices, vertex normal and faces to load the mesh and store them into related data structure. The intersection function used for mesh is `glm::intersectRayTriangle`.
+
+I also use bounding volume intersection culling to avoid unnecessary intersection calculation so as to reduce the number of rays that have to be checked against the entire mesh by first checking rays against a volume that completelt bounds the mesh. The bounding box is calculated by the min and max of the vertices of the mesh and can be created when the mesh is loaded. The intersection function used for bounding box is `glm::intersectRayAABB`. 
+
+
 ![](./img/gear1.png)
 
 ![](./img/vase.png)
@@ -62,10 +87,20 @@ With direct light, the image is brighter than the one without direct light.
 ![](./img/vase1.png)
 #### Open Image AI denoiser
 
+As you can see that the above images are still noisy and not clear enough. And if the scene is complex and consists thousands of points and faces, you will end up into a situation that noise is eliminated slowly even if rendering for a relative long time. It can be anticipated that the marginal benefit of reducing noise use native monte carlo path tracing will be less and less.
+To improve the quality of the image, I use open image AI denoiser to denoise the image. The results are pretty good even if the spp is low. The result is shown below.
 ![](./img/OIMD.png)
+
+
 The above two pictures are basically the same scene and you can easily find the outcome applied with open image AI denoiser is much clearear than the one without denoiser.
 
-Here I use first hit intersection to act as the albedo and normal filter of the pixel.
+Here I use first hit intersection to act as the albedo and normal filter of the pixel. Multiple filters have been added to the denoiser to improve the quality of the denoised image. The filters are listed below.
+
+- albedo filter
+- normal filter
+- basic(color/beauty) filter 
+
+Toggle `IMAGE_DENOISE` in the `main.cpp` to enable/disable the Open Image AI denoiser.
 
 #### Performance Analysis
 
@@ -78,3 +113,6 @@ I use the gear scene to test the performance of stream compaction.
 The result is shown below.
 
 ![](./img/performance1.png)
+
+#### Reference Links
+1. https://www.cs.cmu.edu/~mbz/personal/graphics/obj.html
