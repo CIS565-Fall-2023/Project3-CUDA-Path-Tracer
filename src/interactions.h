@@ -41,6 +41,54 @@ glm::vec3 calculateRandomDirectionInHemisphere(
         + sin(around) * over * perpendicularDirection2;
 }
 
+__host__ __device__
+glm::vec3 reflectionAndRefraction(glm::vec3 surfaceNormal, glm::vec3 incidentRayDirection, float indexofRefraction, thrust::default_random_engine& rng, bool* underwentRefraction) {
+  // Initialize underwentRefraction to false
+  *underwentRefraction = false;
+  bool is_medium = false;
+  glm::vec3 emergentRayDirection;
+
+  // Adjust surface normal and refractive index if light goes from material to air
+  if (glm::dot(surfaceNormal, incidentRayDirection) > 0) {
+    surfaceNormal = -surfaceNormal;
+    is_medium = true;
+  }
+
+  // Calculate reflection coefficient using Schlick's approximation
+  float R_0 = powf((1.f - indexofRefraction) / (1.f + indexofRefraction), 2.f);
+  float reflectionCoefficient = R_0 + (1 - R_0) * powf(1.f + glm::dot(surfaceNormal, incidentRayDirection), 5.f);
+
+  // Generate a random number to decide between reflection and refraction
+  thrust::uniform_real_distribution<float> u01(0, 1);
+  float randomValue = u01(rng);
+
+  // Reflect or refract based on random value and reflection coefficient
+  if (randomValue < reflectionCoefficient) {
+    emergentRayDirection = glm::reflect(incidentRayDirection, surfaceNormal);
+  }
+  else {
+    // here, only consider the refraction from material to air(index) or air to material(1/index) for eta.
+    if (is_medium) {
+			indexofRefraction = 1.f / indexofRefraction;
+      emergentRayDirection = glm::refract(incidentRayDirection, surfaceNormal, indexofRefraction);
+    }
+    else {
+			emergentRayDirection = glm::refract(incidentRayDirection, surfaceNormal, 1.f / indexofRefraction);
+    }
+    
+
+    // Handle total internal reflection
+    if (glm::length(emergentRayDirection) == 0.f) {
+      emergentRayDirection = glm::reflect(incidentRayDirection, surfaceNormal);
+    }
+    else {
+      *underwentRefraction = true;
+    }
+  }
+
+  return emergentRayDirection;
+}
+
 /**
  * Scatter a ray with some probabilities according to the material properties.
  * For example, a diffuse surface scatters in a cosine-weighted hemisphere.
@@ -76,4 +124,36 @@ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+    bool is_refraction = false;
+    
+
+    if (pathSegment.remainingBounces > 0) {
+        glm::vec3 newDir = glm::vec3(0.0f);
+
+        if (m.hasRefractive > 0.0f) {
+          pathSegment.color *= m.color;
+          newDir = reflectionAndRefraction(normal, pathSegment.ray.direction, m.indexOfRefraction, rng, &is_refraction);
+          
+        }
+        else if (m.hasReflective > 0.0f) {
+						newDir = glm::reflect(pathSegment.ray.direction, normal);
+						pathSegment.color *= m.specular.color;
+				}
+				else {
+						newDir = calculateRandomDirectionInHemisphere(normal, rng);					
+						pathSegment.color *= m.color;
+				}
+
+        newDir = glm::normalize(newDir);
+        if (is_refraction) {
+          pathSegment.ray.origin = intersect + .0002f * pathSegment.ray.direction;
+        }
+        else {
+          pathSegment.ray.origin = intersect;
+        }
+
+        pathSegment.ray.direction = newDir;
+        pathSegment.remainingBounces--;
+      }
+
 }

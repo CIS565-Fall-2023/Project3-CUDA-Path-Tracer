@@ -38,12 +38,32 @@ REFR        0
 REFRIOR     0
 EMITTANCE   0
 
-// Specular white
+// Glass
 MATERIAL 4
 RGB         .98 .98 .98
 SPECEX      0
 SPECRGB     .98 .98 .98
 REFL        1
+REFR        1
+REFRIOR     1.5
+EMITTANCE   0
+
+// Diffuse yellow
+MATERIAL 5
+RGB         .67 .98 .18
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
+REFR        0
+REFRIOR     0
+EMITTANCE   0
+
+// Diffuse blue
+MATERIAL 6
+RGB         .02 .22 .43
+SPECEX      0
+SPECRGB     0 0 0
+REFL        0
 REFR        0
 REFRIOR     0
 EMITTANCE   0
@@ -71,7 +91,7 @@ SCALE       3 .3 3
 // Floor
 OBJECT 1
 cube
-material 1
+material 6
 TRANS       0 0 0
 ROTAT       0 0 0
 SCALE       10 .01 10
@@ -108,18 +128,13 @@ TRANS       5 5 0
 ROTAT       0 0 0
 SCALE       .01 10 10
 
-// Sphere
-OBJECT 6
-sphere
-material 4
-TRANS       -1 4 -1
-ROTAT       0 0 0
-SCALE       3 3 3
+// Mesh
 
-// Sphere
-OBJECT 7
-sphere
+
+OBJECT 6
+mesh
+../scenes/vase_modern.obj
 material 1
-TRANS       3 4 0
-ROTAT       0 0 0
-SCALE       3 3 3
+TRANS       0 2 0
+ROTAT       270 20 45
+SCALE       0.015 0.015 0.015

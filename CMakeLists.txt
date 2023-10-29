@@ -32,7 +32,7 @@ set(CUDA_VERBOSE_BUILD ON)
 
 if(WIN32)
     # Set up include and lib paths
-    set(CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE FILEPATH "Host side compiler used by NVCC" FORCE)
+    set(CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE FILEPATH "Host side compiler used by NVCC" FORCE) 
 endif(WIN32)
 ########################################
 
@@ -114,8 +114,24 @@ source_group(Sources FILES ${sources})
 #add_subdirectory(src/ImGui)
 #add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
+include_directories(./external/include)
+link_directories(./external/lib)
+
+
 cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
     #stream_compaction  # TODO: uncomment if using your stream compaction
+	OpenImageDenoise
     )
+
+if (WIN32)
+    # Copy all DLL files from OIDN's bin directory to your executable's directory
+    file(GLOB OIDN_DLLS "${CMAKE_SOURCE_DIR}/external/bin/*.dll")
+
+    foreach(OIDN_DLL IN LISTS OIDN_DLLS)
+        add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+                          COMMAND ${CMAKE_COMMAND} -E copy
+                          ${OIDN_DLL}  ${CMAKE_BINARY_DIR})
+    endforeach()
+endif()
