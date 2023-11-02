@@ -47,7 +47,7 @@
 
  * Material Sorting: When rays bounce and hit materials, the resulting data can be mixed up and out of order. During shading, threads can work on different materials at once, causing inefficiency. To fix this, we sort the data by material type first, so threads work on the same materials together.
 
- * Denoise: TODO until next project
+ * Denoise: Please check [Denoiser](https://github.com/DanielZhong/Project3-CUDA-Path-Tracer/tree/denoiser) Branch!
 
  ![](./img/chart.png)
  Based on the provided chart, compaction significantly impacts the open box scene because there are more terminated rays in this setting. Refer to the chart below for a comparison of ray numbers between the closed box and the open scene. Furthermore, as the number of material types increases, the sorting of materials becomes more pronounced.
