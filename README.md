@@ -31,7 +31,7 @@
  ![](./img/pbrMetal.png)
  ![](./img/pbrGlass.png)
 
- ## Antialising with random ray
+ ## Antialising with random ray(supersampling)
  * Without Antialising  
 
  ![](./img/WithoutAntiAli.png)
