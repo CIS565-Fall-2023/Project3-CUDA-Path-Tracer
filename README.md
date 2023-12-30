@@ -31,7 +31,7 @@
  ![](./img/pbrMetal.png)
  ![](./img/pbrGlass.png)
 
- ## MSAA Antialising with random ray
+ ## Antialising with random ray
  * Without Antialising  
 
  ![](./img/WithoutAntiAli.png)
