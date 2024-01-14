@@ -932,6 +932,8 @@ int Scene::loadMaterial(string materialid) {
                     newMaterial.type = microfacet;
                 else if (tokens[1] == "metallicWorkflow")
                     newMaterial.type = metallicWorkflow;
+                else if (tokens[1] == "blinnphong")
+                    newMaterial.type = blinnphong;
                 else
                     newMaterial.type = emitting;
             }
@@ -952,6 +954,10 @@ int Scene::loadMaterial(string materialid) {
             else if (strcmp(tokens[0].c_str(), "METALLIC") == 0) {
                 float metallic = atof(tokens[1].c_str());
                 newMaterial.metallic = metallic;
+            }
+            else if (strcmp(tokens[0].c_str(), "SPEC") == 0) {
+                float spec = atof(tokens[1].c_str());
+                newMaterial.specExponent = spec;
             }
 
         }

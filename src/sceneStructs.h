@@ -8,7 +8,7 @@
 #define USE_BVH 1
 #define USE_MIS 1
 #define MTBVH 1
-#define DENOISE 1
+#define DENOISE 0
 #define VIS_NORMAL 0
 #define TONEMAPPING 1
 #define DOF_ENABLED 1
@@ -17,7 +17,7 @@
 #define ALPHA_CUTOFF 0.01f
 #define STOCHASTIC_SAMPLING 1
 #define FIRST_INTERSECTION_CACHING 1
-#define MAX_DEPTH 8
+#define MAX_DEPTH 2
 #define SORT_BY_MATERIAL_TYPE 0
 #define MAX_NUM_PRIMS_IN_LEAF 2
 #define SAH_BUCKET_SIZE 20
@@ -100,7 +100,7 @@ const int dirs[] = {
 
 
 enum MaterialType {
-    diffuse, frenselSpecular, microfacet, metallicWorkflow, emitting
+    diffuse, frenselSpecular, microfacet, metallicWorkflow, blinnphong, emitting
 };
 
 enum TextureType {
@@ -118,10 +118,11 @@ struct GLTFTextureLoadInfo {
 
 struct Material {
     glm::vec3 color = glm::vec3(0);
-    float indexOfRefraction = 0;
-    float emittance = 0;
+    float indexOfRefraction = 0.0;
+    float emittance = 0.0;
     float metallic = -1.0;
     float roughness = -1.0;
+    float specExponent = -1.0;
     cudaTextureObject_t baseColorMap = 0, normalMap = 0, metallicRoughnessMap = 0;
     MaterialType type = diffuse;
 };

@@ -1,0 +1,142 @@
+MATERIAL 0
+TYPE blinnphong
+RGB         0.99 0.99 0.99
+ROUGHNESS   0.0
+METALLIC    0
+SPEC        500
+REFRIOR     0
+EMITTANCE   0
+
+MATERIAL 1
+TYPE blinnphong
+RGB         0.99 0.99 0.99
+ROUGHNESS   0.0
+METALLIC    0
+SPEC        5000
+REFRIOR     0
+EMITTANCE   0
+
+MATERIAL 2
+TYPE blinnphong
+RGB         0.99 0.99 0.99
+ROUGHNESS   0.0
+METALLIC    0
+SPEC        500000
+REFRIOR     0
+EMITTANCE   0
+
+// Emissive material (light)
+MATERIAL 3
+TYPE emitting
+RGB         1.0 1.0 0.0
+ROUGHNESS   -1.0
+METALLIC    0
+REFRIOR     0
+EMITTANCE   15
+
+MATERIAL 4
+TYPE emitting
+RGB         1.0 0 1.0
+ROUGHNESS   -1.0
+METALLIC    0
+REFRIOR     0
+EMITTANCE   10
+
+MATERIAL 5
+TYPE emitting
+RGB         0 0.5 0.5
+ROUGHNESS   -1.0
+METALLIC    0
+REFRIOR     0
+EMITTANCE   8
+
+MATERIAL 6
+TYPE emitting
+RGB         0.5 0.5 0.25
+ROUGHNESS   -1.0
+METALLIC    0
+REFRIOR     0
+EMITTANCE   6
+
+MATERIAL 7
+TYPE emitting
+RGB         0.5 0.25 0.5
+ROUGHNESS   -1.0
+METALLIC    0
+REFRIOR     0
+EMITTANCE   5
+
+
+
+// Camera
+CAMERA
+RES         1080 1080
+FOVY        35
+ITERATIONS  10
+DEPTH       8
+FILE        MIS
+EYE         0.0 5 10.5
+LOOKAT      0 5 0
+UP          0 1 0
+
+OBJECT 0
+geometry sphere
+material 3
+TRANS       -8 5 -10
+ROTAT       0 0 0
+SCALE       .3 .3 .3
+
+OBJECT 1
+geometry sphere
+material 4
+TRANS       -4 5 -10
+ROTAT       0 0 0
+SCALE       .4 .4 .4
+
+OBJECT 2
+geometry sphere
+material 5
+TRANS       0 5 -10
+ROTAT       0 0 0
+SCALE       .5 .5 .5
+
+OBJECT 3
+geometry sphere
+material 6
+TRANS       4 5 -10
+ROTAT       0 0 0
+SCALE       .7 .7 .7
+
+OBJECT 4
+geometry sphere
+material 7
+TRANS       8 5 -10
+ROTAT       0 0 0
+SCALE       1 1 1
+
+
+OBJECT 5
+geometry cube
+material 0
+TRANS       0 -1 0
+ROTAT       0 0 0
+SCALE       15 0.2 2
+
+OBJECT 6
+geometry cube
+material 1
+TRANS       0 -1 -3
+ROTAT       8 0 0
+SCALE       15 0.2 2
+
+OBJECT 6
+geometry cube
+material 2
+TRANS       0 -0.4 -6
+ROTAT       16 0 0
+SCALE       15 0.2 2
+
+// SKYBOX
+// ../scenes/environment/kloppenheim_02_puresky_4k.hdr
+
+

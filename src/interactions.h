@@ -275,6 +275,61 @@ __device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo,
 	}
 } 
 
+// https://www.shadertoy.com/view/lsV3zV
+__device__ inline glm::vec3 bxdf_blinn_phong_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float specExponent)
+{
+	float cosThetaN_Wi = util_math_tangent_space_abscos(wi);
+	float cosThetaN_Wo = util_math_tangent_space_abscos(wo);
+	glm::vec3 wh = normalize(wi + wo);
+	float cosThetaN_Wh = util_math_tangent_space_abscos(wh);
+
+	// Compute geometric term of blinn microfacet      
+	float cosThetaWo_Wh = abs(dot(wo, wh));
+	float G = min(1., min((2. * cosThetaN_Wh * cosThetaN_Wo / cosThetaWo_Wh),
+		(2. * cosThetaN_Wh * cosThetaN_Wi / cosThetaWo_Wh)));
+
+	// Compute distribution term
+	float D = (specExponent + 2.) * INV_TWO_PI * pow(max(0.0f, cosThetaN_Wh), specExponent);
+
+	// assume no fresnel
+	float F = 1.;
+
+	return baseColor * D * G * F / (4.0f * cosThetaN_Wi * cosThetaN_Wo);
+}
+
+__device__ inline float bxdf_blinn_phong_pdf(const glm::vec3& wo, const glm::vec3& wi, float specExponent)
+{
+	glm::vec3 wh = normalize(wi + wo);
+	float cosTheta = util_math_tangent_space_abscos(wh);
+
+	float pdf = 0.0f;
+	if (dot(wo, wh) > 0.)
+	{
+		pdf = ((specExponent + 1.0f) * pow(max(0.0f, cosTheta), specExponent)) / (TWO_PI * 4. * dot(wo, wh));
+	}
+
+	return pdf;
+}
+
+__device__ inline glm::vec3 bxdf_blinn_phong_sample(const glm::vec2& random, const glm::vec3& wo, float specExponent)
+{
+	float cosTheta = pow(max(0.0f, random.x), 1.0f / (specExponent + 1.0f));
+	float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
+	float phi = random.y * TWO_PI;
+
+	glm::vec3 wh = glm::vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+	glm::vec3 wi = glm::reflect(-wo, wh);
+	return wi;
+}
+
+__device__ inline glm::vec3 bxdf_blinn_phong_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 baseColor, float specExponent)
+{
+	*wi = bxdf_blinn_phong_sample(random, wo, specExponent);
+	*pdf = bxdf_blinn_phong_pdf(wo, *wi, specExponent);
+	return bxdf_blinn_phong_eval(wo, *wi, baseColor, specExponent);
+}
+
 __device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
 {
 	float t = sqrt(rand.x);
@@ -283,8 +338,8 @@ __device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
 
 __device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 surfaceNormal, glm::vec3 receivePos)
 {
-	glm::vec3 L = surfacePos - receivePos;
-	return glm::clamp(glm::dot(glm::normalize(-L), surfaceNormal), 0.0f, 1.0f) / glm::distance2(surfacePos, receivePos);
+	glm::vec3 L = receivePos - surfacePos;
+	return glm::abs(glm::dot(glm::normalize(L), surfaceNormal)) / glm::distance2(surfacePos, receivePos);
 }
 
 __device__ inline float util_mis_weight_balanced(float pdf1, float pdf2)
@@ -334,13 +389,12 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 {
 	if (!sceneInfo.lightsSize) return;
 	float fchosen = random.x * sceneInfo.lightsSize;
-	int chosenLight = fchosen;
+	int chosenLight = std::floor(fchosen);
 	float u = glm::clamp(fchosen - (int)fchosen, 0.0f, 1.0f);
 	Primitive& lightPrim = sceneInfo.dev_lights[chosenLight];
 	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
 	Material& lightMat = sceneInfo.dev_materials[lightObj.materialid];
 	float prob = 1.0f / sceneInfo.lightsSize;
-	float tArea = 0.0f;
 	if (lightObj.type == GeomType::SPHERE)//Assume uniform scale of xyz
 	{
 		glm::vec3 originWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.0), 1.0f));
@@ -353,7 +407,6 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 		*lightNormal = glm::normalize(glm::mat3(T, B, N) * localSample);
 		*lightPos = originWorld + *lightNormal * R;
 		prob /= (TWO_PI * R * R);
-		tArea = (PI * 4 * R * R);
 	}
 	else if(lightObj.type == GeomType::CUBE)//TODO: use quad light to replace all cubes
 	{
@@ -394,9 +447,8 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 			*lightPos = v0 + vx + vy * i + vz * j;
 			*lightNormal = glm::normalize(vx);
 		}
-		tArea = area;
 	}
-	else
+	else //Triangle
 	{
 		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
 		glm::vec2 bary = util_math_uniform_sample_triangle(glm::vec2(random.y, random.z));
@@ -411,12 +463,11 @@ __device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& ra
 		float area = abs(glm::length(nNormal)) / 2;
 		*lightNormal = nNormal / (area > 0.0 ? area : 1e-8f);
 		prob /= area;
-		tArea = area;
 	}
 	bool vis = glm::dot(position - *lightPos, *lightNormal) > 0;
 	vis = vis && glm::dot(*lightPos - position, normal) > 0;
 	glm::vec3 shadowRayOri = position;
-	shadowRayOri += glm::dot(*lightPos - position, normal) > 0.0 ? normal * 0.00001f : -normal * 0.00001f;
+	//shadowRayOri += glm::dot(*lightPos - position, normal) > 0.0 ? normal * 0.00001f : -normal * 0.00001f;
 #if USE_BVH
 	vis = vis && util_bvh_test_visibility(shadowRayOri, *lightPos, sceneInfo);
 #else

@@ -778,6 +778,10 @@ __global__ void scatter_on_intersection(
 		{
 			bxdf = bxdf_microfacet_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, material.roughness);
 		}
+		else if (material.type == MaterialType::blinnphong)
+		{
+			bxdf = bxdf_blinn_phong_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, material.specExponent);
+		}
 		else//diffuse
 		{
 			float4 color = { 0,0,0,1 };
@@ -906,6 +910,7 @@ __global__ void scatter_on_intersection_mis(
 		else
 		{
 			float roughness = material.roughness, metallic = material.metallic;
+			float specExp = material.specExponent;
 			float4 color = { 0,0,0,1 };
 			float alpha = 1.0f;
 			//Texture mapping
@@ -926,13 +931,14 @@ __global__ void scatter_on_intersection_mis(
 			//Sampling lights
 			glm::vec3 lightPos, lightNormal, emissive = glm::vec3(0);
 			float lightPdf = -1.0;
-			lights_sample(sceneInfo, glm::vec3(u01(rng), u01(rng), u01(rng)), intersection.worldPos, N, &lightPos, &lightNormal, &emissive, &lightPdf);
+			glm::vec3 offseted_pos = intersection.worldPos + N * SCATTER_ORIGIN_OFFSETMULT;
+			lights_sample(sceneInfo, glm::vec3(u01(rng), u01(rng), u01(rng)), offseted_pos, N, &lightPos, &lightNormal, &emissive, &lightPdf);
 			
 			if (emissive.x > 0.0 || emissive.y > 0.0 || emissive.z > 0.0)
 			{
-				glm::vec3 light_wi = lightPos - intersection.worldPos;
+				glm::vec3 light_wi = lightPos - offseted_pos;
 				light_wi = glm::normalize(glm::transpose(TBN) * (light_wi));
-				float G = util_math_solid_angle_to_area(lightPos, glm::normalize(lightNormal), intersection.worldPos);
+				float G = util_math_solid_angle_to_area(lightPos, lightNormal, offseted_pos);
 				float matPdf = -1.0f;
 				if (material.type == MaterialType::metallicWorkflow)
 				{
@@ -944,16 +950,18 @@ __global__ void scatter_on_intersection_mis(
 					matPdf = bxdf_microfacet_pdf(wo, light_wi, roughness);
 					bxdf = bxdf_microfacet_eval(wo, light_wi, materialColor, roughness);
 				}
+				else if (material.type == MaterialType::blinnphong)
+				{
+					matPdf = bxdf_blinn_phong_pdf(wo, light_wi, specExp);
+					bxdf = bxdf_blinn_phong_eval(wo, light_wi, materialColor, specExp);
+				}
 				else
 				{
 					matPdf = bxdf_diffuse_pdf(wo, light_wi);
 					bxdf = bxdf_diffuse_eval(wo, light_wi, materialColor);
 				}
-				if (matPdf > 0.0)
-				{
-					float misW = util_mis_weight_balanced(lightPdf, matPdf * G);
-					image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW * G / (lightPdf);
-				}
+				float misW = util_mis_weight_balanced(lightPdf, matPdf * G);
+				image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW * G / lightPdf;
 			}
 			//Sampling material bsdf
 			if (material.type == MaterialType::metallicWorkflow)
@@ -963,6 +971,10 @@ __global__ void scatter_on_intersection_mis(
 			else if (material.type == MaterialType::microfacet)
 			{
 				bxdf = bxdf_microfacet_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, roughness);
+			}
+			else if (material.type == MaterialType::blinnphong)
+			{
+				bxdf = bxdf_blinn_phong_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, specExp);
 			}
 			else//diffuse
 			{

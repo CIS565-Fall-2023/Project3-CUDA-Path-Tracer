@@ -212,11 +212,9 @@ Different sampling techniques might be optimal for different scenarios, and the 
 
 The following scene is tested with 100spp
 
-|      Light sample only (100spp)      |      BRDF Sample Only (100spp)       |
-| :----------------------------------: | :----------------------------------: |
-|       ![](./img/mis-light.png)       |       ![](./img/mis-brdf.png)        |
-| **Combined (trace depth=2, 100spp)** | **Combined (trace depth=8, 100spp)** |
-|     ![](./img/mis-combined.png)      |     ![](./img/mis-combined8.png)     |
+| Light sample only (10spp) | BRDF Sample Only (10spp) | Combined (10spp)            |
+| :-----------------------: | :----------------------: | --------------------------- |
+| ![](./img/mis_light.png)  | ![](./img/mis_brdf.png)  | ![](./img/mis_combined.png) |
 
 
 
