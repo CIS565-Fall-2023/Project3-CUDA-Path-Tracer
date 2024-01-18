@@ -856,12 +856,14 @@ __global__ void scatter_on_intersection_mis(
 		float matPdf = pathSegments[idx].lastMatPdf;
 		if (matPdf > 0.0)
 		{
-			float G = util_math_solid_angle_to_area(intersection.worldPos, intersection.surfaceNormal, pathSegments[idx].ray.origin);
+			float G = util_math_solid_angle_to_area(intersection.worldPos, pathSegments[idx].ray.origin, pathSegments[idx].cos_wi);
+			//We do not know the value of light pdf(of last intersection point) of the sample taken from bsdf sampling unless we hit a light
 			float lightPdf = lights_sample_pdf(sceneInfo, lightPrimId);
-			float misW = util_mis_weight_balanced(matPdf * G, lightPdf);
+			//Computing weights from last intersection point
+			float misW = util_mis_weight(matPdf * G, lightPdf);
 			pathSegments[idx].color *= (materialColor * material.emittance * misW);
 		}
-		else
+		else//This ray hits a light directly
 		{
 			pathSegments[idx].color *= (materialColor * material.emittance);
 		}
@@ -938,7 +940,7 @@ __global__ void scatter_on_intersection_mis(
 			{
 				glm::vec3 light_wi = lightPos - offseted_pos;
 				light_wi = glm::normalize(glm::transpose(TBN) * (light_wi));
-				float G = util_math_solid_angle_to_area(lightPos, lightNormal, offseted_pos);
+				float G = util_math_solid_angle_to_area(lightPos, offseted_pos, util_math_tangent_space_abscos(light_wi));
 				float matPdf = -1.0f;
 				if (material.type == MaterialType::metallicWorkflow)
 				{
@@ -960,8 +962,8 @@ __global__ void scatter_on_intersection_mis(
 					matPdf = bxdf_diffuse_pdf(wo, light_wi);
 					bxdf = bxdf_diffuse_eval(wo, light_wi, materialColor);
 				}
-				float misW = util_mis_weight_balanced(lightPdf, matPdf * G);
-				image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_tangent_space_abscos(light_wi) * emissive * misW * G / lightPdf;
+				float misW = util_mis_weight(lightPdf, matPdf * G);
+				image[pathSegments[idx].pixelIndex] += pathSegments[idx].color * bxdf * util_math_get_light_cos_wo(lightPos, lightNormal, offseted_pos) * emissive * misW * G / lightPdf;
 			}
 			//Sampling material bsdf
 			if (material.type == MaterialType::metallicWorkflow)
@@ -994,6 +996,7 @@ __global__ void scatter_on_intersection_mis(
 		if (pdf > 0)
 		{
 			pathSegments[idx].color *= bxdf * util_math_tangent_space_abscos(wi) / pdf;
+			pathSegments[idx].cos_wi = util_math_tangent_space_abscos(wi);
 			glm::vec3 newDir = glm::normalize(TBN * wi);
 			glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
 			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;

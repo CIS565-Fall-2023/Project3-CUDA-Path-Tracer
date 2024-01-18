@@ -7,6 +7,7 @@
 
 #define USE_BVH 1
 #define USE_MIS 1
+#define MIS_POWER_2 1
 #define MTBVH 1
 #define DENOISE 0
 #define VIS_NORMAL 0
@@ -153,6 +154,7 @@ struct RenderState {
 struct PathSegment {
     Ray ray;
     glm::vec3 color;
+    float cos_wi;
     int pixelIndex;
     int remainingBounces;
     float lastMatPdf;

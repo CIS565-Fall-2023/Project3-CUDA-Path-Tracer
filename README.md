@@ -210,7 +210,7 @@ Different sampling strategies can be beneficial in different scenarios within a 
 
 Different sampling techniques might be optimal for different scenarios, and the challenge lies in integrating these diverse strategies effectively. Multiple Importance Sampling amalgamates various sampling techniques, assigning weights to each technique based on its efficacy in a given scenario, and then amalgamating them in a way that minimizes variance.
 
-The following scene is tested with 100spp
+The following scene is tested with 10spp
 
 | Light sample only (10spp) | BRDF Sample Only (10spp) | Combined (10spp)            |
 | :-----------------------: | :----------------------: | --------------------------- |

@@ -336,15 +336,37 @@ __device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
 	return glm::vec2(1 - t, t * rand.y);
 }
 
-__device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 surfaceNormal, glm::vec3 receivePos)
+//See (Veach 1997 (8.10)) 
+__device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 receivePos, float cos_wi)
 {
-	glm::vec3 L = receivePos - surfacePos;
-	return glm::abs(glm::dot(glm::normalize(L), surfaceNormal)) / glm::distance2(surfacePos, receivePos);
+	return cos_wi / glm::distance2(surfacePos, receivePos);
 }
+
+__device__ inline float util_math_get_light_cos_wo(glm::vec3 lightPos, glm::vec3 lightSurfaceNormal, glm::vec3 receivePos)
+{
+	glm::vec3 L = receivePos - lightPos;
+	return glm::abs(glm::dot(glm::normalize(L), lightSurfaceNormal));
+}
+
 
 __device__ inline float util_mis_weight_balanced(float pdf1, float pdf2)
 {
 	return pdf1 / (pdf1 + pdf2);
+}
+
+__device__ inline float util_mis_weight_power_heuristic(float pdf1, float pdf2)
+{
+	float p1_p1 = pdf1 * pdf1;
+	return  p1_p1 / (p1_p1 + pdf2 * pdf2);
+}
+
+__device__ inline float util_mis_weight(float pdf1, float pdf2)
+{
+#if MIS_POWER_2
+	return util_mis_weight_power_heuristic(pdf1, pdf2);
+#else
+	return util_mis_weight_balanced(pdf1, pdf2);
+#endif
 }
 
 __device__ float lights_sample_pdf(const SceneInfoDev& sceneInfo, int lightPrimID)
