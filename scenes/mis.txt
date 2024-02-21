@@ -1,25 +1,25 @@
 MATERIAL 0
-TYPE blinnphong
+TYPE microfacet
 RGB         0.99 0.99 0.99
-ROUGHNESS   0.0
+ROUGHNESS   0.1
 METALLIC    0
 SPEC        500
 REFRIOR     0
 EMITTANCE   0
 
 MATERIAL 1
-TYPE blinnphong
+TYPE microfacet
 RGB         0.99 0.99 0.99
-ROUGHNESS   0.0
+ROUGHNESS   0.05
 METALLIC    0
 SPEC        5000
 REFRIOR     0
 EMITTANCE   0
 
 MATERIAL 2
-TYPE blinnphong
+TYPE microfacet
 RGB         0.99 0.99 0.99
-ROUGHNESS   0.0
+ROUGHNESS   0.001
 METALLIC    0
 SPEC        500000
 REFRIOR     0
@@ -72,7 +72,7 @@ EMITTANCE   5
 CAMERA
 RES         1080 1080
 FOVY        35
-ITERATIONS  10
+ITERATIONS  100000
 DEPTH       8
 FILE        MIS
 EYE         0.0 5 10.5

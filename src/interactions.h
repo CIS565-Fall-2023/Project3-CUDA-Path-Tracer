@@ -44,9 +44,9 @@ __device__ inline glm::vec3 util_sample_hemisphere_cosine(const glm::vec2& rando
 	return glm::vec3(t.x, t.y, sqrt(1 - t.x * t.x - t.y * t.y));
 }
 
-__device__ inline float util_math_tangent_space_abscos(const glm::vec3& w)
+__device__ inline float util_math_tangent_space_clampedcos(const glm::vec3& w)
 {
-	return abs(w.z);
+	return max(w.z,0.0f);
 }
 
 __device__ inline float util_math_sin_cos_convert(float sinOrCos)
@@ -87,6 +87,26 @@ __device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float HoV)
 	return f0 + (1.0f - f0) * util_math_pow_5(1.0f - HoV);
 }
 
+__device__ float util_math_lambda(glm::vec3 w, float a2) {
+	float cos2Theta = w.z * w.z;
+	float sin2Theta = 1 - cos2Theta;
+	if (cos2Theta<1e-9) return 0;
+	float tan2Theta = sin2Theta / cos2Theta;
+	
+	return (sqrt(1 + a2 * tan2Theta) - 1) / 2;
+}
+
+//__device__ FrComplex(Float cosTheta_i, pstd::complex<Float> eta) {
+//	using Complex = pstd::complex<Float>;
+//	cosTheta_i = Clamp(cosTheta_i, 0, 1);
+//	<< Compute complex  for Fresnel equations using Snell¡¯s law >>
+//		Complex r_parl = (eta* cosTheta_i - cosTheta_t) /
+//		(eta* cosTheta_i + cosTheta_t);
+//	Complex r_perp = (cosTheta_i - eta * cosTheta_t) /
+//		(cosTheta_i + eta * cosTheta_t);
+//	return (pstd::norm(r_parl) + pstd::norm(r_perp)) / 2;
+//}
+
 __device__ inline glm::vec3 util_math_fschlick_roughness(glm::vec3 f0, float roughness, float NoV)
 {
 	return f0 + util_math_pow_5(1.0f - NoV) * (glm::max(f0, glm::vec3(1.0f - roughness) - f0));
@@ -115,25 +135,45 @@ __device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float
 
 __device__ inline float util_math_smith_ggx_masking(const glm::vec3& wo, float a2)
 {
-	float NoV = util_math_tangent_space_abscos(wo);
+	float NoV = util_math_tangent_space_clampedcos(wo);
 	return 2 * NoV / (sqrt(NoV * NoV * (1 - a2) + a2) + NoV);
 }
 
 __device__ inline float util_math_smith_ggx_shadowing_masking(const glm::vec3& wi, const glm::vec3& wo, float a2)
 {
-	float NoL = util_math_tangent_space_abscos(wi);
-	float NoV = util_math_tangent_space_abscos(wo);
+	float NoL = util_math_tangent_space_clampedcos(wi);
+	float NoV = util_math_tangent_space_clampedcos(wo);
 	float denom = NoL * sqrt(NoV * NoV * (1 - a2) + a2) + NoV * sqrt(NoL * NoL * (1 - a2) + a2);
 	return (2.0 * NoL * NoV) / (denom);
 }
 
+__device__ inline float util_math_smith_ggx_shadowing_masking2(const glm::vec3& wi, const glm::vec3& wo, float a2)
+{
+	return 1 / (1 + util_math_lambda(wi, a2) + util_math_lambda(wo, a2));
+}
+
 __device__ inline float util_math_ggx_normal_distribution(const glm::vec3& wh, float a2)
 {
-	float NoH = util_math_tangent_space_abscos(wh);
+	float NoH = util_math_tangent_space_clampedcos(wh);
 	float denom = NoH * NoH * (a2 - 1) + 1;
 	denom = denom * denom * PI;
-	return (a2 + 1e-10f) / (denom + 1e-10f);
+	return (a2) / (denom);
 }
+
+__device__ inline float util_math_ggx_normal_distribution2(const glm::vec3& wh, float a2)
+{
+	float cosTheta = util_math_tangent_space_clampedcos(wh);
+	float sinTheta = util_math_sin_cos_convert(cosTheta);
+	float sin2Theta = sinTheta * sinTheta;
+	float cos2Theta = cosTheta * cosTheta;
+	if (cos2Theta < 1e-6f) return 0;
+	float tan2Theta = sin2Theta / cos2Theta;
+	float cos4Theta = cos2Theta * cos2Theta;
+	float e = tan2Theta / a2;
+	return 1 / (PI * a2 * cos4Theta * (1 + e) * (1 + e));
+}
+
+
 
 __device__ inline glm::vec3 bxdf_diffuse_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor)
 {
@@ -142,7 +182,7 @@ __device__ inline glm::vec3 bxdf_diffuse_eval(const glm::vec3& wo, const glm::ve
 
 __device__ inline float bxdf_diffuse_pdf(const glm::vec3& wo, const glm::vec3& wi)
 {
-	return util_math_tangent_space_abscos(wi) * INV_PI;
+	return util_math_tangent_space_clampedcos(wi) * INV_PI;
 }
 
 __device__ inline glm::vec3 bxdf_diffuse_sample(const glm::vec2& random, const glm::vec3& wo)
@@ -153,18 +193,18 @@ __device__ inline glm::vec3 bxdf_diffuse_sample(const glm::vec2& random, const g
 __device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
 {
 	*wi = util_sample_hemisphere_cosine(random);
-	*pdf = util_math_tangent_space_abscos(*wi) * INV_PI;
+	*pdf = util_math_tangent_space_clampedcos(*wi) * INV_PI;
 	return diffuseAlbedo * INV_PI;
 }
 
 __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
 {
-	float frensel = util_math_frensel_dielectric(util_math_tangent_space_abscos(wo), refIdx.x, refIdx.y);
+	float frensel = util_math_frensel_dielectric(util_math_tangent_space_clampedcos(wo), refIdx.x, refIdx.y);
 	if (random.x < frensel)
 	{
 		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
 		*pdf = frensel;
-		return frensel * reflectionAlbedo / util_math_tangent_space_abscos(*wi);
+		return frensel * reflectionAlbedo / util_math_tangent_space_clampedcos(*wi);
 	}
 	else
 	{
@@ -174,7 +214,7 @@ __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::ve
 		*wi = refractedRay;
 		*pdf = 1 - frensel;
 		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y * refIdx.y);
-		return val / util_math_tangent_space_abscos(*wi);
+		return val / util_math_tangent_space_clampedcos(*wi);
 	}
 }
 
@@ -182,17 +222,17 @@ __device__ glm::vec3 bxdf_perfect_specular_sample_f(const glm::vec3& wo, glm::ve
 {
 	*wi = glm::vec3(-wo.x, -wo.y, wo.z);
 	*pdf = 1;
-	return reflectionAlbedo / util_math_tangent_space_abscos(wo);
+	return reflectionAlbedo / util_math_tangent_space_clampedcos(wo);
 }
 
 __device__ inline glm::vec3 bxdf_microfacet_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float roughness)
 {
 	glm::vec3 wh = glm::normalize(wo + wi);
 	float a2 = roughness * roughness;
-	glm::vec3 F = util_math_fschlick(baseColor, glm::abs(glm::dot(wo, wh)));
-	float D = util_math_ggx_normal_distribution(wh, a2);
-	float G2 = util_math_smith_ggx_shadowing_masking(wi, wo, a2);
-	return (F * G2 * D) / (max(4 * util_math_tangent_space_abscos(wo) * util_math_tangent_space_abscos(wi), 1e-9f));
+	glm::vec3 F = util_math_fschlick(baseColor, glm::max(glm::dot(wo, wh),0.0f));
+	float D = util_math_ggx_normal_distribution2(wh, a2);
+	float G2 = util_math_smith_ggx_shadowing_masking2(wi, wo, a2);
+	return (F * G2 * D) / (max(4 * util_math_tangent_space_clampedcos(wo) * util_math_tangent_space_clampedcos(wi), 1e-9f));
 }
 
 __device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3& wi, float roughness)
@@ -202,7 +242,7 @@ __device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3
 	float G1 = util_math_smith_ggx_masking(wo, a2);
 	float D = util_math_ggx_normal_distribution(wh, a2);
 
-	return (G1 * D) / (max(4 * util_math_tangent_space_abscos(wo), 1e-9f));
+	return (G1 * D) / (max(4 * util_math_tangent_space_clampedcos(wo), 1e-9f));
 }
 
 __device__ inline glm::vec3 bxdf_microfacet_sample(const glm::vec2& random, const glm::vec3& wo, float roughness)
@@ -237,7 +277,7 @@ __device__ inline glm::vec3 bxdf_metallic_workflow_eval(const glm::vec3& wo, con
 	float a2 = roughness * roughness;
 	float D = util_math_ggx_normal_distribution(wh, a2);
 	float G2 = util_math_smith_ggx_shadowing_masking(wi, wo, a2);
-	return kD * bxdf_diffuse_eval(wo, wi, baseColor) + kS * D * G2 / (4 * util_math_tangent_space_abscos(wo) * util_math_tangent_space_abscos(wi));
+	return kD * bxdf_diffuse_eval(wo, wi, baseColor) + kS * D * G2 / (4 * util_math_tangent_space_clampedcos(wo) * util_math_tangent_space_clampedcos(wi));
 }
 
 __device__ inline float bxdf_metallic_workflow_pdf(const glm::vec3& wo, const glm::vec3& wi, const glm::vec3& baseColor, float metallic, float roughness)
@@ -278,10 +318,10 @@ __device__ inline glm::vec3 bxdf_metallic_workflow_sample_f(const glm::vec3& wo,
 // https://www.shadertoy.com/view/lsV3zV
 __device__ inline glm::vec3 bxdf_blinn_phong_eval(const glm::vec3& wo, const glm::vec3& wi, glm::vec3& baseColor, float specExponent)
 {
-	float cosThetaN_Wi = util_math_tangent_space_abscos(wi);
-	float cosThetaN_Wo = util_math_tangent_space_abscos(wo);
+	float cosThetaN_Wi = util_math_tangent_space_clampedcos(wi);
+	float cosThetaN_Wo = util_math_tangent_space_clampedcos(wo);
 	glm::vec3 wh = normalize(wi + wo);
-	float cosThetaN_Wh = util_math_tangent_space_abscos(wh);
+	float cosThetaN_Wh = util_math_tangent_space_clampedcos(wh);
 
 	// Compute geometric term of blinn microfacet      
 	float cosThetaWo_Wh = abs(dot(wo, wh));
@@ -300,7 +340,7 @@ __device__ inline glm::vec3 bxdf_blinn_phong_eval(const glm::vec3& wo, const glm
 __device__ inline float bxdf_blinn_phong_pdf(const glm::vec3& wo, const glm::vec3& wi, float specExponent)
 {
 	glm::vec3 wh = normalize(wi + wo);
-	float cosTheta = util_math_tangent_space_abscos(wh);
+	float cosTheta = util_math_tangent_space_clampedcos(wh);
 
 	float pdf = 0.0f;
 	if (dot(wo, wh) > 0.)
@@ -337,15 +377,10 @@ __device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
 }
 
 //See (Veach 1997 (8.10)) 
-__device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 receivePos, float cos_wi)
+__device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 surfaceNormal, glm::vec3 receivePos)
 {
-	return cos_wi / glm::distance2(surfacePos, receivePos);
-}
-
-__device__ inline float util_math_get_light_cos_wo(glm::vec3 lightPos, glm::vec3 lightSurfaceNormal, glm::vec3 receivePos)
-{
-	glm::vec3 L = receivePos - lightPos;
-	return glm::abs(glm::dot(glm::normalize(L), lightSurfaceNormal));
+	glm::vec3 L = receivePos - surfacePos;
+	return glm::abs(glm::dot(glm::normalize(L), surfaceNormal)) / glm::distance2(surfacePos, receivePos);
 }
 
 
