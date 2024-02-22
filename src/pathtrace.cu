@@ -749,6 +749,7 @@ __global__ void scatter_on_intersection(
 		float pdf = 0;
 		glm::vec3 wi, bxdf;
 		glm::vec3 random = glm::vec3(u01(rng), u01(rng), u01(rng));
+		float cosWi = 0;
 		if (material.type == MaterialType::metallicWorkflow)
 		{
 			float4 color = { 0,0,0,1 };
@@ -768,19 +769,23 @@ __global__ void scatter_on_intersection(
 			}
 
 			bxdf = bxdf_metallic_workflow_sample_f(wo, &wi, random, &pdf, materialColor, metallic, roughness);
+			cosWi = util_math_tangent_space_clampedcos(wi);
 		}
 		else if (material.type == MaterialType::frenselSpecular)
 		{
 			glm::vec2 iors = glm::dot(woInWorld, N) < 0 ? glm::vec2(1.0, material.indexOfRefraction) : glm::vec2(material.indexOfRefraction, 1.0);
 			bxdf = bxdf_frensel_specular_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, materialColor, iors);
+			cosWi = 1.0;
 		}
 		else if (material.type == MaterialType::microfacet)
 		{
 			bxdf = bxdf_microfacet_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, material.roughness);
+			cosWi = util_math_tangent_space_clampedcos(wi);
 		}
 		else if (material.type == MaterialType::blinnphong)
 		{
 			bxdf = bxdf_blinn_phong_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, material.specExponent);
+			cosWi = util_math_tangent_space_clampedcos(wi);
 		}
 		else//diffuse
 		{
@@ -804,11 +809,12 @@ __global__ void scatter_on_intersection(
 			{
 				bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor);
 			}
+			cosWi = util_math_tangent_space_clampedcos(wi);
 
 		}
 		if (pdf > 0)
 		{
-			pathSegments[idx].transport *= bxdf * util_math_tangent_space_clampedcos(wi) / pdf;
+			pathSegments[idx].transport *= bxdf * cosWi / pdf;
 			glm::vec3 newDir = glm::normalize(TBN * wi);
 			glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
 			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;
@@ -904,10 +910,12 @@ __global__ void scatter_on_intersection_mis(
 		float pdf = 0;
 		glm::vec3 wi, bxdf;
 		glm::vec3 random = glm::vec3(u01(rng), u01(rng), u01(rng));
+		float cosWi = 0;
 		if (material.type == MaterialType::frenselSpecular)
 		{
 			glm::vec2 iors = glm::dot(woInWorld, N) < 0 ? glm::vec2(1.0, material.indexOfRefraction) : glm::vec2(material.indexOfRefraction, 1.0);
 			bxdf = bxdf_frensel_specular_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, materialColor, iors);
+			cosWi = 1.0;
 		}
 		else
 		{
@@ -993,10 +1001,11 @@ __global__ void scatter_on_intersection_mis(
 				}
 
 			}
+			cosWi = util_math_tangent_space_clampedcos(wi);
 		}
 		if (pdf > 0)
 		{
-			pathSegments[idx].transport *= bxdf * util_math_tangent_space_clampedcos(wi) / pdf;
+			pathSegments[idx].transport *= bxdf * cosWi / pdf;
 			glm::vec3 newDir = glm::normalize(TBN * wi);
 			glm::vec3 offset = glm::dot(newDir, N) < 0 ? -N : N;
 			float offsetMult = material.type != MaterialType::frenselSpecular ? SCATTER_ORIGIN_OFFSETMULT : SCATTER_ORIGIN_OFFSETMULT * 100.0f;

@@ -199,12 +199,12 @@ __device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, c
 
 __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
 {
-	float frensel = util_math_frensel_dielectric(util_math_tangent_space_clampedcos(wo), refIdx.x, refIdx.y);
+	float frensel = util_math_frensel_dielectric(abs(wo.z), refIdx.x, refIdx.y);
 	if (random.x < frensel)
 	{
 		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
 		*pdf = frensel;
-		return frensel * reflectionAlbedo / util_math_tangent_space_clampedcos(*wi);
+		return frensel * reflectionAlbedo;
 	}
 	else
 	{
@@ -214,7 +214,7 @@ __device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::ve
 		*wi = refractedRay;
 		*pdf = 1 - frensel;
 		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y * refIdx.y);
-		return val / util_math_tangent_space_clampedcos(*wi);
+		return val;
 	}
 }
 
