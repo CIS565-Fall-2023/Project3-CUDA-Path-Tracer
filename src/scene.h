@@ -25,7 +25,7 @@ private:
 public:
     void buildBVH();
     void buildStacklessBVH();
-    void LoadAllTextures();
+    void LoadAllTextures(); 
     void CreateLights();
     Scene(string filename);
     ~Scene();

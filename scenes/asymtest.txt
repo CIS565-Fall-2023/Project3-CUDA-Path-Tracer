@@ -1,0 +1,30 @@
+MATERIAL 0
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.99 0.99 0.99
+ASYM_ALPHA_ZS   -0.3
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+
+OBJECT 0
+geometry sphere
+material 0
+TRANS       0 2 0
+ROTAT       0 0 0
+SCALE       3 3 3
+
+// Camera
+CAMERA
+RES         1080 1080
+FOVY        35
+ITERATIONS  100000
+DEPTH       8
+FILE        asym
+EYE         0.0 5 10.5
+LOOKAT      0 5 0
+UP          0 1 0
+
+SKYBOX
+../scenes/environment/lake_pier_4k.hdr

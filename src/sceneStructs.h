@@ -101,7 +101,7 @@ const int dirs[] = {
 
 
 enum MaterialType {
-    diffuse, frenselSpecular, microfacet, metallicWorkflow, blinnphong, emitting
+    diffuse, frenselSpecular, microfacet, metallicWorkflow, blinnphong, asymMicrofacet, emitting
 };
 
 enum TextureType {
@@ -117,6 +117,19 @@ struct GLTFTextureLoadInfo {
     GLTFTextureLoadInfo(char* buffer, int index, TextureType type, int width, int height, int bits, int component) :buffer(buffer), matIndex(index), texType(type), width(width), height(height), bits(bits), component(component){}
 };
 
+typedef glm::vec3(*phaseEvalFunc)(const glm::vec3&, const glm::vec3&, float, float, const glm::vec3&);
+typedef glm::vec3(*phaseSampleFunc)(const glm::vec3&, const glm::vec2&, glm::vec3&, float, float, glm::vec3);
+
+struct asymMicrofacetInfo
+{
+    float zs;
+    float alphaXA, alphaYA;
+    float alphaXB, alphaYB;
+    glm::vec3 albedo;
+    phaseEvalFunc fEval;
+    phaseSampleFunc fSample;
+};
+
 struct Material {
     glm::vec3 color = glm::vec3(0);
     float indexOfRefraction = 0.0;
@@ -124,6 +137,7 @@ struct Material {
     float metallic = -1.0;
     float roughness = -1.0;
     float specExponent = -1.0;
+    asymMicrofacetInfo asymmicrofacet;
     cudaTextureObject_t baseColorMap = 0, normalMap = 0, metallicRoughnessMap = 0;
     MaterialType type = diffuse;
 };
@@ -203,4 +217,6 @@ struct SceneGbuffer {
     glm::vec3* dev_albedo;
     glm::vec3* dev_normal;
 };
+
+
 

@@ -1,5 +1,5 @@
 MATERIAL 0
-TYPE microfacet
+TYPE blinnphong
 RGB         0.99 0.99 0.99
 ROUGHNESS   0.1
 METALLIC    0
@@ -8,7 +8,7 @@ REFRIOR     0
 EMITTANCE   0
 
 MATERIAL 1
-TYPE microfacet
+TYPE blinnphong
 RGB         0.99 0.99 0.99
 ROUGHNESS   0.05
 METALLIC    0
@@ -17,7 +17,7 @@ REFRIOR     0
 EMITTANCE   0
 
 MATERIAL 2
-TYPE microfacet
+TYPE blinnphong
 RGB         0.99 0.99 0.99
 ROUGHNESS   0.001
 METALLIC    0

@@ -7,6 +7,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
 
+#include "randomUtils.h"
 #include "sceneStructs.h"
 #include "scene.h"
 #include "glm/glm.hpp"
@@ -15,6 +16,7 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
+#include "microfacet.h"
 
 #define ERRORCHECK 1
 
@@ -41,11 +43,7 @@ void checkCUDAErrorFn(const char* msg, const char* file, int line) {
 #endif
 }
 
-__host__ __device__
-thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
-	int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
-	return thrust::default_random_engine(h);
-}
+
 
 __device__ inline bool util_math_is_nan(const glm::vec3& v)
 {
@@ -89,6 +87,14 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 		}
 		pbo[index].w = 0;
 	}
+}
+
+__global__ void initFunctionPointers(Material* dev_materials, int size)
+{
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= size) return;
+	dev_materials[idx].asymmicrofacet.fEval = util_conductor_evalPhaseFunction;
+	dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
 }
 
 static Scene* hst_scene = NULL;
@@ -163,7 +169,7 @@ void pathtraceInit(Scene* scene) {
 			cudaMemcpy(dev_fsigns, scene->fSigns.data(), scene->fSigns.size() * sizeof(float), cudaMemcpyHostToDevice);
 		}
 	}
-	
+
 #if MTBVH
 	cudaMalloc(&dev_mtbvhArray, scene->MTBVHArray.size() * sizeof(MTBVHGPUNode));
 	cudaMemcpy(dev_mtbvhArray, scene->MTBVHArray.data(), scene->MTBVHArray.size() * sizeof(MTBVHGPUNode), cudaMemcpyHostToDevice);
@@ -184,10 +190,15 @@ void pathtraceInit(Scene* scene) {
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
+	//init function ptrs
+	initFunctionPointers << <1, 32 >> > (dev_materials, scene->materials.size());
+
 	cudaMalloc(&dev_intersections1, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections1, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	cudaMalloc(&dev_intersections2, pixelcount * sizeof(ShadeableIntersection));
+
+	
 
 #if !STOCHASTIC_SAMPLING && FIRST_INTERSECTION_CACHING
 	cudaMalloc(&dev_intersectionCache, pixelcount * sizeof(ShadeableIntersection));
@@ -699,7 +710,7 @@ __global__ void scatter_on_intersection(
 	// Set up the RNG
 	// LOOK: this is how you use thrust's RNG! Please look at
 	// makeSeededRandomEngine as well.
-	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, pathSegments[idx].remainingBounces);
 	thrust::uniform_real_distribution<float> u01(0, 1);
 
 	Material material = materials[intersection.materialId];
@@ -787,6 +798,14 @@ __global__ void scatter_on_intersection(
 			bxdf = bxdf_blinn_phong_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor, material.specExponent);
 			cosWi = util_math_tangent_space_clampedcos(wi);
 		}
+		else if (material.type == MaterialType::asymMicrofacet)
+		{
+			bxdf = bxdf_asymMicrofacet_sample_f(wo, &wi, rng, &pdf, material.asymmicrofacet, 1);
+			//image[pathSegments[idx].pixelIndex] = bxdf;
+			//pathSegments[idx].remainingBounces = 0;
+			//return;
+			cosWi = wi.z > 0.0f ? 1.0f : 0.0f;
+		}
 		else//diffuse
 		{
 			float4 color = { 0,0,0,1 };
@@ -803,13 +822,13 @@ __global__ void scatter_on_intersection(
 			{
 				bxdf = pathSegments[idx].remainingBounces == 0 ? glm::vec3(0, 0, 0) : glm::vec3(1, 1, 1);
 				wi = -wo;
-				pdf = util_math_tangent_space_clampedcos(wi);
+				pdf = abs(wi.z);
 			}
 			else
 			{
 				bxdf = bxdf_diffuse_sample_f(wo, &wi, glm::vec2(random.x, random.y), &pdf, materialColor);
 			}
-			cosWi = util_math_tangent_space_clampedcos(wi);
+			cosWi = abs(wi.z);
 
 		}
 		if (pdf > 0)
@@ -843,7 +862,7 @@ __global__ void scatter_on_intersection_mis(
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= num_paths) return;
 	ShadeableIntersection intersection = shadeableIntersections[idx];
-	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
+	thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, pathSegments[idx].remainingBounces);
 	thrust::uniform_real_distribution<float> u01(0, 1);
 
 	Material* materials = sceneInfo.dev_materials;

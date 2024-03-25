@@ -67,12 +67,14 @@ set(headers
     src/image.h
     src/interactions.h
     src/intersections.h
+    src/microfacet.h
     src/glslUtility.hpp
     src/pathtrace.h
     src/scene.h
     src/sceneStructs.h
     src/preview.h
     src/utilities.h
+    src/randomUtils.h
     src/bvh.h
     src/ImGui/imconfig.h
 	

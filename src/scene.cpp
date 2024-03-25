@@ -89,7 +89,7 @@ void Scene::LoadAllTextures()
     for (auto& p : LoadTextureFromMemoryJobs)
     {
         Material& mat = materials[p.matIndex];
-        cudaTextureObject_t* texObj;
+        cudaTextureObject_t* texObj = nullptr;
         switch (p.texType)
         {
         case TextureType::color:
@@ -919,9 +919,10 @@ int Scene::loadMaterial(string materialid) {
         Material newMaterial;
 
         //load static properties
-        for (int i = 0; i < 6; i++) {
+        while(true){
             string line;
             utilityCore::safeGetline(fp_in, line);
+            if (line.size() == 0) break;
             vector<string> tokens = utilityCore::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "TYPE") == 0) {
                 if (tokens[1] == "diffuse")
@@ -934,6 +935,8 @@ int Scene::loadMaterial(string materialid) {
                     newMaterial.type = metallicWorkflow;
                 else if (tokens[1] == "blinnphong")
                     newMaterial.type = blinnphong;
+                else if (tokens[1] == "asymMicrofacet")
+                    newMaterial.type = asymMicrofacet;
                 else
                     newMaterial.type = emitting;
             }
@@ -959,7 +962,30 @@ int Scene::loadMaterial(string materialid) {
                 float spec = atof(tokens[1].c_str());
                 newMaterial.specExponent = spec;
             }
-
+            else if (strcmp(tokens[0].c_str(), "ASYM_ALPHA_X_A") == 0) {
+                float val = atof(tokens[1].c_str());
+                newMaterial.asymmicrofacet.alphaXA = val;
+            }
+            else if (strcmp(tokens[0].c_str(), "ASYM_ALPHA_Y_A") == 0) {
+                float val = atof(tokens[1].c_str());
+                newMaterial.asymmicrofacet.alphaYA = val;
+            }
+            else if (strcmp(tokens[0].c_str(), "ASYM_ALPHA_X_B") == 0) {
+                float val = atof(tokens[1].c_str());
+                newMaterial.asymmicrofacet.alphaXB = val;
+            }
+            else if (strcmp(tokens[0].c_str(), "ASYM_ALPHA_Y_B") == 0) {
+                float val = atof(tokens[1].c_str());
+                newMaterial.asymmicrofacet.alphaYB = val;
+            }
+            else if (strcmp(tokens[0].c_str(), "ASYM_ALPHA_ZS") == 0) {
+                float val = atof(tokens[1].c_str());
+                newMaterial.asymmicrofacet.zs = val;
+            }
+            else if (strcmp(tokens[0].c_str(), "ASYM_ALBEDO") == 0) {
+                glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                newMaterial.asymmicrofacet.albedo = color;
+            }
         }
         materials.push_back(newMaterial);
         return 1;
