@@ -5,6 +5,7 @@
 #include "utilities.h"
 #include "randomUtils.h"
 #include "sceneStructs.h"
+#include "interactions.h"
 
 __device__ float util_alpha_i(const glm::vec3& wi, float alpha_x, float alpha_y)
 {
@@ -222,9 +223,9 @@ __device__ glm::vec3 util_conductor_evalPhaseFunction(const glm::vec3& wi, const
 	return 0.25f * util_Dwi(wi, wh, alpha_x, alpha_y) * util_fschlick(albedo, wi, wh) / dot(wi, wh);
 }
 
-__device__ glm::vec3 util_conductor_samplePhaseFunction(const glm::vec3& wi, const glm::vec2& random, glm::vec3& throughput, float alpha_x, float alpha_y, glm::vec3 albedo)
+__device__ glm::vec3 util_conductor_samplePhaseFunction(const glm::vec3& wi, const glm::vec3& random, glm::vec3& throughput, float alpha_x, float alpha_y, glm::vec3 albedo)
 {
-	glm::vec3 wh = util_sample_ggx_vndf(wi, random, alpha_x, alpha_y);
+	glm::vec3 wh = util_sample_ggx_vndf(wi, glm::vec2(random), alpha_x, alpha_y);
 
 	// reflect
 	glm::vec3 wo = glm::normalize(-wi + 2.0f * wh * dot(wi, wh));
@@ -233,6 +234,43 @@ __device__ glm::vec3 util_conductor_samplePhaseFunction(const glm::vec3& wi, con
 	return wo;
 }
 
+__device__ glm::vec3 util_dielectric_samplePhaseFunctionFromSide(const glm::vec3& wi, const bool wi_outside, bool& wo_outside, glm::vec3 random, glm::vec3& throughput, float alpha_x, float alpha_y, glm::vec3 albedo)
+{
+	const float U1 = random.x;
+	const float U2 = random.y;
+	const float m_eta = 2.0;//TODO: make this a input
+	const float etaI = wi_outside ? 1.0f : m_eta;
+	const float etaT = wi_outside ? m_eta : 1.0f;
+
+	glm::vec3 wm = wi_outside ? (util_sample_ggx_vndf(wi, glm::vec2(random.x, random.y), alpha_x, alpha_y)) :
+		(-util_sample_ggx_vndf(-wi, glm::vec2(random.x, random.y), alpha_x, alpha_y));
+
+	const float F = util_math_frensel_dielectric(abs(wi.z), etaI, etaT);
+
+	if (random.z < F)
+	{
+		const glm::vec3 wo = -wi + 2.0f * wm * dot(wi, wm); // reflect
+		return wo;
+	}
+	else
+	{
+		wo_outside = !wi_outside;
+		const glm::vec3 wo = glm::refract(wi, wm, etaI / etaT);
+
+		/*glm::vec3 n = wi.z > 0 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+		glm::vec3 refractedRay;
+		if (!util_geomerty_refract(wi, n, etaI / etaT, &refractedRay)) return glm::vec3(0, 0, 1);*/
+
+		return glm::normalize(wo);
+	}
+}
+
+__device__ glm::vec3 util_dielectric_samplePhaseFunction(const glm::vec3& wi, const glm::vec3& random, glm::vec3& throughput, float alpha_x, float alpha_y, glm::vec3 albedo)
+{
+	bool wo_outside;
+	throughput = glm::vec3(1.0);
+	return util_dielectric_samplePhaseFunctionFromSide(wi, wi.z > 0, wo_outside, random, throughput, alpha_x, alpha_y, albedo);
+}
 
 __device__ glm::vec3 bxdf_asymMicrofacet_sample(glm::vec3 wo, glm::vec3& throughput, thrust::default_random_engine& rng, const asymMicrofacetInfo& mat, int order)
 {
@@ -240,7 +278,6 @@ __device__ glm::vec3 bxdf_asymMicrofacet_sample(glm::vec3 wo, glm::vec3& through
 	glm::vec3 w = glm::normalize(-wo);
 	int i = 0;
 	thrust::uniform_real_distribution<float> u01(0, 1);
-	throughput = glm::vec3(1.0f);
 
 	while (i <= order)
 	{	
@@ -254,15 +291,15 @@ __device__ glm::vec3 bxdf_asymMicrofacet_sample(glm::vec3 wo, glm::vec3& through
 		}
 		z += deltaZ;
 		if (z > 0) break;
-		glm::vec2 rand2 = glm::vec2(u01(rng), u01(rng));
+		glm::vec3 rand3 = glm::vec3(u01(rng), u01(rng), u01(rng));
 		glm::vec3 nw;
 		if (z > mat.zs)
 		{
-			w = util_conductor_samplePhaseFunction(-w, rand2, throughput, mat.alphaXA, mat.alphaYA, mat.albedo);
+			w = mat.fSample(-w, rand3, throughput, mat.alphaXA, mat.alphaYA, mat.albedo);
 		}
 		else
 		{
-			w = util_conductor_samplePhaseFunction(-w, rand2, throughput, mat.alphaXB, mat.alphaYB, mat.albedo);
+			w = mat.fSample(-w, rand3, throughput, mat.alphaXB, mat.alphaYB, mat.albedo);
 		}
 		//float val = glm::dot(nw, glm::vec3(0, 0, 1));//debug
 		//return nw;
@@ -298,14 +335,14 @@ __device__ glm::vec3 bxdf_asymMicrofacet_eval(const glm::vec3& wo, const glm::ve
 		glm::vec3 p = z > mat.zs ? mat.fEval(-w, wi, mat.alphaXA, mat.alphaYA, mat.albedo) : mat.fEval(-w, wi, mat.alphaXB, mat.alphaYB, mat.albedo);
 		float tau_exit = glm::max(z, mat.zs) * util_GGX_lambda(wi, mat.alphaXA, mat.alphaYA) + glm::min(z - mat.zs, 0.0f) * util_GGX_lambda(wi, mat.alphaXB, mat.alphaYB);
 		result += throughput * exp(tau_exit) * p;
-		glm::vec2 rand2 = glm::vec2(u01(rng), u01(rng));
+		glm::vec3 rand3 = glm::vec3(u01(rng), u01(rng), u01(rng));
 		if(z> mat.zs)
 		{
-			w = (*mat.fSample)(-w, rand2, throughput, mat.alphaXA, mat.alphaYA, mat.albedo);
+			w = mat.fSample(-w, rand3, throughput, mat.alphaXA, mat.alphaYA, mat.albedo);
 		}
 		else
 		{
-			w = (*mat.fSample)(-w, rand2, throughput, mat.alphaXB, mat.alphaYB, mat.albedo);
+			w = mat.fSample(-w, rand3, throughput, mat.alphaXB, mat.alphaYB, mat.albedo);
 		}
 
 

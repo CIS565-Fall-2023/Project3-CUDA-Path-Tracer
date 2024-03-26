@@ -93,8 +93,11 @@ __global__ void initFunctionPointers(Material* dev_materials, int size)
 {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= size) return;
-	dev_materials[idx].asymmicrofacet.fEval = util_conductor_evalPhaseFunction;
-	dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
+	if (dev_materials[idx].asymmicrofacet.type == conductor)
+		dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
+	else if(dev_materials[idx].asymmicrofacet.type == dielectric)
+		dev_materials[idx].asymmicrofacet.fSample = util_dielectric_samplePhaseFunction;
+	//dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
 }
 
 static Scene* hst_scene = NULL;
@@ -618,7 +621,11 @@ __global__ void compute_intersection_bvh_stackless_mtbvh(
 	{
 		glm::vec2 uv = util_sample_spherical_map(glm::normalize(rayDir));
 		float4 skyColorRGBA = tex2D<float4>(dev_sceneInfo.skyboxObj, uv.x, uv.y);
+#if WHITE_FURNANCE_TEST
+		glm::vec3 skyColor = glm::vec3(1.0, 1.0, 1.0);
+#else
 		glm::vec3 skyColor = glm::vec3(skyColorRGBA.x, skyColorRGBA.y, skyColorRGBA.z);
+#endif
 		image[pathSegment.pixelIndex] += pathSegment.transport * skyColor;
 	}
 }
@@ -800,11 +807,8 @@ __global__ void scatter_on_intersection(
 		}
 		else if (material.type == MaterialType::asymMicrofacet)
 		{
-			bxdf = bxdf_asymMicrofacet_sample_f(wo, &wi, rng, &pdf, material.asymmicrofacet, 1);
-			//image[pathSegments[idx].pixelIndex] = bxdf;
-			//pathSegments[idx].remainingBounces = 0;
-			//return;
-			cosWi = wi.z > 0.0f ? 1.0f : 0.0f;
+			bxdf = bxdf_asymMicrofacet_sample_f(wo, &wi, rng, &pdf, material.asymmicrofacet, NUM_MULTI_SCATTER_BOUNCE);
+			cosWi = 1.0f;
 		}
 		else//diffuse
 		{

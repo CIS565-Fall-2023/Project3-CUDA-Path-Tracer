@@ -1,0 +1,142 @@
+MATERIAL 0
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -0.0
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 1
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -0.2
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 2
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -0.4
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 3
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -0.8
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 4
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -1.6
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 5
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -3.2
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 6
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -6.4
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+MATERIAL 7
+TYPE asymMicrofacet
+ASYM_ALBEDO 0.8 0.7 0.2
+ASYM_TYPE conductor
+ASYM_ALPHA_ZS   -12.8
+ASYM_ALPHA_X_A   0.8
+ASYM_ALPHA_Y_A   0.8
+ASYM_ALPHA_X_B   0.1
+ASYM_ALPHA_Y_B   0.1
+
+OBJECT 0
+geometry sphere
+material 0
+TRANS       -7.5 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+OBJECT 0
+geometry sphere
+material 1
+TRANS       -5 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+OBJECT 1
+geometry sphere
+material 2
+TRANS       -2.5 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+OBJECT 2
+geometry sphere
+material 3
+TRANS       0 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+OBJECT 3
+geometry sphere
+material 4
+TRANS       2.5 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+OBJECT 4
+geometry sphere
+material 5
+TRANS       5 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+OBJECT 4
+geometry sphere
+material 6
+TRANS       7.5 4 0
+ROTAT       0 0 0
+SCALE       2 2 2
+
+// Camera
+CAMERA
+RES         1920 1080
+FOVY        35
+ITERATIONS  100000
+DEPTH       8
+FILE        asym
+EYE         0.0 5 10.5
+LOOKAT      0 5 0
+UP          0 1 0
+
+SKYBOX
+../scenes/environment/lake_pier_4k.hdr

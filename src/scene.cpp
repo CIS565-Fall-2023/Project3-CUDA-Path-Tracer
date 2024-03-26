@@ -962,6 +962,12 @@ int Scene::loadMaterial(string materialid) {
                 float spec = atof(tokens[1].c_str());
                 newMaterial.specExponent = spec;
             }
+            else if (strcmp(tokens[0].c_str(), "ASYM_TYPE") == 0) {
+                if (strcmp(tokens[1].c_str(), "conductor")==0)
+                    newMaterial.asymmicrofacet.type = conductor;
+                else if(strcmp(tokens[1].c_str(), "dielectric") == 0)
+                    newMaterial.asymmicrofacet.type = dielectric;
+            }
             else if (strcmp(tokens[0].c_str(), "ASYM_ALPHA_X_A") == 0) {
                 float val = atof(tokens[1].c_str());
                 newMaterial.asymmicrofacet.alphaXA = val;

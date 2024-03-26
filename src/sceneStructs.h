@@ -23,6 +23,8 @@
 #define MAX_NUM_PRIMS_IN_LEAF 2
 #define SAH_BUCKET_SIZE 20
 #define SAH_RAY_BOX_INTERSECTION_COST 0.1f
+#define WHITE_FURNANCE_TEST 0
+#define NUM_MULTI_SCATTER_BOUNCE 4
 
 enum GeomType {
     SPHERE,
@@ -104,6 +106,10 @@ enum MaterialType {
     diffuse, frenselSpecular, microfacet, metallicWorkflow, blinnphong, asymMicrofacet, emitting
 };
 
+enum AsymMicrofacetType {
+    conductor, dielectric
+};
+
 enum TextureType {
     color, normal, metallicroughness
 };
@@ -118,10 +124,11 @@ struct GLTFTextureLoadInfo {
 };
 
 typedef glm::vec3(*phaseEvalFunc)(const glm::vec3&, const glm::vec3&, float, float, const glm::vec3&);
-typedef glm::vec3(*phaseSampleFunc)(const glm::vec3&, const glm::vec2&, glm::vec3&, float, float, glm::vec3);
+typedef glm::vec3(*phaseSampleFunc)(const glm::vec3&, const glm::vec3&, glm::vec3&, float, float, glm::vec3);
 
 struct asymMicrofacetInfo
 {
+    AsymMicrofacetType type;
     float zs;
     float alphaXA, alphaYA;
     float alphaXB, alphaYB;
